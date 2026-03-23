@@ -36,14 +36,51 @@
                 <i class="bi bi-grid-fill"></i>
                 <span>Panel Principal</span>
             </a>
+
+            {{-- SOLICITUDES --}}
+            <div class="nav-section-label">Solicitudes</div>
             <a href="{{ route('respuestas.index') }}" class="nav-item {{ request()->routeIs('respuestas.*') ? 'active' : '' }}">
                 <i class="bi bi-file-earmark-text-fill"></i>
-                <span>Solicitudes</span>
+                <span>Mis Solicitudes</span>
             </a>
             <a href="{{ route('formularios.index') }}" class="nav-item {{ request()->routeIs('formularios.*') ? 'active' : '' }}">
                 <i class="bi bi-ui-checks"></i>
                 <span>Formularios</span>
             </a>
+            <a href="{{ route('categorias-formularios.index') }}" class="nav-item {{ request()->routeIs('categorias-formularios.*') ? 'active' : '' }}">
+                <i class="bi bi-tag-fill"></i>
+                <span>Categorías</span>
+            </a>
+
+            {{-- SST --}}
+            <div class="nav-section-label">Prevención SST</div>
+            <a href="{{ route('charlas.index') }}" class="nav-item {{ request()->routeIs('charlas.*') ? 'active' : '' }}">
+                <i class="bi bi-mic-fill"></i>
+                <span>Charlas SST</span>
+            </a>
+            <a href="{{ route('carta-gantt.index') }}" class="nav-item {{ request()->routeIs('carta-gantt.*') ? 'active' : '' }}">
+                <i class="bi bi-kanban-fill"></i>
+                <span>Carta Gantt</span>
+            </a>
+            <a href="{{ route('visitas-sst.index') }}" class="nav-item {{ request()->routeIs('visitas-sst.*') ? 'active' : '' }}">
+                <i class="bi bi-binoculars-fill"></i>
+                <span>Visitas / Inspecciones</span>
+            </a>
+            <a href="{{ route('auditorias-sst.index') }}" class="nav-item {{ request()->routeIs('auditorias-sst.*') ? 'active' : '' }}">
+                <i class="bi bi-clipboard2-check-fill"></i>
+                <span>Auditorías</span>
+            </a>
+            <a href="{{ route('accidentes-sst.index') }}" class="nav-item {{ request()->routeIs('accidentes-sst.*') ? 'active' : '' }}">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <span>Accidentes</span>
+            </a>
+            <a href="{{ route('ley-karin.index') }}" class="nav-item {{ request()->routeIs('ley-karin.*') ? 'active' : '' }}">
+                <i class="bi bi-shield-fill-exclamation"></i>
+                <span>Ley Karin</span>
+            </a>
+
+            {{-- MAESTROS --}}
+            <div class="nav-section-label">Administración</div>
             <a href="{{ route('usuarios.index') }}" class="nav-item {{ request()->routeIs('usuarios.*') ? 'active' : '' }}">
                 <i class="bi bi-people-fill"></i>
                 <span>Usuarios</span>
@@ -52,11 +89,15 @@
                 <i class="bi bi-building"></i>
                 <span>Departamentos</span>
             </a>
-            <a href="{{ route('charlas.index') }}" class="nav-item {{ request()->routeIs('charlas.*') ? 'active' : '' }}">
-                <i class="bi bi-mic-fill"></i>
-                <span>Charlas SST</span>
+            <a href="{{ route('cargos.index') }}" class="nav-item {{ request()->routeIs('cargos.*') ? 'active' : '' }}">
+                <i class="bi bi-person-badge-fill"></i>
+                <span>Cargos</span>
             </a>
-            <a href="#" class="nav-item">
+            <a href="{{ route('centros-costo.index') }}" class="nav-item {{ request()->routeIs('centros-costo.*') ? 'active' : '' }}">
+                <i class="bi bi-geo-alt-fill"></i>
+                <span>Centros de Costo</span>
+            </a>
+            <a href="{{ route('configuraciones.index') }}" class="nav-item {{ request()->routeIs('configuraciones.*') ? 'active' : '' }}">
                 <i class="bi bi-gear-fill"></i>
                 <span>Configuración</span>
             </a>

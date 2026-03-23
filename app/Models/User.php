@@ -18,26 +18,21 @@ class User extends Authenticatable
      * @var list<string>
      */
     protected $fillable = [
-        'azure_oid',
-        'talana_id',
-        'name',
-        'email',
-        'rut',
-        'departamento_id',
-        'rol_id',
-        'password',
-        'activo',
-        'ultimo_acceso',
+        'azure_oid', 'talana_id', 'name', 'apellido_paterno', 'apellido_materno',
+        'email', 'rut', 'departamento_id', 'rol_id', 'cargo_id', 'centro_costo_id',
+        'tipo_nomina', 'razon_social', 'fecha_nacimiento', 'nacionalidad',
+        'sexo', 'estado_civil', 'fecha_ingreso', 'telefono',
+        'password', 'activo', 'ultimo_acceso',
     ];
 
-    public function departamento()
-    {
-        return $this->belongsTo(Departamento::class);
-    }
+    public function departamento() { return $this->belongsTo(Departamento::class); }
+    public function rol()           { return $this->belongsTo(Rol::class); }
+    public function cargo()         { return $this->belongsTo(Cargo::class); }
+    public function centroCosto()   { return $this->belongsTo(CentroCosto::class, 'centro_costo_id'); }
 
-    public function rol()
+    public function getNombreCompletoAttribute(): string
     {
-        return $this->belongsTo(Rol::class);
+        return trim($this->name . ' ' . $this->apellido_paterno . ' ' . $this->apellido_materno);
     }
 
     /**
