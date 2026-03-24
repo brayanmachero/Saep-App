@@ -46,10 +46,16 @@ Route::middleware('auth')->group(function () {
     Route::resource('charlas', CharlaSstController::class);
     Route::patch('charlas/{charla}/estado', [CharlaSstController::class, 'cambiarEstado'])
         ->name('charlas.estado');
+    // Firma de asistente (trabajador)
     Route::get('charlas/{charla}/firmar/{asistente}',  [CharlaSstController::class, 'firmar'])
         ->name('charlas.firmar');
     Route::post('charlas/{charla}/firmar/{asistente}', [CharlaSstController::class, 'guardarFirma'])
         ->name('charlas.guardarFirma');
+    // Firma de relator
+    Route::get('charlas/{charla}/relator/{relator}/firmar',  [CharlaSstController::class, 'firmarRelator'])
+        ->name('charlas.firmarRelator');
+    Route::post('charlas/{charla}/relator/{relator}/firmar', [CharlaSstController::class, 'guardarFirmaRelator'])
+        ->name('charlas.guardarFirmaRelator');
 
     // --- SST: CARTA GANTT ---
     Route::resource('carta-gantt', CartaGanttController::class);

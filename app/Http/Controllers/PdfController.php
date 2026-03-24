@@ -30,10 +30,19 @@ class PdfController extends Controller
      */
     public function charla(Charla $charla)
     {
-        $charla->load('creador', 'supervisor', 'asistentes.usuario');
+        $charla->load([
+            'creador', 'supervisor', 'centroCosto',
+            'relatores.usuario',
+            'asistentes.usuario.rol',
+        ]);
 
         $pdf = Pdf::loadView('pdf.charla', compact('charla'))
-            ->setPaper('a4', 'portrait');
+            ->setPaper('a4', 'portrait')
+            ->setOptions([
+                'isRemoteEnabled' => true,
+                'isHtml5ParserEnabled' => true,
+                'defaultFont' => 'DejaVu Sans',
+            ]);
 
         $filename = 'charla-sst-' . str_pad($charla->id, 5, '0', STR_PAD_LEFT) . '.pdf';
         return $pdf->download($filename);

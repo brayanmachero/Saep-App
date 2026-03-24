@@ -1,15 +1,15 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('title', 'Editar Charla SST')
 
 @section('content')
-<div class="page-container" style="max-width:820px;">
+<div class="page-container" style="max-width:860px;">
 
     @include('partials._alerts')
 
     <div class="page-header">
         <div>
-            <h2 class="page-heading">Editar Charla SST</h2>
+            <h2 class="page-heading"><i class="bi bi-pencil-square" style="color:#0056b3"></i> Editar Charla SST</h2>
             <p class="page-subheading">{{ $charla->titulo }}</p>
         </div>
         <a href="{{ route('charlas.show', $charla) }}" class="btn-ghost">
@@ -21,8 +21,9 @@
         @csrf
         @method('PUT')
 
+        <!-- Datos básicos -->
         <div class="glass-card" style="margin-bottom:1.25rem;">
-            <h3 style="font-size:0.9rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:1.25rem;">
+            <h3 style="font-size:0.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1.25rem;font-weight:700;">
                 <i class="bi bi-info-circle"></i> Información General
             </h3>
             <div class="form-group">
@@ -34,9 +35,21 @@
             <div class="form-grid-2">
                 <div class="form-group">
                     <label>Tipo *</label>
-                    <select name="tipo" class="form-input" required>
+                    <select name="tipo" class="form-input @error('tipo') is-invalid @enderror" required>
                         @foreach(['CHARLA_5MIN'=>'Charla 5 Minutos','CAPACITACION'=>'Capacitación','INDUCCION'=>'Inducción','CHARLA_ESPECIAL'=>'Charla Especial'] as $val => $lbl)
                             <option value="{{ $val }}" {{ old('tipo', $charla->tipo) === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                        @endforeach
+                    </select>
+                    @error('tipo') <span class="error-msg">{{ $message }}</span> @enderror
+                </div>
+                <div class="form-group">
+                    <label>Centro de Costo</label>
+                    <select name="centro_costo_id" class="form-input">
+                        <option value="">Sin asignar</option>
+                        @foreach($centros as $cc)
+                            <option value="{{ $cc->id }}" {{ old('centro_costo_id', $charla->centro_costo_id) == $cc->id ? 'selected' : '' }}>
+                                {{ $cc->nombre }}
+                            </option>
                         @endforeach
                     </select>
                 </div>
@@ -46,17 +59,19 @@
                         value="{{ old('lugar', $charla->lugar) }}">
                 </div>
                 <div class="form-group">
-                    <label>Fecha y Hora *</label>
-                    <input type="datetime-local" name="fecha_programada" class="form-input"
-                        value="{{ old('fecha_programada', $charla->fecha_programada->format('Y-m-d\TH:i')) }}" required>
-                </div>
-                <div class="form-group">
                     <label>Duración (minutos) *</label>
                     <input type="number" name="duracion_minutos" class="form-input" min="1"
                         value="{{ old('duracion_minutos', $charla->duracion_minutos) }}" required>
                 </div>
                 <div class="form-group">
-                    <label>Supervisor / Relator</label>
+                    <label>Fecha y Hora *</label>
+                    <input type="datetime-local" name="fecha_programada"
+                        class="form-input @error('fecha_programada') is-invalid @enderror"
+                        value="{{ old('fecha_programada', $charla->fecha_programada->format('Y-m-d\TH:i')) }}" required>
+                    @error('fecha_programada') <span class="error-msg">{{ $message }}</span> @enderror
+                </div>
+                <div class="form-group">
+                    <label>Supervisor a cargo</label>
                     <select name="supervisor_id" class="form-input">
                         <option value="">Sin asignar</option>
                         @foreach($supervisores as $sup)
@@ -69,63 +84,70 @@
             </div>
         </div>
 
+        <!-- Contenido -->
         <div class="glass-card" style="margin-bottom:1.25rem;">
-            <h3 style="font-size:0.9rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:1rem;">
+            <h3 style="font-size:0.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1rem;font-weight:700;">
                 <i class="bi bi-file-text"></i> Contenido / Temario
             </h3>
-            <div class="form-group">
-                <textarea name="contenido" class="form-input" rows="6">{{ old('contenido', $charla->contenido) }}</textarea>
-            </div>
+            <textarea name="contenido" class="form-input" rows="7">{{ old('contenido', $charla->contenido) }}</textarea>
         </div>
 
+        <!-- Relatores -->
+        <div class="glass-card" style="margin-bottom:1.25rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+                <h3 style="font-size:0.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;margin:0;">
+                    <i class="bi bi-person-badge-fill" style="color:#0056b3;"></i> Relatores / Instructores
+                </h3>
+                <button type="button" class="btn-secondary" style="padding:6px 14px;font-size:0.8rem;" id="btn-add-relator">
+                    <i class="bi bi-plus-circle"></i> Agregar Relator
+                </button>
+            </div>
+            <div id="relatores-container">
+                @foreach($charla->relatores as $rel)
+                <div class="relator-existing" style="display:flex;gap:0.75rem;align-items:center;margin-bottom:0.5rem;padding:0.6rem;border:1px solid var(--surface-border);border-radius:10px;">
+                    <div style="flex:1;font-weight:600;font-size:0.9rem;">{{ $rel->usuario->name }}</div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);">{{ $rel->rolLabel }}</div>
+                    @if($rel->estado === 'PENDIENTE')
+                        <span style="font-size:0.72rem;padding:3px 8px;border-radius:6px;background:rgba(217,119,6,0.15);color:#d97706;">Pendiente firma</span>
+                    @else
+                        <span style="font-size:0.72rem;padding:3px 8px;border-radius:6px;background:rgba(22,163,74,0.15);color:#16a34a;"><i class="bi bi-check-circle-fill"></i> Firmado</span>
+                    @endif
+                </div>
+                @endforeach
+            </div>
+            <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.5rem;">
+                <i class="bi bi-info-circle"></i> Los relatores existentes se mantienen. Nuevos relatores se agregarán y los firmados no se pueden eliminar.
+            </p>
+        </div>
+
+        <!-- Asistentes -->
         <div class="glass-card" style="margin-bottom:1.5rem;">
-            <h3 style="font-size:0.9rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:1rem;">
+            <h3 style="font-size:0.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1rem;font-weight:700;">
                 <i class="bi bi-people-fill"></i> Asistentes
             </h3>
-            @if($charla->asistentes->where('estado', 'FIRMADO')->count() > 0)
-            <div class="alert alert-warning" style="margin-bottom:0.75rem;">
-                <i class="bi bi-exclamation-triangle-fill"></i>
-                {{ $charla->asistentes->where('estado', 'FIRMADO')->count() }} asistente(s) ya firmaron.
-                Solo se pueden quitar asistentes que aún no han firmado.
-            </div>
-            @endif
-            <div style="margin-bottom:0.75rem;">
-                <input type="text" id="buscar-asistente" class="form-input" placeholder="Buscar trabajador...">
-            </div>
-            <div style="max-height:260px;overflow-y:auto;border:1px solid var(--surface-border);border-radius:10px;padding:0.75rem;display:flex;flex-direction:column;gap:0.4rem;" id="lista-trabajadores">
+            <input type="text" id="buscar-asistente" class="form-input" placeholder="Buscar trabajador..." style="margin-bottom:0.75rem;">
+            <div style="max-height:280px;overflow-y:auto;border:1px solid var(--surface-border);border-radius:10px;padding:0.75rem;display:flex;flex-direction:column;gap:0.35rem;" id="lista-trabajadores">
                 @foreach($trabajadores as $t)
-                @php $yaFirmo = $charla->asistentes->where('usuario_id', $t->id)->where('estado','FIRMADO')->isNotEmpty(); @endphp
-                <label id="worker-{{ $t->id }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.45rem 0.5rem;border-radius:8px;cursor:pointer;"
+                <label id="worker-{{ $t->id }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.45rem 0.5rem;border-radius:8px;cursor:pointer;transition:background 0.12s;"
                     onmouseover="this.style.background='rgba(255,255,255,0.05)'"
                     onmouseout="this.style.background=''">
                     <input type="checkbox" name="asistentes[]" value="{{ $t->id }}"
                         {{ in_array($t->id, old('asistentes', $asistentesIds)) ? 'checked' : '' }}
-                        {{ $yaFirmo ? 'disabled' : '' }}
-                        style="width:15px;height:15px;accent-color:var(--primary-color);">
-                    @if($yaFirmo)
-                        {{-- Keep signed value even if disabled --}}
-                        <input type="hidden" name="asistentes[]" value="{{ $t->id }}">
-                    @endif
-                    <div class="avatar" style="width:30px;height:30px;flex-shrink:0;font-size:0.75rem;">
-                        {{ strtoupper(substr($t->name, 0, 1)) }}
-                    </div>
-                    <div style="flex:1;">
+                        style="width:15px;height:15px;accent-color:#0056b3;">
+                    <div class="avatar" style="width:30px;height:30px;flex-shrink:0;font-size:0.75rem;">{{ strtoupper(substr($t->name, 0, 1)) }}</div>
+                    <div>
                         <span style="font-size:0.875rem;font-weight:500;">{{ $t->name }}</span>
-                        <span style="display:block;font-size:0.75rem;color:var(--text-muted);">{{ $t->rol->nombre ?? '' }}</span>
+                        <span style="display:block;font-size:0.73rem;color:var(--text-muted);">{{ $t->rol->nombre ?? '' }}</span>
                     </div>
-                    @if($yaFirmo)
-                        <span class="badge success" style="font-size:0.7rem;"><i class="bi bi-pen-fill"></i> Firmado</span>
-                    @endif
                 </label>
                 @endforeach
             </div>
+            <div style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-muted);" id="count-asistentes">0 seleccionados</div>
         </div>
 
         <div style="display:flex;gap:1rem;justify-content:flex-end;">
             <a href="{{ route('charlas.show', $charla) }}" class="btn-ghost">Cancelar</a>
-            <button type="submit" class="btn-premium">
-                <i class="bi bi-save-fill"></i> Guardar Cambios
-            </button>
+            <button type="submit" class="btn-premium"><i class="bi bi-save-fill"></i> Guardar Cambios</button>
         </div>
     </form>
 </div>
@@ -133,11 +155,62 @@
 
 @push('scripts')
 <script>
-document.getElementById('buscar-asistente').addEventListener('input', function() {
-    const q = this.value.toLowerCase();
-    document.querySelectorAll('#lista-trabajadores label').forEach(lbl => {
-        lbl.style.display = lbl.textContent.toLowerCase().includes(q) ? '' : 'none';
+(function () {
+    const checkboxes = document.querySelectorAll('input[name="asistentes[]"]');
+    const countEl = document.getElementById('count-asistentes');
+
+    function updateCount() {
+        const n = [...checkboxes].filter(c => c.checked).length;
+        countEl.textContent = n + ' seleccionado' + (n !== 1 ? 's' : '');
+    }
+    checkboxes.forEach(c => c.addEventListener('change', updateCount));
+    updateCount();
+
+    document.getElementById('buscar-asistente').addEventListener('input', function () {
+        const q = this.value.toLowerCase();
+        document.querySelectorAll('#lista-trabajadores label').forEach(el => {
+            el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+        });
     });
-});
+
+    // New relatores
+    let relatorIdx = 1000;
+    const usuarios = @json($usuarios->map(fn($u) => ['id' => $u->id, 'name' => $u->name]));
+
+    function buildUserOpts(selectedId) {
+        return usuarios.map(u =>
+            `<option value="${u.id}" ${u.id == selectedId ? 'selected' : ''}>${u.name}</option>`
+        ).join('');
+    }
+
+    window.addRelatorRow = function (usuarioId, rol) {
+        rol = rol || 'RELATOR';
+        const i = relatorIdx++;
+        const container = document.getElementById('relatores-container');
+        const div = document.createElement('div');
+        div.id = 'relator-row-' + i;
+        div.style.cssText = 'display:flex;gap:0.75rem;align-items:center;margin-bottom:0.5rem;';
+        div.innerHTML = `
+            <select name="relatores[${i}][usuario_id]" class="form-input" style="flex:1;" required>
+                <option value="">Seleccionar persona...</option>${buildUserOpts(usuarioId)}
+            </select>
+            <select name="relatores[${i}][rol]" class="form-input" style="width:200px;">
+                <option value="RELATOR" ${rol==='RELATOR'?'selected':''}>Relator / Instructor</option>
+                <option value="SUPERVISOR_CPHS" ${rol==='SUPERVISOR_CPHS'?'selected':''}>Supervisor / CPHS</option>
+                <option value="INSTRUCTOR" ${rol==='INSTRUCTOR'?'selected':''}>Instructor Externo</option>
+            </select>
+            <button type="button" onclick="document.getElementById('relator-row-${i}').remove()"
+                style="padding:8px 12px;border:none;border-radius:8px;background:rgba(220,38,38,0.15);color:#dc2626;cursor:pointer;flex-shrink:0;">
+                <i class="bi bi-trash3-fill"></i>
+            </button>
+        `;
+        container.appendChild(div);
+    };
+
+    document.getElementById('btn-add-relator').addEventListener('click', function () {
+        addRelatorRow();
+    });
+}());
 </script>
 @endpush
+

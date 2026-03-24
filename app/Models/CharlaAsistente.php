@@ -12,7 +12,8 @@ class CharlaAsistente extends Model
 
     protected $fillable = [
         'charla_id', 'usuario_id', 'estado',
-        'firma_imagen', 'fecha_firma', 'ip_address', 'user_agent', 'documento_hash',
+        'firma_imagen', 'fecha_firma', 'ip_address', 'user_agent',
+        'geolatitud', 'geolongitud', 'documento_hash',
         'fecha_asignacion',
     ];
 
