@@ -23,6 +23,7 @@ use App\Http\Controllers\ProteccionDatosController;
 use App\Http\Controllers\RespuestaController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VisitaSstController;
+use App\Http\Controllers\LeyKarinPublicoController;
 use Illuminate\Support\Facades\Route;
 
 // Auth (con throttle para prevenir fuerza bruta)
@@ -33,6 +34,17 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 // Política de Privacidad (pública, accesible sin auth)
 Route::get('/politica-privacidad', [ProteccionDatosController::class, 'politicaPrivacidad'])
     ->name('proteccion-datos.politica-privacidad');
+
+// --- DENUNCIA LEY KARIN PÚBLICA (sin autenticación SAEP, requiere Google OAuth) ---
+Route::prefix('denuncia-ley-karin')->group(function () {
+    Route::get('/',                [LeyKarinPublicoController::class, 'inicio'])->name('ley-karin-publico.inicio');
+    Route::get('/auth/google',     [LeyKarinPublicoController::class, 'redirectGoogle'])->name('ley-karin-publico.google');
+    Route::get('/auth/callback',   [LeyKarinPublicoController::class, 'callbackGoogle'])->name('ley-karin-publico.callback');
+    Route::get('/formulario',      [LeyKarinPublicoController::class, 'formulario'])->name('ley-karin-publico.formulario');
+    Route::post('/enviar',         [LeyKarinPublicoController::class, 'store'])->name('ley-karin-publico.store');
+    Route::get('/confirmacion/{folio}', [LeyKarinPublicoController::class, 'confirmacion'])->name('ley-karin-publico.confirmacion');
+    Route::post('/logout',         [LeyKarinPublicoController::class, 'logout'])->name('ley-karin-publico.logout');
+});
 
 // App (requiere autenticación)
 Route::middleware('auth')->group(function () {

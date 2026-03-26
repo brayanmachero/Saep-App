@@ -40,4 +40,10 @@ return [
         'url'   => env('KIZEO_API_URL', 'https://www.kizeoforms.com/rest/v3'),
     ],
 
+    'google' => [
+        'client_id'     => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect'      => env('GOOGLE_REDIRECT_URI', '/denuncia-ley-karin/auth/callback'),
+    ],
+
 ];

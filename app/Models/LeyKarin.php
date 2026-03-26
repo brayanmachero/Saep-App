@@ -10,11 +10,15 @@ class LeyKarin extends Model
 
     protected $fillable = [
         'folio', 'tipo', 'denunciante_id', 'denunciante_nombre', 'denunciante_rut',
+        'denunciante_email', 'denunciante_latitud', 'denunciante_longitud',
         'denunciado_nombre', 'denunciado_cargo', 'centro_costo_id', 'canal',
         'fecha_denuncia', 'descripcion_hechos', 'medidas_cautelares',
         'resultado_investigacion', 'medidas_adoptadas',
         'fecha_resolucion', 'fecha_plazo_investigacion',
-        'estado', 'anonima', 'confidencial', 'investigador_id',
+        'estado', 'anonima', 'confidencial',
+        'consentimiento_datos', 'consentimiento_geolocalizacion',
+        'metodo_contacto',
+        'investigador_id',
     ];
 
     protected $casts = [
@@ -23,11 +27,26 @@ class LeyKarin extends Model
         'fecha_plazo_investigacion'  => 'date',
         'anonima'                    => 'boolean',
         'confidencial'               => 'boolean',
+        'consentimiento_datos'       => 'boolean',
+        'consentimiento_geolocalizacion' => 'boolean',
+        'denunciante_latitud'        => 'decimal:7',
+        'denunciante_longitud'       => 'decimal:7',
     ];
 
     public function denunciante()  { return $this->belongsTo(User::class, 'denunciante_id'); }
     public function investigador() { return $this->belongsTo(User::class, 'investigador_id'); }
     public function centroCosto()  { return $this->belongsTo(CentroCosto::class, 'centro_costo_id'); }
+
+    public function archivos()
+    {
+        return $this->hasMany(ArchivoAdjunto::class, 'entidad_id')
+            ->where('entidad_tipo', 'ley_karin');
+    }
+
+    public function logs()
+    {
+        return $this->hasMany(LeyKarinLog::class)->orderByDesc('created_at');
+    }
 
     protected static function booted(): void
     {
