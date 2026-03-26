@@ -24,4 +24,21 @@ class Rol extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    public function modulos()
+    {
+        return $this->belongsToMany(Modulo::class, 'rol_modulo')
+            ->withPivot('puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar')
+            ->withTimestamps();
+    }
+
+    /**
+     * Verificar si este rol tiene acceso a un módulo.
+     */
+    public function tieneAcceso(string $moduloSlug, string $accion = 'puede_ver'): bool
+    {
+        $modulo = $this->modulos()->where('slug', $moduloSlug)->first();
+        if (!$modulo) return false;
+        return (bool) $modulo->pivot->{$accion};
+    }
 }

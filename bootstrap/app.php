@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Middleware\CheckModulo;
+use App\Http\Middleware\CheckPermission;
+use App\Http\Middleware\CheckRole;
+use App\Http\Middleware\VerificarConsentimientoDatos;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -11,7 +15,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
+        $middleware->alias([
+            'role'       => CheckRole::class,
+            'permission' => CheckPermission::class,
+            'modulo'     => CheckModulo::class,
+            'consentimiento' => VerificarConsentimientoDatos::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

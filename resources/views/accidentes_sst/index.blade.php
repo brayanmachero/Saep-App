@@ -4,8 +4,8 @@
 <div class="page-container">
     <div class="page-header">
         <div>
-            <h1>Accidentes / Enf. Profesionales</h1>
-            <p style="color:var(--text-muted);margin:0">Registro de accidentes del trabajo y enfermedades profesionales</p>
+            <h2 class="page-heading">Accidentes / Enf. Profesionales</h2>
+            <p class="page-subheading">Registro de accidentes del trabajo y enfermedades profesionales</p>
         </div>
         <a href="{{ route('accidentes-sst.create') }}" class="btn-premium">
             <i class="bi bi-plus-lg"></i> Nuevo Caso
@@ -38,7 +38,7 @@
                     <form method="POST" action="{{ route('accidentes-sst.destroy', $acc) }}" style="display:inline"
                           onsubmit="return confirm('¿Eliminar este caso?')">
                         @csrf @method('DELETE')
-                        <button class="icon-btn" style="color:#ef4444"><i class="bi bi-trash-fill"></i></button>
+                        <button class="icon-btn danger"><i class="bi bi-trash-fill"></i></button>
                     </form>
                 </td>
             </tr>

@@ -3,7 +3,7 @@
 @section('title', 'Nueva Solicitud')
 
 @section('content')
-<div class="page-container" style="max-width:800px;">
+<div class="page-container">
 
     @include('partials._alerts')
 

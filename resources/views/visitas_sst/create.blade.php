@@ -1,9 +1,9 @@
 @extends('layouts.app')
 @section('title','Nueva Visita SST')
 @section('content')
-<div class="page-container" style="max-width:860px">
+<div class="page-container">
     <div class="page-header">
-        <div><h1>Nueva Visita / Inspección SST</h1></div>
+        <div><h2 class="page-heading">Nueva Visita / Inspección SST</h2></div>
         <a href="{{ route('visitas-sst.index') }}" class="btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
     </div>
     @include('partials._alerts')

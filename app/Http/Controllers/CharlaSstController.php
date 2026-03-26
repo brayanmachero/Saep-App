@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Http\Controllers;
 
@@ -45,12 +45,12 @@ class CharlaSstController extends Controller
 
     public function create()
     {
-        $centros      = CentroCosto::where('activo', true)->orderBy('nombre')->get();
-        $usuarios     = User::where('activo', true)->orderBy('name')->get();
-        $supervisores = $usuarios->filter(
+        $centros       = CentroCosto::where('activo', true)->orderBy('nombre')->get();
+        $trabajadores  = User::where('activo', true)->orderBy('name')->get();
+        $supervisores  = $trabajadores->filter(
             fn($u) => in_array($u->rol->nombre ?? '', ['SUPER_ADMIN', 'PREVENCIONISTA', 'SUPERVISOR', 'ADMIN'])
         )->values();
-        return view('charlas.create', compact('centros', 'usuarios', 'supervisores'));
+        return view('charlas.create', compact('centros', 'trabajadores', 'supervisores'));
     }
 
     public function store(Request $request)

@@ -4,8 +4,8 @@
 <div class="page-container">
     <div class="page-header">
         <div>
-            <h1>Cargos</h1>
-            <p style="color:var(--text-muted);margin:0">Cargos y puestos de trabajo</p>
+            <h2 class="page-heading">Cargos</h2>
+            <p class="page-subheading">Cargos y puestos de trabajo</p>
         </div>
         <a href="{{ route('cargos.create') }}" class="btn-premium">
             <i class="bi bi-plus-lg"></i> Nuevo Cargo
@@ -35,7 +35,7 @@
                     <form method="POST" action="{{ route('cargos.destroy', $cargo) }}" style="display:inline"
                           onsubmit="return confirm('¿Desactivar este cargo?')">
                         @csrf @method('DELETE')
-                        <button class="icon-btn" style="color:#ef4444" title="Desactivar">
+                        <button class="icon-btn danger" title="Desactivar">
                             <i class="bi bi-trash-fill"></i>
                         </button>
                     </form>

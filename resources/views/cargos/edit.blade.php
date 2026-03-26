@@ -1,11 +1,11 @@
 @extends('layouts.app')
 @section('title','Editar Cargo')
 @section('content')
-<div class="page-container" style="max-width:600px">
+<div class="page-container">
     <div class="page-header">
         <div>
-            <h1>Editar Cargo</h1>
-            <p style="color:var(--text-muted);margin:0">{{ $cargo->nombre }}</p>
+            <h2 class="page-heading">Editar Cargo</h2>
+            <p class="page-subheading">{{ $cargo->nombre }}</p>
         </div>
         <a href="{{ route('cargos.index') }}" class="btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
     </div>

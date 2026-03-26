@@ -1,9 +1,9 @@
 @extends('layouts.app')
 @section('title','Nuevo Accidente SST')
 @section('content')
-<div class="page-container" style="max-width:900px">
+<div class="page-container">
     <div class="page-header">
-        <div><h1>Registrar Accidente / Enfermedad Profesional</h1></div>
+        <div><h2 class="page-heading">Registrar Accidente / Enfermedad Profesional</h2></div>
         <a href="{{ route('accidentes-sst.index') }}" class="btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
     </div>
     @include('partials._alerts')

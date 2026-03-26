@@ -1,10 +1,10 @@
 @extends('layouts.app')
 @section('title','Detalle Accidente SST')
 @section('content')
-<div class="page-container" style="max-width:960px">
+<div class="page-container">
     <div class="page-header">
         <div>
-            <h1>Caso N° {{ $accidenteSst->numero_caso ?? $accidenteSst->id }}</h1>
+            <h2 class="page-heading">Caso N° {{ $accidenteSst->numero_caso ?? $accidenteSst->id }}</h2>
             <p style="color:var(--text-muted);margin:0">
                 {{ \Carbon\Carbon::parse($accidenteSst->fecha_accidente)->format('d/m/Y') }}
                 @if($accidenteSst->hora_accidente) — {{ $accidenteSst->hora_accidente }} @endif

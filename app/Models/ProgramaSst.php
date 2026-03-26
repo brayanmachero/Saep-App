@@ -9,17 +9,33 @@ class ProgramaSst extends Model
 {
     protected $table = 'programas_sst';
 
-    protected $fillable = ['anio','titulo','descripcion','estado','creado_por'];
+    protected $fillable = [
+        'anio', 'titulo', 'descripcion', 'estado',
+        'codigo', 'centro_costo_id', 'responsable_id', 'creado_por',
+    ];
 
-    // Alias: views use $prog->nombre, DB stores 'titulo'
+    // Alias: views usan $prog->nombre
     public function getNombreAttribute(): string { return $this->titulo ?? ''; }
-    // Stub for missing FK — table has no centro_costo_id yet
+
+    // === Relationships ===
     public function centroCosto() { return $this->belongsTo(CentroCosto::class, 'centro_costo_id'); }
     public function responsable() { return $this->belongsTo(User::class, 'responsable_id'); }
-
     public function categorias()  { return $this->hasMany(SstCategoria::class, 'programa_id'); }
     public function creador()     { return $this->belongsTo(User::class, 'creado_por'); }
 
+    // === Auto-código ===
+    protected static function booted(): void
+    {
+        static::creating(function (self $prog) {
+            if (empty($prog->codigo)) {
+                $year = $prog->anio ?? date('Y');
+                $seq  = self::where('anio', $year)->count() + 1;
+                $prog->codigo = sprintf('SST-%d-%03d', $year, $seq);
+            }
+        });
+    }
+
+    // === Stats ===
     public function getPorcentajeRealizadoAttribute(): int
     {
         $seguimiento = SstSeguimiento::whereHas('actividad', fn($q) =>
@@ -28,5 +44,28 @@ class ProgramaSst extends Model
         $programados = (clone $seguimiento)->where('programado', true)->count();
         $realizados  = (clone $seguimiento)->where('realizado', true)->count();
         return $programados > 0 ? (int) round($realizados / $programados * 100) : 0;
+    }
+
+    public function getEstadoBadgeAttribute(): string
+    {
+        return match($this->estado) {
+            'ACTIVO'   => 'success',
+            'CERRADO'  => 'secondary',
+            'BORRADOR' => 'warning',
+            default    => 'info',
+        };
+    }
+
+    public function getActividadesTotalesAttribute(): int
+    {
+        return SstActividad::whereHas('categoria', fn($q) => $q->where('programa_id', $this->id))->count();
+    }
+
+    public function getActividadesVencidasAttribute(): int
+    {
+        return SstActividad::whereHas('categoria', fn($q) => $q->where('programa_id', $this->id))
+            ->where('fecha_fin', '<', now())
+            ->where('estado', '!=', 'COMPLETADA')
+            ->count();
     }
 }

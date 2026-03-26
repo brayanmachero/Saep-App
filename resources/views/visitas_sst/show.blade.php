@@ -1,10 +1,10 @@
 @extends('layouts.app')
 @section('title','Detalle Visita SST')
 @section('content')
-<div class="page-container" style="max-width:900px">
+<div class="page-container">
     <div class="page-header">
         <div>
-            <h1>Visita N° {{ $visitaSst->numero_visita ?? $visitaSst->id }}</h1>
+            <h2 class="page-heading">Visita N° {{ $visitaSst->numero_visita ?? $visitaSst->id }}</h2>
             <p style="color:var(--text-muted);margin:0">
                 {{ \Carbon\Carbon::parse($visitaSst->fecha_visita)->format('d/m/Y') }}
                 · {{ $visitaSst->centroCosto->nombre ?? '—' }}

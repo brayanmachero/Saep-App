@@ -1,10 +1,10 @@
 @extends('layouts.app')
 @section('title','Editar Categoría')
 @section('content')
-<div class="page-container" style="max-width:680px">
+<div class="page-container">
     <div class="page-header">
         <div>
-            <h1>Editar Categoría</h1>
+            <h2 class="page-heading">Editar Categoría</h2>
             <p style="color:var(--text-muted);margin:0">{{ $categoria->nombre }}</p>
         </div>
         <a href="{{ route('categorias-formularios.index') }}" class="btn-secondary">

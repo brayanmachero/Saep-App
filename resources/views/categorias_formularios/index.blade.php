@@ -4,7 +4,7 @@
 <div class="page-container">
     <div class="page-header">
         <div>
-            <h1>Categorías de Formularios</h1>
+            <h2 class="page-heading">Categorías de Formularios</h2>
             <p style="color:var(--text-muted);margin:0">Agrupación de formularios Kizeo</p>
         </div>
         <a href="{{ route('categorias-formularios.create') }}" class="btn-premium">
@@ -41,7 +41,7 @@
                     <form method="POST" action="{{ route('categorias-formularios.destroy', $cat) }}" style="display:inline"
                           onsubmit="return confirm('¿Eliminar esta categoría?')">
                         @csrf @method('DELETE')
-                        <button class="icon-btn" style="color:#ef4444"><i class="bi bi-trash-fill"></i></button>
+                        <button class="icon-btn danger"><i class="bi bi-trash-fill"></i></button>
                     </form>
                 </td>
             </tr>

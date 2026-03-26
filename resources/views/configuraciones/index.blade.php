@@ -1,12 +1,15 @@
 @extends('layouts.app')
 @section('title','Configuración del Sistema')
 @section('content')
-<div class="page-container" style="max-width:860px">
+<div class="page-container">
     <div class="page-header">
         <div>
-            <h1>Configuración del Sistema</h1>
-            <p style="color:var(--text-muted);margin:0">Parámetros globales de la plataforma SAEP</p>
+            <h2 class="page-heading">Configuración del Sistema</h2>
+            <p class="page-subheading">Parámetros globales de la plataforma SAEP</p>
         </div>
+        <a href="{{ route('importacion.index') }}" class="btn-secondary">
+            <i class="bi bi-cloud-upload-fill"></i> Importar Datos
+        </a>
     </div>
     @include('partials._alerts')
     <form method="POST" action="{{ route('configuraciones.update') }}">
@@ -25,7 +28,7 @@
 
         @foreach($grupos as $grupo => $items)
         <div class="glass-card" style="margin-bottom:1.5rem">
-            <div style="border-bottom:1px solid var(--border-color);padding-bottom:.75rem;margin-bottom:1.25rem">
+            <div style="border-bottom:1px solid var(--surface-border);padding-bottom:.75rem;margin-bottom:1.25rem">
                 <h3 style="margin:0;font-size:1.05rem;display:flex;align-items:center;gap:.5rem">
                     <span>{{ $grupoLabels[$grupo][0] ?? '⚙️' }}</span>
                     {{ $grupoLabels[$grupo][1] ?? ucfirst($grupo) }}
@@ -54,13 +57,13 @@
                             </label>
                         </div>
                     @elseif($config->tipo === 'text')
-                        <textarea name="config[{{ $config->clave }}]" class="form-control"
+                        <textarea name="config[{{ $config->clave }}]" class="form-input"
                                   rows="3">{{ old('config.'.$config->clave, $config->valor) }}</textarea>
                     @else
                         <input type="{{ $config->tipo === 'integer' ? 'number' : 'text' }}"
                                name="config[{{ $config->clave }}]"
                                value="{{ old('config.'.$config->clave, $config->valor) }}"
-                               class="form-control">
+                               class="form-input">
                     @endif
                 </div>
                 @endforeach

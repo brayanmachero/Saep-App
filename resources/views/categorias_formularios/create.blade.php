@@ -1,9 +1,9 @@
 @extends('layouts.app')
 @section('title','Nueva Categoría')
 @section('content')
-<div class="page-container" style="max-width:680px">
+<div class="page-container">
     <div class="page-header">
-        <div><h1>Nueva Categoría de Formularios</h1></div>
+        <div><h2 class="page-heading">Nueva Categoría de Formularios</h2></div>
         <a href="{{ route('categorias-formularios.index') }}" class="btn-secondary">
             <i class="bi bi-arrow-left"></i> Volver
         </a>

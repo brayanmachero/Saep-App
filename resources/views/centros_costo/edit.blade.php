@@ -1,11 +1,11 @@
 @extends('layouts.app')
 @section('title','Editar Centro de Costo')
 @section('content')
-<div class="page-container" style="max-width:700px">
+<div class="page-container">
     <div class="page-header">
         <div>
-            <h1>Editar Centro de Costo</h1>
-            <p style="color:var(--text-muted);margin:0">{{ $centroCosto->nombre }}</p>
+            <h2 class="page-heading">Editar Centro de Costo</h2>
+            <p class="page-subheading">{{ $centroCosto->nombre }}</p>
         </div>
         <a href="{{ route('centros-costo.index') }}" class="btn-secondary">
             <i class="bi bi-arrow-left"></i> Volver

@@ -4,8 +4,8 @@
 <div class="page-container">
     <div class="page-header">
         <div>
-            <h1>Visitas e Inspecciones SST</h1>
-            <p style="color:var(--text-muted);margin:0">Registro de visitas de campo y observaciones preventivas</p>
+            <h2 class="page-heading">Visitas e Inspecciones SST</h2>
+            <p class="page-subheading">Registro de visitas de campo y observaciones preventivas</p>
         </div>
         <a href="{{ route('visitas-sst.create') }}" class="btn-premium">
             <i class="bi bi-plus-lg"></i> Nueva Visita
@@ -39,7 +39,7 @@
                     <form method="POST" action="{{ route('visitas-sst.destroy', $v) }}" style="display:inline"
                           onsubmit="return confirm('¿Eliminar esta visita?')">
                         @csrf @method('DELETE')
-                        <button class="icon-btn" style="color:#ef4444"><i class="bi bi-trash-fill"></i></button>
+                        <button class="icon-btn danger"><i class="bi bi-trash-fill"></i></button>
                     </form>
                 </td>
             </tr>

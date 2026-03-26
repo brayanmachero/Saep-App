@@ -1,9 +1,9 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('title', 'Firmar Asistencia — ' . $charla->titulo)
 
 @section('content')
-<div class="page-container" style="max-width:680px;">
+<div class="page-container">
 
     @include('partials._alerts')
 

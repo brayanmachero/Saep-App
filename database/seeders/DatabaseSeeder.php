@@ -3,9 +3,11 @@
 namespace Database\Seeders;
 
 use App\Models\Departamento;
+use App\Models\Modulo;
 use App\Models\Rol;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
@@ -79,5 +81,14 @@ class DatabaseSeeder extends Seeder
             'password'        => Hash::make('Saep2026!'),
             'activo'          => true,
         ]);
+
+        // Asignar todos los módulos al rol SUPER_ADMIN
+        $modulos = Modulo::all();
+        foreach ($modulos as $modulo) {
+            DB::table('rol_modulo')->updateOrInsert(
+                ['rol_id' => $superAdmin->id, 'modulo_id' => $modulo->id],
+                ['puede_ver' => true, 'puede_crear' => true, 'puede_editar' => true, 'puede_eliminar' => true, 'created_at' => now(), 'updated_at' => now()]
+            );
+        }
     }
 }

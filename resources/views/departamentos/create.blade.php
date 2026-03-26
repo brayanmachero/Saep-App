@@ -3,7 +3,7 @@
 @section('title', 'Nuevo Departamento')
 
 @section('content')
-<div class="page-container" style="max-width:600px;">
+<div class="page-container">
 
     @include('partials._alerts')
 

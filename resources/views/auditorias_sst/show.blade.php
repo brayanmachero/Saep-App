@@ -1,10 +1,10 @@
 @extends('layouts.app')
 @section('title','Detalle Auditoría SST')
 @section('content')
-<div class="page-container" style="max-width:900px">
+<div class="page-container">
     <div class="page-header">
         <div>
-            <h1>Auditoría N° {{ $auditoriaSst->numero_auditoria ?? $auditoriaSst->id }}</h1>
+            <h2 class="page-heading">Auditoría N° {{ $auditoriaSst->numero_auditoria ?? $auditoriaSst->id }}</h2>
             <p style="color:var(--text-muted);margin:0">
                 {{ \Carbon\Carbon::parse($auditoriaSst->fecha_auditoria)->format('d/m/Y') }}
                 · {{ $auditoriaSst->centroCosto->nombre ?? '—' }}

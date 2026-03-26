@@ -15,14 +15,36 @@ class SstPlanAccion extends Model
     public function actividad()  { return $this->belongsTo(SstActividad::class, 'actividad_id'); }
     public function creadoPor()  { return $this->belongsTo(User::class, 'creado_por'); }
 
-    public function getEstadoBadgeAttribute(): array
+    public static function estadosMap(): array
+    {
+        return [
+            'PENDIENTE'   => 'Pendiente',
+            'EN_PROGRESO' => 'En Progreso',
+            'COMPLETADO'  => 'Completado',
+            'CANCELADO'   => 'Cancelado',
+        ];
+    }
+
+    public function getEstadoBadgeAttribute(): string
     {
         return match($this->estado) {
-            'PENDIENTE'    => ['label'=>'Pendiente',    'class'=>'badge-warning'],
-            'EN_PROGRESO'  => ['label'=>'En Progreso',  'class'=>'badge-info'],
-            'COMPLETADO'   => ['label'=>'Completado',   'class'=>'badge-success'],
-            'CANCELADO'    => ['label'=>'Cancelado',    'class'=>'badge-danger'],
-            default        => ['label'=>$this->estado,  'class'=>'badge-secondary'],
+            'PENDIENTE'   => 'warning',
+            'EN_PROGRESO' => 'info',
+            'COMPLETADO'  => 'success',
+            'CANCELADO'   => 'danger',
+            default       => 'secondary',
         };
+    }
+
+    public function getEstadoLabelAttribute(): string
+    {
+        return self::estadosMap()[$this->estado] ?? $this->estado;
+    }
+
+    public function getEstaVencidoAttribute(): bool
+    {
+        return $this->fecha_compromiso
+            && $this->fecha_compromiso->isPast()
+            && !in_array($this->estado, ['COMPLETADO', 'CANCELADO']);
     }
 }

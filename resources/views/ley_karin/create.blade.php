@@ -1,168 +1,215 @@
 @extends('layouts.app')
-@section('title','Nueva Denuncia Ley Karin')
+@section('title', 'Nueva Denuncia Ley Karin')
+
 @section('content')
-<div class="page-container" style="max-width:900px">
-    <div class="page-header">
-        <div>
-            <h1>Nueva Denuncia — Ley Karin</h1>
-            <p style="color:var(--text-muted);margin:0">Ley 21.643 · Acoso laboral, sexual y violencia en el trabajo</p>
-        </div>
-        <a href="{{ route('ley-karin.index') }}" class="btn-secondary"><i class="bi bi-arrow-left"></i> Volver</a>
-    </div>
+<div class="page-container">
+
     @include('partials._alerts')
 
-    <div class="glass-card" style="background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.2);margin-bottom:1.5rem">
-        <div style="display:flex;gap:.75rem;align-items:flex-start">
-            <i class="bi bi-shield-lock-fill" style="font-size:1.5rem;color:#dc2626;flex-shrink:0;margin-top:.1rem"></i>
+    <div class="page-header">
+        <div>
+            <h2 class="page-heading"><i class="bi bi-shield-exclamation" style="color:#dc2626"></i> Nueva Denuncia</h2>
+            <p class="page-subheading">Ley 21.643 · Acoso laboral, sexual y violencia en el trabajo</p>
+        </div>
+        <a href="{{ route('ley-karin.index') }}" class="btn-ghost">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
+
+    {{-- Aviso de confidencialidad --}}
+    <div class="glass-card" style="border-left:4px solid #dc2626;margin-bottom:1.5rem;padding:1rem 1.25rem;">
+        <div style="display:flex;gap:.75rem;align-items:flex-start;">
+            <i class="bi bi-shield-lock-fill" style="font-size:1.25rem;color:#dc2626;flex-shrink:0;margin-top:.1rem;"></i>
             <div>
                 <strong>Confidencialidad</strong>
-                <p style="margin:.25rem 0 0;font-size:.9rem;color:var(--text-muted)">
+                <p style="margin:.25rem 0 0;font-size:.88rem;color:var(--text-muted);line-height:1.5;">
                     Este registro es estrictamente confidencial. Solo el personal autorizado tendrá acceso al expediente.
-                    El folio será generado automáticamente y servirá como número de seguimiento para el denunciante.
+                    El folio será generado automáticamente y servirá como número de seguimiento.
                 </p>
             </div>
         </div>
     </div>
 
-    <div class="glass-card">
-        <form method="POST" action="{{ route('ley-karin.store') }}">
-            @csrf
-            <h4 style="margin-top:0;color:var(--text-muted);font-size:.85rem;text-transform:uppercase;letter-spacing:.05em">Datos de la Denuncia</h4>
-            <div class="form-grid">
+    <form method="POST" action="{{ route('ley-karin.store') }}">
+        @csrf
+
+        {{-- Datos de la denuncia --}}
+        <div class="glass-card" style="margin-bottom:1.25rem;">
+            <h3 style="font-size:0.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1.25rem;font-weight:700;">
+                <i class="bi bi-file-earmark-text"></i> Datos de la Denuncia
+            </h3>
+            <div class="form-grid-2">
                 <div class="form-group">
-                    <label>Fecha de Denuncia <span class="required">*</span></label>
+                    <label>Fecha de Denuncia *</label>
                     <input type="date" name="fecha_denuncia" value="{{ old('fecha_denuncia', date('Y-m-d')) }}"
-                           class="form-control @error('fecha_denuncia') is-invalid @enderror" required>
-                    @error('fecha_denuncia')<span class="form-error">{{ $message }}</span>@enderror
+                           class="form-input @error('fecha_denuncia') is-invalid @enderror" required>
+                    @error('fecha_denuncia') <span class="error-msg">{{ $message }}</span> @enderror
                 </div>
                 <div class="form-group">
-                    <label>Tipo de Denuncia <span class="required">*</span></label>
-                    <select name="tipo_denuncia" class="form-control @error('tipo_denuncia') is-invalid @enderror" required>
+                    <label>Tipo de Denuncia *</label>
+                    <select name="tipo" class="form-input @error('tipo') is-invalid @enderror" required>
                         <option value="">Seleccionar...</option>
-                        @foreach(['acoso_laboral','acoso_sexual','violencia_trabajo','discriminación','otra'] as $t)
-                            <option value="{{ $t }}" {{ old('tipo_denuncia') === $t ? 'selected' : '' }}>
-                                {{ ucfirst(str_replace('_',' ',$t)) }}
-                            </option>
+                        @foreach(\App\Models\LeyKarin::tiposMap() as $val => $lbl)
+                            <option value="{{ $val }}" {{ old('tipo') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
                         @endforeach
                     </select>
-                    @error('tipo_denuncia')<span class="form-error">{{ $message }}</span>@enderror
+                    @error('tipo') <span class="error-msg">{{ $message }}</span> @enderror
                 </div>
                 <div class="form-group">
-                    <label>Centro de Costo <span class="required">*</span></label>
-                    <select name="centro_costo_id" class="form-control @error('centro_costo_id') is-invalid @enderror" required>
+                    <label>Centro de Costo *</label>
+                    <select name="centro_costo_id" class="form-input @error('centro_costo_id') is-invalid @enderror" required>
                         <option value="">Seleccionar...</option>
                         @foreach($centros as $cc)
-                            <option value="{{ $cc->id }}" {{ old('centro_costo_id') == $cc->id ? 'selected' : '' }}>
-                                {{ $cc->nombre }}
-                            </option>
+                            <option value="{{ $cc->id }}" {{ old('centro_costo_id') == $cc->id ? 'selected' : '' }}>{{ $cc->nombre }}</option>
                         @endforeach
                     </select>
-                    @error('centro_costo_id')<span class="form-error">{{ $message }}</span>@enderror
+                    @error('centro_costo_id') <span class="error-msg">{{ $message }}</span> @enderror
                 </div>
                 <div class="form-group">
                     <label>Canal de Denuncia</label>
-                    <select name="canal" class="form-control">
-                        @foreach(['presencial','escrito','correo_electronico','formulario_web','telefono','anonimo'] as $c)
-                            <option value="{{ $c }}" {{ old('canal') === $c ? 'selected' : '' }}>
-                                {{ ucfirst(str_replace('_',' ',$c)) }}
-                            </option>
+                    <select name="canal" class="form-input">
+                        <option value="">Seleccionar...</option>
+                        @foreach(\App\Models\LeyKarin::canalesMap() as $val => $lbl)
+                            <option value="{{ $val }}" {{ old('canal') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
                         @endforeach
                     </select>
                 </div>
             </div>
+        </div>
 
-            <h4 style="margin-top:1.5rem;color:var(--text-muted);font-size:.85rem;text-transform:uppercase;letter-spacing:.05em">Denunciante</h4>
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" name="anonima" value="1" id="esAnonima" {{ old('anonima') ? 'checked' : '' }}>
-                    Denuncia anónima
+        {{-- Denunciante --}}
+        <div class="glass-card" style="margin-bottom:1.25rem;">
+            <h3 style="font-size:0.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1.25rem;font-weight:700;">
+                <i class="bi bi-person-fill"></i> Denunciante
+            </h3>
+
+            <div class="form-group" style="margin-bottom:1rem;">
+                <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+                    <input type="checkbox" name="anonima" value="1" id="esAnonima" {{ old('anonima') ? 'checked' : '' }}
+                           style="width:18px;height:18px;accent-color:var(--primary-color);">
+                    <span>Denuncia anónima</span>
                 </label>
             </div>
-            <div id="datosDenunciante">
-                <div class="form-grid">
+
+            <div id="datosDenunciante" style="transition:opacity .2s;">
+                <div class="form-grid-2">
                     <div class="form-group">
-                        <label>Nombre Denunciante</label>
-                        <input type="text" name="nombre_denunciante" value="{{ old('nombre_denunciante') }}" class="form-control">
+                        <label>Nombre del Denunciante</label>
+                        <input type="text" name="denunciante_nombre" value="{{ old('denunciante_nombre') }}"
+                               class="form-input" placeholder="Nombre completo">
                     </div>
                     <div class="form-group">
+                        <label>RUT</label>
+                        <input type="text" name="denunciante_rut" value="{{ old('denunciante_rut') }}"
+                               class="form-input" placeholder="12.345.678-9">
+                    </div>
+                    <div class="form-group" style="grid-column:span 2;">
                         <label>O seleccionar usuario interno</label>
-                        <select name="denunciante_id" class="form-control">
+                        <select name="denunciante_id" class="form-input">
                             <option value="">— Externo / No registrado —</option>
                             @foreach($usuarios as $u)
                                 <option value="{{ $u->id }}" {{ old('denunciante_id') == $u->id ? 'selected' : '' }}>
-                                    {{ $u->name }} {{ $u->apellido_paterno }}
+                                    {{ $u->name }} {{ $u->apellido_paterno ?? '' }}
                                 </option>
                             @endforeach
                         </select>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <h4 style="margin-top:1.5rem;color:var(--text-muted);font-size:.85rem;text-transform:uppercase;letter-spacing:.05em">Denunciado</h4>
-            <div class="form-grid">
+        {{-- Denunciado --}}
+        <div class="glass-card" style="margin-bottom:1.25rem;">
+            <h3 style="font-size:0.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1.25rem;font-weight:700;">
+                <i class="bi bi-person-x-fill"></i> Denunciado
+            </h3>
+            <div class="form-grid-2">
                 <div class="form-group">
-                    <label>Nombre Denunciado</label>
-                    <input type="text" name="nombre_denunciado" value="{{ old('nombre_denunciado') }}" class="form-control">
+                    <label>Nombre del Denunciado</label>
+                    <input type="text" name="denunciado_nombre" value="{{ old('denunciado_nombre') }}"
+                           class="form-input" placeholder="Nombre completo">
                 </div>
                 <div class="form-group">
                     <label>Cargo del Denunciado</label>
-                    <input type="text" name="cargo_denunciado" value="{{ old('cargo_denunciado') }}" class="form-control">
+                    <input type="text" name="denunciado_cargo" value="{{ old('denunciado_cargo') }}"
+                           class="form-input" placeholder="Ej: Supervisor, Jefatura">
                 </div>
             </div>
+        </div>
 
-            <div class="form-group">
-                <label>Descripción de los Hechos <span class="required">*</span></label>
-                <textarea name="descripcion_hechos" class="form-control @error('descripcion_hechos') is-invalid @enderror"
-                          rows="5" placeholder="Describir en detalle los hechos denunciados, fechas, lugares, testigos...">{{ old('descripcion_hechos') }}</textarea>
-                @error('descripcion_hechos')<span class="form-error">{{ $message }}</span>@enderror
+        {{-- Descripción --}}
+        <div class="glass-card" style="margin-bottom:1.25rem;">
+            <h3 style="font-size:0.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1.25rem;font-weight:700;">
+                <i class="bi bi-chat-left-text-fill"></i> Descripción de los Hechos
+            </h3>
+            <div class="form-group" style="margin-bottom:0;">
+                <textarea name="descripcion_hechos" class="form-input @error('descripcion_hechos') is-invalid @enderror"
+                          rows="6" required placeholder="Describir en detalle los hechos denunciados, fechas, lugares, testigos...">{{ old('descripcion_hechos') }}</textarea>
+                @error('descripcion_hechos') <span class="error-msg">{{ $message }}</span> @enderror
             </div>
+        </div>
 
-            <div class="form-grid">
+        {{-- Investigación --}}
+        <div class="glass-card" style="margin-bottom:1.25rem;">
+            <h3 style="font-size:0.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1.25rem;font-weight:700;">
+                <i class="bi bi-search"></i> Investigación
+            </h3>
+            <div class="form-grid-2">
                 <div class="form-group">
                     <label>Investigador Asignado</label>
-                    <select name="investigador_id" class="form-control">
+                    <select name="investigador_id" class="form-input">
                         <option value="">— Sin asignar —</option>
                         @foreach($usuarios as $u)
                             <option value="{{ $u->id }}" {{ old('investigador_id') == $u->id ? 'selected' : '' }}>
-                                {{ $u->name }} {{ $u->apellido_paterno }}
+                                {{ $u->name }} {{ $u->apellido_paterno ?? '' }}
                             </option>
                         @endforeach
                     </select>
                 </div>
                 <div class="form-group">
                     <label>Plazo Legal de Investigación</label>
-                    <input type="date" name="fecha_plazo_investigacion" value="{{ old('fecha_plazo_investigacion') }}" class="form-control">
-                    <small style="color:var(--text-muted)">La ley otorga 30 días hábiles</small>
+                    <input type="date" name="fecha_plazo_investigacion" value="{{ old('fecha_plazo_investigacion') }}"
+                           class="form-input">
+                    <small style="color:var(--text-muted);display:block;margin-top:.25rem;">La ley otorga 30 días hábiles desde la recepción.</small>
                 </div>
             </div>
+        </div>
 
-            <div class="form-group">
-                <label class="checkbox-label">
+        {{-- Opciones --}}
+        <div class="glass-card" style="margin-bottom:1.5rem;">
+            <div class="form-group" style="margin-bottom:0;">
+                <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
                     <input type="hidden" name="confidencial" value="0">
-                    <input type="checkbox" name="confidencial" value="1" {{ old('confidencial', true) ? 'checked' : '' }}>
-                    Marcar como confidencial (acceso restringido)
+                    <input type="checkbox" name="confidencial" value="1" {{ old('confidencial', true) ? 'checked' : '' }}
+                           style="width:18px;height:18px;accent-color:#dc2626;">
+                    <span><i class="bi bi-lock-fill" style="color:#dc2626;"></i> Marcar como confidencial (acceso restringido)</span>
                 </label>
             </div>
+        </div>
 
-            <div style="display:flex;gap:1rem;justify-content:flex-end;margin-top:1.5rem">
-                <a href="{{ route('ley-karin.index') }}" class="btn-secondary">Cancelar</a>
-                <button type="submit" class="btn-premium">
-                    <i class="bi bi-shield-check"></i> Registrar Denuncia
-                </button>
-            </div>
-        </form>
-    </div>
+        {{-- Acciones --}}
+        <div style="display:flex;gap:1rem;justify-content:flex-end;">
+            <a href="{{ route('ley-karin.index') }}" class="btn-ghost">Cancelar</a>
+            <button type="submit" class="btn-premium" onclick="this.disabled=true;this.form.submit();">
+                <i class="bi bi-shield-check"></i> Registrar Denuncia
+            </button>
+        </div>
+    </form>
 </div>
+
+@push('scripts')
 <script>
-const anonima = document.getElementById('esAnonima');
-const datos = document.getElementById('datosDenunciante');
-anonima.addEventListener('change', () => {
-    datos.style.opacity = anonima.checked ? '.4' : '1';
-    datos.querySelectorAll('input,select').forEach(el => el.disabled = anonima.checked);
+document.addEventListener('DOMContentLoaded', function() {
+    const anonima = document.getElementById('esAnonima');
+    const datos = document.getElementById('datosDenunciante');
+    function toggleAnonima() {
+        datos.style.opacity = anonima.checked ? '.35' : '1';
+        datos.style.pointerEvents = anonima.checked ? 'none' : 'auto';
+        datos.querySelectorAll('input,select').forEach(function(el) { el.disabled = anonima.checked; });
+    }
+    anonima.addEventListener('change', toggleAnonima);
+    toggleAnonima();
 });
-if (anonima.checked) {
-    datos.style.opacity = '.4';
-    datos.querySelectorAll('input,select').forEach(el => el.disabled = true);
-}
 </script>
+@endpush
 @endsection

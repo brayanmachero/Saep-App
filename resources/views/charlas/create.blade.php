@@ -1,9 +1,9 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('title', 'Nueva Charla SST')
 
 @section('content')
-<div class="page-container" style="max-width:860px;">
+<div class="page-container">
 
     @include('partials._alerts')
 
@@ -167,7 +167,7 @@
 
     // Relatores
     let relatorIdx = 0;
-    const usuarios = @json($usuarios->map(fn($u) => ['id' => $u->id, 'name' => $u->name]));
+    const usuarios = @json($trabajadores->map(fn($u) => ['id' => $u->id, 'name' => $u->name]));
 
     function buildUserOpts(selectedId) {
         return usuarios.map(u =>

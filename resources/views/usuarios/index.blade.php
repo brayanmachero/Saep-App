@@ -35,6 +35,26 @@
                 </select>
             </div>
             <div class="filter-group">
+                <select name="departamento_id" class="form-input">
+                    <option value="">Todos los departamentos</option>
+                    @foreach($departamentos as $dep)
+                        <option value="{{ $dep->id }}" {{ request('departamento_id') == $dep->id ? 'selected' : '' }}>
+                            {{ $dep->nombre }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="filter-group">
+                <select name="cargo_id" class="form-input">
+                    <option value="">Todos los cargos</option>
+                    @foreach($cargos as $cargo)
+                        <option value="{{ $cargo->id }}" {{ request('cargo_id') == $cargo->id ? 'selected' : '' }}>
+                            {{ $cargo->nombre }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="filter-group">
                 <select name="activo" class="form-input">
                     <option value="">Todos</option>
                     <option value="1" {{ request('activo') === '1' ? 'selected' : '' }}>Activos</option>
@@ -44,7 +64,7 @@
             <button type="submit" class="btn-secondary">
                 <i class="bi bi-search"></i> Filtrar
             </button>
-            @if(request()->hasAny(['buscar','rol_id','activo']))
+            @if(request()->hasAny(['buscar','rol_id','departamento_id','cargo_id','activo']))
                 <a href="{{ route('usuarios.index') }}" class="btn-ghost">
                     <i class="bi bi-x"></i> Limpiar
                 </a>
@@ -59,12 +79,13 @@
                 <thead>
                     <tr>
                         <th>Usuario</th>
-                        <th>Email</th>
                         <th>RUT</th>
-                        <th>Rol</th>
+                        <th>Cargo</th>
                         <th>Departamento</th>
+                        <th>Centro de Costo</th>
+                        <th>Razón Social</th>
+                        <th>Rol</th>
                         <th>Estado</th>
-                        <th>Último Acceso</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
@@ -76,19 +97,23 @@
                                 <div class="avatar" style="width:34px;height:34px;font-size:0.8rem;flex-shrink:0;">
                                     {{ strtoupper(substr($usuario->name, 0, 1)) }}
                                 </div>
-                                <span>{{ $usuario->name }}</span>
+                                <div>
+                                    <span style="font-weight:600;">{{ $usuario->nombre_completo }}</span>
+                                    <span style="display:block;font-size:0.8rem;color:var(--text-muted);">{{ $usuario->email }}</span>
+                                </div>
                             </div>
                         </td>
-                        <td>{{ $usuario->email }}</td>
                         <td>{{ $usuario->rut ?? '—' }}</td>
-                        <td><span class="badge">{{ $usuario->rol->nombre ?? '—' }}</span></td>
+                        <td>{{ $usuario->cargo->nombre ?? '—' }}</td>
                         <td>{{ $usuario->departamento->nombre ?? '—' }}</td>
+                        <td>{{ $usuario->centroCosto->nombre ?? '—' }}</td>
+                        <td>{{ $usuario->razon_social ?? '—' }}</td>
+                        <td><span class="badge">{{ $usuario->rol->nombre ?? '—' }}</span></td>
                         <td>
                             <span class="badge {{ $usuario->activo ? 'success' : 'danger' }}">
                                 {{ $usuario->activo ? 'Activo' : 'Inactivo' }}
                             </span>
                         </td>
-                        <td>{{ $usuario->ultimo_acceso ? \Carbon\Carbon::parse($usuario->ultimo_acceso)->format('d/m/Y H:i') : '—' }}</td>
                         <td>
                             <div style="display:flex;gap:0.25rem;">
                                 <a href="{{ route('usuarios.edit', $usuario) }}" class="icon-btn" title="Editar"
@@ -110,7 +135,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">
+                        <td colspan="9" style="text-align:center;color:var(--text-muted);padding:2rem;">
                             <i class="bi bi-people" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>
                             No hay usuarios
                         </td>

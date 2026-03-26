@@ -3,7 +3,7 @@
 @section('title', 'Firma Relator — ' . $charla->titulo)
 
 @section('content')
-<div class="page-container" style="max-width:680px;">
+<div class="page-container">
 
     @include('partials._alerts')
 

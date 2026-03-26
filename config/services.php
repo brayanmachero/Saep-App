@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'kizeo' => [
+        'token' => env('KIZEO_API_TOKEN'),
+        'url'   => env('KIZEO_API_URL', 'https://www.kizeoforms.com/rest/v3'),
+    ],
+
 ];

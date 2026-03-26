@@ -3,7 +3,7 @@
 @section('title', 'Editar Solicitud #' . str_pad($respuesta->id, 5, '0', STR_PAD_LEFT))
 
 @section('content')
-<div class="page-container" style="max-width:800px;">
+<div class="page-container">
 
     @include('partials._alerts')
 

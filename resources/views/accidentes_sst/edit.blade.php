@@ -1,10 +1,10 @@
 @extends('layouts.app')
 @section('title','Editar Accidente SST')
 @section('content')
-<div class="page-container" style="max-width:900px">
+<div class="page-container">
     <div class="page-header">
         <div>
-            <h1>Editar Accidente SST</h1>
+            <h2 class="page-heading">Editar Accidente SST</h2>
             <p style="color:var(--text-muted);margin:0">Caso N° {{ $accidenteSst->numero_caso ?? $accidenteSst->id }}</p>
         </div>
         <a href="{{ route('accidentes-sst.show', $accidenteSst) }}" class="btn-secondary">

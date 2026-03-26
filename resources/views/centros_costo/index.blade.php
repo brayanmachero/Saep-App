@@ -4,8 +4,8 @@
 <div class="page-container">
     <div class="page-header">
         <div>
-            <h1>Centros de Costo</h1>
-            <p style="color:var(--text-muted);margin:0">Clientes donde SAEP presta servicios</p>
+            <h2 class="page-heading">Centros de Costo</h2>
+            <p class="page-subheading">Clientes donde SAEP presta servicios</p>
         </div>
         <a href="{{ route('centros-costo.create') }}" class="btn-premium">
             <i class="bi bi-plus-lg"></i> Nuevo Centro
@@ -40,7 +40,7 @@
                     <form method="POST" action="{{ route('centros-costo.destroy', $centro) }}" style="display:inline"
                           onsubmit="return confirm('¿Desactivar este centro?')">
                         @csrf @method('DELETE')
-                        <button class="icon-btn" style="color:#ef4444" title="Desactivar">
+                        <button class="icon-btn danger" title="Desactivar">
                             <i class="bi bi-trash-fill"></i>
                         </button>
                     </form>
