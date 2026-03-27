@@ -192,7 +192,7 @@ class KizeoWebhookController extends Controller
 
             return response()->json(['status' => 'success', 'message' => "Acta de {$tipoActa} procesada correctamente"]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Error en Kizeo Webhook: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
