@@ -47,21 +47,52 @@ class KizeoWebhookController extends Controller
         try {
             $payload = $request->all();
 
-            Log::info('Kizeo Webhook recibido', ['event' => $payload['eventType'] ?? 'unknown']);
+            // Log completo del payload para debugging
+            Log::info('Kizeo Webhook recibido (payload completo)', $payload);
 
-            // Validar estructura mínima
-            if (!isset($payload['data']['fields'])) {
+            // Extraer form_id y data_id del webhook notification
+            // Kizeo Standard Webhook puede enviar: {format, eventType, data: {id, form_id, ...}}
+            // O directamente: {id, form_id, eventType, ...}
+            $formId = $payload['data']['form_id'] ?? $payload['form_id'] ?? null;
+            $dataId = $payload['data']['id'] ?? $payload['id'] ?? $payload['data_id'] ?? null;
+            $eventType = $payload['eventType'] ?? $payload['event'] ?? 'unknown';
+
+            Log::info("Webhook parseado", ['formId' => $formId, 'dataId' => $dataId, 'event' => $eventType]);
+
+            // Si el payload tiene los campos directamente, usarlos
+            $fields = $payload['data']['fields'] ?? null;
+
+            // Si NO trae campos, consultar la API de Kizeo para obtener el registro completo
+            if (!$fields && $formId && $dataId) {
+                Log::info("Campos no encontrados en payload, consultando API de Kizeo...", ['formId' => $formId, 'dataId' => $dataId]);
+
+                $record = $this->kizeo->getRecord($formId, $dataId);
+
+                if (!$record || !isset($record['fields'])) {
+                    Log::warning('No se pudieron obtener campos de la API de Kizeo', ['response' => $record]);
+                    return response()->json(['status' => 'error', 'message' => 'No se pudieron obtener datos del formulario'], 200);
+                }
+
+                $fields = $record['fields'];
+                Log::info('Campos obtenidos de la API de Kizeo', ['fields_count' => count($fields)]);
+            }
+
+            if (!$fields) {
+                Log::warning('Sin campos de datos disponibles', ['payload_keys' => array_keys($payload)]);
                 return response()->json(['status' => 'ignored', 'message' => 'Sin campos de datos'], 200);
             }
 
-            $fields = $payload['data']['fields'];
-            $formId = $payload['data']['form_id'] ?? null;
-            $dataId = $payload['id'] ?? null;
-
             // Helper para extraer campos del payload de Kizeo
             $getVal = function (string $key) use ($fields, $formId, $dataId) {
-                if (!isset($fields[$key]) || $fields[$key]['result'] === null) return '-';
-                $res = $fields[$key]['result'];
+                if (!isset($fields[$key])) return '-';
+
+                $field = $fields[$key];
+                $res = $field['result'] ?? $field['value'] ?? $field;
+
+                if ($res === null) return '-';
+
+                // Si es un string simple, devolverlo
+                if (is_string($res)) return $res;
 
                 // Lista de selección múltiple (kit de seguridad, patentes)
                 if (is_array($res) && !isset($res['value'])) {
@@ -74,7 +105,11 @@ class KizeoWebhookController extends Controller
                             return $code;
                         })->implode(', ');
                     }
-                    return implode(', ', $res);
+                    // Array de strings simples
+                    if (!empty($res) && is_string($res[0] ?? null)) {
+                        return implode(', ', $res);
+                    }
+                    return json_encode($res);
                 }
 
                 // Objeto complejo (fecha, geo, firma, dibujo, lista simple)
@@ -82,7 +117,6 @@ class KizeoWebhookController extends Controller
                     $val = $res['value'];
                     if (is_array($val)) {
                         if (isset($val['code'])) {
-                            // Lista simple con código - puede ser patente
                             if ($key === 'lista' && isset(self::PATENTES_MAP[$val['code']])) {
                                 return self::PATENTES_MAP[$val['code']];
                             }
@@ -91,7 +125,6 @@ class KizeoWebhookController extends Controller
                         if (isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
                         if (isset($val['lat'], $val['long'])) return $val['lat'] . ', ' . $val['long'];
                         if (isset($val['file'])) {
-                            // ¡Descargar media real de Kizeo via API!
                             return $this->fetchMediaBase64($formId, $dataId, $val['file']);
                         }
                         return json_encode($val);
@@ -100,7 +133,7 @@ class KizeoWebhookController extends Controller
                     return (string) $val;
                 }
 
-                return (string) $res;
+                return is_string($res) ? $res : json_encode($res);
             };
 
             // Extraer todos los campos
@@ -126,6 +159,8 @@ class KizeoWebhookController extends Controller
                 'firma_devolucion'          => $getVal('firma1'),
                 'geo_devolucion'            => $getVal('geolocalizacion1'),
             ];
+
+            Log::info('Datos extraídos', ['gestion' => $data['gestion'], 'patente' => $data['patente']]);
 
             // Detectar tipo de acta
             $esDevolucion = str_contains($data['gestion'], 'Devoluci');
