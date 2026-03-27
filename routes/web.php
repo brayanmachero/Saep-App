@@ -16,6 +16,7 @@ use App\Http\Controllers\ExportController;
 use App\Http\Controllers\FormularioController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\KizeoDashboardController;
+use App\Http\Controllers\KizeoWebhookController;
 use App\Http\Controllers\LeyKarinController;
 use App\Http\Controllers\PdfController;
 use App\Http\Controllers\PermisoController;
@@ -25,6 +26,11 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VisitaSstController;
 use App\Http\Controllers\LeyKarinPublicoController;
 use Illuminate\Support\Facades\Route;
+
+// --- WEBHOOK KIZEO (público, sin auth ni CSRF) ---
+Route::post('/api/kizeo/webhook', [KizeoWebhookController::class, 'handle'])
+    ->name('kizeo.webhook')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 
 // Auth (con throttle para prevenir fuerza bruta)
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
