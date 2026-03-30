@@ -47,4 +47,12 @@ return [
         'redirect'      => env('GOOGLE_REDIRECT_URI', '/denuncia-ley-karin/auth/callback'),
     ],
 
+    'microsoft_graph' => [
+        'tenant_id'     => env('MSGRAPH_TENANT_ID'),
+        'client_id'     => env('MSGRAPH_CLIENT_ID'),
+        'client_secret' => env('MSGRAPH_CLIENT_SECRET'),
+        'drive_user'    => env('MSGRAPH_DRIVE_USER'),       // email del usuario dueño del OneDrive
+        'root_folder'   => env('MSGRAPH_ROOT_FOLDER', 'Actas Vehiculos'),
+    ],
+
 ];

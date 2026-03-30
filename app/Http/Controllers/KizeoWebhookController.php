@@ -6,6 +6,7 @@ use App\Mail\VehiculoDevolucionMail;
 use App\Mail\VehiculoEntregaMail;
 use App\Models\Configuracion;
 use App\Services\KizeoService;
+use App\Services\OneDriveService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -202,6 +203,19 @@ class KizeoWebhookController extends Controller
 
             $filename = "Acta_{$tipoActa}_Vehiculo_{$data['patente']}_" . preg_replace('/[^a-zA-Z0-9]/', '', $fechaRef) . '.pdf';
             $pdfContent = $pdf->output();
+
+            // Subir PDF a OneDrive (carpeta por patente)
+            try {
+                $oneDrive = app(OneDriveService::class);
+                if ($oneDrive->isConfigured()) {
+                    $conductorSlug = preg_replace('/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/u', '', $data['conductor_nombre']);
+                    $fechaSlug = date('Y-m-d');
+                    $remotePath = "{$data['patente']}/{$tipoActa}_{$fechaSlug}_{$conductorSlug}.pdf";
+                    $oneDrive->uploadFile($pdfContent, $remotePath);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('OneDrive upload falló (no crítico): ' . $e->getMessage());
+            }
 
             // Enviar correo con PDF adjunto
             $envioActivo = Configuracion::get('kizeo_vehiculos_activo', '1');
