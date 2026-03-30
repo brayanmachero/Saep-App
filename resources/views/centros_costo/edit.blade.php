@@ -17,10 +17,9 @@
             @csrf @method('PUT')
             <div class="form-grid">
                 <div class="form-group">
-                    <label>Código <span class="required">*</span></label>
-                    <input type="text" name="codigo" value="{{ old('codigo', $centroCosto->codigo) }}"
-                           class="form-control @error('codigo') is-invalid @enderror" required>
-                    @error('codigo')<span class="form-error">{{ $message }}</span>@enderror
+                    <label>Código</label>
+                    <input type="text" value="{{ $centroCosto->codigo }}" class="form-control" disabled>
+                    <small style="color:var(--text-muted)">Se genera automáticamente desde el nombre</small>
                 </div>
                 <div class="form-group">
                     <label>Tipo Nómina <span class="required">*</span></label>

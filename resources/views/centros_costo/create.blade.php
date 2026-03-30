@@ -17,13 +17,6 @@
             @csrf
             <div class="form-grid">
                 <div class="form-group">
-                    <label>Código <span class="required">*</span></label>
-                    <input type="text" name="codigo" value="{{ old('codigo') }}"
-                           class="form-control @error('codigo') is-invalid @enderror"
-                           placeholder="Ej: CC001" required>
-                    @error('codigo')<span class="form-error">{{ $message }}</span>@enderror
-                </div>
-                <div class="form-group">
                     <label>Tipo Nómina <span class="required">*</span></label>
                     <select name="razon_social" class="form-control @error('razon_social') is-invalid @enderror" required>
                         <option value="NORMAL" {{ old('razon_social') === 'NORMAL' ? 'selected' : '' }}>Normal</option>

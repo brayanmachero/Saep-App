@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CentroCosto;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class CentroCostoController extends Controller
 {
@@ -22,11 +23,11 @@ class CentroCostoController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'codigo' => 'required|string|max:100|unique:centros_costo,codigo',
             'nombre' => 'required|string|max:200',
             'razon_social' => 'required|in:NORMAL,TRANSITORIO',
         ]);
-        CentroCosto::create($request->only(['codigo','nombre','razon_social']));
+        $codigo = $this->generarCodigo($request->nombre);
+        CentroCosto::create(['codigo' => $codigo] + $request->only(['nombre','razon_social']));
         return redirect()->route('centros-costo.index')->with('success', 'Centro de costo creado.');
     }
 
@@ -37,17 +38,17 @@ class CentroCostoController extends Controller
 
     public function edit(CentroCosto $centrosCosto)
     {
-        return view('centros_costo.edit', ['centro' => $centrosCosto]);
+        return view('centros_costo.edit', ['centroCosto' => $centrosCosto]);
     }
 
     public function update(Request $request, CentroCosto $centrosCosto)
     {
         $request->validate([
-            'codigo' => 'required|string|max:100|unique:centros_costo,codigo,'.$centrosCosto->id,
             'nombre' => 'required|string|max:200',
             'razon_social' => 'required|in:NORMAL,TRANSITORIO',
         ]);
-        $centrosCosto->update($request->only(['codigo','nombre','razon_social','activo']));
+        $codigo = $this->generarCodigo($request->nombre, $centrosCosto->id);
+        $centrosCosto->update(['codigo' => $codigo] + $request->only(['nombre','razon_social','activo']));
         return redirect()->route('centros-costo.index')->with('success', 'Centro de costo actualizado.');
     }
 
@@ -55,5 +56,21 @@ class CentroCostoController extends Controller
     {
         $centrosCosto->update(['activo' => false]);
         return redirect()->route('centros-costo.index')->with('success', 'Centro de costo desactivado.');
+    }
+
+    private function generarCodigo(string $nombre, ?int $excludeId = null): string
+    {
+        $base = Str::upper(Str::slug($nombre, '_'));
+        $codigo = Str::limit($base, 50, '');
+        $suffix = 0;
+
+        while (CentroCosto::where('codigo', $codigo)
+            ->when($excludeId, fn($q) => $q->where('id', '!=', $excludeId))
+            ->exists()) {
+            $suffix++;
+            $codigo = Str::limit($base, 47, '') . '_' . $suffix;
+        }
+
+        return $codigo;
     }
 }
