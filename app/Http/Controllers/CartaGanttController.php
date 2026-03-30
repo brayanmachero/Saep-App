@@ -234,6 +234,8 @@ class CartaGanttController extends Controller
             'prioridad'      => 'nullable|string|in:ALTA,MEDIA,BAJA',
             'estado'         => 'nullable|string|in:' . implode(',', array_keys(SstActividad::estadosMap())),
             'periodicidad'   => 'nullable|string|in:' . implode(',', array_keys(SstActividad::periodicidadesMap())),
+            'meses_prog'     => 'nullable|array',
+            'meses_prog.*'   => 'integer|min:1|max:12',
         ]);
 
         $actividad->update([
@@ -249,6 +251,28 @@ class CartaGanttController extends Controller
             'estado'         => $request->estado ?? $actividad->estado,
             'periodicidad'   => $request->periodicidad,
         ]);
+
+        // Actualizar meses programados si se enviaron checkboxes
+        if ($request->has('meses_prog')) {
+            $mesesSeleccionados = collect($request->get('meses_prog', []))->map(fn($m) => (int) $m);
+
+            for ($m = 1; $m <= 12; $m++) {
+                if ($mesesSeleccionados->contains($m)) {
+                    $actividad->seguimiento()->updateOrCreate(
+                        ['mes' => $m],
+                        ['programado' => true]
+                    );
+                } else {
+                    // Desprogramar (pero conservar si ya fue realizado)
+                    $seg = $actividad->seguimiento()->where('mes', $m)->first();
+                    if ($seg && !$seg->realizado) {
+                        $seg->update(['programado' => false]);
+                    }
+                }
+            }
+        }
+
+        $this->recalcularEstadoActividad($actividad);
 
         return back()->with('success', 'Actividad actualizada.');
     }

@@ -17,6 +17,7 @@
         'periodicidad' => $act->periodicidad,
         'fecha_inicio' => $act->fecha_inicio ? $act->fecha_inicio->format('Y-m-d') : '',
         'fecha_fin' => $act->fecha_fin ? $act->fecha_fin->format('Y-m-d') : '',
+        'meses_prog' => collect($seg)->filter(fn($s) => $s['programado'])->keys()->values()->all(),
     ]), ENT_QUOTES) }}">
     {{-- Nombre con acciones --}}
     <td class="sst-th-sticky" style="font-weight:600;font-size:.82rem">

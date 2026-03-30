@@ -218,11 +218,6 @@
     @endforeach
     </div>
 
-    {{-- ========== VISTA DETALLADA (Semestral/Mensual/Semanal) ========== --}}
-    <div id="view-detail" style="display:none">
-        <div id="detail-content"></div>
-    </div>
-
     {{-- ========== AGREGAR CATEGORÍA ========== --}}
     <div class="sst-add-cat-card">
         <button class="sst-btn sst-btn-outline" onclick="toggleAddCat()" style="width:100%">
@@ -266,6 +261,14 @@
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha inicio</label><input type="date" name="fecha_inicio" id="edit-fecha-inicio" class="form-input"></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha fin</label><input type="date" name="fecha_fin" id="edit-fecha-fin" class="form-input"></div>
                     <div class="form-group" style="margin:0;grid-column:1/-1"><label class="sst-label">Descripción</label><textarea name="descripcion" id="edit-descripcion" class="form-input" rows="2" placeholder="Descripción o instrucciones..."></textarea></div>
+                </div>
+                <div style="margin-bottom:.85rem">
+                    <label class="sst-label" style="display:block;margin-bottom:.3rem">Meses Programados <small style="text-transform:none;font-weight:400">(marcar los meses donde se debe ejecutar)</small></label>
+                    <div id="edit-meses-grid" style="display:flex;gap:.35rem;flex-wrap:wrap">
+                        @foreach(['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'] as $idx => $mesNom)
+                        <label class="sst-mes-check"><input type="checkbox" name="meses_prog[]" value="{{ $idx + 1 }}" id="edit-mes-{{ $idx + 1 }}"> {{ $mesNom }}</label>
+                        @endforeach
+                    </div>
                 </div>
                 <div style="display:flex;gap:.5rem;justify-content:flex-end">
                     <button type="button" class="sst-btn sst-btn-outline" onclick="document.getElementById('editModal').style.display='none'">Cancelar</button>
