@@ -35,6 +35,9 @@
     .fes-box { border: 1px dashed #6b7280; padding: 7px 10px; border-radius: 4px; margin-top: 18px; font-size: 8px; color: #4b5563; line-height: 1.5; }
     .footer { text-align: center; font-size: 7.5px; color: #9ca3af; margin-top: 14px; border-top: 1px solid #e5e7eb; padding-top: 8px; }
     .media-img { max-height: 130px; width: auto; border: 1px solid #cbd5e1; border-radius: 3px; }
+    .clause { margin-bottom: 6px; text-align: justify; line-height: 1.55; }
+    .clause-num { font-weight: bold; color: #1e40af; }
+    .clause-title { font-weight: bold; text-transform: uppercase; font-size: 8.5px; }
 </style>
 </head>
 <body>
@@ -92,13 +95,52 @@
   <tr><th>Empleador</th><td>{{ $data['empresa_razon_social'] }}@if(!empty($data['empresa_rut'])) &nbsp;·&nbsp; RUT {{ $data['empresa_rut'] }}@endif</td></tr>
 </table>
 
-<div class="section-title">3. Declaración Jurada de Recepción y Custodia</div>
+<div class="section-title">3. Declaración de Recepción, Custodia y Responsabilidad del Vehículo</div>
 <div class="decl-box">
   <div class="decl-title">El conductor declara bajo juramento:</div>
-  {!! ($data['declaracion_recepcion'] ?? '-') !== '-'
-      ? nl2br(e($data['declaracion_recepcion']))
-      : 'Declaro haber recibido el vehículo individualizado en este documento en condiciones operativas, comprometiéndome a su uso exclusivo para fines laborales autorizados por la empresa, a velar por su mantenimiento, seguridad y devolución en el mismo o mejor estado en que fue entregado. Acepto ser responsable civil y laboralmente de cualquier daño, pérdida o uso indebido del vehículo durante el período de custodia asignado.' !!}
-  <br><br>
+  <p style="margin:0 0 6px;text-align:justify;line-height:1.55">
+    Por el presente documento, y mediante la firma digital o manuscrita adjunta, declaro haber recibido de parte de la empresa
+    <strong>{{ $data['empresa_razon_social'] }}</strong> el vehículo individualizado en los apartados anteriores, así como sus
+    correspondientes accesorios, herramientas, neumático de repuesto, extintor y documentación legal exigida, en el estado de
+    conservación y funcionamiento que se detalla en la presente inspección.
+  </p>
+  <p style="margin:0 0 8px;text-align:justify;font-weight:bold;font-size:9px">
+    Al recibir la custodia de este vehículo, asumo y acepto expresamente las siguientes condiciones y responsabilidades:
+  </p>
+
+  <div class="clause">
+    <span class="clause-num">1.</span> <span class="clause-title">Cumplimiento de la Ley de Tránsito Nacional:</span>
+    Me comprometo a conducir el vehículo respetando íntegramente la Ley de Tránsito (Ley N° 18.290) y demás normativas viales vigentes en el territorio de la República de Chile. Reconozco que {{ $data['empresa_razon_social'] }} queda totalmente eximida de cualquier responsabilidad civil, penal o infraccional derivada de mi conducción.
+  </div>
+
+  <div class="clause">
+    <span class="clause-num">2.</span> <span class="clause-title">Responsabilidad Exclusiva del Conductor:</span>
+    Asumo la total y exclusiva responsabilidad legal y económica frente a terceros, autoridades y ante la propia empresa, por cualquier accidente, siniestro, daño, atropello o eventualidad que se produzca como consecuencia de:
+    <br>• Conducir bajo los efectos del alcohol, drogas o estupefacientes (Ley Emilia / Ley Tolerancia Cero).
+    <br>• Evadir, huir o desobedecer instrucciones de Carabineros de Chile, PDI o Inspectores Fiscales.
+    <br>• Conducir a exceso de velocidad o realizar maniobras temerarias comprobables.
+    <br>• Cualquier otra negligencia grave, dolo o uso del vehículo para fines ajenos a los autorizados.
+  </div>
+
+  <div class="clause">
+    <span class="clause-num">3.</span> <span class="clause-title">Multas e Infracciones de Tránsito (TAG, Parquímetros, Empadronadas):</span>
+    Acepto que cualquier multa empadronada, infracción por mal estacionamiento, cobros de vías exclusivas, evasión de pórticos TAG o partes cursados por Juzgados de Policía Local durante el período en que el vehículo se encuentra bajo mi registro y custodia, son de mi absoluta responsabilidad económica.
+  </div>
+
+  <div class="clause">
+    <span class="clause-num">4.</span> <span class="clause-title">Custodia de Equipamiento y Accesorios:</span>
+    Me constituyo como depositario y custodio del vehículo y de todos los implementos de seguridad y accesorios entregados con él (incluyendo, pero no limitado a: neumático de repuesto, gata hidráulica, llave de ruedas, extintor de incendios, botiquín, chaleco reflectante, radio y documentos). La pérdida, extravío, robo o hurto de estos elementos por dejar el vehículo abierto, sin seguros, o por negligencia en su cuidado, será de mi exclusiva responsabilidad.
+  </div>
+
+  <div class="clause">
+    <span class="clause-num">5.</span> <span class="clause-title">Exención de Responsabilidad a la Empresa:</span>
+    Declaro que {{ $data['empresa_razon_social'] }} no será responsable bajo ninguna circunstancia por la pérdida o sustracción de objetos personales de valor, dinero o especies que yo, o cualquier acompañante, dejemos al interior del vehículo.
+  </div>
+
+  <p style="margin:8px 0 0;text-align:justify;line-height:1.55;font-style:italic;font-size:8.5px;border-top:1px solid #bfdbfe;padding-top:6px">
+    Al firmar este documento electrónico, declaro haber leído, comprendido y aceptado a cabalidad cada uno de los puntos anteriores, constituyendo este registro prueba suficiente de mi consentimiento para todos los fines legales, laborales y administrativos que {{ $data['empresa_razon_social'] }} estime convenientes.
+  </p>
+  <br>
   <strong>Aceptación expresa:</strong> {{ $data['he_leido_acepto'] !== '-' ? $data['he_leido_acepto'] : 'Sí, he leído, comprendo y acepto las condiciones.' }}
 </div>
 
@@ -119,7 +161,13 @@
       <div class="sig-role">Fecha: {{ $data['fecha_hora'] }} &nbsp;·&nbsp; Lugar: {{ $data['empresa_ciudad'] }}</div>
     </td>
     <td>
-      <div class="sig-block"><div class="sig-line"></div></div>
+      <div class="sig-block">
+        @if(str_starts_with($data['firma_encargado'] ?? '', 'data:image'))
+          <img src="{{ $data['firma_encargado'] }}" class="sig-img"/>
+        @else
+          <div class="sig-line"></div>
+        @endif
+      </div>
       <div class="sig-name">{{ strtoupper($data['empresa_responsable']) }}</div>
       <div class="sig-role">Representante Empleador / Encargado de Flota</div>
       <div class="sig-role">{{ $data['empresa_razon_social'] }}</div>

@@ -149,6 +149,7 @@ class KizeoWebhookController extends Controller
                 'declaracion_recepcion'     => $getVal('declaracion_de_recepcion_cust'),
                 'he_leido_acepto'           => $getVal('he_leido_comprendo_y_acepto_l'),
                 'firma_entrega'             => $getVal('firma'),
+                'firma_encargado'           => $getVal('firma_encargado'),
                 'geo_entrega'               => $getVal('geolocalizacion'),
                 'dibujo'                    => $getVal('dibujo'),
                 // Campos de Devolución
