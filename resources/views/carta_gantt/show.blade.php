@@ -21,6 +21,22 @@
         }
     }
     $mesesNombres = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    $actividadesJson = $allActividades->map(function($a) {
+        return [
+            'id' => $a->id,
+            'nombre' => $a->nombre,
+            'descripcion' => $a->descripcion,
+            'responsable' => $a->nombre_responsable,
+            'responsable_id' => $a->responsable_id,
+            'categoria' => $a->categoria->nombre ?? '—',
+            'prioridad' => $a->prioridad,
+            'estado' => $a->estado,
+            'periodicidad' => $a->periodicidad,
+            'fecha_inicio' => $a->fecha_inicio ? $a->fecha_inicio->format('Y-m-d') : null,
+            'fecha_fin' => $a->fecha_fin ? $a->fecha_fin->format('Y-m-d') : null,
+            'seguimiento' => $a->seguimiento_por_mes,
+        ];
+    })->values();
 @endphp
 <div class="page-container">
 
@@ -301,5 +317,5 @@
 </div>
 
 @include('carta_gantt._styles')
-@include('carta_gantt._scripts', ['allActividades' => $allActividades, 'anioPrograma' => $anioPrograma, 'mesActual' => $mesActual, 'mesesNombres' => $mesesNombres])
+@include('carta_gantt._scripts', ['actividadesJson' => $actividadesJson, 'anioPrograma' => $anioPrograma, 'mesActual' => $mesActual, 'mesesNombres' => $mesesNombres])
 @endsection

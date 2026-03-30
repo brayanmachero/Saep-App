@@ -14,22 +14,7 @@ let periodoMes = MES_ACTUAL;
 let periodoSemana = getISOWeek(new Date());
 
 // ============ DATA: all actividades for detail views ============
-const actividadesData = @json($allActividades->map(function($a) {
-    return [
-        'id' => $a->id,
-        'nombre' => $a->nombre,
-        'descripcion' => $a->descripcion,
-        'responsable' => $a->nombre_responsable,
-        'responsable_id' => $a->responsable_id,
-        'categoria' => $a->categoria->nombre ?? '—',
-        'prioridad' => $a->prioridad,
-        'estado' => $a->estado,
-        'periodicidad' => $a->periodicidad,
-        'fecha_inicio' => $a->fecha_inicio ? $a->fecha_inicio->format('Y-m-d') : null,
-        'fecha_fin' => $a->fecha_fin ? $a->fecha_fin->format('Y-m-d') : null,
-        'seguimiento' => $a->seguimiento_por_mes,
-    ];
-}));
+const actividadesData = @json($actividadesJson);
 
 // ============ VIEW SWITCHING ============
 function switchView(view) {
