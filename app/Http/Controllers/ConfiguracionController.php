@@ -10,8 +10,8 @@ class ConfiguracionController extends Controller
 {
     public function index()
     {
-        $configs = Configuracion::orderBy('categoria')->orderBy('clave')->get()->groupBy('categoria');
-        return view('configuraciones.index', compact('configs'));
+        $configuraciones = Configuracion::orderBy('categoria')->orderBy('clave')->get();
+        return view('configuraciones.index', compact('configuraciones'));
     }
 
     public function update(Request $request)

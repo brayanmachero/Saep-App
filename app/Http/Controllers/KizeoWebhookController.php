@@ -165,8 +165,8 @@ class KizeoWebhookController extends Controller
                                                 ? $getVal('conductor')
                                                 : ($getVal('nombre_conductor') !== '-'
                                                     ? $getVal('nombre_conductor')
-                                                    : trim(($recordMeta['first_name'] ?? '') . ' ' . ($recordMeta['last_name'] ?? ''))
-                                                       ?: ($recordMeta['user_name'] ?? '-')),
+                                                    : (trim(($recordMeta['first_name'] ?? '') . ' ' . ($recordMeta['last_name'] ?? ''))
+                                                       ?: ($recordMeta['user_name'] ?? '-'))),
                 'conductor_rut'             => $getVal('rut_conductor') !== '-'
                                                 ? $getVal('rut_conductor')
                                                 : ($getVal('rut') !== '-' ? $getVal('rut') : '-'),
