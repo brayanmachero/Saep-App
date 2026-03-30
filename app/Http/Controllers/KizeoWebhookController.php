@@ -61,6 +61,7 @@ class KizeoWebhookController extends Controller
 
             // Si el payload tiene los campos directamente, usarlos
             $fields = $payload['data']['fields'] ?? null;
+            $recordMeta = $payload['data'] ?? [];
 
             // Si NO trae campos, consultar la API de Kizeo para obtener el registro completo
             if (!$fields && $formId && $dataId) {
@@ -74,6 +75,7 @@ class KizeoWebhookController extends Controller
                 }
 
                 $fields = $record['fields'];
+                $recordMeta = $record;
                 Log::info('Campos obtenidos de la API de Kizeo', ['fields_count' => count($fields)]);
             }
 
@@ -158,6 +160,25 @@ class KizeoWebhookController extends Controller
                 'observaciones_adicionales' => $getVal('observaciones_adicionales'),
                 'firma_devolucion'          => $getVal('firma1'),
                 'geo_devolucion'            => $getVal('geolocalizacion1'),
+                // Datos del conductor (del formulario o metadatos del registro)
+                'conductor_nombre'          => $getVal('conductor') !== '-'
+                                                ? $getVal('conductor')
+                                                : ($getVal('nombre_conductor') !== '-'
+                                                    ? $getVal('nombre_conductor')
+                                                    : trim(($recordMeta['first_name'] ?? '') . ' ' . ($recordMeta['last_name'] ?? ''))
+                                                       ?: ($recordMeta['user_name'] ?? '-')),
+                'conductor_rut'             => $getVal('rut_conductor') !== '-'
+                                                ? $getVal('rut_conductor')
+                                                : ($getVal('rut') !== '-' ? $getVal('rut') : '-'),
+                // Metadatos del documento
+                'folio'                     => strtoupper(substr(md5($dataId ?? uniqid()), 0, 8)),
+                'data_id'                   => $dataId ?? '-',
+                // Datos empresa (desde config/env)
+                'empresa_razon_social'      => config('app.saep_razon_social', env('SAEP_RAZON_SOCIAL', 'SAEP')),
+                'empresa_rut'               => env('SAEP_RUT', ''),
+                'empresa_direccion'         => env('SAEP_DIRECCION', ''),
+                'empresa_ciudad'            => env('SAEP_CIUDAD', 'Santiago'),
+                'empresa_responsable'       => env('SAEP_RESPONSABLE_FIRMA', 'Encargado de Flota'),
             ];
 
             Log::info('Datos extraídos', ['gestion' => $data['gestion'], 'patente' => $data['patente']]);
