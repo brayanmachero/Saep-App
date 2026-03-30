@@ -1,7 +1,7 @@
 {{-- Carta Gantt Scripts --}}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    updateProgress();
+    updateStats();
 });
 
 // ============ CONSTANTS ============
@@ -245,12 +245,17 @@ function toggleSeguimiento(actId, mes, el) {
     .then(data => {
         // Update local data
         const actData = actividadesData.find(a => a.id === actId);
-        if (actData && actData.seguimiento[mes]) {
-            actData.seguimiento[mes].realizado = data.realizado;
+        if (actData) {
+            if (actData.seguimiento[mes]) {
+                actData.seguimiento[mes].realizado = data.realizado;
+            }
+            if (data.estado) {
+                actData.estado = data.estado;
+            }
         }
         // Rebuild the current view to reflect changes
         rebuildAllTables();
-        updateProgress();
+        updateStats();
     })
     .catch(err => { console.error(err); alert('Error al actualizar seguimiento.'); })
     .finally(() => { el.style.opacity = '1'; el.style.pointerEvents = ''; });
@@ -355,19 +360,73 @@ function escHtml(str) {
     return d.innerHTML;
 }
 
-// ============ PROGRESS UPDATE ============
-function updateProgress() {
-    let prog = 0, real = 0;
+// ============ STATS UPDATE ============
+function updateStats() {
+    let progTotal = 0, realTotal = 0;
+    let mesProgTotal = 0, mesRealTotal = 0;
+    let completadas = 0, enProgreso = 0, vencidosMes = 0;
+
     actividadesData.forEach(a => {
+        let actProg = 0, actReal = 0;
         for (let m = 1; m <= 12; m++) {
             const s = a.seguimiento[m];
-            if (s && s.programado) { prog++; if (s.realizado) real++; }
+            if (s && s.programado) {
+                progTotal++; actProg++;
+                if (s.realizado) { realTotal++; actReal++; }
+                else if (m < MES_ACTUAL) { vencidosMes++; }
+                // Current month
+                if (m === MES_ACTUAL) { mesProgTotal++; if (s.realizado) mesRealTotal++; }
+            }
         }
+        // Recalculate effective estado from data
+        if (a.estado === 'CANCELADA') return;
+        if (actProg > 0 && actReal >= actProg) completadas++;
+        else if (actReal > 0) enProgreso++;
     });
-    const pct = prog > 0 ? Math.round(real / prog * 100) : 0;
+
+    const pct = progTotal > 0 ? Math.round(realTotal / progTotal * 100) : 0;
+    const mesPct = mesProgTotal > 0 ? Math.round(mesRealTotal / mesProgTotal * 100) : 0;
+
+    // Global progress
     const bar = document.getElementById('progressBar');
     const num = document.getElementById('progressNum');
     if (bar) bar.style.width = pct + '%';
     if (num) num.textContent = pct + '%';
+
+    // Month progress
+    const mBar = document.getElementById('monthProgressBar');
+    const mNum = document.getElementById('monthProgressNum');
+    if (mBar) mBar.style.width = mesPct + '%';
+    if (mNum) mNum.textContent = mesPct + '%';
+
+    // Stat cards
+    const elComp = document.getElementById('statCompletadas');
+    const elProg = document.getElementById('statEnProgreso');
+    const elVenc = document.getElementById('statVencidas');
+    if (elComp) elComp.textContent = completadas;
+    if (elProg) elProg.textContent = enProgreso;
+    if (elVenc) elVenc.textContent = vencidosMes;
+
+    // Update category progress bars
+    document.querySelectorAll('.sst-cat-card').forEach(card => {
+        let catProg = 0, catReal = 0;
+        card.querySelectorAll('.sst-act-row').forEach(row => {
+            const actId = parseInt(row.dataset.actividadId);
+            const actData = actividadesData.find(a => a.id === actId);
+            if (!actData) return;
+            for (let m = 1; m <= 12; m++) {
+                const s = actData.seguimiento[m];
+                if (s && s.programado) { catProg++; if (s.realizado) catReal++; }
+            }
+        });
+        const catPct = catProg > 0 ? Math.round(catReal / catProg * 100) : 0;
+        const catFill = card.querySelector('.sst-cat-progress-fill');
+        if (catFill) catFill.style.width = catPct + '%';
+        const catInfo = card.querySelector('.sst-cat-header span[style*="font-size:.72rem"]');
+        if (catInfo) {
+            const count = card.querySelectorAll('.sst-act-row').length;
+            catInfo.textContent = count + ' actividades · ' + catPct + '% avance';
+        }
+    });
 }
 </script>

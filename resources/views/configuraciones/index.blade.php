@@ -78,5 +78,43 @@
             </button>
         </div>
     </form>
+
+    {{-- Email Template Preview Section --}}
+    <div class="glass-card" style="margin-top:2rem">
+        <div style="border-bottom:1px solid var(--surface-border);padding-bottom:.75rem;margin-bottom:1.25rem">
+            <h3 style="margin:0;font-size:1.05rem;display:flex;align-items:center;gap:.5rem">
+                <span>📨</span> Previsualización de Templates de Email SST
+            </h3>
+            <p style="margin:.35rem 0 0;font-size:.82rem;color:var(--text-muted)">
+                Haga clic en un tipo de alerta para ver cómo se verá el email que reciben los destinatarios.
+            </p>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.75rem">
+            @php
+                $tipos = [
+                    'asignacion' => ['📋','Nueva Asignación','#0f1b4c','Se envía cuando se asigna una actividad a un responsable'],
+                    'recordatorio' => ['🔔','Recordatorio','#6366f1','Se envía según la periodicidad de cada actividad'],
+                    'vencimiento' => ['⏰','Próxima a Vencer','#f59e0b','Se envía días antes de la fecha de vencimiento'],
+                    'vencida' => ['⚠️','Vencida','#dc2626','Se envía cuando la actividad superó su fecha límite'],
+                    'seguimiento_pendiente' => ['📊','Seguimiento Pendiente','#ea580c','Se envía si el mes anterior quedó sin marcar'],
+                ];
+            @endphp
+            @foreach($tipos as $tipoKey => $tipoInfo)
+            <a href="{{ route('carta-gantt.email-preview', $tipoKey) }}" target="_blank"
+               style="display:flex;flex-direction:column;gap:.5rem;padding:1rem;border-radius:10px;border:1px solid var(--surface-border);background:var(--surface-color);text-decoration:none;transition:all .2s;cursor:pointer"
+               onmouseover="this.style.borderColor='{{ $tipoInfo[2] }}';this.style.transform='translateY(-2px)'"
+               onmouseout="this.style.borderColor='';this.style.transform=''">
+                <div style="display:flex;align-items:center;gap:.5rem">
+                    <span style="font-size:1.3rem">{{ $tipoInfo[0] }}</span>
+                    <span style="font-weight:700;font-size:.88rem;color:var(--text-main)">{{ $tipoInfo[1] }}</span>
+                </div>
+                <span style="font-size:.72rem;color:var(--text-muted);line-height:1.4">{{ $tipoInfo[3] }}</span>
+                <span style="display:inline-flex;align-items:center;gap:.25rem;font-size:.72rem;font-weight:600;color:{{ $tipoInfo[2] }}">
+                    <i class="bi bi-eye"></i> Ver Preview
+                </span>
+            </a>
+            @endforeach
+        </div>
+    </div>
 </div>
 @endsection

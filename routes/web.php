@@ -153,6 +153,9 @@ Route::middleware('auth')->group(function () {
             ->name('carta-gantt.plantilla');
         Route::post('carta-gantt/{cartaGantt}/importar', [CartaGanttController::class, 'importarActividades'])
             ->name('carta-gantt.importar');
+        // Preview email template
+        Route::get('carta-gantt/email-preview/{tipo}', [CartaGanttController::class, 'previewEmail'])
+            ->name('carta-gantt.email-preview');
     });
 
     // --- KIZEO FORMS ANALYTICS ---

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ProgramaSst;
 use App\Models\Rol;
+use App\Models\Configuracion;
 use App\Models\SstCategoria;
 use App\Models\SstActividad;
 use App\Models\SstNotificacionLog;
@@ -314,7 +315,11 @@ class CartaGanttController extends Controller
 
         $this->recalcularEstadoActividad($actividad);
 
-        return response()->json(['success' => true, 'realizado' => $nuevoRealizado]);
+        return response()->json([
+            'success'   => true,
+            'realizado' => $nuevoRealizado,
+            'estado'    => $actividad->fresh()->estado,
+        ]);
     }
 
     // =====================================================
@@ -371,6 +376,27 @@ class CartaGanttController extends Controller
      */
     private function enviarNotificacionActividad(SstActividad $actividad, string $tipo, ?int $mes = null): void
     {
+        // Verificar si las notificaciones SST están activas
+        $notifActiva = Configuracion::get('sst_notif_activa', 'true');
+        if ($notifActiva === 'false' || $notifActiva === '0') {
+            return;
+        }
+
+        // Verificar si el tipo de notificación específico está habilitado
+        $tipoConfigMap = [
+            'asignacion'            => 'sst_notif_asignacion',
+            'vencimiento'           => 'sst_notif_vencimiento',
+            'vencida'               => 'sst_notif_vencida',
+            'recordatorio'          => 'sst_notif_recordatorio',
+            'seguimiento_pendiente' => 'sst_notif_seguimiento',
+        ];
+        if (isset($tipoConfigMap[$tipo])) {
+            $tipoActivo = Configuracion::get($tipoConfigMap[$tipo], 'true');
+            if ($tipoActivo === 'false' || $tipoActivo === '0') {
+                return;
+            }
+        }
+
         $actividad->loadMissing(['responsableUser', 'categoria.programa.responsable']);
         $programa = $actividad->categoria?->programa;
 
@@ -391,6 +417,16 @@ class CartaGanttController extends Controller
             ->pluck('email')
             ->filter();
         $ccEmails = $ccEmails->merge($superAdmins)->unique()->reject(fn ($e) => $e === $responsableEmail);
+
+        // Agregar CC adicionales desde configuración
+        $ccAdicional = Configuracion::get('sst_notif_cc_adicional', '');
+        if ($ccAdicional) {
+            $extras = collect(preg_split('/[;,]+/', $ccAdicional))
+                ->map(fn($e) => trim($e))
+                ->filter(fn($e) => filter_var($e, FILTER_VALIDATE_EMAIL))
+                ->reject(fn($e) => $e === $responsableEmail);
+            $ccEmails = $ccEmails->merge($extras)->unique();
+        }
 
         // Si no hay responsable pero sí hay CCs, enviar al primer CC como destinatario principal
         $toEmail = $responsableEmail ?: $ccEmails->shift();
@@ -430,6 +466,11 @@ class CartaGanttController extends Controller
 
     private function recalcularEstadoActividad(SstActividad $actividad): void
     {
+        // No auto-cambiar actividades canceladas manualmente
+        if ($actividad->estado === 'CANCELADA') {
+            return;
+        }
+
         $actividad->load('seguimiento');
         $programados = $actividad->seguimiento->where('programado', true)->count();
         $realizados  = $actividad->seguimiento->where('realizado', true)->count();
@@ -438,6 +479,8 @@ class CartaGanttController extends Controller
             $actividad->update(['estado' => 'COMPLETADA']);
         } elseif ($realizados > 0) {
             $actividad->update(['estado' => 'EN_PROGRESO']);
+        } elseif ($programados > 0) {
+            $actividad->update(['estado' => 'PENDIENTE']);
         }
     }
 
@@ -603,5 +646,26 @@ class CartaGanttController extends Controller
         }
 
         return back()->with('success', $msg);
+    }
+
+    // =====================================================
+    // PREVIEW EMAIL TEMPLATE
+    // =====================================================
+
+    public function previewEmail(string $tipo)
+    {
+        $validTypes = ['asignacion', 'vencimiento', 'vencida', 'recordatorio', 'seguimiento_pendiente'];
+        if (!in_array($tipo, $validTypes)) {
+            abort(404);
+        }
+
+        // Usar una actividad real o crear datos de ejemplo
+        $actividad = SstActividad::with(['responsableUser', 'categoria.programa.responsable'])->first();
+
+        if (!$actividad) {
+            return response('<p>No hay actividades para previsualizar. Crea al menos una actividad primero.</p>', 200);
+        }
+
+        return new SstActividadAlertaMail($actividad, $tipo);
     }
 }

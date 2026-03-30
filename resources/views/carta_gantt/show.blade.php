@@ -7,9 +7,8 @@
     $diaActual = (int) date('j');
     $anioPrograma = (int) $cartaGantt->anio;
     $totalAct = $cartaGantt->actividadesTotales;
-    $vencidas = $cartaGantt->actividadesVencidas;
     $pct = $cartaGantt->porcentajeRealizado;
-    $completadas = 0; $enProgreso = 0; $pendientes = 0; $porVencer = 0;
+    $completadas = 0; $enProgreso = 0; $pendientes = 0; $porVencer = 0; $vencidosMes = 0;
     $allActividades = collect();
     foreach ($cartaGantt->categorias as $cat) {
         foreach ($cat->actividades as $a) {
@@ -17,6 +16,10 @@
             elseif ($a->estado === 'EN_PROGRESO') $enProgreso++;
             else $pendientes++;
             if ($a->estaPorVencer) $porVencer++;
+            // Contar meses vencidos (programado + pasado + no realizado)
+            foreach ($a->seguimiento_por_mes as $m => $s) {
+                if ($s['programado'] && !$s['realizado'] && $m < $mesActual) $vencidosMes++;
+            }
             $allActividades->push($a);
         }
     }
@@ -75,21 +78,33 @@
                 <div class="sst-progress-track"><div class="sst-progress-fill" id="progressBar" style="width:{{ $pct }}%"></div></div>
             </div>
         </div>
+        @php
+            $mesProgTotal = 0; $mesRealTotal = 0;
+            foreach ($allActividades as $a) {
+                $sMes = $a->seguimiento_por_mes[$mesActual] ?? null;
+                if ($sMes && $sMes['programado']) { $mesProgTotal++; if ($sMes['realizado']) $mesRealTotal++; }
+            }
+            $mesPct = $mesProgTotal > 0 ? (int) round($mesRealTotal / $mesProgTotal * 100) : 0;
+        @endphp
         <div class="sst-stat-card">
-            <div class="sst-stat-icon" style="background:linear-gradient(135deg,#0ea5e9,#38bdf8)"><i class="bi bi-list-task"></i></div>
-            <div><div class="sst-stat-label">Total Actividades</div><div class="sst-stat-value">{{ $totalAct }}</div></div>
+            <div class="sst-stat-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa)"><i class="bi bi-calendar-check"></i></div>
+            <div style="flex:1">
+                <div class="sst-stat-label">Avance {{ $mesesNombres[$mesActual] }}</div>
+                <div class="sst-stat-value" id="monthProgressNum">{{ $mesPct }}%</div>
+                <div class="sst-progress-track"><div class="sst-progress-fill" id="monthProgressBar" style="width:{{ $mesPct }}%;background:linear-gradient(90deg,#8b5cf6,#a78bfa)"></div></div>
+            </div>
         </div>
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#10b981,#34d399)"><i class="bi bi-check-circle-fill"></i></div>
-            <div><div class="sst-stat-label">Completadas</div><div class="sst-stat-value" style="color:#10b981">{{ $completadas }}</div></div>
+            <div><div class="sst-stat-label">Completadas</div><div class="sst-stat-value" id="statCompletadas" style="color:#10b981">{{ $completadas }}</div></div>
         </div>
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#f59e0b,#fbbf24)"><i class="bi bi-clock-history"></i></div>
-            <div><div class="sst-stat-label">En Progreso</div><div class="sst-stat-value" style="color:#f59e0b">{{ $enProgreso }}</div></div>
+            <div><div class="sst-stat-label">En Progreso</div><div class="sst-stat-value" id="statEnProgreso" style="color:#f59e0b">{{ $enProgreso }}</div></div>
         </div>
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#ef4444,#f87171)"><i class="bi bi-exclamation-triangle-fill"></i></div>
-            <div><div class="sst-stat-label">Vencidas</div><div class="sst-stat-value" style="color:#ef4444">{{ $vencidas }}</div></div>
+            <div><div class="sst-stat-label">Meses Vencidos</div><div class="sst-stat-value" id="statVencidas" style="color:#ef4444">{{ $vencidosMes }}</div></div>
         </div>
     </div>
 
