@@ -141,10 +141,13 @@ class CartaGanttController extends Controller
 
     public function storeCategoria(Request $request, ProgramaSst $cartaGantt)
     {
-        $request->validate(['nombre' => 'required|string|max:200']);
+        $request->validate([
+            'nombre' => 'required|string|max:200',
+            'orden'  => 'nullable|integer|min:1',
+        ]);
         $cartaGantt->categorias()->create([
             'nombre' => $request->nombre,
-            'orden'  => $cartaGantt->categorias()->max('orden') + 1,
+            'orden'  => $request->orden ?? ($cartaGantt->categorias()->max('orden') + 1),
         ]);
         return back()->with('success', 'Categoría agregada.');
     }
@@ -253,8 +256,8 @@ class CartaGanttController extends Controller
         ]);
 
         // Actualizar meses programados si se enviaron checkboxes
-        if ($request->has('meses_prog')) {
-            $mesesSeleccionados = collect($request->get('meses_prog', []))->map(fn($m) => (int) $m);
+        if ($request->has('has_meses_prog')) {
+            $mesesSeleccionados = collect($request->get('meses_prog', []))->map(fn($m) => (int) $m)->filter(fn($m) => $m >= 1 && $m <= 12);
 
             for ($m = 1; $m <= 12; $m++) {
                 if ($mesesSeleccionados->contains($m)) {
@@ -291,14 +294,18 @@ class CartaGanttController extends Controller
     {
         $request->validate([
             'mes'         => 'required|integer|min:1|max:12',
-            'realizado'   => 'required|boolean',
             'observacion' => 'nullable|string|max:1000',
         ]);
+
+        // Toggle: buscar estado actual y alternar
+        $seg = $actividad->seguimiento()->where('mes', $request->mes)->first();
+        $nuevoRealizado = $seg ? !$seg->realizado : true;
 
         $actividad->seguimiento()->updateOrCreate(
             ['mes' => $request->mes],
             [
-                'realizado'           => $request->realizado,
+                'programado'          => true,
+                'realizado'           => $nuevoRealizado,
                 'observacion'         => $request->observacion,
                 'actualizado_por'     => auth()->id(),
                 'fecha_actualizacion' => now(),
@@ -307,7 +314,7 @@ class CartaGanttController extends Controller
 
         $this->recalcularEstadoActividad($actividad);
 
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true, 'realizado' => $nuevoRealizado]);
     }
 
     // =====================================================

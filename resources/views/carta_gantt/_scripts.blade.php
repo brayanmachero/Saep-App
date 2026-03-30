@@ -38,7 +38,7 @@ function navigatePeriod(dir) {
     } else if (currentView === 'mensual') {
         periodoMes = Math.max(1, Math.min(12, periodoMes + dir));
     } else if (currentView === 'semanal') {
-        // Move by week within the current month
+        // Move by month (each semanal view shows one full month)
         periodoMes = Math.max(1, Math.min(12, periodoMes + dir));
     }
     rebuildAllTables();
@@ -241,7 +241,7 @@ function toggleSeguimiento(actId, mes, el) {
         headers: {'Content-Type':'application/json','X-CSRF-TOKEN':'{{ csrf_token() }}','Accept':'application/json'},
         body: JSON.stringify({mes: mes})
     })
-    .then(r => r.json())
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(data => {
         // Update local data
         const actData = actividadesData.find(a => a.id === actId);
@@ -306,7 +306,7 @@ function openDetail(row) {
 
     const priLabels = {ALTA:'Alta',MEDIA:'Media',BAJA:'Baja'};
     const estLabels = {PENDIENTE:'Pendiente',EN_PROGRESO:'En Progreso',COMPLETADA:'Completada',CANCELADA:'Cancelada'};
-    const perLabels = {UNICA:'Única',DIARIA:'Diaria',SEMANAL:'Semanal',QUINCENAL:'Quincenal',MENSUAL:'Mensual',BIMESTRAL:'Bimestral',TRIMESTRAL:'Trimestral',SEMESTRAL:'Semestral',ANUAL:'Anual'};
+    const perLabels = {UNICA:'Única',DIARIA:'Diaria',SEMANAL:'Semanal',QUINCENAL:'Quincenal',MENSUAL:'Mensual',BIMENSUAL:'Bimensual',TRIMESTRAL:'Trimestral',SEMESTRAL:'Semestral',ANUAL:'Anual'};
 
     document.getElementById('detail-title').innerHTML = '<i class="bi bi-info-circle"></i> ' + escHtml(act.nombre);
 

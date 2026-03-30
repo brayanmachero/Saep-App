@@ -174,6 +174,7 @@
                         <select name="periodicidad" class="form-input"><option value="">— Ninguna —</option>@foreach(\App\Models\SstActividad::periodicidadesMap() as $k => $v)<option value="{{ $k }}">{{ $v }}</option>@endforeach</select></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha inicio</label><input type="date" name="fecha_inicio" class="form-input"></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha fin</label><input type="date" name="fecha_fin" class="form-input"></div>
+                    <div class="form-group" style="margin:0;grid-column:1/-1"><label class="sst-label">Descripción</label><textarea name="descripcion" class="form-input" rows="2" placeholder="Descripción o instrucciones..."></textarea></div>
                 </div>
                 <div style="margin-bottom:.65rem">
                     <label class="sst-label" style="display:block;margin-bottom:.3rem">Meses programados <small style="text-transform:none;font-weight:400">(se auto-calculan con periodicidad)</small></label>
@@ -263,6 +264,7 @@
                     <div class="form-group" style="margin:0;grid-column:1/-1"><label class="sst-label">Descripción</label><textarea name="descripcion" id="edit-descripcion" class="form-input" rows="2" placeholder="Descripción o instrucciones..."></textarea></div>
                 </div>
                 <div style="margin-bottom:.85rem">
+                    <input type="hidden" name="has_meses_prog" value="1">
                     <label class="sst-label" style="display:block;margin-bottom:.3rem">Meses Programados <small style="text-transform:none;font-weight:400">(marcar los meses donde se debe ejecutar)</small></label>
                     <div id="edit-meses-grid" style="display:flex;gap:.35rem;flex-wrap:wrap">
                         @foreach(['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'] as $idx => $mesNom)
