@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // Auto-refresh Kizeo cache every 4 hours
 Schedule::command('kizeo:cache-warm')->everyFourHours()->withoutOverlapping();
+
+// SST: enviar recordatorios de actividades próximas a vencer / vencidas (cada día a las 8:00 AM)
+Schedule::command('sst:enviar-recordatorios')->dailyAt('08:00')->withoutOverlapping();

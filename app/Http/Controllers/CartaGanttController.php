@@ -12,6 +12,8 @@ use App\Models\User;
 use App\Http\Controllers\Controller;
 use App\Mail\SstActividadAlertaMail;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class CartaGanttController extends Controller
@@ -327,5 +329,148 @@ class CartaGanttController extends Controller
         } elseif ($realizados > 0) {
             $actividad->update(['estado' => 'EN_PROGRESO']);
         }
+    }
+
+    // =====================================================
+    // IMPORTACIÓN MASIVA CSV
+    // =====================================================
+
+    public function descargarPlantilla()
+    {
+        $headers = ['categoria', 'nombre', 'responsable_email', 'prioridad', 'periodicidad', 'fecha_inicio', 'fecha_fin', 'meses_programados'];
+        $ejemplo = ['Capacitaciones', 'Inducción SST nuevos trabajadores', 'bmachero@saep.cl', 'ALTA', 'MENSUAL', '2026-01-15', '2026-12-31', '1,3,6,9,12'];
+
+        $callback = function () use ($headers, $ejemplo) {
+            $f = fopen('php://output', 'w');
+            fprintf($f, chr(0xEF) . chr(0xBB) . chr(0xBF)); // BOM UTF-8
+            fputcsv($f, $headers, ';');
+            fputcsv($f, $ejemplo, ';');
+            fclose($f);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="plantilla_actividades_sst.csv"',
+        ]);
+    }
+
+    public function importarActividades(Request $request, ProgramaSst $cartaGantt)
+    {
+        $request->validate([
+            'archivo' => 'required|file|mimes:csv,txt|max:5120',
+        ]);
+
+        $path = $request->file('archivo')->getRealPath();
+        $rows = [];
+        if (($handle = fopen($path, 'r')) !== false) {
+            // Detectar BOM
+            $bom = fread($handle, 3);
+            if ($bom !== chr(0xEF) . chr(0xBB) . chr(0xBF)) {
+                rewind($handle);
+            }
+            $headers = fgetcsv($handle, 0, ';');
+            if ($headers) {
+                $headers = array_map(fn($h) => strtolower(trim($h)), $headers);
+                while (($line = fgetcsv($handle, 0, ';')) !== false) {
+                    if (count($line) === count($headers)) {
+                        $rows[] = array_combine($headers, $line);
+                    }
+                }
+            }
+            fclose($handle);
+        }
+
+        if (empty($rows)) {
+            return back()->with('error', 'El archivo está vacío o el formato no es válido. Use la plantilla CSV con separador punto y coma (;).');
+        }
+
+        $creadas = 0;
+        $errores = [];
+
+        DB::beginTransaction();
+        try {
+            foreach ($rows as $i => $row) {
+                $fila = $i + 2; // Línea en el CSV (1=headers)
+
+                $catNombre = trim($row['categoria'] ?? '');
+                $nombre    = trim($row['nombre'] ?? '');
+
+                if (!$catNombre || !$nombre) {
+                    $errores[] = "Fila {$fila}: categoría y nombre son obligatorios.";
+                    continue;
+                }
+
+                // Buscar o crear categoría
+                $categoria = $cartaGantt->categorias()->firstOrCreate(
+                    ['nombre' => $catNombre],
+                    ['orden' => $cartaGantt->categorias()->max('orden') + 1]
+                );
+
+                // Buscar responsable por email
+                $responsableId = null;
+                $responsableNombre = null;
+                $email = trim($row['responsable_email'] ?? '');
+                if ($email) {
+                    $user = User::where('email', $email)->first();
+                    if ($user) {
+                        $responsableId = $user->id;
+                        $responsableNombre = $user->nombre_completo;
+                    } else {
+                        $responsableNombre = $email;
+                    }
+                }
+
+                $prioridad = strtoupper(trim($row['prioridad'] ?? 'MEDIA'));
+                if (!in_array($prioridad, ['ALTA', 'MEDIA', 'BAJA'])) $prioridad = 'MEDIA';
+
+                $periodicidad = strtoupper(trim($row['periodicidad'] ?? ''));
+                if ($periodicidad && !array_key_exists($periodicidad, SstActividad::periodicidadesMap())) {
+                    $periodicidad = null;
+                }
+
+                $fechaInicio = !empty($row['fecha_inicio']) ? date('Y-m-d', strtotime($row['fecha_inicio'])) : null;
+                $fechaFin    = !empty($row['fecha_fin']) ? date('Y-m-d', strtotime($row['fecha_fin'])) : null;
+
+                $actividad = $categoria->actividades()->create([
+                    'nombre'         => $nombre,
+                    'responsable'    => $responsableNombre,
+                    'responsable_id' => $responsableId,
+                    'prioridad'      => $prioridad,
+                    'periodicidad'   => $periodicidad ?: null,
+                    'fecha_inicio'   => $fechaInicio,
+                    'fecha_fin'      => $fechaFin,
+                    'orden'          => $categoria->actividades()->max('orden') + 1,
+                ]);
+
+                // Meses programados: "1,3,6,9,12"
+                $mesesStr = trim($row['meses_programados'] ?? '');
+                if ($mesesStr) {
+                    foreach (explode(',', $mesesStr) as $mes) {
+                        $mes = (int) trim($mes);
+                        if ($mes >= 1 && $mes <= 12) {
+                            $actividad->seguimiento()->create([
+                                'mes' => $mes,
+                                'programado' => true,
+                            ]);
+                        }
+                    }
+                }
+
+                $creadas++;
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error importando actividades SST: ' . $e->getMessage());
+            return back()->with('error', 'Error al importar: por favor revise el formato del archivo.');
+        }
+
+        $msg = "{$creadas} actividades importadas correctamente.";
+        if (!empty($errores)) {
+            $msg .= ' Advertencias: ' . implode(' | ', array_slice($errores, 0, 5));
+        }
+
+        return back()->with('success', $msg);
     }
 }
