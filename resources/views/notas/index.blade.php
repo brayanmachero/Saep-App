@@ -6,8 +6,8 @@
 <style>
 /* ===== DICTATION PANEL ===== */
 .dictation-panel {
-    background: var(--glass-bg, rgba(255,255,255,0.08));
-    border: 1px solid var(--glass-border, rgba(255,255,255,0.12));
+    background: var(--surface-color);
+    border: 1px solid var(--surface-border);
     border-radius: 16px;
     padding: 1.25rem;
     margin-bottom: 1.5rem;
@@ -15,10 +15,10 @@
 .dictation-textarea {
     width: 100%;
     min-height: 100px;
-    background: var(--input-bg, rgba(0,0,0,0.15));
-    border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+    background: var(--bg-color);
+    border: 1px solid var(--surface-border);
     border-radius: 12px;
-    color: var(--text-primary, #fff);
+    color: var(--text-main);
     padding: 0.875rem 1rem;
     font-size: 0.95rem;
     resize: vertical;
@@ -27,10 +27,10 @@
 }
 .dictation-textarea:focus {
     outline: none;
-    border-color: var(--accent, #6366f1);
+    border-color: var(--accent-color);
 }
 .dictation-textarea::placeholder {
-    color: var(--text-muted, rgba(255,255,255,0.4));
+    color: var(--text-muted);
 }
 .dictation-controls {
     display: flex;
@@ -42,16 +42,16 @@
 .btn-mic {
     width: 48px; height: 48px;
     border-radius: 50%;
-    border: 2px solid var(--accent, #6366f1);
+    border: 2px solid var(--accent-color);
     background: transparent;
-    color: var(--accent, #6366f1);
+    color: var(--accent-color);
     font-size: 1.25rem;
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     transition: all 0.3s;
     flex-shrink: 0;
 }
-.btn-mic:hover { background: var(--accent, #6366f1); color: #fff; }
+.btn-mic:hover { background: var(--accent-color); color: #fff; }
 .btn-mic.recording {
     background: #ef4444;
     border-color: #ef4444;
@@ -64,7 +64,7 @@
 }
 .mic-status {
     font-size: 0.8rem;
-    color: var(--text-muted, rgba(255,255,255,0.5));
+    color: var(--text-muted);
 }
 .mic-status.active { color: #ef4444; font-weight: 600; }
 .dictation-meta {
@@ -77,18 +77,18 @@
 }
 .dictation-meta select,
 .dictation-meta input[type="date"] {
-    background: var(--input-bg, rgba(0,0,0,0.15));
-    border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+    background: var(--bg-color);
+    border: 1px solid var(--surface-border);
     border-radius: 8px;
-    color: var(--text-primary, #fff);
+    color: var(--text-main);
     padding: 0.5rem 0.65rem;
     font-size: 0.85rem;
     min-width: 0;
 }
-.dictation-meta select option { background: #1e1e2e; color: #fff; }
+.dictation-meta select option { background: var(--bg-color); color: var(--text-main); }
 .btn-save-nota {
     padding: 0.55rem 1.25rem;
-    background: var(--accent, #6366f1);
+    background: var(--accent-color);
     color: #fff;
     border: none;
     border-radius: 10px;
@@ -109,13 +109,13 @@
     margin-bottom: 1.25rem;
 }
 .stat-mini {
-    background: var(--glass-bg, rgba(255,255,255,0.06));
-    border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
+    background: var(--surface-color);
+    border: 1px solid var(--surface-border);
     border-radius: 12px;
     padding: 0.85rem;
     text-align: center;
 }
-.stat-mini .stat-number { font-size: 1.5rem; font-weight: 700; color: var(--accent, #6366f1); }
+.stat-mini .stat-number { font-size: 1.5rem; font-weight: 700; color: var(--accent-color); }
 .stat-mini .stat-label  { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
 
 /* ===== FILTERS ===== */
@@ -128,14 +128,14 @@
 }
 .notas-filters select,
 .notas-filters input {
-    background: var(--input-bg, rgba(0,0,0,0.15));
-    border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+    background: var(--bg-color);
+    border: 1px solid var(--surface-border);
     border-radius: 8px;
-    color: var(--text-primary, #fff);
+    color: var(--text-main);
     padding: 0.45rem 0.65rem;
     font-size: 0.85rem;
 }
-.notas-filters select option { background: #1e1e2e; }
+.notas-filters select option { background: var(--bg-color); color: var(--text-main); }
 .notas-filters .search-input {
     flex: 1;
     min-width: 150px;
@@ -148,15 +148,15 @@
     gap: 0.65rem;
 }
 .nota-card {
-    background: var(--glass-bg, rgba(255,255,255,0.06));
-    border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
+    background: var(--surface-color);
+    border: 1px solid var(--surface-border);
     border-radius: 14px;
     padding: 1rem 1.1rem;
     transition: all 0.2s;
     position: relative;
 }
 .nota-card:hover {
-    border-color: var(--accent, #6366f1);
+    border-color: var(--accent-color);
 }
 .nota-card.completada {
     opacity: 0.55;
@@ -182,15 +182,26 @@
     text-transform: uppercase;
     letter-spacing: 0.03em;
 }
-.cat-General      { background: rgba(99,102,241,0.2); color: #818cf8; }
-.cat-Reunión      { background: rgba(59,130,246,0.2); color: #60a5fa; }
-.cat-Tarea        { background: rgba(234,179,8,0.2);  color: #facc15; }
-.cat-Recordatorio { background: rgba(168,85,247,0.2); color: #c084fc; }
+.cat-General      { background: rgba(99,102,241,0.15); color: #6366f1; }
+.cat-Reunión      { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.cat-Tarea        { background: rgba(202,138,4,0.15);  color: #ca8a04; }
+.cat-Recordatorio { background: rgba(147,51,234,0.15); color: #9333ea; }
 .cat-Horas.Extra,
-.cat-Horas        { background: rgba(20,184,166,0.2); color: #2dd4bf; }
-.cat-Personal     { background: rgba(236,72,153,0.2); color: #f472b6; }
-.cat-Urgente      { background: rgba(239,68,68,0.2);  color: #f87171; }
-.cat-Idea         { background: rgba(34,197,94,0.2);  color: #4ade80; }
+.cat-Horas        { background: rgba(13,148,136,0.15); color: #0d9488; }
+.cat-Personal     { background: rgba(219,39,119,0.15); color: #db2777; }
+.cat-Urgente      { background: rgba(220,38,38,0.15);  color: #dc2626; }
+.cat-Idea         { background: rgba(22,163,74,0.15);  color: #16a34a; }
+
+body.dark-mode .cat-General      { color: #818cf8; }
+body.dark-mode .cat-Reunión      { color: #60a5fa; }
+body.dark-mode .cat-Tarea        { color: #facc15; }
+body.dark-mode .cat-Recordatorio { color: #c084fc; }
+body.dark-mode .cat-Horas.Extra,
+body.dark-mode .cat-Horas        { color: #2dd4bf; }
+body.dark-mode .cat-Personal     { color: #f472b6; }
+body.dark-mode .cat-Urgente      { color: #f87171; }
+body.dark-mode .cat-Idea         { color: #4ade80; }
+
 .nota-actions {
     display: flex;
     gap: 0.3rem;
@@ -207,12 +218,12 @@
     font-size: 0.9rem;
     transition: all 0.15s;
 }
-.nota-actions button:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
-.nota-actions button.check-btn:hover { color: #4ade80; }
-.nota-actions button.delete-btn:hover { color: #f87171; }
+.nota-actions button:hover { background: var(--surface-border); color: var(--text-main); }
+.nota-actions button.check-btn:hover { color: #16a34a; }
+.nota-actions button.delete-btn:hover { color: #dc2626; }
 .nota-text {
     font-size: 0.92rem;
-    color: var(--text-primary, #e2e8f0);
+    color: var(--text-main);
     line-height: 1.5;
     word-break: break-word;
 }
@@ -230,8 +241,9 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    color: #c084fc;
+    color: #9333ea;
 }
+body.dark-mode .nota-reminder { color: #c084fc; }
 .nota-origen { opacity: 0.6; }
 .nota-empty {
     text-align: center;
@@ -248,8 +260,8 @@
     align-items: start;
 }
 .cat-sidebar {
-    background: var(--glass-bg, rgba(255,255,255,0.05));
-    border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
+    background: var(--surface-color);
+    border: 1px solid var(--surface-border);
     border-radius: 14px;
     padding: 0.75rem;
     position: sticky;
@@ -270,15 +282,15 @@
     padding: 0.45rem 0.6rem;
     border-radius: 8px;
     font-size: 0.82rem;
-    color: var(--text-secondary, #94a3b8);
+    color: var(--text-muted);
     text-decoration: none;
     transition: background 0.15s;
 }
-.cat-link:hover { background: rgba(255,255,255,0.06); }
-.cat-link.active { background: var(--accent, #6366f1); color: #fff; }
+.cat-link:hover { background: var(--surface-border); }
+.cat-link.active { background: var(--accent-color); color: #fff; }
 .cat-count {
     font-size: 0.7rem;
-    background: rgba(255,255,255,0.1);
+    background: var(--surface-border);
     padding: 0.15rem 0.4rem;
     border-radius: 10px;
 }
