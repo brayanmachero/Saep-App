@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\VehiculoDevolucionMail;
 use App\Mail\VehiculoEntregaMail;
+use App\Models\Configuracion;
 use App\Services\KizeoService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -203,14 +204,27 @@ class KizeoWebhookController extends Controller
             $pdfContent = $pdf->output();
 
             // Enviar correo con PDF adjunto
-            $destinatario = config('services.kizeo.notify_email', 'bmachero@saep.cl');
-            $mailable = $esDevolucion
-                ? new VehiculoDevolucionMail($data, $pdfContent, $filename)
-                : new VehiculoEntregaMail($data, $pdfContent, $filename);
+            $envioActivo = Configuracion::get('kizeo_vehiculos_activo', '1');
+            if ($envioActivo === '1' || $envioActivo === 'true') {
+                $destinatariosRaw = Configuracion::get(
+                    'kizeo_vehiculos_destinatarios',
+                    config('services.kizeo.notify_email', 'brayan@bmachero.com')
+                );
+                $destinatarios = array_filter(array_map('trim', explode(',', $destinatariosRaw)));
 
-            Mail::to($destinatario)->send($mailable);
+                $mailable = $esDevolucion
+                    ? new VehiculoDevolucionMail($data, $pdfContent, $filename)
+                    : new VehiculoEntregaMail($data, $pdfContent, $filename);
 
-            Log::info("Acta de {$tipoActa} generada y enviada", ['patente' => $data['patente']]);
+                Mail::to($destinatarios)->send($mailable);
+
+                Log::info("Acta de {$tipoActa} generada y enviada", [
+                    'patente' => $data['patente'],
+                    'destinatarios' => $destinatarios,
+                ]);
+            } else {
+                Log::info("Acta de {$tipoActa} generada (envío email desactivado)", ['patente' => $data['patente']]);
+            }
 
             return response()->json(['status' => 'success', 'message' => "Acta de {$tipoActa} procesada correctamente"]);
 

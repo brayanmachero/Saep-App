@@ -16,8 +16,8 @@ class ConfiguracionController extends Controller
 
     public function update(Request $request)
     {
-        $data = $request->except(['_token','_method']);
-        foreach ($data as $clave => $valor) {
+        $items = $request->input('config', []);
+        foreach ($items as $clave => $valor) {
             $config = Configuracion::where('clave', $clave)->where('editable', true)->first();
             if ($config) {
                 if ($config->tipo === 'PASSWORD' && empty($valor)) continue;

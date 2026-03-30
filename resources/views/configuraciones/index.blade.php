@@ -16,13 +16,14 @@
         @csrf @method('PUT')
 
         @php
-            $grupos = $configuraciones->groupBy('grupo');
+            $grupos = $configuraciones->groupBy('categoria');
             $grupoLabels = [
-                'general'       => ['🏢','Datos de la Empresa'],
-                'email'         => ['📧','Configuración de Email'],
-                'sst'           => ['🦺','Prevención de Riesgos (SST)'],
-                'kizeo'         => ['📱','Integración Kizeo Forms'],
-                'notificaciones'=> ['🔔','Notificaciones'],
+                'general'        => ['🏢','Datos de la Empresa'],
+                'email'          => ['📧','Configuración de Email'],
+                'sst'            => ['🦺','Prevención de Riesgos (SST)'],
+                'integraciones'  => ['📱','Integraciones Externas'],
+                'seguridad'      => ['🔒','Seguridad'],
+                'notificaciones' => ['🔔','Notificaciones y Destinatarios'],
             ];
         @endphp
 
@@ -36,31 +37,31 @@
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:1rem">
                 @foreach($items as $config)
+                @if(!$config->editable) @continue @endif
                 <div class="form-group">
                     <label style="font-weight:600">
-                        {{ $config->label }}
-                        @if($config->descripcion)
-                            <span style="font-weight:400;color:var(--text-muted);font-size:.8rem;display:block">
-                                {{ $config->descripcion }}
-                            </span>
-                        @endif
+                        {{ $config->descripcion ?: ucfirst(str_replace('_',' ',$config->clave)) }}
                     </label>
-                    @if($config->tipo === 'boolean')
+                    @if(strtoupper($config->tipo) === 'BOOLEAN')
                         <div style="display:flex;align-items:center;gap:.5rem;margin-top:.25rem">
                             <input type="hidden" name="config[{{ $config->clave }}]" value="0">
                             <input type="checkbox" name="config[{{ $config->clave }}]" value="1"
                                    id="cfg_{{ $config->clave }}"
-                                   {{ $config->valor === '1' ? 'checked' : '' }}
+                                   {{ $config->valor === '1' || $config->valor === 'true' ? 'checked' : '' }}
                                    style="width:18px;height:18px;cursor:pointer">
                             <label for="cfg_{{ $config->clave }}" style="cursor:pointer;margin:0;font-weight:400">
-                                {{ $config->valor === '1' ? 'Activado' : 'Desactivado' }}
+                                {{ $config->valor === '1' || $config->valor === 'true' ? 'Activado' : 'Desactivado' }}
                             </label>
                         </div>
-                    @elseif($config->tipo === 'text')
+                    @elseif(strtoupper($config->tipo) === 'TEXT' && strlen($config->valor ?? '') > 80)
                         <textarea name="config[{{ $config->clave }}]" class="form-input"
                                   rows="3">{{ old('config.'.$config->clave, $config->valor) }}</textarea>
+                    @elseif(strtoupper($config->tipo) === 'PASSWORD')
+                        <input type="password" name="config[{{ $config->clave }}]"
+                               value="" placeholder="••••••••  (dejar vacío para no cambiar)"
+                               class="form-input" autocomplete="off">
                     @else
-                        <input type="{{ $config->tipo === 'integer' ? 'number' : 'text' }}"
+                        <input type="{{ strtoupper($config->tipo) === 'NUMBER' ? 'number' : (strtoupper($config->tipo) === 'EMAIL' ? 'email' : 'text') }}"
                                name="config[{{ $config->clave }}]"
                                value="{{ old('config.'.$config->clave, $config->valor) }}"
                                class="form-input">
