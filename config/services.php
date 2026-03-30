@@ -36,9 +36,10 @@ return [
     ],
 
     'kizeo' => [
-        'token'        => env('KIZEO_API_TOKEN'),
-        'url'          => env('KIZEO_API_URL', 'https://www.kizeoforms.com/rest/v3'),
-        'notify_email' => env('KIZEO_NOTIFY_EMAIL', 'bmachero@saep.cl'),
+        'token'          => env('KIZEO_API_TOKEN'),
+        'url'            => env('KIZEO_API_URL', 'https://www.kizeoforms.com/rest/v3'),
+        'notify_email'   => env('KIZEO_NOTIFY_EMAIL', 'bmachero@saep.cl'),
+        'webhook_secret' => env('KIZEO_WEBHOOK_SECRET'),
     ],
 
     'google' => [

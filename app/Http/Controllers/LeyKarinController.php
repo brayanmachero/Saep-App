@@ -21,7 +21,7 @@ class LeyKarinController extends Controller
         $query = LeyKarin::with(['centroCosto', 'investigador', 'denunciante']);
 
         if ($request->filled('buscar')) {
-            $b = $request->buscar;
+            $b = str_replace(['%', '_'], ['\%', '\_'], $request->buscar);
             $query->where(function ($q) use ($b) {
                 $q->where('folio', 'like', "%{$b}%")
                   ->orWhere('denunciante_nombre', 'like', "%{$b}%")

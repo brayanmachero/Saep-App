@@ -25,7 +25,7 @@ class RespuestaController extends Controller
         }
 
         if ($request->filled('buscar')) {
-            $q = $request->buscar;
+            $q = str_replace(['%', '_'], ['\%', '\_'], $request->buscar);
             $query->whereHas('usuario', fn($u) => $u->where('name', 'like', "%$q%"));
         }
 

@@ -46,6 +46,13 @@ class KizeoWebhookController extends Controller
      */
     public function handle(Request $request)
     {
+        // Verificar secreto del webhook si está configurado
+        $secret = config('services.kizeo.webhook_secret');
+        if ($secret && !hash_equals($secret, (string) $request->header('X-Webhook-Secret', ''))) {
+            Log::warning('Kizeo Webhook rechazado: secreto inválido', ['ip' => $request->ip()]);
+            return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 403);
+        }
+
         try {
             $payload = $request->all();
 
@@ -244,7 +251,7 @@ class KizeoWebhookController extends Controller
 
         } catch (\Throwable $e) {
             Log::error('Error en Kizeo Webhook: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+            return response()->json(['status' => 'error', 'message' => 'Internal processing error'], 500);
         }
     }
 

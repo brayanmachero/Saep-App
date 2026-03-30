@@ -26,7 +26,8 @@ class CharlaSstController extends Controller
             $query->where('tipo', $request->tipo);
         }
         if ($request->filled('buscar')) {
-            $query->where('titulo', 'like', '%' . $request->buscar . '%');
+            $escaped = str_replace(['%', '_'], ['\%', '\_'], $request->buscar);
+            $query->where('titulo', 'like', '%' . $escaped . '%');
         }
 
         $charlas = $query->orderBy('fecha_programada', 'desc')->paginate(20)->withQueryString();

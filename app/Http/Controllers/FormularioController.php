@@ -15,7 +15,7 @@ class FormularioController extends Controller
         $query = Formulario::with(['departamento', 'creador']);
 
         if ($request->filled('buscar')) {
-            $q = $request->buscar;
+            $q = str_replace(['%', '_'], ['\%', '\_'], $request->buscar);
             $query->where(function ($w) use ($q) {
                 $w->where('nombre', 'like', "%$q%")
                   ->orWhere('codigo', 'like', "%$q%");

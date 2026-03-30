@@ -136,11 +136,12 @@ class LeyKarinPublicoController extends Controller
             'consentimiento_geolocalizacion' => $request->boolean('consentimiento_geolocalizacion'),
         ]);
 
-        // Subir evidencias
+        // Subir evidencias (almacenamiento privado)
         if ($request->hasFile('evidencias')) {
             foreach ($request->file('evidencias') as $archivo) {
-                $nombre = time() . '_' . $archivo->getClientOriginalName();
-                $ruta = $archivo->storeAs('ley_karin/' . $caso->id, $nombre, 'public');
+                $extension = $archivo->getClientOriginalExtension();
+                $nombre = time() . '_' . \Illuminate\Support\Str::random(10) . '.' . $extension;
+                $ruta = $archivo->storeAs('ley_karin/' . $caso->id, $nombre);
 
                 ArchivoAdjunto::create([
                     'entidad_tipo'     => 'ley_karin',

@@ -40,7 +40,8 @@ class NotaPersonalController extends Controller
 
         // Búsqueda por texto
         if ($request->filled('buscar')) {
-            $query->where('contenido', 'like', '%' . $request->buscar . '%');
+            $escaped = str_replace(['%', '_'], ['\%', '\_'], $request->buscar);
+            $query->where('contenido', 'like', '%' . $escaped . '%');
         }
 
         $notas = $query->paginate(20)->withQueryString();

@@ -18,7 +18,7 @@ class UserController extends Controller
         $query = User::with(['rol', 'departamento', 'cargo', 'centroCosto']);
 
         if ($request->filled('buscar')) {
-            $q = $request->buscar;
+            $q = str_replace(['%', '_'], ['\%', '\_'], $request->buscar);
             $query->where(function ($w) use ($q) {
                 $w->where('name', 'like', "%$q%")
                   ->orWhere('email', 'like', "%$q%")

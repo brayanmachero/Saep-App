@@ -17,7 +17,7 @@ class ArchivoAdjunto extends Model
 
     public function getUrlAttribute(): string
     {
-        return asset('storage/' . $this->ruta);
+        return route('archivos.descargar', $this->id);
     }
 
     public function getTamanioFormateadoAttribute(): string

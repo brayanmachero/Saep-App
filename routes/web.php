@@ -56,6 +56,18 @@ Route::prefix('denuncia-ley-karin')->group(function () {
 // App (requiere autenticación)
 Route::middleware('auth')->group(function () {
 
+    // --- DESCARGA DE ARCHIVOS ADJUNTOS (privados) ---
+    Route::get('/archivos/{archivo}/descargar', function (\App\Models\ArchivoAdjunto $archivo) {
+        $path = storage_path('app/private/' . $archivo->ruta);
+        if (!file_exists($path)) {
+            abort(404);
+        }
+        return response()->file($path, [
+            'Content-Type' => $archivo->mime_type,
+            'Content-Disposition' => 'inline; filename="' . $archivo->nombre_original . '"',
+        ]);
+    })->name('archivos.descargar');
+
     // --- PROTECCIÓN DE DATOS (Ley 21.719) ---
     Route::get('/proteccion-datos/consentimiento', fn () => view('proteccion-datos.consentimiento'))
         ->name('proteccion-datos.consentimiento');
