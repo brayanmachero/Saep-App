@@ -18,6 +18,7 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\KizeoDashboardController;
 use App\Http\Controllers\KizeoWebhookController;
 use App\Http\Controllers\LeyKarinController;
+use App\Http\Controllers\NotaPersonalController;
 use App\Http\Controllers\PdfController;
 use App\Http\Controllers\PermisoController;
 use App\Http\Controllers\ProteccionDatosController;
@@ -224,6 +225,15 @@ Route::middleware('auth')->group(function () {
     // --- DOCUMENTACIÓN ---
     Route::get('documentacion', [DocumentacionController::class, 'index'])->name('documentacion.index');
     Route::get('documentacion/{modulo}', [DocumentacionController::class, 'show'])->name('documentacion.show');
+
+    // --- NOTAS PERSONALES (dictado por voz) ---
+    Route::middleware('modulo:notas_personales')->group(function () {
+        Route::get('notas', [NotaPersonalController::class, 'index'])->name('notas.index');
+        Route::post('notas', [NotaPersonalController::class, 'store'])->name('notas.store');
+        Route::put('notas/{nota}', [NotaPersonalController::class, 'update'])->name('notas.update');
+        Route::patch('notas/{nota}/toggle', [NotaPersonalController::class, 'toggleCompletada'])->name('notas.toggle');
+        Route::delete('notas/{nota}', [NotaPersonalController::class, 'destroy'])->name('notas.destroy');
+    });
 
     }); // fin middleware consentimiento
 });

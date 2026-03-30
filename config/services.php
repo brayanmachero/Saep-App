@@ -55,4 +55,8 @@ return [
         'root_folder'   => env('MSGRAPH_ROOT_FOLDER', 'Actas Vehiculos'),
     ],
 
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+    ],
+
 ];

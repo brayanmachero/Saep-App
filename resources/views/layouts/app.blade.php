@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'SAEP Platform')</title>
 
     <!-- Bootstrap Icons -->
@@ -189,6 +190,15 @@
             <a href="{{ route('documentacion.index') }}" class="nav-item {{ request()->routeIs('documentacion.*') ? 'active' : '' }}">
                 <i class="bi bi-book-fill"></i>
                 <span>Documentación</span>
+            </a>
+            @endif
+
+            {{-- NOTAS PERSONALES --}}
+            @if(auth()->user()->tieneAcceso('notas_personales'))
+            <div class="nav-section-label">Mis Herramientas</div>
+            <a href="{{ route('notas.index') }}" class="nav-item {{ request()->routeIs('notas.*') ? 'active' : '' }}">
+                <i class="bi bi-journal-text"></i>
+                <span>Notas por Voz</span>
             </a>
             @endif
         </nav>
