@@ -521,18 +521,39 @@ class CartaGanttController extends Controller
                     'orden'          => $categoria->actividades()->max('orden') + 1,
                 ]);
 
-                // Meses programados: "1,3,6,9,12"
+                // Meses programados: "1,3,6,9,12" o auto-calcular desde periodicidad
                 $mesesStr = trim($row['meses_programados'] ?? '');
+                $mesesProg = [];
                 if ($mesesStr) {
                     foreach (explode(',', $mesesStr) as $mes) {
                         $mes = (int) trim($mes);
                         if ($mes >= 1 && $mes <= 12) {
-                            $actividad->seguimiento()->create([
-                                'mes' => $mes,
-                                'programado' => true,
-                            ]);
+                            $mesesProg[] = $mes;
                         }
                     }
+                }
+
+                // Si no se especificaron meses pero hay periodicidad: auto-calcular
+                if (empty($mesesProg) && $periodicidad) {
+                    $mesesProg = SstActividad::mesesProgramadosPorPeriodicidad($periodicidad);
+                }
+
+                // Crear seguimiento para meses programados
+                foreach ($mesesProg as $mes) {
+                    $actividad->seguimiento()->create([
+                        'mes' => $mes,
+                        'programado' => true,
+                    ]);
+                }
+
+                // Auto-asignar fechas si no se especificaron
+                if (!$fechaInicio && !empty($mesesProg)) {
+                    $anio = $cartaGantt->anio ?? date('Y');
+                    $actividad->update(['fecha_inicio' => \Carbon\Carbon::create($anio, min($mesesProg), 1)->toDateString()]);
+                }
+                if (!$fechaFin && !empty($mesesProg)) {
+                    $anio = $cartaGantt->anio ?? date('Y');
+                    $actividad->update(['fecha_fin' => \Carbon\Carbon::create($anio, max($mesesProg))->endOfMonth()->toDateString()]);
                 }
 
                 $creadas++;
