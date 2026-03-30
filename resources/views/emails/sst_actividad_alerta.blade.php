@@ -6,13 +6,29 @@
 <tr><td align="center">
 <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
     <tr>
-        <td style="background:{{ $tipo === 'vencida' ? '#dc2626' : ($tipo === 'vencimiento' ? '#f59e0b' : '#0f1b4c') }};padding:28px 36px;">
+        @php
+            $headerColors = [
+                'vencida' => '#dc2626',
+                'vencimiento' => '#f59e0b',
+                'recordatorio' => '#6366f1',
+                'seguimiento_pendiente' => '#ea580c',
+            ];
+            $headerBg = $headerColors[$tipo] ?? '#0f1b4c';
+        @endphp
+        <td style="background:{{ $headerBg }};padding:28px 36px;">
             <h1 style="color:white;font-size:20px;margin:0;">SAEP Platform</h1>
             <p style="color:rgba(255,255,255,0.8);font-size:13px;margin:6px 0 0;">
                 @if($tipo === 'asignacion')
                     📋 Nueva Actividad Asignada
                 @elseif($tipo === 'vencimiento')
                     ⏰ Actividad Próxima a Vencer
+                @elseif($tipo === 'recordatorio')
+                    🔔 Recordatorio de Actividad
+                    @if($actividad->periodicidad)
+                    ({{ \App\Models\SstActividad::periodicidadesMap()[$actividad->periodicidad] ?? $actividad->periodicidad }})
+                    @endif
+                @elseif($tipo === 'seguimiento_pendiente')
+                    📊 Seguimiento Pendiente
                 @else
                     ⚠️ Actividad Vencida
                 @endif
@@ -32,6 +48,14 @@
             @elseif($tipo === 'vencimiento')
             <p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 24px;">
                 Le recordamos que la siguiente actividad está <strong>próxima a vencer</strong>:
+            </p>
+            @elseif($tipo === 'recordatorio')
+            <p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 24px;">
+                Este es un recordatorio {{ strtolower(\App\Models\SstActividad::periodicidadesMap()[$actividad->periodicidad] ?? '') }} de la siguiente actividad programada que aún <strong>no ha sido completada</strong> este mes:
+            </p>
+            @elseif($tipo === 'seguimiento_pendiente')
+            <p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 24px;">
+                La siguiente actividad tenía <strong>seguimiento programado el mes anterior</strong> pero no fue marcada como realizada:
             </p>
             @else
             <p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 24px;">
@@ -95,10 +119,26 @@
                     Quedan pocos días para completar esta actividad. Revise el progreso y asegúrese de cumplir los plazos.
                 </p>
             </div>
+            @elseif($tipo === 'recordatorio')
+            <div style="background:#eef2ff;border-left:3px solid #6366f1;border-radius:8px;padding:14px 16px;margin-bottom:24px;">
+                <p style="font-size:13px;color:#3730a3;margin:0;font-weight:600;">🔔 Recordatorio {{ strtolower(\App\Models\SstActividad::periodicidadesMap()[$actividad->periodicidad] ?? '') }}</p>
+                <p style="font-size:12px;color:#4338ca;margin:6px 0 0;line-height:1.5;">
+                    Esta actividad tiene periodicidad <strong>{{ strtolower(\App\Models\SstActividad::periodicidadesMap()[$actividad->periodicidad] ?? $actividad->periodicidad) }}</strong>.
+                    Recuerde marcar el seguimiento como realizado una vez completada.
+                </p>
+            </div>
+            @elseif($tipo === 'seguimiento_pendiente')
+            <div style="background:#fff7ed;border-left:3px solid #ea580c;border-radius:8px;padding:14px 16px;margin-bottom:24px;">
+                <p style="font-size:13px;color:#9a3412;margin:0;font-weight:600;">📊 Seguimiento sin completar</p>
+                <p style="font-size:12px;color:#7c2d12;margin:6px 0 0;line-height:1.5;">
+                    El mes anterior esta actividad estaba programada pero no fue marcada como realizada. Por favor actualice el estado o registre un plan de acción.
+                </p>
+            </div>
             @endif
 
             @php
                 $programaId = $actividad->categoria?->programa_id;
+                $jefeNombre = $actividad->categoria?->programa?->responsable?->nombre_completo;
             @endphp
             @if($programaId)
             <div style="text-align:center;margin-bottom:24px;">
@@ -106,6 +146,14 @@
                    style="background:#0f1b4c;color:white;padding:14px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600;display:inline-block;">
                     Ver en Carta Gantt
                 </a>
+            </div>
+            @endif
+
+            @if($tipo !== 'asignacion' && $jefeNombre)
+            <div style="background:#f0fdf4;border-radius:8px;padding:10px 14px;margin-bottom:16px;">
+                <p style="font-size:11px;color:#15803d;margin:0;">
+                    📤 Este correo también fue enviado al jefe del programa (<strong>{{ $jefeNombre }}</strong>) y al equipo de administración para seguimiento.
+                </p>
             </div>
             @endif
         </td>

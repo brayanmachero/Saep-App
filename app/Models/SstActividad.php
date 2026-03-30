@@ -52,6 +52,49 @@ class SstActividad extends Model
         ];
     }
 
+    /**
+     * Meses que deben programarse automáticamente según la periodicidad.
+     */
+    public static function mesesProgramadosPorPeriodicidad(string $periodicidad): array
+    {
+        return match ($periodicidad) {
+            'DIARIA', 'SEMANAL', 'QUINCENAL', 'MENSUAL' => range(1, 12),
+            'BIMENSUAL'  => [1, 3, 5, 7, 9, 11],
+            'TRIMESTRAL' => [1, 4, 7, 10],
+            'SEMESTRAL'  => [1, 7],
+            'ANUAL'      => [1],
+            default      => [], // UNICA: selección manual
+        };
+    }
+
+    /**
+     * Determina si hoy corresponde enviar un recordatorio según la periodicidad
+     * para un mes programado que aún no ha sido realizado.
+     */
+    public function debeRecordarHoy(int $mesActual): bool
+    {
+        $seg = $this->seguimiento->firstWhere('mes', $mesActual);
+        if (!$seg || !$seg->programado || $seg->realizado) {
+            return false;
+        }
+
+        $dia = (int) now()->format('j');
+        $diaSemana = (int) now()->format('N'); // 1=Lunes ... 7=Domingo
+
+        return match ($this->periodicidad) {
+            'DIARIA'     => $diaSemana <= 5,              // Lunes a Viernes
+            'SEMANAL'    => $diaSemana === 1,             // Solo Lunes
+            'QUINCENAL'  => in_array($dia, [1, 15]),      // 1 y 15 del mes
+            'MENSUAL', 'BIMENSUAL', 'TRIMESTRAL',
+            'SEMESTRAL', 'ANUAL' => in_array($dia, [1, 15]), // Inicio + seguimiento
+            'UNICA'      => in_array($dia, [1]),          // Solo al inicio del mes
+            default      => false,
+        };
+    }
+
+    // Relationships
+    public function notificaciones() { return $this->hasMany(SstNotificacionLog::class, 'actividad_id'); }
+
     // === Relationships ===
     public function categoria()      { return $this->belongsTo(SstCategoria::class, 'categoria_id'); }
     public function responsableUser() { return $this->belongsTo(User::class, 'responsable_id'); }

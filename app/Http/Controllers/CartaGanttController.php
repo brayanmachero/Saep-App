@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProgramaSst;
+use App\Models\Rol;
 use App\Models\SstCategoria;
 use App\Models\SstActividad;
+use App\Models\SstNotificacionLog;
 use App\Models\SstSeguimiento;
 use App\Models\SstPlanAccion;
 use App\Models\CentroCosto;
@@ -184,25 +186,40 @@ class CartaGanttController extends Controller
             'orden'          => $categoria->actividades()->max('orden') + 1,
         ]);
 
+        // Si hay periodicidad sin meses manuales: auto-calcular meses programados
+        $mesesProg = $request->get('meses_prog', []);
+        if (empty($mesesProg) && $request->periodicidad) {
+            $mesesProg = SstActividad::mesesProgramadosPorPeriodicidad($request->periodicidad);
+        }
+
+        // Auto-asignar fecha_fin basada en el último mes programado si no se especificó
+        if (!$request->fecha_fin && !empty($mesesProg)) {
+            $anio = $categoria->programa->anio ?? date('Y');
+            $ultimoMes = max($mesesProg);
+            $actividad->update([
+                'fecha_fin' => \Carbon\Carbon::create($anio, $ultimoMes)->endOfMonth()->toDateString(),
+            ]);
+        }
+
+        // Auto-asignar fecha_inicio si no se especificó
+        if (!$request->fecha_inicio && !empty($mesesProg)) {
+            $anio = $categoria->programa->anio ?? date('Y');
+            $primerMes = min($mesesProg);
+            $actividad->update([
+                'fecha_inicio' => \Carbon\Carbon::create($anio, $primerMes, 1)->toDateString(),
+            ]);
+        }
+
         // Crear seguimiento para meses programados
-        foreach ($request->get('meses_prog', []) as $mes) {
+        foreach ($mesesProg as $mes) {
             $actividad->seguimiento()->updateOrCreate(
                 ['mes' => (int) $mes],
                 ['programado' => true]
             );
         }
 
-        // Notificar al responsable si tiene email
-        if ($actividad->responsable_id) {
-            $user = User::find($actividad->responsable_id);
-            if ($user?->email) {
-                try {
-                    Mail::to($user->email)->send(new SstActividadAlertaMail($actividad, 'asignacion'));
-                } catch (\Exception $e) {
-                    // SMTP no configurado — no bloquear la operación
-                }
-            }
-        }
+        // Notificar al responsable + CC jefe del programa + superadmins
+        $this->enviarNotificacionActividad($actividad, 'asignacion');
 
         return back()->with('success', 'Actividad agregada.');
     }
@@ -317,6 +334,68 @@ class CartaGanttController extends Controller
     // =====================================================
     // HELPERS
     // =====================================================
+
+    /**
+     * Envía email de actividad al responsable con CC al jefe del programa y superadmins.
+     */
+    private function enviarNotificacionActividad(SstActividad $actividad, string $tipo, ?int $mes = null): void
+    {
+        $actividad->loadMissing(['responsableUser', 'categoria.programa.responsable']);
+        $programa = $actividad->categoria?->programa;
+
+        $responsable = $actividad->responsableUser;
+        $responsableEmail = $responsable?->email;
+
+        // Construir lista de CC: jefe del programa + superadmins
+        $ccEmails = collect();
+
+        // Jefe del programa (responsable del ProgramaSst)
+        if ($programa?->responsable?->email) {
+            $ccEmails->push($programa->responsable->email);
+        }
+
+        // Todos los superadmins activos
+        $superAdmins = User::whereHas('rol', fn ($q) => $q->where('codigo', 'SUPER_ADMIN'))
+            ->where('activo', true)
+            ->pluck('email')
+            ->filter();
+        $ccEmails = $ccEmails->merge($superAdmins)->unique()->reject(fn ($e) => $e === $responsableEmail);
+
+        // Si no hay responsable pero sí hay CCs, enviar al primer CC como destinatario principal
+        $toEmail = $responsableEmail ?: $ccEmails->shift();
+        if (!$toEmail) {
+            return; // No hay a quién enviar
+        }
+
+        try {
+            $mail = Mail::to($toEmail);
+            if ($ccEmails->isNotEmpty()) {
+                $mail->cc($ccEmails->all());
+            }
+            $mail->send(new SstActividadAlertaMail($actividad, $tipo));
+
+            // Registrar en log
+            $allRecipients = collect([$toEmail])->merge($ccEmails);
+            foreach ($allRecipients as $email) {
+                $user = User::where('email', $email)->first();
+                $rolDest = 'responsable';
+                if ($email !== $responsableEmail) {
+                    $isSuperAdmin = $superAdmins->contains($email);
+                    $rolDest = $isSuperAdmin ? 'superadmin' : 'jefe';
+                }
+                SstNotificacionLog::create([
+                    'actividad_id'    => $actividad->id,
+                    'user_id'         => $user?->id,
+                    'email'           => $email,
+                    'tipo'            => $tipo,
+                    'mes'             => $mes,
+                    'rol_destinatario' => $rolDest,
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning("SST Notificación ({$tipo}): no se pudo enviar para actividad #{$actividad->id}: {$e->getMessage()}");
+        }
+    }
 
     private function recalcularEstadoActividad(SstActividad $actividad): void
     {

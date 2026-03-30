@@ -15,15 +15,19 @@ class SstActividadAlertaMail extends Mailable
 
     public function __construct(
         public SstActividad $actividad,
-        public string $tipo = 'asignacion' // asignacion | vencimiento | vencida
+        public string $tipo = 'asignacion' // asignacion | vencimiento | vencida | recordatorio | seguimiento_pendiente
     ) {}
 
     public function envelope(): Envelope
     {
+        $periodicidadLabel = \App\Models\SstActividad::periodicidadesMap()[$this->actividad->periodicidad] ?? '';
+
         $subjects = [
-            'asignacion'  => 'Nueva actividad asignada: ' . $this->actividad->nombre,
-            'vencimiento' => 'Actividad próxima a vencer: ' . $this->actividad->nombre,
-            'vencida'     => '⚠ Actividad vencida: ' . $this->actividad->nombre,
+            'asignacion'            => 'Nueva actividad asignada: ' . $this->actividad->nombre,
+            'vencimiento'           => 'Actividad próxima a vencer: ' . $this->actividad->nombre,
+            'vencida'               => '⚠ Actividad vencida: ' . $this->actividad->nombre,
+            'recordatorio'          => "Recordatorio ({$periodicidadLabel}): " . $this->actividad->nombre,
+            'seguimiento_pendiente' => 'Seguimiento pendiente: ' . $this->actividad->nombre,
         ];
 
         return new Envelope(
