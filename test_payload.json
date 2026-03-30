@@ -1,0 +1,123 @@
+{
+  "id": "264154624",
+  "eventType": "finished",
+  "data": {
+    "recipient_user_id": null,
+    "answer_time": "2026-03-27T11:35:18-03:00",
+    "update_answer_time": "2026-03-27T11:35:18-03:00",
+    "id_tel": "d21a54a3-772e-45f5-8e0a-3d36642fe263",
+    "media": [
+      "c97607f1165545du754332_20260327113507_c6a92ca5-8ae9-4224-ba63-be0fb4a32965.jpg",
+      "c97607f1165545su754332_20260327113514_73b5c9ba-2a20-4acb-b144-c154d3ab4cba.png"
+    ],
+    "form_id": "1165545",
+    "origin": "ios",
+    "app_version": "7.56.316",
+    "fields": {
+      "marca_modelo": {
+        "result": {
+          "value": {
+            "code": "Fiat - Fiorino"
+          },
+          "time": "2026-03-27T11:34:49-03:00"
+        },
+        "hidden": false
+      },
+      "lista": {
+        "result": [
+          {
+            "value": {
+              "code": "a1667ca8-694c-47eb-b808-59e7134c93a5",
+              "path": "",
+              "column1": "Fiat - Fiorino"
+            },
+            "time": "2026-03-27T11:34:53-03:00"
+          }
+        ],
+        "hidden": false
+      },
+      "gestion": {
+        "result": {
+          "value": {
+            "code": "Entrega a Conductor"
+          },
+          "time": "2026-03-27T11:34:37-03:00"
+        },
+        "hidden": false
+      },
+      "fecha_y_hora": {
+        "result": {
+          "value": {
+            "date": "2026-03-27",
+            "hour": "11:34:00"
+          },
+          "time": "2026-03-27T11:34:42-03:00"
+        },
+        "hidden": false
+      },
+      "kilometraje_de_entrega": {
+        "result": {
+          "value": "80000",
+          "time": "2026-03-27T11:34:58-03:00"
+        },
+        "hidden": false
+      },
+      "kit_de_seguridad_y_emergencia": {
+        "result": [
+          { "value": { "code": "Extintor de incendios (Cargado y vigente)" }, "time": "2026-03-27T11:35:02-03:00" },
+          { "value": { "code": "Neumático de repuesto (En buen estado)" }, "time": "2026-03-27T11:35:02-03:00" },
+          { "value": { "code": "Chaleco reflectante amarillo" }, "time": "2026-03-27T11:35:02-03:00" },
+          { "value": { "code": "Botiquín de primeros auxilios" }, "time": "2026-03-27T11:35:02-03:00" },
+          { "value": { "code": "Triángulos reflectantes (Juego de 2)" }, "time": "2026-03-27T11:35:02-03:00" },
+          { "value": { "code": "Llave de ruedas" }, "time": "2026-03-27T11:35:02-03:00" },
+          { "value": { "code": "Cables para pasar corriente" }, "time": "2026-03-27T11:35:02-03:00" }
+        ],
+        "hidden": false
+      },
+      "dibujo": {
+        "result": {
+          "value": {
+            "file": "c97607f1165545du754332_20260327113507_c6a92ca5-8ae9-4224-ba63-be0fb4a32965.jpg"
+          },
+          "time": "2026-03-27T11:35:07-03:00"
+        },
+        "hidden": false
+      },
+      "declaracion_de_recepcion_cust": {
+        "result": {
+          "value": "Por el presente documento declaro haber recibido de parte de la empresa SAEP el vehículo individualizado, así como sus correspondientes accesorios y herramientas.",
+          "time": "2026-03-27T11:35:10-03:00"
+        },
+        "hidden": false
+      },
+      "he_leido_comprendo_y_acepto_l": {
+        "result": {
+          "value": true,
+          "time": "2026-03-27T11:35:11-03:00"
+        },
+        "hidden": false
+      },
+      "firma": {
+        "result": {
+          "value": {
+            "file": "c97607f1165545su754332_20260327113514_73b5c9ba-2a20-4acb-b144-c154d3ab4cba.png"
+          },
+          "time": "2026-03-27T11:35:14-03:00"
+        },
+        "hidden": false
+      },
+      "geolocalizacion": {
+        "result": {
+          "value": {
+            "lat": "-33.40433802172275",
+            "long": "-70.65541602015303"
+          },
+          "time": "2026-03-27T11:35:16-03:00"
+        },
+        "hidden": false
+      }
+    },
+    "id": "754332",
+    "user_id": "197851"
+  }
+}

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Cargo;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class CargoController extends Controller
 {
@@ -22,10 +23,12 @@ class CargoController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'codigo' => 'required|string|max:100|unique:cargos,codigo',
             'nombre' => 'required|string|max:200',
         ]);
-        Cargo::create($request->only(['codigo','nombre']));
+
+        $codigo = $this->generarCodigo($request->nombre);
+
+        Cargo::create(['codigo' => $codigo, 'nombre' => $request->nombre]);
         return redirect()->route('cargos.index')->with('success', 'Cargo creado.');
     }
 
@@ -42,10 +45,12 @@ class CargoController extends Controller
     public function update(Request $request, Cargo $cargo)
     {
         $request->validate([
-            'codigo' => 'required|string|max:100|unique:cargos,codigo,'.$cargo->id,
             'nombre' => 'required|string|max:200',
         ]);
-        $cargo->update($request->only(['codigo','nombre','activo']));
+
+        $codigo = $this->generarCodigo($request->nombre, $cargo->id);
+
+        $cargo->update(['codigo' => $codigo, 'nombre' => $request->nombre, 'activo' => $request->boolean('activo')]);
         return redirect()->route('cargos.index')->with('success', 'Cargo actualizado.');
     }
 
@@ -53,5 +58,19 @@ class CargoController extends Controller
     {
         $cargo->update(['activo' => false]);
         return redirect()->route('cargos.index')->with('success', 'Cargo desactivado.');
+    }
+
+    private function generarCodigo(string $nombre, ?int $excludeId = null): string
+    {
+        $base = Str::upper(Str::slug($nombre, '_'));
+        $codigo = Str::limit($base, 50, '');
+        $suffix = 0;
+
+        while (Cargo::where('codigo', $codigo)->when($excludeId, fn($q) => $q->where('id', '!=', $excludeId))->exists()) {
+            $suffix++;
+            $codigo = Str::limit($base, 47, '') . '_' . $suffix;
+        }
+
+        return $codigo;
     }
 }

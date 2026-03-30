@@ -13,14 +13,6 @@
     <div class="glass-card">
         <form method="POST" action="{{ route('cargos.update', $cargo) }}">
             @csrf @method('PUT')
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>Código</label>
-                    <input type="text" name="codigo" value="{{ old('codigo', $cargo->codigo) }}"
-                           class="form-control @error('codigo') is-invalid @enderror">
-                    @error('codigo')<span class="form-error">{{ $message }}</span>@enderror
-                </div>
-            </div>
             <div class="form-group">
                 <label>Nombre del Cargo <span class="required">*</span></label>
                 <input type="text" name="nombre" value="{{ old('nombre', $cargo->nombre) }}"
