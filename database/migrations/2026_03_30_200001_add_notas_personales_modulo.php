@@ -23,7 +23,7 @@ return new class extends Migration
         // Asignar acceso a rol Admin (id=1) por defecto
         $moduloId = DB::table('modulos')->where('slug', 'notas_personales')->value('id');
         if ($moduloId) {
-            $adminRol = DB::table('roles')->where('slug', 'admin')->orWhere('id', 1)->value('id');
+            $adminRol = DB::table('roles')->where('codigo', 'admin')->value('id') ?? 1;
             if ($adminRol) {
                 DB::table('rol_modulo')->insert([
                     'rol_id'          => $adminRol,
