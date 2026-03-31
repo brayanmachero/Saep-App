@@ -9,7 +9,6 @@
         <td bgcolor="#9f1239" style="background-color:#9f1239;padding:35px 30px;text-align:center;color:#ffffff;border-bottom:4px solid #f43f5e;">
             <div style="margin-bottom:20px;">
                 <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg" alt="SAEP" width="160" style="max-height:48px;width:auto;display:inline-block;" />
-                <br><span style="font-size:11px;opacity:0.7;letter-spacing:1px;">SERVICIOS DE ASESORÍAS A EMPRESAS</span>
             </div>
             <h1 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.025em;">Acta de Devolución de Vehículo</h1>
             <p style="margin:8px 0 0;font-size:15px;opacity:0.9;">Recepción oficial en base o instalaciones</p>
