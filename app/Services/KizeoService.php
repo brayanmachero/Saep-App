@@ -198,6 +198,50 @@ class KizeoService
     }
 
     /**
+     * Descargar el PDF estándar generado por Kizeo para un registro.
+     * Retorna el contenido binario del PDF o null si falla.
+     */
+    public function downloadPdf(string $formId, string $dataId): ?string
+    {
+        $url = "{$this->baseUrl}/forms/{$formId}/data/{$dataId}/pdf";
+        $response = Http::withHeaders(['Authorization' => $this->token])
+            ->timeout(30)
+            ->get($url);
+
+        if ($response->failed()) {
+            throw new \Exception("Kizeo PDF download error [{$response->status()}]: {$response->body()}");
+        }
+
+        return $response->body();
+    }
+
+    /**
+     * Obtener la lista de exports (Word/Excel templates) de un formulario.
+     */
+    public function getExports(string $formId): array
+    {
+        $data = $this->get("forms/{$formId}/exports");
+        return $data['exports'] ?? [];
+    }
+
+    /**
+     * Descargar un export personalizado como PDF.
+     */
+    public function downloadExportPdf(string $formId, string $dataId, string $exportId): ?string
+    {
+        $url = "{$this->baseUrl}/forms/{$formId}/data/{$dataId}/exports/{$exportId}/pdf";
+        $response = Http::withHeaders(['Authorization' => $this->token])
+            ->timeout(30)
+            ->get($url);
+
+        if ($response->failed()) {
+            throw new \Exception("Kizeo Export PDF error [{$response->status()}]: {$response->body()}");
+        }
+
+        return $response->body();
+    }
+
+    /**
      * Limpiar toda la caché de Kizeo (forzar refresh completo).
      */
     public function clearCache(): void

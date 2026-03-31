@@ -43,6 +43,7 @@ class KizeoWebhookController extends Controller
 
     /**
      * Recibir webhook de Kizeo Forms (Standard Webhook).
+     * Despacha según el formId al handler correspondiente.
      */
     public function handle(Request $request)
     {
@@ -60,37 +61,57 @@ class KizeoWebhookController extends Controller
             Log::info('Kizeo Webhook recibido (payload completo)', $payload);
 
             // Extraer form_id y data_id del webhook notification
-            // Kizeo Standard Webhook puede enviar: {format, eventType, data: {id, form_id, ...}}
-            // O directamente: {id, form_id, eventType, ...}
             $formId = $payload['data']['form_id'] ?? $payload['form_id'] ?? null;
             $dataId = $payload['data']['id'] ?? $payload['id'] ?? $payload['data_id'] ?? null;
             $eventType = $payload['eventType'] ?? $payload['event'] ?? 'unknown';
 
             Log::info("Webhook parseado", ['formId' => $formId, 'dataId' => $dataId, 'event' => $eventType]);
 
-            // Si el payload tiene los campos directamente, usarlos
+            if (!$formId || !$dataId) {
+                Log::warning('Webhook sin formId o dataId', ['payload_keys' => array_keys($payload)]);
+                return response()->json(['status' => 'ignored', 'message' => 'Sin form_id o data_id'], 200);
+            }
+
+            // Despachar según el formulario
+            $vehicleFormId = config('services.kizeo.vehicle_form_id');
+            $charlaFormId  = config('services.kizeo.charla_form_id');
+
+            if ($vehicleFormId && $formId == $vehicleFormId) {
+                return $this->handleVehiculo($formId, $dataId, $payload);
+            }
+
+            if ($charlaFormId && $formId == $charlaFormId) {
+                return $this->handleCharlaSst($formId, $dataId, $payload);
+            }
+
+            Log::info("Webhook recibido para formulario no registrado", ['formId' => $formId]);
+            return response()->json(['status' => 'ignored', 'message' => "FormId {$formId} no tiene handler configurado"], 200);
+
+        } catch (\Throwable $e) {
+            Log::error('Error en Kizeo Webhook: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['status' => 'error', 'message' => 'Internal processing error'], 500);
+        }
+    }
+
+    /**
+     * Handler para formularios de Vehículos (Entrega/Devolución).
+     */
+    private function handleVehiculo(string $formId, string $dataId, array $payload)
+    {
+        try {
+            // Obtener campos del registro
             $fields = $payload['data']['fields'] ?? null;
             $recordMeta = $payload['data'] ?? [];
 
-            // Si NO trae campos, consultar la API de Kizeo para obtener el registro completo
-            if (!$fields && $formId && $dataId) {
+            if (!$fields) {
                 Log::info("Campos no encontrados en payload, consultando API de Kizeo...", ['formId' => $formId, 'dataId' => $dataId]);
-
                 $record = $this->kizeo->getRecord($formId, $dataId);
-
                 if (!$record || !isset($record['fields'])) {
                     Log::warning('No se pudieron obtener campos de la API de Kizeo', ['response' => $record]);
                     return response()->json(['status' => 'error', 'message' => 'No se pudieron obtener datos del formulario'], 200);
                 }
-
                 $fields = $record['fields'];
                 $recordMeta = $record;
-                Log::info('Campos obtenidos de la API de Kizeo', ['fields_count' => count($fields)]);
-            }
-
-            if (!$fields) {
-                Log::warning('Sin campos de datos disponibles', ['payload_keys' => array_keys($payload)]);
-                return response()->json(['status' => 'ignored', 'message' => 'Sin campos de datos'], 200);
             }
 
             // Helper para extraer campos del payload de Kizeo
@@ -293,7 +314,134 @@ class KizeoWebhookController extends Controller
             return response()->json(['status' => 'success', 'message' => "Acta de {$tipoActa} procesada correctamente"]);
 
         } catch (\Throwable $e) {
-            Log::error('Error en Kizeo Webhook: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            Log::error('Error en Kizeo Webhook (Vehículo): ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['status' => 'error', 'message' => 'Internal processing error'], 500);
+        }
+    }
+
+    /**
+     * Handler para formularios de Charla de Seguridad SST (Form 973784).
+     * Descarga el PDF generado por Kizeo y lo sube a SharePoint.
+     *
+     * Campos del formulario:
+     * supervisor, fecha_de_actividad_, hora_inicial_, hora_termino_,
+     * duracion_actividad, lugar_de_la_capacitacion, nombre_relator_,
+     * firma_relator_, nombre_relator_cphs_, firma_relator_cphs_, notas,
+     * antecedentes, actividad_de_, otro_especificar_, titulo_actividad,
+     * descripcion_, foto1, asistentes/asistentes2 (tabla: rut, nombre_y_apellidos1, cargo, firma1)
+     */
+    private function handleCharlaSst(string $formId, string $dataId, array $payload)
+    {
+        try {
+            // Obtener registro completo desde la API de Kizeo
+            $record = $this->kizeo->getRecord($formId, $dataId);
+            $fields = $record['fields'] ?? [];
+            $recordMeta = $record ?? [];
+
+            // Helper para extraer valor simple de un campo
+            $getVal = function (string $key) use ($fields) {
+                if (!isset($fields[$key])) return '-';
+                $field = $fields[$key];
+                $res = $field['result'] ?? $field['value'] ?? $field;
+                if ($res === null) return '-';
+                if (is_string($res)) return $res;
+                if (isset($res['value'])) {
+                    $val = $res['value'];
+                    if (is_array($val) && isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
+                    if (is_array($val) && isset($val['date'])) return $val['date'];
+                    if (is_string($val)) return $val;
+                    if (is_bool($val)) return $val ? 'Sí' : 'No';
+                }
+                return is_string($res) ? $res : '-';
+            };
+
+            // Extraer datos del formulario de Charla SST
+            $fecha      = $getVal('fecha_de_actividad_');
+            $titulo     = $getVal('titulo_actividad');
+            $actividad  = $getVal('actividad_de_');
+            $relator    = $getVal('nombre_relator_');
+            $supervisor = $getVal('supervisor');
+            $lugar      = $getVal('lugar_de_la_capacitacion');
+
+            // Fallbacks
+            if ($fecha === '-') $fecha = date('Y-m-d');
+            if ($titulo === '-') $titulo = $actividad !== '-' ? $actividad : 'Charla SST';
+            if ($relator === '-') {
+                $relator = trim(($recordMeta['first_name'] ?? '') . ' ' . ($recordMeta['last_name'] ?? ''));
+                if (!$relator || trim($relator) === '') {
+                    $relator = $recordMeta['user_name'] ?? 'Desconocido';
+                }
+            }
+
+            // Limpiar fecha para slug (solo YYYY-MM-DD)
+            $fechaSlug = preg_replace('/[^0-9-]/', '', substr($fecha, 0, 10));
+            if (!$fechaSlug) $fechaSlug = date('Y-m-d');
+
+            Log::info("Procesando Charla SST", [
+                'formId' => $formId, 'dataId' => $dataId,
+                'fecha' => $fecha, 'titulo' => $titulo, 'relator' => $relator,
+            ]);
+
+            // Descargar el PDF generado por Kizeo
+            $pdfContent = $this->kizeo->downloadPdf($formId, $dataId);
+
+            if (!$pdfContent || strlen($pdfContent) < 100) {
+                Log::warning('PDF de Charla SST vacío o inválido', ['size' => strlen($pdfContent ?? '')]);
+                return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
+            }
+
+            // Nombre del archivo: Charla_SST_2026-03-31_Titulo.pdf
+            $tituloSlug = preg_replace('/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/u', '', $titulo);
+            $tituloSlug = substr(trim($tituloSlug), 0, 60);
+            $filename = "Charla_SST_{$fechaSlug}_{$tituloSlug}.pdf";
+
+            // Subir a SharePoint → Charlas SST / 2026-03 / archivo.pdf
+            try {
+                $oneDrive = app(OneDriveService::class);
+                if ($oneDrive->isConfigured()) {
+                    $rootFolder = config('services.kizeo.charla_sharepoint_folder', 'Charlas SST');
+                    $mesAnio = date('Y-m', strtotime($fechaSlug) ?: time());
+                    $remotePath = "{$rootFolder}/{$mesAnio}/{$filename}";
+                    $oneDrive->uploadFile($pdfContent, $remotePath);
+                    Log::info("Charla SST subida a SharePoint", ['path' => $remotePath]);
+                } else {
+                    Log::warning('SharePoint no configurado, PDF de Charla SST no se pudo subir');
+                }
+            } catch (\Throwable $e) {
+                Log::warning('SharePoint upload de Charla SST falló (no crítico): ' . $e->getMessage());
+            }
+
+            // Enviar email con PDF adjunto (desactivado por defecto, activar desde Configuración)
+            $envioActivo = Configuracion::get('kizeo_charla_sst_email_activo', '0');
+            if ($envioActivo === '1' || $envioActivo === 'true') {
+                $destinatariosRaw = Configuracion::get(
+                    'kizeo_charla_sst_destinatarios',
+                    config('services.kizeo.notify_email', 'brayan@bmachero.com')
+                );
+                $destinatarios = array_filter(array_map('trim', explode(',', $destinatariosRaw)));
+
+                if (!empty($destinatarios)) {
+                    $cuerpo = "Se adjunta el registro de Charla de Seguridad SST.\n\n"
+                        . "Título: {$titulo}\n"
+                        . "Fecha: {$fecha}\n"
+                        . "Relator: {$relator}\n"
+                        . ($lugar !== '-' ? "Lugar: {$lugar}\n" : '')
+                        . ($supervisor !== '-' ? "Supervisor: {$supervisor}\n" : '')
+                        . "\nDocumento generado automáticamente desde Kizeo Forms.";
+
+                    Mail::raw($cuerpo, function ($message) use ($destinatarios, $pdfContent, $filename, $fecha, $titulo) {
+                        $message->to($destinatarios)
+                            ->subject("Charla SST - {$titulo} ({$fecha})")
+                            ->attachData($pdfContent, $filename, ['mime' => 'application/pdf']);
+                    });
+                    Log::info("Email de Charla SST enviado", ['destinatarios' => $destinatarios]);
+                }
+            }
+
+            return response()->json(['status' => 'success', 'message' => 'Charla SST procesada correctamente']);
+
+        } catch (\Throwable $e) {
+            Log::error('Error en Kizeo Webhook (Charla SST): ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['status' => 'error', 'message' => 'Internal processing error'], 500);
         }
     }
