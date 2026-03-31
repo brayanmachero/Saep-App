@@ -163,6 +163,12 @@
                 <span>Importar Datos</span>
             </a>
             @endif
+            @if(auth()->user()->tieneAcceso('configuracion'))
+            <a href="{{ route('webhook-logs.index') }}" class="nav-item {{ request()->routeIs('webhook-logs.*') ? 'active' : '' }}">
+                <i class="bi bi-activity"></i>
+                <span>Webhooks Log</span>
+            </a>
+            @endif
             @endif
 
             {{-- PROTECCIÓN DE DATOS (Ley 21.719) --}}

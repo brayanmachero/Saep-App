@@ -18,6 +18,7 @@ use App\Http\Controllers\ImportController;
 use App\Http\Controllers\KizeoDashboardController;
 use App\Http\Controllers\KizeoWebhookController;
 use App\Http\Controllers\LeyKarinController;
+use App\Http\Controllers\WebhookLogController;
 use App\Http\Controllers\NotaPersonalController;
 use App\Http\Controllers\PdfController;
 use App\Http\Controllers\PermisoController;
@@ -201,6 +202,11 @@ Route::middleware('auth')->group(function () {
     Route::middleware('modulo:configuracion')->group(function () {
         Route::get('configuraciones',   [ConfiguracionController::class, 'index'])->name('configuraciones.index');
         Route::put('configuraciones',   [ConfiguracionController::class, 'update'])->name('configuraciones.update');
+    });
+
+    // --- WEBHOOK LOGS (solo configuracion / superadmin) ---
+    Route::middleware('modulo:configuracion')->group(function () {
+        Route::get('webhook-logs', [WebhookLogController::class, 'index'])->name('webhook-logs.index');
     });
 
     // --- PERMISOS POR ROL ---

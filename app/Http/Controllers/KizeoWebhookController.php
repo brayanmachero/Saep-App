@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\VehiculoDevolucionMail;
 use App\Mail\VehiculoEntregaMail;
 use App\Models\Configuracion;
+use App\Models\WebhookLog;
 use App\Services\KizeoService;
 use App\Services\OneDriveService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -69,6 +70,7 @@ class KizeoWebhookController extends Controller
 
             if (!$formId || !$dataId) {
                 Log::warning('Webhook sin formId o dataId', ['payload_keys' => array_keys($payload)]);
+                WebhookLog::logIgnored(['origen' => 'kizeo', 'form_id' => $formId, 'data_id' => $dataId, 'tipo' => 'sin_identificar', 'resumen' => 'Payload sin form_id o data_id', 'ip' => $request->ip()]);
                 return response()->json(['status' => 'ignored', 'message' => 'Sin form_id o data_id'], 200);
             }
 
@@ -77,14 +79,15 @@ class KizeoWebhookController extends Controller
             $charlaFormId  = config('services.kizeo.charla_form_id');
 
             if ($vehicleFormId && $formId == $vehicleFormId) {
-                return $this->handleVehiculo($formId, $dataId, $payload);
+                return $this->handleVehiculo($formId, $dataId, $payload, $request->ip());
             }
 
             if ($charlaFormId && $formId == $charlaFormId) {
-                return $this->handleCharlaSst($formId, $dataId, $payload);
+                return $this->handleCharlaSst($formId, $dataId, $payload, $request->ip());
             }
 
             Log::info("Webhook recibido para formulario no registrado", ['formId' => $formId]);
+            WebhookLog::logIgnored(['origen' => 'kizeo', 'form_id' => $formId, 'data_id' => $dataId, 'tipo' => 'no_registrado', 'resumen' => "FormId {$formId} sin handler configurado", 'ip' => $request->ip()]);
             return response()->json(['status' => 'ignored', 'message' => "FormId {$formId} no tiene handler configurado"], 200);
 
         } catch (\Throwable $e) {
@@ -96,7 +99,7 @@ class KizeoWebhookController extends Controller
     /**
      * Handler para formularios de Vehículos (Entrega/Devolución).
      */
-    private function handleVehiculo(string $formId, string $dataId, array $payload)
+    private function handleVehiculo(string $formId, string $dataId, array $payload, ?string $ip = null)
     {
         try {
             // Obtener campos del registro
@@ -276,6 +279,7 @@ class KizeoWebhookController extends Controller
             $pdfContent = $pdf->output();
 
             // Subir PDF a OneDrive (carpeta por patente)
+            $sharepointPath = null;
             try {
                 $oneDrive = app(OneDriveService::class);
                 if ($oneDrive->isConfigured()) {
@@ -283,12 +287,15 @@ class KizeoWebhookController extends Controller
                     $fechaSlug = date('Y-m-d');
                     $remotePath = "{$data['patente']}/{$tipoActa}_{$fechaSlug}_{$conductorSlug}.pdf";
                     $oneDrive->uploadFile($pdfContent, $remotePath);
+                    $sharepointPath = $remotePath;
                 }
             } catch (\Throwable $e) {
                 Log::warning('OneDrive upload falló (no crítico): ' . $e->getMessage());
             }
 
             // Enviar correo con PDF adjunto
+            $emailEnviado = false;
+            $destinatarios = [];
             $envioActivo = Configuracion::get('kizeo_vehiculos_activo', '1');
             if ($envioActivo === '1' || $envioActivo === 'true') {
                 $destinatariosRaw = Configuracion::get(
@@ -302,6 +309,7 @@ class KizeoWebhookController extends Controller
                     : new VehiculoEntregaMail($data, $pdfContent, $filename);
 
                 Mail::to($destinatarios)->send($mailable);
+                $emailEnviado = true;
 
                 Log::info("Acta de {$tipoActa} generada y enviada", [
                     'patente' => $data['patente'],
@@ -311,10 +319,38 @@ class KizeoWebhookController extends Controller
                 Log::info("Acta de {$tipoActa} generada (envío email desactivado)", ['patente' => $data['patente']]);
             }
 
+            // Registrar en webhook_logs
+            WebhookLog::logSuccess([
+                'origen'          => 'kizeo',
+                'form_id'         => $formId,
+                'data_id'         => $dataId,
+                'tipo'            => 'vehiculo_' . strtolower($tipoActa),
+                'resumen'         => "Acta de {$tipoActa} - {$data['patente']} ({$data['conductor_nombre']})",
+                'archivo'         => $filename,
+                'sharepoint_path' => $sharepointPath,
+                'email_enviado'   => $emailEnviado,
+                'destinatarios'   => $destinatarios,
+                'metadata'        => [
+                    'patente'   => $data['patente'],
+                    'conductor' => $data['conductor_nombre'],
+                    'fecha'     => $fechaRef,
+                ],
+                'ip' => $ip,
+            ]);
+
             return response()->json(['status' => 'success', 'message' => "Acta de {$tipoActa} procesada correctamente"]);
 
         } catch (\Throwable $e) {
             Log::error('Error en Kizeo Webhook (Vehículo): ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            WebhookLog::logError([
+                'origen'        => 'kizeo',
+                'form_id'       => $formId,
+                'data_id'       => $dataId,
+                'tipo'          => 'vehiculo',
+                'resumen'       => 'Error al procesar acta de vehículo',
+                'error_message' => $e->getMessage(),
+                'ip'            => $ip,
+            ]);
             return response()->json(['status' => 'error', 'message' => 'Internal processing error'], 500);
         }
     }
@@ -330,7 +366,7 @@ class KizeoWebhookController extends Controller
      * antecedentes, actividad_de_, otro_especificar_, titulo_actividad,
      * descripcion_, foto1, asistentes/asistentes2 (tabla: rut, nombre_y_apellidos1, cargo, firma1)
      */
-    private function handleCharlaSst(string $formId, string $dataId, array $payload)
+    private function handleCharlaSst(string $formId, string $dataId, array $payload, ?string $ip = null)
     {
         try {
             // Obtener registro completo desde la API de Kizeo
@@ -411,12 +447,14 @@ class KizeoWebhookController extends Controller
             $filename = "{$fechaSlug} - " . substr(trim($tituloClean), 0, 60) . " ({$relatorClean}).pdf";
 
             // Estructura: Charlas SST / 2026 / 03 - Marzo / CD Santiago / Capacitación / archivo.pdf
+            $sharepointPath = null;
             try {
                 $oneDrive = app(OneDriveService::class);
                 if ($oneDrive->isConfigured()) {
                     $rootFolder = config('services.kizeo.charla_sharepoint_folder', 'Charlas SST');
                     $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$lugarFolder}/{$actividadFolder}/{$filename}";
                     $oneDrive->uploadFile($pdfContent, $remotePath);
+                    $sharepointPath = $remotePath;
                     Log::info("Charla SST subida a SharePoint", ['path' => $remotePath]);
                 } else {
                     Log::warning('SharePoint no configurado, PDF de Charla SST no se pudo subir');
@@ -426,6 +464,8 @@ class KizeoWebhookController extends Controller
             }
 
             // Enviar email con PDF adjunto (desactivado por defecto, activar desde Configuración)
+            $emailEnviado = false;
+            $destinatarios = [];
             $envioActivo = Configuracion::get('kizeo_charla_sst_email_activo', '0');
             if ($envioActivo === '1' || $envioActivo === 'true') {
                 $destinatariosRaw = Configuracion::get(
@@ -448,14 +488,45 @@ class KizeoWebhookController extends Controller
                             ->subject("Charla SST - {$titulo} ({$fecha})")
                             ->attachData($pdfContent, $filename, ['mime' => 'application/pdf']);
                     });
+                    $emailEnviado = true;
                     Log::info("Email de Charla SST enviado", ['destinatarios' => $destinatarios]);
                 }
             }
+
+            // Registrar en webhook_logs
+            WebhookLog::logSuccess([
+                'origen'          => 'kizeo',
+                'form_id'         => $formId,
+                'data_id'         => $dataId,
+                'tipo'            => 'charla_sst',
+                'resumen'         => "Charla SST - {$titulo} ({$relator})",
+                'archivo'         => $filename,
+                'sharepoint_path' => $sharepointPath,
+                'email_enviado'   => $emailEnviado,
+                'destinatarios'   => $destinatarios,
+                'metadata'        => [
+                    'titulo'    => $titulo,
+                    'actividad' => $actividad,
+                    'relator'   => $relator,
+                    'lugar'     => $lugar,
+                    'fecha'     => $fecha,
+                ],
+                'ip' => $ip,
+            ]);
 
             return response()->json(['status' => 'success', 'message' => 'Charla SST procesada correctamente']);
 
         } catch (\Throwable $e) {
             Log::error('Error en Kizeo Webhook (Charla SST): ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            WebhookLog::logError([
+                'origen'        => 'kizeo',
+                'form_id'       => $formId,
+                'data_id'       => $dataId,
+                'tipo'          => 'charla_sst',
+                'resumen'       => 'Error al procesar Charla SST',
+                'error_message' => $e->getMessage(),
+                'ip'            => $ip,
+            ]);
             return response()->json(['status' => 'error', 'message' => 'Internal processing error'], 500);
         }
     }
