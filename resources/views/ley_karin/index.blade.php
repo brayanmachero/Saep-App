@@ -27,9 +27,14 @@
             <h2 class="page-heading"><i class="bi bi-shield-exclamation" style="color:#dc2626"></i> Ley Karin</h2>
             <p class="page-subheading">Denuncias por acoso laboral, sexual y violencia en el trabajo (Ley 21.643)</p>
         </div>
-        <a href="{{ route('ley-karin.create') }}" class="btn-premium">
-            <i class="bi bi-plus-circle-fill"></i> Nueva Denuncia
-        </a>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+            <a href="{{ route('ley-karin-publico.inicio') }}" target="_blank" class="btn-ghost" title="Abrir formulario público de denuncia">
+                <i class="bi bi-box-arrow-up-right"></i> Formulario Público
+            </a>
+            <a href="{{ route('ley-karin.create') }}" class="btn-premium">
+                <i class="bi bi-plus-circle-fill"></i> Nueva Denuncia
+            </a>
+        </div>
     </div>
 
     <!-- Stats -->
