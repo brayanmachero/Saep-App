@@ -220,6 +220,22 @@ class KizeoWebhookController extends Controller
                 }
             }
 
+            // Limpiar campos que Kizeo devuelve como JSON oculto ({"result":null,"hidden":true})
+            $cleanKizeo = function ($val) {
+                if (!is_string($val)) return $val;
+                $trimmed = trim($val);
+                if ($trimmed === '' || $trimmed === '-') return '-';
+                // Detectar JSON con hidden:true o result:null
+                if (preg_match('/^\s*\{.*"hidden"\s*:\s*true/i', $trimmed) ||
+                    preg_match('/^\s*\{.*"result"\s*:\s*null/i', $trimmed)) {
+                    return '-';
+                }
+                return $val;
+            };
+            foreach (['articulos_faltantes', 'geo_entrega', 'geo_devolucion', 'observaciones_adicionales', 'dibujo'] as $campo) {
+                $data[$campo] = $cleanKizeo($data[$campo]);
+            }
+
             // Detectar tipo de acta
             $esDevolucion = str_contains($data['gestion'], 'Devoluci');
             $tipoActa = $esDevolucion ? 'Devolucion' : 'Entrega';

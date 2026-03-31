@@ -38,8 +38,10 @@
                     <td style="padding:14px 16px;border-bottom:1px solid #fecdd3;color:#4c0519;font-weight:700;background-color:#fff;font-size:14px;">{{ $vehiculo['danos_nuevos'] }}</td></tr>
                 <tr><td style="padding:14px 16px;border-bottom:1px solid #fecdd3;color:#9f1239;font-weight:500;background-color:#fff1f2;font-size:14px;">¿Kit Completo?</td>
                     <td style="padding:14px 16px;border-bottom:1px solid #fecdd3;color:#4c0519;font-weight:500;background-color:#fff;font-size:14px;">{{ $vehiculo['kit_completo'] }}</td></tr>
+                @if($vehiculo['geo_devolucion'] !== '-')
                 <tr><td style="padding:14px 16px;color:#9f1239;font-weight:500;background-color:#fff1f2;font-size:14px;">Ubicación GPS</td>
                     <td style="padding:14px 16px;color:#4c0519;font-weight:500;background-color:#fff;font-size:14px;"><a href="https://maps.google.com/?q={{ $vehiculo['geo_devolucion'] }}" target="_blank" style="color:#e11d48;text-decoration:none;">Ver Mapa →</a></td></tr>
+                @endif
             </table>
 
             @if($vehiculo['articulos_faltantes'] !== '-')

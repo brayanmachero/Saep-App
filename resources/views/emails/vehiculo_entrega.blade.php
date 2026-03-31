@@ -36,8 +36,10 @@
                     <td style="padding:14px 16px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-weight:500;background-color:#fff;font-size:14px;">{{ $vehiculo['marca_modelo'] }}</td></tr>
                 <tr><td style="padding:14px 16px;border-bottom:1px solid #e2e8f0;color:#64748b;font-weight:500;background-color:#f8fafc;font-size:14px;">Kilometraje de Entrega</td>
                     <td style="padding:14px 16px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-weight:500;background-color:#fff;font-size:14px;">{{ $vehiculo['kilometraje_entrega'] }} km</td></tr>
+                @if($vehiculo['geo_entrega'] !== '-')
                 <tr><td style="padding:14px 16px;color:#64748b;font-weight:500;background-color:#f8fafc;font-size:14px;">Ubicación GPS</td>
                     <td style="padding:14px 16px;color:#0f172a;font-weight:500;background-color:#fff;font-size:14px;"><a href="https://maps.google.com/?q={{ $vehiculo['geo_entrega'] }}" target="_blank" style="color:#2563eb;text-decoration:none;">Ver Localización en Google Maps →</a></td></tr>
+                @endif
             </table>
         </td>
     </tr>
