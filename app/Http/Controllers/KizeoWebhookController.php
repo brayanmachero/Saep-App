@@ -171,27 +171,54 @@ class KizeoWebhookController extends Controller
                 'firma_devolucion'          => $getVal('firma1'),
                 'geo_devolucion'            => $getVal('geolocalizacion1'),
                 // Datos del conductor (del formulario o metadatos del registro)
-                'conductor_nombre'          => $getVal('conductor') !== '-'
-                                                ? $getVal('conductor')
-                                                : ($getVal('nombre_conductor') !== '-'
-                                                    ? $getVal('nombre_conductor')
-                                                    : (trim(($recordMeta['first_name'] ?? '') . ' ' . ($recordMeta['last_name'] ?? ''))
-                                                       ?: ($recordMeta['user_name'] ?? '-'))),
-                'conductor_rut'             => $getVal('rut_conductor') !== '-'
-                                                ? $getVal('rut_conductor')
-                                                : ($getVal('rut') !== '-' ? $getVal('rut') : '-'),
+                'conductor_nombre'          => '-',
+                'conductor_rut'             => '-',
                 // Metadatos del documento
                 'folio'                     => strtoupper(substr(md5($dataId ?? uniqid()), 0, 8)),
                 'data_id'                   => $dataId ?? '-',
                 // Datos empresa (desde config/env)
-                'empresa_razon_social'      => config('app.saep_razon_social', env('SAEP_RAZON_SOCIAL', 'SAEP')),
+                'empresa_razon_social'      => env('SAEP_RAZON_SOCIAL', 'SAEP'),
                 'empresa_rut'               => env('SAEP_RUT', ''),
                 'empresa_direccion'         => env('SAEP_DIRECCION', ''),
                 'empresa_ciudad'            => env('SAEP_CIUDAD', 'Santiago'),
                 'empresa_responsable'       => env('SAEP_RESPONSABLE_FIRMA', 'Encargado de Flota'),
             ];
 
-            Log::info('Datos extraídos', ['gestion' => $data['gestion'], 'patente' => $data['patente']]);
+            // ── Resolver conductor_nombre y conductor_rut con detección inteligente ──
+            // Patrón RUT: 1-99 millones + guión + dígito verificador (0-9 o K)
+            $esRut = fn($v) => $v && $v !== '-' && preg_match('/^\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]$/i', trim($v));
+
+            // Recopilar candidatos de nombre y RUT desde múltiples campos
+            $candidatos = [
+                $getVal('conductor'),
+                $getVal('nombre_conductor'),
+                trim(($recordMeta['first_name'] ?? '') . ' ' . ($recordMeta['last_name'] ?? '')),
+                $recordMeta['user_name'] ?? null,
+            ];
+            $candidatosRut = [
+                $getVal('rut_conductor'),
+                $getVal('rut'),
+            ];
+
+            foreach ($candidatos as $c) {
+                if (!$c || $c === '-' || trim($c) === '') continue;
+                if ($esRut($c)) {
+                    // Si parece RUT, usarlo como RUT si aún no tenemos uno
+                    if ($data['conductor_rut'] === '-') {
+                        $data['conductor_rut'] = trim($c);
+                    }
+                } else {
+                    // Es un nombre real
+                    if ($data['conductor_nombre'] === '-') {
+                        $data['conductor_nombre'] = trim($c);
+                    }
+                }
+            }
+            foreach ($candidatosRut as $r) {
+                if ($r && $r !== '-' && $data['conductor_rut'] === '-') {
+                    $data['conductor_rut'] = trim($r);
+                }
+            }
 
             // Detectar tipo de acta
             $esDevolucion = str_contains($data['gestion'], 'Devoluci');

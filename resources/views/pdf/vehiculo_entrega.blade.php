@@ -42,6 +42,20 @@
 </head>
 <body>
 
+@php
+    $clean = function($val) {
+        if ($val === '-' || $val === null || $val === '') return '-';
+        if (is_string($val) && (str_starts_with(trim($val), '{') || str_starts_with(trim($val), '['))) {
+            $decoded = json_decode($val, true);
+            if (is_array($decoded)) {
+                if (isset($decoded['hidden']) && $decoded['hidden'] === true) return '-';
+                if (isset($decoded['result']) && $decoded['result'] === null) return '-';
+            }
+        }
+        return $val;
+    };
+@endphp
+
 <div class="header-wrap">
   <table class="header-table">
     <tr>
@@ -75,8 +89,8 @@
   <tr><th>Kilometraje al Momento de Entrega</th><td>{{ $data['kilometraje_entrega'] }} km</td></tr>
   <tr><th>Kit de Seguridad y Emergencia</th><td>{{ $data['kit_seguridad'] }}</td></tr>
   <tr><th>Fecha y Hora de Entrega</th><td><strong>{{ $data['fecha_hora'] }}</strong></td></tr>
-  @if(($data['geo_entrega'] ?? '-') !== '-')
-  <tr><th>Geolocalización GPS (lat, long)</th><td style="font-family:monospace;font-size:8.5px">{{ $data['geo_entrega'] }}</td></tr>
+  @if($clean($data['geo_entrega'] ?? '-') !== '-')
+  <tr><th>Geolocalización GPS (lat, long)</th><td style="font-family:monospace;font-size:8.5px">{{ $clean($data['geo_entrega']) }}</td></tr>
   @endif
   @if(str_starts_with($data['dibujo'] ?? '', 'data:image'))
   <tr><th>Esquema de Novedades</th><td><img src="{{ $data['dibujo'] }}" class="media-img"/></td></tr>

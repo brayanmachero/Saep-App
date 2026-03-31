@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Acta de DevoluciÃ³n de VehÃ­culo â€“ {{ $data['patente'] }}</title>
+<title>Acta de Devolución de Vehículo – {{ $data['patente'] }}</title>
 <style>
     @page { margin: 18mm 15mm 22mm 15mm; }
     body { font-family: 'DejaVu Sans', sans-serif; font-size: 9.5px; color: #1a202c; margin: 0; padding: 0; line-height: 1.45; }
@@ -40,6 +40,21 @@
 </head>
 <body>
 
+@php
+    // Limpia valores JSON crudos que Kizeo devuelve como hidden/null
+    $clean = function($val) {
+        if ($val === '-' || $val === null || $val === '') return '-';
+        if (is_string($val) && (str_starts_with(trim($val), '{') || str_starts_with(trim($val), '['))) {
+            $decoded = json_decode($val, true);
+            if (is_array($decoded)) {
+                if (isset($decoded['hidden']) && $decoded['hidden'] === true) return '-';
+                if (isset($decoded['result']) && $decoded['result'] === null) return '-';
+            }
+        }
+        return $val;
+    };
+@endphp
+
 <div class="header-wrap">
   <table class="header-table">
     <tr>
@@ -53,13 +68,13 @@
         </div>
       </td>
       <td class="doc-meta">
-        <h1>Acta de DevoluciÃ³n de VehÃ­culo</h1>
+        <h1>Acta de Devolución de Vehículo</h1>
         <div class="folio-box">
-          <div class="folio-label">NÂ° Documento / Folio</div>
+          <div class="folio-label">N° Documento / Folio</div>
           <div class="folio-value">DEVOL-{{ strtoupper($data['folio']) }}</div>
         </div>
         <div style="font-size:8px;color:#6b7280;margin-top:5px">
-          EmisiÃ³n: <strong>{{ now()->format('d/m/Y H:i') }}</strong> &nbsp;|&nbsp; GestiÃ³n: <strong>{{ $data['gestion'] }}</strong>
+          Emisión: <strong>{{ now()->format('d/m/Y H:i') }}</strong> &nbsp;|&nbsp; Gestión: <strong>{{ $data['gestion'] }}</strong>
         </div>
       </td>
     </tr>
@@ -67,22 +82,22 @@
 </div>
 
 <div class="ref-box">
-  <strong>Referencia Acta de Entrega Original:</strong> VehÃ­culo entregado el <strong>{{ $data['fecha_hora'] }}</strong> con kilometraje inicial de <strong>{{ $data['kilometraje_entrega'] }} km</strong>.
+  <strong>Referencia Acta de Entrega Original:</strong> Vehículo entregado el <strong>{{ $data['fecha_hora'] }}</strong> con kilometraje inicial de <strong>{{ $data['kilometraje_entrega'] }} km</strong>.
   Recorrido estimado: <strong>{{ (is_numeric(str_replace(['.','km',' '],'',$data['kilometraje_devolucion'])) && is_numeric(str_replace(['.','km',' '],'',$data['kilometraje_entrega']))) ? (intval(str_replace(['.','km',' '],'',$data['kilometraje_devolucion'])) - intval(str_replace(['.','km',' '],'',$data['kilometraje_entrega']))) . ' km' : 'Ver valores de km' }}</strong>.
 </div>
 
-<div class="section-title">1. Datos del VehÃ­culo Devuelto</div>
+<div class="section-title">1. Datos del Vehículo Devuelto</div>
 <table class="data-table">
   <tr><th>Marca y Modelo</th><td>{{ $data['marca_modelo'] }}</td></tr>
   <tr><th>Patente / PPU</th><td><strong style="font-size:12px;color:#9f1239">{{ $data['patente'] }}</strong></td></tr>
-  <tr><th>Kilometraje al Momento de DevoluciÃ³n</th><td>{{ $data['kilometraje_devolucion'] }} km</td></tr>
-  <tr><th>Fecha y Hora de DevoluciÃ³n</th><td><strong>{{ $data['fecha_hora_devolucion'] }}</strong></td></tr>
-  @if(($data['geo_devolucion'] ?? '-') !== '-')
-  <tr><th>GeolocalizaciÃ³n GPS (lat, long)</th><td style="font-family:monospace;font-size:8.5px">{{ $data['geo_devolucion'] }}</td></tr>
+  <tr><th>Kilometraje al Momento de Devolución</th><td>{{ $data['kilometraje_devolucion'] }} km</td></tr>
+  <tr><th>Fecha y Hora de Devolución</th><td><strong>{{ $data['fecha_hora_devolucion'] }}</strong></td></tr>
+  @if($clean($data['geo_devolucion'] ?? '-') !== '-')
+  <tr><th>Geolocalización GPS (lat, long)</th><td style="font-family:monospace;font-size:8.5px">{{ $clean($data['geo_devolucion']) }}</td></tr>
   @endif
 </table>
 
-<div class="section-title">2. IdentificaciÃ³n del Conductor que Devuelve</div>
+<div class="section-title">2. Identificación del Conductor que Devuelve</div>
 <table class="data-table">
   <tr>
     <th>Nombre Completo del Conductor</th>
@@ -91,27 +106,27 @@
   @if(($data['conductor_rut'] ?? '-') !== '-')
   <tr><th>RUT del Conductor</th><td>{{ $data['conductor_rut'] }}</td></tr>
   @endif
-  <tr><th>Empleador</th><td>{{ $data['empresa_razon_social'] }}@if(!empty($data['empresa_rut'])) &nbsp;Â·&nbsp; RUT {{ $data['empresa_rut'] }}@endif</td></tr>
+  <tr><th>Empleador</th><td>{{ $data['empresa_razon_social'] }}@if(!empty($data['empresa_rut'])) &nbsp;·&nbsp; RUT {{ $data['empresa_rut'] }}@endif</td></tr>
 </table>
 
-<div class="section-title">3. Estado e InspecciÃ³n del VehÃ­culo</div>
+<div class="section-title">3. Estado e Inspección del Vehículo</div>
 <table class="data-table">
   <tr>
-    <th>Â¿El vehÃ­culo presenta daÃ±os NUEVOS?</th>
-    <td><strong class="{{ $data['danos_nuevos'] === 'SÃ­' || str_contains(strtolower($data['danos_nuevos']), 'si') ? 'alert-red' : '' }}">{{ $data['danos_nuevos'] }}</strong></td>
+    <th>¿El vehículo presenta daños NUEVOS?</th>
+    <td><strong class="{{ $data['danos_nuevos'] === 'Sí' || str_contains(strtolower($data['danos_nuevos']), 'si') ? 'alert-red' : '' }}">{{ $data['danos_nuevos'] }}</strong></td>
   </tr>
-  <tr><th>Â¿Se devuelve el kit COMPLETO?</th><td>{{ $data['kit_completo'] }}</td></tr>
-  @if(($data['articulos_faltantes'] ?? '-') !== '-')
-  <tr><th>ArtÃ­culos Faltantes Declarados</th><td class="alert-red">{{ $data['articulos_faltantes'] }}</td></tr>
+  <tr><th>¿Se devuelve el kit COMPLETO?</th><td>{{ $data['kit_completo'] }}</td></tr>
+  @if($clean($data['articulos_faltantes'] ?? '-') !== '-')
+  <tr><th>Artículos Faltantes Declarados</th><td class="alert-red">{{ $clean($data['articulos_faltantes']) }}</td></tr>
   @endif
 </table>
 
 <div class="section-title">4. Observaciones del Conductor / Receptor SAEP</div>
 <div class="decl-box">
-  <div class="decl-title">Observaciones al momento de devoluciÃ³n:</div>
+  <div class="decl-title">Observaciones al momento de devolución:</div>
   {!! ($data['observaciones_adicionales'] ?? '-') !== '-'
       ? nl2br(e($data['observaciones_adicionales']))
-      : 'Sin observaciones adicionales registradas por el conductor durante el proceso de devoluciÃ³n. El vehÃ­culo se entrega conforme a las condiciones acordadas.' !!}
+      : 'Sin observaciones adicionales registradas por el conductor durante el proceso de devolución. El vehículo se entrega conforme a las condiciones acordadas.' !!}
 </div>
 
 <div class="section-title">5. Firmas y Conformidad</div>
@@ -127,8 +142,8 @@
       </div>
       <div class="sig-name">{{ $data['conductor_nombre'] !== '-' ? strtoupper($data['conductor_nombre']) : '________________________________' }}</div>
       @if(($data['conductor_rut'] ?? '-') !== '-')<div class="sig-rut">RUT: {{ $data['conductor_rut'] }}</div>@endif
-      <div class="sig-role">Conductor que Devuelve el VehÃ­culo</div>
-      <div class="sig-role">Fecha: {{ $data['fecha_hora_devolucion'] }} &nbsp;Â·&nbsp; Lugar: {{ $data['empresa_ciudad'] }}</div>
+      <div class="sig-role">Conductor que Devuelve el Vehículo</div>
+      <div class="sig-role">Fecha: {{ $data['fecha_hora_devolucion'] }} &nbsp;·&nbsp; Lugar: {{ $data['empresa_ciudad'] }}</div>
     </td>
     <td>
       <div class="sig-block"><div class="sig-line"></div></div>
@@ -141,12 +156,12 @@
 </table>
 
 <div class="fes-box">
-  <strong>Validez Legal â€” Firma ElectrÃ³nica Simple (FES):</strong> La firma digitalizada del conductor fue capturada mediante dispositivo mÃ³vil a travÃ©s de Kizeo Forms y tiene plena validez en virtud de la <strong>Ley NÂ° 19.799 sobre Documentos ElectrÃ³nicos, Firma ElectrÃ³nica y Servicios de CertificaciÃ³n</strong> (D.O. 12.04.2002) y sus reglamentos. El registro incluye geolocalizaciÃ³n GPS, marca de tiempo universal y folio Ãºnico de trazabilidad. <strong>Folio:</strong> DEVOL-{{ strtoupper($data['folio']) }} &nbsp;|&nbsp; <strong>ID Kizeo:</strong> {{ $data['data_id'] }}.
+  <strong>Validez Legal — Firma Electrónica Simple (FES):</strong> La firma digitalizada del conductor fue capturada mediante dispositivo móvil a través de Kizeo Forms y tiene plena validez en virtud de la <strong>Ley N° 19.799 sobre Documentos Electrónicos, Firma Electrónica y Servicios de Certificación</strong> (D.O. 12.04.2002) y sus reglamentos. El registro incluye geolocalización GPS, marca de tiempo universal y folio único de trazabilidad. <strong>Folio:</strong> DEVOL-{{ strtoupper($data['folio']) }} &nbsp;|&nbsp; <strong>ID Kizeo:</strong> {{ $data['data_id'] }}.
 </div>
 
 <div class="footer">
-  Generado por SAEP Platform â€” Folio: DEVOL-{{ strtoupper($data['folio']) }} â€” {{ now()->format('d/m/Y H:i:s') }} ({{ now()->timezoneName }}) â€” Â© {{ date('Y') }} {{ $data['empresa_razon_social'] }}<br>
-  Instrumento privado con firma electrÃ³nica simple â€” Ley NÂ° 19.799. Conservar en legajo de personal del conductor.
+  Generado por SAEP Platform — Folio: DEVOL-{{ strtoupper($data['folio']) }} — {{ now()->format('d/m/Y H:i:s') }} ({{ now()->timezoneName }}) — © {{ date('Y') }} {{ $data['empresa_razon_social'] }}<br>
+  Instrumento privado con firma electrónica simple — Ley N° 19.799. Conservar en legajo de personal del conductor.
 </div>
 
 </body>
