@@ -4,11 +4,12 @@
 <body style="font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f1f5f9;margin:0;padding:0;color:#1e293b;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:40px 15px;">
 <tr><td align="center">
-<table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);border:1px solid #e2e8f0;">
+<table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;overflow:hidden;border:1px solid #e2e8f0;">
     <tr>
-        <td style="background:linear-gradient(135deg,#1e3a8a 0%,#1e40af 100%);padding:35px 30px;text-align:center;color:#ffffff;border-bottom:4px solid #f97316;">
+        <td bgcolor="#1e3a8a" style="background-color:#1e3a8a;padding:35px 30px;text-align:center;color:#ffffff;border-bottom:4px solid #f97316;">
             <div style="margin-bottom:20px;">
-                <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg" alt="SAEP" style="max-height:48px;width:auto;" />
+                <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg" alt="SAEP" width="160" style="max-height:48px;width:auto;display:inline-block;" />
+                <br><span style="font-size:11px;opacity:0.7;letter-spacing:1px;">SERVICIOS DE ASESORÍAS A EMPRESAS</span>
             </div>
             <h1 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.025em;">Acta de Entrega de Vehículo</h1>
             <p style="margin:8px 0 0;font-size:15px;opacity:0.9;">Confirmación oficial de recepción y custodia</p>
@@ -27,7 +28,7 @@
 
             <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:25px;border:1px solid #e2e8f0;">
                 <tr><td style="padding:14px 16px;border-bottom:1px solid #e2e8f0;color:#64748b;font-weight:500;width:40%;background-color:#f8fafc;font-size:14px;">Tipo de Operación</td>
-                    <td style="padding:14px 16px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-weight:500;background-color:#fff;font-size:14px;"><span style="background-color:#dbeafe;color:#1d4ed8;padding:4px 10px;border-radius:12px;font-size:13px;font-weight:600;">{{ $vehiculo['gestion'] }}</span></td></tr>
+                    <td style="padding:14px 16px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-weight:500;background-color:#fff;font-size:14px;"><strong style="color:#1d4ed8;font-size:13px;">{{ $vehiculo['gestion'] }}</strong></td></tr>
                 <tr><td style="padding:14px 16px;border-bottom:1px solid #e2e8f0;color:#64748b;font-weight:500;background-color:#f8fafc;font-size:14px;">Fecha de Autorización</td>
                     <td style="padding:14px 16px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-weight:500;background-color:#fff;font-size:14px;">{{ $vehiculo['fecha_hora'] }}</td></tr>
                 <tr><td style="padding:14px 16px;border-bottom:1px solid #e2e8f0;color:#64748b;font-weight:500;background-color:#f8fafc;font-size:14px;">Patente (PPU)</td>
