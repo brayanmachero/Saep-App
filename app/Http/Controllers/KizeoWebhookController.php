@@ -377,9 +377,24 @@ class KizeoWebhookController extends Controller
             $fechaSlug = preg_replace('/[^0-9-]/', '', substr($fecha, 0, 10));
             if (!$fechaSlug) $fechaSlug = date('Y-m-d');
 
+            // Extraer componentes de fecha para carpetas
+            $ts = strtotime($fechaSlug) ?: time();
+            $anio = date('Y', $ts);
+            $mesNum = date('m', $ts);
+            $meses = ['01'=>'Enero','02'=>'Febrero','03'=>'Marzo','04'=>'Abril','05'=>'Mayo','06'=>'Junio',
+                       '07'=>'Julio','08'=>'Agosto','09'=>'Septiembre','10'=>'Octubre','11'=>'Noviembre','12'=>'Diciembre'];
+            $mesNombre = "{$mesNum} - " . ($meses[$mesNum] ?? $mesNum);
+
+            // Sanitizar nombres de carpeta (quitar caracteres no válidos para paths)
+            $sanitize = fn($v) => trim(preg_replace('/[\\\\\/\:*?"<>|]/u', '', $v)) ?: 'Sin especificar';
+
+            $lugarFolder    = $sanitize($lugar !== '-' ? $lugar : 'Sin CD');
+            $actividadFolder = $sanitize($actividad !== '-' ? $actividad : 'General');
+
             Log::info("Procesando Charla SST", [
                 'formId' => $formId, 'dataId' => $dataId,
                 'fecha' => $fecha, 'titulo' => $titulo, 'relator' => $relator,
+                'lugar' => $lugar, 'actividad' => $actividad,
             ]);
 
             // Descargar el PDF generado por Kizeo
@@ -390,18 +405,17 @@ class KizeoWebhookController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
             }
 
-            // Nombre del archivo: Charla_SST_2026-03-31_Titulo.pdf
-            $tituloSlug = preg_replace('/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/u', '', $titulo);
-            $tituloSlug = substr(trim($tituloSlug), 0, 60);
-            $filename = "Charla_SST_{$fechaSlug}_{$tituloSlug}.pdf";
+            // Nombre: 2026-03-31 - Titulo Actividad (Juan Pérez).pdf
+            $tituloClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $titulo);
+            $relatorClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $relator);
+            $filename = "{$fechaSlug} - " . substr(trim($tituloClean), 0, 60) . " ({$relatorClean}).pdf";
 
-            // Subir a SharePoint → Charlas SST / 2026-03 / archivo.pdf
+            // Estructura: Charlas SST / 2026 / 03 - Marzo / CD Santiago / Capacitación / archivo.pdf
             try {
                 $oneDrive = app(OneDriveService::class);
                 if ($oneDrive->isConfigured()) {
                     $rootFolder = config('services.kizeo.charla_sharepoint_folder', 'Charlas SST');
-                    $mesAnio = date('Y-m', strtotime($fechaSlug) ?: time());
-                    $remotePath = "{$rootFolder}/{$mesAnio}/{$filename}";
+                    $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$lugarFolder}/{$actividadFolder}/{$filename}";
                     $oneDrive->uploadFile($pdfContent, $remotePath);
                     Log::info("Charla SST subida a SharePoint", ['path' => $remotePath]);
                 } else {
