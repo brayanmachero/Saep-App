@@ -11,17 +11,19 @@ class OneDriveService
     private string $tenantId;
     private string $clientId;
     private string $clientSecret;
-    private string $driveUser;
+    private string $sharepointHost;
+    private string $sharepointSite;
     private string $rootFolder;
 
     public function __construct()
     {
         $config = config('services.microsoft_graph');
-        $this->tenantId     = $config['tenant_id'] ?? '';
-        $this->clientId     = $config['client_id'] ?? '';
-        $this->clientSecret = $config['client_secret'] ?? '';
-        $this->driveUser    = $config['drive_user'] ?? '';
-        $this->rootFolder   = $config['root_folder'] ?? 'Actas Vehiculos';
+        $this->tenantId       = $config['tenant_id'] ?? '';
+        $this->clientId       = $config['client_id'] ?? '';
+        $this->clientSecret   = $config['client_secret'] ?? '';
+        $this->sharepointHost = $config['sharepoint_host'] ?? '';
+        $this->sharepointSite = $config['sharepoint_site'] ?? '';
+        $this->rootFolder     = $config['root_folder'] ?? 'Actas Vehiculos';
     }
 
     /**
@@ -29,7 +31,8 @@ class OneDriveService
      */
     public function isConfigured(): bool
     {
-        return $this->tenantId && $this->clientId && $this->clientSecret && $this->driveUser;
+        return $this->tenantId && $this->clientId && $this->clientSecret
+            && $this->sharepointHost && $this->sharepointSite;
     }
 
     /**
@@ -51,7 +54,7 @@ class OneDriveService
             );
 
             if ($response->failed()) {
-                Log::error('OneDrive: Error obteniendo token', [
+                Log::error('SharePoint: Error obteniendo token', [
                     'status' => $response->status(),
                     'body'   => $response->body(),
                 ]);
@@ -63,7 +66,40 @@ class OneDriveService
     }
 
     /**
-     * Subir un archivo al OneDrive del usuario configurado.
+     * Obtener el Site ID de SharePoint (se cachea indefinidamente).
+     */
+    private function getSiteId(): ?string
+    {
+        $cacheKey = 'msgraph_sharepoint_site_id';
+
+        return Cache::rememberForever($cacheKey, function () {
+            $token = $this->getAccessToken();
+            if (!$token) {
+                return null;
+            }
+
+            // GET /sites/{hostname}:/sites/{sitePath}
+            $url = "https://graph.microsoft.com/v1.0/sites/{$this->sharepointHost}:/sites/{$this->sharepointSite}";
+
+            $response = Http::withToken($token)->get($url);
+
+            if ($response->failed()) {
+                Log::error('SharePoint: Error obteniendo Site ID', [
+                    'url'    => $url,
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+                return null;
+            }
+
+            $siteId = $response->json('id');
+            Log::info('SharePoint: Site ID obtenido', ['siteId' => $siteId]);
+            return $siteId;
+        });
+    }
+
+    /**
+     * Subir un archivo al SharePoint del sitio configurado.
      *
      * @param string $content     Contenido binario del archivo (p.ej. PDF)
      * @param string $remotePath  Ruta relativa dentro del rootFolder (p.ej. "CGVC-41/Entrega_2026-03-30.pdf")
@@ -73,7 +109,7 @@ class OneDriveService
     public function uploadFile(string $content, string $remotePath, string $contentType = 'application/pdf'): bool
     {
         if (!$this->isConfigured()) {
-            Log::warning('OneDrive: Servicio no configurado, se omite subida');
+            Log::warning('SharePoint: Servicio no configurado, se omite subida');
             return false;
         }
 
@@ -82,19 +118,22 @@ class OneDriveService
             return false;
         }
 
+        $siteId = $this->getSiteId();
+        if (!$siteId) {
+            return false;
+        }
+
         // Construir ruta completa: rootFolder/remotePath
         $fullPath = $this->rootFolder . '/' . ltrim($remotePath, '/');
-
-        // Sanitizar la ruta (eliminar caracteres no válidos para OneDrive)
         $fullPath = $this->sanitizePath($fullPath);
 
-        $url = "https://graph.microsoft.com/v1.0/users/{$this->driveUser}/drive/root:/{$fullPath}:/content";
+        // Endpoint SharePoint: /sites/{siteId}/drive/root:/{path}:/content
+        $url = "https://graph.microsoft.com/v1.0/sites/{$siteId}/drive/root:/{$fullPath}:/content";
 
-        // Para archivos < 4MB se usa PUT simple; para más grandes se necesita upload session
         $fileSize = strlen($content);
 
         if ($fileSize > 4 * 1024 * 1024) {
-            return $this->uploadLargeFile($token, $fullPath, $content, $contentType);
+            return $this->uploadLargeFile($token, $siteId, $fullPath, $content, $contentType);
         }
 
         $response = Http::withToken($token)
@@ -103,7 +142,7 @@ class OneDriveService
             ->put($url);
 
         if ($response->successful()) {
-            Log::info('OneDrive: Archivo subido exitosamente', [
+            Log::info('SharePoint: Archivo subido exitosamente', [
                 'path'   => $fullPath,
                 'size'   => $fileSize,
                 'itemId' => $response->json('id'),
@@ -111,7 +150,7 @@ class OneDriveService
             return true;
         }
 
-        Log::error('OneDrive: Error subiendo archivo', [
+        Log::error('SharePoint: Error subiendo archivo', [
             'path'   => $fullPath,
             'status' => $response->status(),
             'body'   => $response->body(),
@@ -127,7 +166,7 @@ class OneDriveService
                     ->withBody($content, $contentType)
                     ->put($url);
                 if ($retry->successful()) {
-                    Log::info('OneDrive: Archivo subido en reintento', ['path' => $fullPath]);
+                    Log::info('SharePoint: Archivo subido en reintento', ['path' => $fullPath]);
                     return true;
                 }
             }
@@ -139,16 +178,16 @@ class OneDriveService
     /**
      * Upload session para archivos > 4MB.
      */
-    private function uploadLargeFile(string $token, string $fullPath, string $content, string $contentType): bool
+    private function uploadLargeFile(string $token, string $siteId, string $fullPath, string $content, string $contentType): bool
     {
-        $url = "https://graph.microsoft.com/v1.0/users/{$this->driveUser}/drive/root:/{$fullPath}:/createUploadSession";
+        $url = "https://graph.microsoft.com/v1.0/sites/{$siteId}/drive/root:/{$fullPath}:/createUploadSession";
 
         $session = Http::withToken($token)->post($url, [
             'item' => ['@microsoft.graph.conflictBehavior' => 'rename'],
         ]);
 
         if ($session->failed()) {
-            Log::error('OneDrive: Error creando upload session', ['body' => $session->body()]);
+            Log::error('SharePoint: Error creando upload session', ['body' => $session->body()]);
             return false;
         }
 
@@ -166,7 +205,7 @@ class OneDriveService
             ])->withBody($chunk, $contentType)->put($uploadUrl);
 
             if ($response->failed() && $response->status() !== 202) {
-                Log::error('OneDrive: Error en chunk upload', [
+                Log::error('SharePoint: Error en chunk upload', [
                     'offset' => $offset,
                     'status' => $response->status(),
                 ]);
@@ -174,18 +213,16 @@ class OneDriveService
             }
         }
 
-        Log::info('OneDrive: Archivo grande subido exitosamente', ['path' => $fullPath, 'size' => $fileSize]);
+        Log::info('SharePoint: Archivo grande subido exitosamente', ['path' => $fullPath, 'size' => $fileSize]);
         return true;
     }
 
     /**
-     * Sanitizar ruta para OneDrive (remover caracteres inválidos).
+     * Sanitizar ruta para SharePoint (remover caracteres inválidos).
      */
     private function sanitizePath(string $path): string
     {
-        // Caracteres no permitidos en OneDrive: " * : < > ? | #  %
         $path = str_replace(['*', ':', '<', '>', '?', '|', '#', '%', '"'], '_', $path);
-        // Eliminar dobles slashes
         $path = preg_replace('#/+#', '/', $path);
         return trim($path, '/');
     }
