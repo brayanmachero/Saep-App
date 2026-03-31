@@ -11,6 +11,9 @@ class WebhookLogController extends Controller
     {
         $query = WebhookLog::query()->orderByDesc('created_at');
 
+        // Default: filtrar por hoy si no hay filtros aplicados
+        $hasFilters = $request->hasAny(['tipo', 'estado', 'desde', 'hasta', 'buscar']);
+
         // Filtros
         if ($request->filled('tipo')) {
             $query->where('tipo', $request->tipo);
@@ -20,6 +23,8 @@ class WebhookLogController extends Controller
         }
         if ($request->filled('desde')) {
             $query->whereDate('created_at', '>=', $request->desde);
+        } elseif (!$hasFilters) {
+            $query->whereDate('created_at', '>=', today());
         }
         if ($request->filled('hasta')) {
             $query->whereDate('created_at', '<=', $request->hasta);

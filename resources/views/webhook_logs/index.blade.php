@@ -10,68 +10,81 @@
     </div>
 
     {{-- Stats Cards --}}
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;margin-bottom:24px;">
-        <div class="glass-card" style="padding:16px;text-align:center;">
-            <div style="font-size:28px;font-weight:700;color:var(--text-primary)">{{ $stats['total'] }}</div>
-            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Total</div>
+    <div class="stats-grid" style="grid-template-columns:repeat(5,1fr);">
+        <div class="glass-card stat-item">
+            <div class="stat-icon primary"><i class="bi bi-activity"></i></div>
+            <div class="stat-info">
+                <h3>{{ $stats['total'] }}</h3>
+                <p>Total</p>
+            </div>
         </div>
-        <div class="glass-card" style="padding:16px;text-align:center;">
-            <div style="font-size:28px;font-weight:700;color:#16a34a">{{ $stats['success'] }}</div>
-            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Exitosos</div>
+        <div class="glass-card stat-item">
+            <div class="stat-icon success"><i class="bi bi-check-circle-fill"></i></div>
+            <div class="stat-info">
+                <h3>{{ $stats['success'] }}</h3>
+                <p>Exitosos</p>
+            </div>
         </div>
-        <div class="glass-card" style="padding:16px;text-align:center;">
-            <div style="font-size:28px;font-weight:700;color:#dc2626">{{ $stats['error'] }}</div>
-            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Errores</div>
+        <div class="glass-card stat-item">
+            <div class="stat-icon danger"><i class="bi bi-x-circle-fill"></i></div>
+            <div class="stat-info">
+                <h3>{{ $stats['error'] }}</h3>
+                <p>Errores</p>
+            </div>
         </div>
-        <div class="glass-card" style="padding:16px;text-align:center;">
-            <div style="font-size:28px;font-weight:700;color:#f59e0b">{{ $stats['ignored'] }}</div>
-            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Ignorados</div>
+        <div class="glass-card stat-item">
+            <div class="stat-icon warning"><i class="bi bi-dash-circle-fill"></i></div>
+            <div class="stat-info">
+                <h3>{{ $stats['ignored'] }}</h3>
+                <p>Ignorados</p>
+            </div>
         </div>
-        <div class="glass-card" style="padding:16px;text-align:center;">
-            <div style="font-size:28px;font-weight:700;color:#6366f1">{{ $stats['hoy'] }}</div>
-            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Hoy</div>
+        <div class="glass-card stat-item">
+            <div class="stat-icon" style="background:rgba(99,102,241,0.15);color:#6366f1;"><i class="bi bi-calendar-event"></i></div>
+            <div class="stat-info">
+                <h3>{{ $stats['hoy'] }}</h3>
+                <p>Hoy</p>
+            </div>
         </div>
     </div>
 
     {{-- Filtros --}}
-    <div class="glass-card" style="padding:16px;margin-bottom:20px;">
-        <form method="GET" action="{{ route('webhook-logs.index') }}" style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;">
-            <div style="flex:1;min-width:160px;">
-                <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Tipo</label>
-                <select name="tipo" class="form-select" style="width:100%;">
-                    <option value="">Todos</option>
-                    @foreach($tipos as $tipo)
-                    <option value="{{ $tipo }}" {{ request('tipo') == $tipo ? 'selected' : '' }}>{{ str_replace('_', ' ', ucfirst($tipo)) }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div style="flex:0 0 130px;">
-                <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Estado</label>
-                <select name="estado" class="form-select" style="width:100%;">
-                    <option value="">Todos</option>
-                    <option value="success" {{ request('estado') == 'success' ? 'selected' : '' }}>Exitoso</option>
-                    <option value="error" {{ request('estado') == 'error' ? 'selected' : '' }}>Error</option>
-                    <option value="ignored" {{ request('estado') == 'ignored' ? 'selected' : '' }}>Ignorado</option>
-                </select>
-            </div>
-            <div style="flex:0 0 150px;">
-                <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Desde</label>
-                <input type="date" name="desde" class="form-control" value="{{ request('desde') }}" style="width:100%;">
-            </div>
-            <div style="flex:0 0 150px;">
-                <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Hasta</label>
-                <input type="date" name="hasta" class="form-control" value="{{ request('hasta') }}" style="width:100%;">
-            </div>
-            <div style="flex:1;min-width:180px;">
-                <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;">Buscar</label>
-                <input type="text" name="buscar" class="form-control" value="{{ request('buscar') }}" placeholder="Archivo, patente, título...">
-            </div>
-            <div style="display:flex;gap:8px;">
-                <button type="submit" class="btn-premium" style="padding:8px 16px;font-size:13px;"><i class="bi bi-funnel"></i> Filtrar</button>
-                <a href="{{ route('webhook-logs.index') }}" class="btn-premium" style="padding:8px 16px;font-size:13px;background:var(--bg-secondary);color:var(--text-primary);"><i class="bi bi-x-lg"></i></a>
-            </div>
-        </form>
-    </div>
+    <form method="GET" action="{{ route('webhook-logs.index') }}" class="filter-form glass-card" style="margin-bottom:1.25rem;">
+        <div class="filter-group">
+            <label>Tipo</label>
+            <select name="tipo" class="form-input">
+                <option value="">Todos</option>
+                @foreach($tipos as $tipo)
+                <option value="{{ $tipo }}" {{ request('tipo') == $tipo ? 'selected' : '' }}>{{ str_replace('_', ' ', ucfirst($tipo)) }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Estado</label>
+            <select name="estado" class="form-input">
+                <option value="">Todos</option>
+                <option value="success" {{ request('estado') == 'success' ? 'selected' : '' }}>Exitoso</option>
+                <option value="error" {{ request('estado') == 'error' ? 'selected' : '' }}>Error</option>
+                <option value="ignored" {{ request('estado') == 'ignored' ? 'selected' : '' }}>Ignorado</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Desde</label>
+            <input type="date" name="desde" class="form-input" value="{{ request('desde', request()->hasAny(['tipo','estado','desde','hasta','buscar']) ? '' : now()->format('Y-m-d')) }}">
+        </div>
+        <div class="filter-group">
+            <label>Hasta</label>
+            <input type="date" name="hasta" class="form-input" value="{{ request('hasta') }}">
+        </div>
+        <div class="filter-group">
+            <label>Buscar</label>
+            <input type="text" name="buscar" class="form-input" value="{{ request('buscar') }}" placeholder="Archivo, patente, título...">
+        </div>
+        <div class="filter-group" style="align-self:flex-end;">
+            <button type="submit" class="btn-secondary"><i class="bi bi-search"></i> Buscar</button>
+            <a href="{{ route('webhook-logs.index') }}" class="btn-ghost">Limpiar</a>
+        </div>
+    </form>
 
     {{-- Tabla de logs --}}
     <div class="glass-card">
