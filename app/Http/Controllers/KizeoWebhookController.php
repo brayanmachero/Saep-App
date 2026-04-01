@@ -79,6 +79,7 @@ class KizeoWebhookController extends Controller
             $charlaFormId      = config('services.kizeo.charla_form_id');
             $observacionFormId = config('services.kizeo.observacion_form_id');
             $inspeccionFormId  = config('services.kizeo.inspeccion_form_id');
+            $visitaFormId      = config('services.kizeo.visita_form_id');
 
             if ($vehicleFormId && $formId == $vehicleFormId) {
                 return $this->handleVehiculo($formId, $dataId, $payload, $request->ip());
@@ -94,6 +95,10 @@ class KizeoWebhookController extends Controller
 
             if ($inspeccionFormId && $formId == $inspeccionFormId) {
                 return $this->handleInspeccionSst($formId, $dataId, $payload, $request->ip());
+            }
+
+            if ($visitaFormId && $formId == $visitaFormId) {
+                return $this->handleVisitaTerreno($formId, $dataId, $payload, $request->ip());
             }
 
             Log::info("Webhook recibido para formulario no registrado", ['formId' => $formId]);
@@ -822,6 +827,144 @@ class KizeoWebhookController extends Controller
                 'data_id'       => $dataId,
                 'tipo'          => 'inspeccion_sst',
                 'resumen'       => 'Error al procesar Inspección SST',
+                'error_message' => $e->getMessage(),
+                'ip'            => $ip,
+            ]);
+            return response()->json(['status' => 'error', 'message' => 'Internal processing error'], 500);
+        }
+    }
+
+    /**
+     * Handler para formulario Visita a Terreno.
+     * Descarga el PDF generado por Kizeo y lo sube a SharePoint.
+     *
+     * Campos: centro_de_costo, fecha, seccion_area_sector, participantes,
+     * listado_de_actividades, temas_tratados_acuerdos_o,
+     * nombre_de_quien_realiza_el_re, recibido_por
+     */
+    private function handleVisitaTerreno(string $formId, string $dataId, array $payload, ?string $ip = null)
+    {
+        try {
+            $record = $this->kizeo->getRecord($formId, $dataId);
+            $fields = $record['fields'] ?? [];
+            $recordMeta = $record ?? [];
+
+            $getVal = function (string $key) use ($fields) {
+                if (!isset($fields[$key])) return '-';
+                $field = $fields[$key];
+                $res = $field['result'] ?? $field['value'] ?? $field;
+                if ($res === null) return '-';
+                if (is_string($res)) return $res;
+                if (isset($res['value'])) {
+                    $val = $res['value'];
+                    if (is_array($val) && isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
+                    if (is_array($val) && isset($val['date'])) return $val['date'];
+                    if (is_string($val)) return $val;
+                    if (is_bool($val)) return $val ? 'Sí' : 'No';
+                }
+                return is_string($res) ? $res : '-';
+            };
+
+            // Extraer datos
+            $fecha      = $getVal('fecha');
+            $cd         = $getVal('centro_de_costo');
+            $seccion    = $getVal('seccion_area_sector');
+            $realizador = $getVal('nombre_de_quien_realiza_el_re');
+            $recibido   = $getVal('recibido_por');
+
+            // Fallbacks
+            if ($fecha === '-') $fecha = date('Y-m-d');
+            if ($realizador === '-') {
+                $realizador = trim(($recordMeta['first_name'] ?? '') . ' ' . ($recordMeta['last_name'] ?? ''));
+                if (!$realizador || trim($realizador) === '') {
+                    $realizador = $recordMeta['user_name'] ?? 'Desconocido';
+                }
+            }
+            if ($seccion === '-') $seccion = 'General';
+
+            // Slug de fecha
+            $fechaSlug = preg_replace('/[^0-9-]/', '', substr($fecha, 0, 10));
+            if (!$fechaSlug) $fechaSlug = date('Y-m-d');
+
+            // Componentes de fecha para carpetas
+            $ts = strtotime($fechaSlug) ?: time();
+            $anio = date('Y', $ts);
+            $mesNum = date('m', $ts);
+            $meses = ['01'=>'Enero','02'=>'Febrero','03'=>'Marzo','04'=>'Abril','05'=>'Mayo','06'=>'Junio',
+                       '07'=>'Julio','08'=>'Agosto','09'=>'Septiembre','10'=>'Octubre','11'=>'Noviembre','12'=>'Diciembre'];
+            $mesNombre = "{$mesNum} - " . ($meses[$mesNum] ?? $mesNum);
+
+            $sanitize = fn($v) => trim(preg_replace('/[\\\\\/\:*?"<>|]/u', '', $v)) ?: 'Sin especificar';
+
+            $cdFolder = $sanitize($cd !== '-' ? $cd : 'Sin CD');
+
+            Log::info("Procesando Visita a Terreno", [
+                'formId' => $formId, 'dataId' => $dataId,
+                'fecha' => $fecha, 'realizador' => $realizador,
+                'seccion' => $seccion, 'cd' => $cd,
+            ]);
+
+            // Descargar PDF de Kizeo
+            $pdfContent = $this->kizeo->downloadPdf($formId, $dataId);
+
+            if (!$pdfContent || strlen($pdfContent) < 100) {
+                Log::warning('PDF de Visita Terreno vacío o inválido', ['size' => strlen($pdfContent ?? '')]);
+                return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
+            }
+
+            // Nombre: 2026-04-01 - Sección (Realizador).pdf
+            $seccionClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $seccion);
+            $realizadorClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $realizador);
+            $filename = "{$fechaSlug} - " . substr(trim($seccionClean), 0, 60) . " ({$realizadorClean}).pdf";
+
+            // Estructura: Visitas Terreno / 2026 / 04 - Abril / CD Santiago / archivo.pdf
+            $sharepointPath = null;
+            try {
+                $oneDrive = app(OneDriveService::class);
+                if ($oneDrive->isConfigured()) {
+                    $rootFolder = config('services.kizeo.visita_sharepoint_folder', 'Visitas Terreno');
+                    $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
+                    $oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', true);
+                    $sharepointPath = $remotePath;
+                    Log::info("Visita Terreno subida a SharePoint", ['path' => $remotePath]);
+                } else {
+                    Log::warning('SharePoint no configurado, PDF de Visita no se pudo subir');
+                }
+            } catch (\Throwable $e) {
+                Log::warning('SharePoint upload de Visita falló (no crítico): ' . $e->getMessage());
+            }
+
+            // Registrar en webhook_logs
+            WebhookLog::logSuccess([
+                'origen'          => 'kizeo',
+                'form_id'         => $formId,
+                'data_id'         => $dataId,
+                'tipo'            => 'visita_terreno',
+                'resumen'         => "Visita Terreno - {$cd} / {$seccion} ({$realizador})",
+                'archivo'         => $filename,
+                'sharepoint_path' => $sharepointPath,
+                'email_enviado'   => false,
+                'destinatarios'   => [],
+                'metadata'        => [
+                    'realizador' => $realizador,
+                    'recibido'   => $recibido,
+                    'seccion'    => $seccion,
+                    'cd'         => $cd,
+                    'fecha'      => $fecha,
+                ],
+                'ip' => $ip,
+            ]);
+
+            return response()->json(['status' => 'success', 'message' => 'Visita Terreno procesada correctamente']);
+
+        } catch (\Throwable $e) {
+            Log::error('Error en Kizeo Webhook (Visita Terreno): ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            WebhookLog::logError([
+                'origen'        => 'kizeo',
+                'form_id'       => $formId,
+                'data_id'       => $dataId,
+                'tipo'          => 'visita_terreno',
+                'resumen'       => 'Error al procesar Visita Terreno',
                 'error_message' => $e->getMessage(),
                 'ip'            => $ip,
             ]);
