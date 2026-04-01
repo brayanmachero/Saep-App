@@ -113,6 +113,7 @@
                             'vehiculo_devolucion' => 'badge-warning',
                             'charla_sst' => 'badge-success',
                             'observacion_conducta' => 'badge-primary',
+                            'inspeccion_sst' => 'badge-secondary',
                             'vehiculo' => 'badge-info',
                         ];
                         $tipoLabels = [
@@ -120,6 +121,7 @@
                             'vehiculo_devolucion' => 'Devolución Vehículo',
                             'charla_sst' => 'Charla SST',
                             'observacion_conducta' => 'Obs. Conducta',
+                            'inspeccion_sst' => 'Inspección SST',
                             'no_registrado' => 'No Registrado',
                             'sin_identificar' => 'Sin Identificar',
                         ];

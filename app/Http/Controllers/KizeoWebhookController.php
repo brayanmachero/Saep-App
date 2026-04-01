@@ -78,6 +78,7 @@ class KizeoWebhookController extends Controller
             $vehicleFormId     = config('services.kizeo.vehicle_form_id');
             $charlaFormId      = config('services.kizeo.charla_form_id');
             $observacionFormId = config('services.kizeo.observacion_form_id');
+            $inspeccionFormId  = config('services.kizeo.inspeccion_form_id');
 
             if ($vehicleFormId && $formId == $vehicleFormId) {
                 return $this->handleVehiculo($formId, $dataId, $payload, $request->ip());
@@ -89,6 +90,10 @@ class KizeoWebhookController extends Controller
 
             if ($observacionFormId && $formId == $observacionFormId) {
                 return $this->handleObservacionConducta($formId, $dataId, $payload, $request->ip());
+            }
+
+            if ($inspeccionFormId && $formId == $inspeccionFormId) {
+                return $this->handleInspeccionSst($formId, $dataId, $payload, $request->ip());
             }
 
             Log::info("Webhook recibido para formulario no registrado", ['formId' => $formId]);
@@ -674,6 +679,149 @@ class KizeoWebhookController extends Controller
                 'data_id'       => $dataId,
                 'tipo'          => 'observacion_conducta',
                 'resumen'       => 'Error al procesar Observación de Conducta',
+                'error_message' => $e->getMessage(),
+                'ip'            => $ip,
+            ]);
+            return response()->json(['status' => 'error', 'message' => 'Internal processing error'], 500);
+        }
+    }
+
+    /**
+     * Handler para formulario Inspección SST.
+     * Descarga el PDF generado por Kizeo y lo sube a SharePoint.
+     *
+     * Campos: centro_de_distribucion, fecha_, hora_, responsable_area_,
+     * inspeccion_efectuada_por_, cargo_, areas_inspeccionadas_, objetivo_1,
+     * descripcion_de_la_accion_o_co, medidas_correctivas_preventiv, frecuencia,
+     * responsable_de_ejecucion, verificacion
+     */
+    private function handleInspeccionSst(string $formId, string $dataId, array $payload, ?string $ip = null)
+    {
+        try {
+            $record = $this->kizeo->getRecord($formId, $dataId);
+            $fields = $record['fields'] ?? [];
+            $recordMeta = $record ?? [];
+
+            $getVal = function (string $key) use ($fields) {
+                if (!isset($fields[$key])) return '-';
+                $field = $fields[$key];
+                $res = $field['result'] ?? $field['value'] ?? $field;
+                if ($res === null) return '-';
+                if (is_string($res)) return $res;
+                if (isset($res['value'])) {
+                    $val = $res['value'];
+                    if (is_array($val) && isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
+                    if (is_array($val) && isset($val['date'])) return $val['date'];
+                    if (is_string($val)) return $val;
+                    if (is_bool($val)) return $val ? 'Sí' : 'No';
+                }
+                return is_string($res) ? $res : '-';
+            };
+
+            // Extraer datos
+            $fecha       = $getVal('fecha_');
+            $cd          = $getVal('centro_de_distribucion');
+            $inspector   = $getVal('inspeccion_efectuada_por_');
+            $cargoInsp   = $getVal('cargo_');
+            $responsable = $getVal('responsable_area_');
+            $areas       = $getVal('areas_inspeccionadas_');
+            $objetivo    = $getVal('objetivo_1');
+
+            // Fallbacks
+            if ($fecha === '-') $fecha = date('Y-m-d');
+            if ($inspector === '-') {
+                $inspector = trim(($recordMeta['first_name'] ?? '') . ' ' . ($recordMeta['last_name'] ?? ''));
+                if (!$inspector || trim($inspector) === '') {
+                    $inspector = $recordMeta['user_name'] ?? 'Desconocido';
+                }
+            }
+            if ($areas === '-') $areas = 'Inspección General';
+
+            // Slug de fecha
+            $fechaSlug = preg_replace('/[^0-9-]/', '', substr($fecha, 0, 10));
+            if (!$fechaSlug) $fechaSlug = date('Y-m-d');
+
+            // Componentes de fecha para carpetas
+            $ts = strtotime($fechaSlug) ?: time();
+            $anio = date('Y', $ts);
+            $mesNum = date('m', $ts);
+            $meses = ['01'=>'Enero','02'=>'Febrero','03'=>'Marzo','04'=>'Abril','05'=>'Mayo','06'=>'Junio',
+                       '07'=>'Julio','08'=>'Agosto','09'=>'Septiembre','10'=>'Octubre','11'=>'Noviembre','12'=>'Diciembre'];
+            $mesNombre = "{$mesNum} - " . ($meses[$mesNum] ?? $mesNum);
+
+            $sanitize = fn($v) => trim(preg_replace('/[\\\\\/\:*?"<>|]/u', '', $v)) ?: 'Sin especificar';
+
+            $cdFolder = $sanitize($cd !== '-' ? $cd : 'Sin CD');
+
+            Log::info("Procesando Inspección SST", [
+                'formId' => $formId, 'dataId' => $dataId,
+                'fecha' => $fecha, 'inspector' => $inspector,
+                'areas' => $areas, 'cd' => $cd,
+            ]);
+
+            // Descargar PDF de Kizeo
+            $pdfContent = $this->kizeo->downloadPdf($formId, $dataId);
+
+            if (!$pdfContent || strlen($pdfContent) < 100) {
+                Log::warning('PDF de Inspección SST vacío o inválido', ['size' => strlen($pdfContent ?? '')]);
+                return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
+            }
+
+            // Nombre: 2026-04-01 - Áreas inspeccionadas (Inspector).pdf
+            $areasClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $areas);
+            $inspectorClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $inspector);
+            $filename = "{$fechaSlug} - " . substr(trim($areasClean), 0, 60) . " ({$inspectorClean}).pdf";
+
+            // Estructura: Inspecciones SST / 2026 / 04 - Abril / CD Santiago / archivo.pdf
+            $sharepointPath = null;
+            try {
+                $oneDrive = app(OneDriveService::class);
+                if ($oneDrive->isConfigured()) {
+                    $rootFolder = config('services.kizeo.inspeccion_sharepoint_folder', 'Inspecciones SST');
+                    $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
+                    $oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', true);
+                    $sharepointPath = $remotePath;
+                    Log::info("Inspección SST subida a SharePoint", ['path' => $remotePath]);
+                } else {
+                    Log::warning('SharePoint no configurado, PDF de Inspección no se pudo subir');
+                }
+            } catch (\Throwable $e) {
+                Log::warning('SharePoint upload de Inspección falló (no crítico): ' . $e->getMessage());
+            }
+
+            // Registrar en webhook_logs
+            WebhookLog::logSuccess([
+                'origen'          => 'kizeo',
+                'form_id'         => $formId,
+                'data_id'         => $dataId,
+                'tipo'            => 'inspeccion_sst',
+                'resumen'         => "Inspección SST - {$areas} ({$inspector})",
+                'archivo'         => $filename,
+                'sharepoint_path' => $sharepointPath,
+                'email_enviado'   => false,
+                'destinatarios'   => [],
+                'metadata'        => [
+                    'inspector'   => $inspector,
+                    'cargo'       => $cargoInsp,
+                    'responsable' => $responsable,
+                    'areas'       => $areas,
+                    'objetivo'    => substr($objetivo, 0, 200),
+                    'cd'          => $cd,
+                    'fecha'       => $fecha,
+                ],
+                'ip' => $ip,
+            ]);
+
+            return response()->json(['status' => 'success', 'message' => 'Inspección SST procesada correctamente']);
+
+        } catch (\Throwable $e) {
+            Log::error('Error en Kizeo Webhook (Inspección SST): ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            WebhookLog::logError([
+                'origen'        => 'kizeo',
+                'form_id'       => $formId,
+                'data_id'       => $dataId,
+                'tipo'          => 'inspeccion_sst',
+                'resumen'       => 'Error al procesar Inspección SST',
                 'error_message' => $e->getMessage(),
                 'ip'            => $ip,
             ]);
