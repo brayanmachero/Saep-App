@@ -75,8 +75,9 @@ class KizeoWebhookController extends Controller
             }
 
             // Despachar según el formulario
-            $vehicleFormId = config('services.kizeo.vehicle_form_id');
-            $charlaFormId  = config('services.kizeo.charla_form_id');
+            $vehicleFormId     = config('services.kizeo.vehicle_form_id');
+            $charlaFormId      = config('services.kizeo.charla_form_id');
+            $observacionFormId = config('services.kizeo.observacion_form_id');
 
             if ($vehicleFormId && $formId == $vehicleFormId) {
                 return $this->handleVehiculo($formId, $dataId, $payload, $request->ip());
@@ -84,6 +85,10 @@ class KizeoWebhookController extends Controller
 
             if ($charlaFormId && $formId == $charlaFormId) {
                 return $this->handleCharlaSst($formId, $dataId, $payload, $request->ip());
+            }
+
+            if ($observacionFormId && $formId == $observacionFormId) {
+                return $this->handleObservacionConducta($formId, $dataId, $payload, $request->ip());
             }
 
             Log::info("Webhook recibido para formulario no registrado", ['formId' => $formId]);
@@ -524,6 +529,151 @@ class KizeoWebhookController extends Controller
                 'data_id'       => $dataId,
                 'tipo'          => 'charla_sst',
                 'resumen'       => 'Error al procesar Charla SST',
+                'error_message' => $e->getMessage(),
+                'ip'            => $ip,
+            ]);
+            return response()->json(['status' => 'error', 'message' => 'Internal processing error'], 500);
+        }
+    }
+
+    /**
+     * Handler para formulario Observación de Conducta.
+     * Descarga el PDF generado por Kizeo y lo sube a SharePoint.
+     *
+     * Campos: nombre_del_observador, cargo, centro_de_distribucion, fecha,
+     * tipo_de_observacion, negativa_1, conducta_observada, medida_de_control,
+     * registro_de_retroalimentacion, nombre_del_trabajador (RUT),
+     * nombre_trabajador_observado, cargo1, firma_observador, firma_colaborador
+     */
+    private function handleObservacionConducta(string $formId, string $dataId, array $payload, ?string $ip = null)
+    {
+        try {
+            $record = $this->kizeo->getRecord($formId, $dataId);
+            $fields = $record['fields'] ?? [];
+            $recordMeta = $record ?? [];
+
+            $getVal = function (string $key) use ($fields) {
+                if (!isset($fields[$key])) return '-';
+                $field = $fields[$key];
+                $res = $field['result'] ?? $field['value'] ?? $field;
+                if ($res === null) return '-';
+                if (is_string($res)) return $res;
+                if (isset($res['value'])) {
+                    $val = $res['value'];
+                    if (is_array($val) && isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
+                    if (is_array($val) && isset($val['date'])) return $val['date'];
+                    if (is_string($val)) return $val;
+                    if (is_bool($val)) return $val ? 'Sí' : 'No';
+                }
+                return is_string($res) ? $res : '-';
+            };
+
+            // Extraer datos
+            $fecha        = $getVal('fecha');
+            $observador   = $getVal('nombre_del_observador');
+            $cargoObs     = $getVal('cargo');
+            $cd           = $getVal('centro_de_distribucion');
+            $tipoObs      = $getVal('tipo_de_observacion');
+            $trabajador   = $getVal('nombre_trabajador_observado');
+            $rutTrabajador = $getVal('nombre_del_trabajador');
+            $conducta     = $getVal('conducta_observada');
+
+            // Fallbacks
+            if ($fecha === '-') $fecha = date('Y-m-d');
+            if ($observador === '-') {
+                $observador = trim(($recordMeta['first_name'] ?? '') . ' ' . ($recordMeta['last_name'] ?? ''));
+                if (!$observador || trim($observador) === '') {
+                    $observador = $recordMeta['user_name'] ?? 'Desconocido';
+                }
+            }
+            if ($trabajador === '-') $trabajador = 'Trabajador';
+            if ($tipoObs === '-') $tipoObs = 'Observación';
+
+            // Slug de fecha
+            $fechaSlug = preg_replace('/[^0-9-]/', '', substr($fecha, 0, 10));
+            if (!$fechaSlug) $fechaSlug = date('Y-m-d');
+
+            // Componentes de fecha para carpetas
+            $ts = strtotime($fechaSlug) ?: time();
+            $anio = date('Y', $ts);
+            $mesNum = date('m', $ts);
+            $meses = ['01'=>'Enero','02'=>'Febrero','03'=>'Marzo','04'=>'Abril','05'=>'Mayo','06'=>'Junio',
+                       '07'=>'Julio','08'=>'Agosto','09'=>'Septiembre','10'=>'Octubre','11'=>'Noviembre','12'=>'Diciembre'];
+            $mesNombre = "{$mesNum} - " . ($meses[$mesNum] ?? $mesNum);
+
+            $sanitize = fn($v) => trim(preg_replace('/[\\\\\/\:*?"<>|]/u', '', $v)) ?: 'Sin especificar';
+
+            $cdFolder = $sanitize($cd !== '-' ? $cd : 'Sin CD');
+
+            Log::info("Procesando Observación de Conducta", [
+                'formId' => $formId, 'dataId' => $dataId,
+                'fecha' => $fecha, 'observador' => $observador,
+                'trabajador' => $trabajador, 'tipo' => $tipoObs, 'cd' => $cd,
+            ]);
+
+            // Descargar PDF de Kizeo
+            $pdfContent = $this->kizeo->downloadPdf($formId, $dataId);
+
+            if (!$pdfContent || strlen($pdfContent) < 100) {
+                Log::warning('PDF de Observación Conducta vacío o inválido', ['size' => strlen($pdfContent ?? '')]);
+                return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
+            }
+
+            // Nombre: 2026-04-01 - Juan Pérez (Positiva).pdf
+            $trabajadorClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $trabajador);
+            $tipoClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $tipoObs);
+            $filename = "{$fechaSlug} - " . substr(trim($trabajadorClean), 0, 60) . " ({$tipoClean}).pdf";
+
+            // Estructura: Observaciones Conducta / 2026 / 04 - Abril / CD Santiago / archivo.pdf
+            $sharepointPath = null;
+            try {
+                $oneDrive = app(OneDriveService::class);
+                if ($oneDrive->isConfigured()) {
+                    $rootFolder = config('services.kizeo.observacion_sharepoint_folder', 'Observaciones Conducta');
+                    $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
+                    $oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', true);
+                    $sharepointPath = $remotePath;
+                    Log::info("Observación de Conducta subida a SharePoint", ['path' => $remotePath]);
+                } else {
+                    Log::warning('SharePoint no configurado, PDF de Observación no se pudo subir');
+                }
+            } catch (\Throwable $e) {
+                Log::warning('SharePoint upload de Observación falló (no crítico): ' . $e->getMessage());
+            }
+
+            // Registrar en webhook_logs
+            WebhookLog::logSuccess([
+                'origen'          => 'kizeo',
+                'form_id'         => $formId,
+                'data_id'         => $dataId,
+                'tipo'            => 'observacion_conducta',
+                'resumen'         => "Obs. Conducta - {$trabajador} ({$tipoObs})",
+                'archivo'         => $filename,
+                'sharepoint_path' => $sharepointPath,
+                'email_enviado'   => false,
+                'destinatarios'   => [],
+                'metadata'        => [
+                    'observador'  => $observador,
+                    'trabajador'  => $trabajador,
+                    'rut'         => $rutTrabajador,
+                    'tipo'        => $tipoObs,
+                    'conducta'    => substr($conducta, 0, 200),
+                    'cd'          => $cd,
+                    'fecha'       => $fecha,
+                ],
+                'ip' => $ip,
+            ]);
+
+            return response()->json(['status' => 'success', 'message' => 'Observación de Conducta procesada correctamente']);
+
+        } catch (\Throwable $e) {
+            Log::error('Error en Kizeo Webhook (Observación Conducta): ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            WebhookLog::logError([
+                'origen'        => 'kizeo',
+                'form_id'       => $formId,
+                'data_id'       => $dataId,
+                'tipo'          => 'observacion_conducta',
+                'resumen'       => 'Error al procesar Observación de Conducta',
                 'error_message' => $e->getMessage(),
                 'ip'            => $ip,
             ]);

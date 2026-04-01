@@ -41,8 +41,10 @@ return [
         'notify_email'             => env('KIZEO_NOTIFY_EMAIL', 'bmachero@saep.cl'),
         'webhook_secret'           => env('KIZEO_WEBHOOK_SECRET'),
         'vehicle_form_id'          => env('KIZEO_VEHICLE_FORM_ID'),
-        'charla_form_id'           => env('KIZEO_CHARLA_FORM_ID'),
-        'charla_sharepoint_folder' => env('KIZEO_CHARLA_SHAREPOINT_FOLDER', 'Charlas SST'),
+        'charla_form_id'              => env('KIZEO_CHARLA_FORM_ID'),
+        'charla_sharepoint_folder'    => env('KIZEO_CHARLA_SHAREPOINT_FOLDER', 'Charlas SST'),
+        'observacion_form_id'         => env('KIZEO_OBSERVACION_FORM_ID'),
+        'observacion_sharepoint_folder' => env('KIZEO_OBSERVACION_SHAREPOINT_FOLDER', 'Observaciones Conducta'),
     ],
 
     'google' => [
