@@ -104,9 +104,10 @@ class OneDriveService
      * @param string $content     Contenido binario del archivo (p.ej. PDF)
      * @param string $remotePath  Ruta relativa dentro del rootFolder (p.ej. "CGVC-41/Entrega_2026-03-30.pdf")
      * @param string $contentType Tipo MIME del archivo
+     * @param bool   $absolute    Si true, remotePath es ruta absoluta desde la raíz del drive (no antepone rootFolder)
      * @return bool
      */
-    public function uploadFile(string $content, string $remotePath, string $contentType = 'application/pdf'): bool
+    public function uploadFile(string $content, string $remotePath, string $contentType = 'application/pdf', bool $absolute = false): bool
     {
         if (!$this->isConfigured()) {
             Log::warning('SharePoint: Servicio no configurado, se omite subida');
@@ -123,8 +124,8 @@ class OneDriveService
             return false;
         }
 
-        // Construir ruta completa: rootFolder/remotePath
-        $fullPath = $this->rootFolder . '/' . ltrim($remotePath, '/');
+        // Construir ruta completa: rootFolder/remotePath (o absoluta si se indica)
+        $fullPath = $absolute ? ltrim($remotePath, '/') : $this->rootFolder . '/' . ltrim($remotePath, '/');
         $fullPath = $this->sanitizePath($fullPath);
 
         // Endpoint SharePoint: /sites/{siteId}/drive/root:/{path}:/content

@@ -453,7 +453,7 @@ class KizeoWebhookController extends Controller
                 if ($oneDrive->isConfigured()) {
                     $rootFolder = config('services.kizeo.charla_sharepoint_folder', 'Charlas SST');
                     $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$lugarFolder}/{$actividadFolder}/{$filename}";
-                    $oneDrive->uploadFile($pdfContent, $remotePath);
+                    $oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', true);
                     $sharepointPath = $remotePath;
                     Log::info("Charla SST subida a SharePoint", ['path' => $remotePath]);
                 } else {
