@@ -169,4 +169,164 @@ class CharlaTrackingController extends Controller
 
         return back()->with('success', 'Sincronización completada. ' . trim($output));
     }
+
+    /**
+     * DEBUG: Compare Kizeo API endpoints to find where transferred records live.
+     * TEMPORARY — remove after fixing sync.
+     */
+    public function debug(\App\Services\KizeoService $kizeo)
+    {
+        $formId = config('services.kizeo.charla_form_id');
+        $desde = now()->subMonths(6)->format('Y-m-d H:i:s');
+        $results = [];
+
+        // 1. data/advanced (current approach — wrong filter format)
+        try {
+            $advResp = $kizeo->rawPost("forms/{$formId}/data/advanced", [
+                'filters' => [
+                    ['type' => 'OR', 'col' => '_create_time', 'op' => 'ge', 'val' => $desde],
+                ],
+                'order' => [['col' => '_create_time', 'type' => 'desc']],
+                'limit' => 10,
+            ]);
+            $advData = $advResp['data'] ?? [];
+            $results['advanced_old_format'] = [
+                'count' => count($advData),
+                'sample' => array_map(fn($r) => [
+                    '_id' => $r['_id'] ?? null,
+                    '_answer_time' => $r['_answer_time'] ?? 'NOT SET',
+                    '_direction' => $r['_direction'] ?? 'NOT SET',
+                    '_recipient_id' => $r['_recipient_id'] ?? 'NOT SET',
+                    '_recipient_name' => $r['_recipient_name'] ?? 'NOT SET',
+                    '_history' => $r['_history'] ?? 'NOT SET',
+                    '_origin_answer' => $r['_origin_answer'] ?? 'NOT SET',
+                    '_pull_time' => $r['_pull_time'] ?? 'NOT SET',
+                    '_user_name' => $r['_user_name'] ?? 'NOT SET',
+                ], array_slice($advData, 0, 3)),
+            ];
+        } catch (\Exception $e) {
+            $results['advanced_old_format'] = ['error' => $e->getMessage()];
+        }
+
+        // 2. data/advanced (correct filter format per Swagger)
+        try {
+            $advResp2 = $kizeo->rawPost("forms/{$formId}/data/advanced", [
+                'filters' => [
+                    [
+                        'type' => 'simple',
+                        'field' => '_create_time',
+                        'operator' => '>=',
+                        'val' => $desde,
+                    ],
+                ],
+                'order' => [['col' => '_create_time', 'type' => 'desc']],
+                'limit' => 10,
+            ]);
+            $advData2 = $advResp2['data'] ?? [];
+            $results['advanced_correct_format'] = [
+                'count' => count($advData2),
+                'sample' => array_map(fn($r) => [
+                    '_id' => $r['_id'] ?? null,
+                    '_answer_time' => $r['_answer_time'] ?? 'NOT SET',
+                    '_direction' => $r['_direction'] ?? 'NOT SET',
+                    '_recipient_id' => $r['_recipient_id'] ?? 'NOT SET',
+                    '_recipient_name' => $r['_recipient_name'] ?? 'NOT SET',
+                    '_history' => $r['_history'] ?? 'NOT SET',
+                    '_origin_answer' => $r['_origin_answer'] ?? 'NOT SET',
+                    '_pull_time' => $r['_pull_time'] ?? 'NOT SET',
+                    '_user_name' => $r['_user_name'] ?? 'NOT SET',
+                ], array_slice($advData2, 0, 3)),
+            ];
+        } catch (\Exception $e) {
+            $results['advanced_correct_format'] = ['error' => $e->getMessage()];
+        }
+
+        // 3. data/unread with a test action
+        try {
+            $unreadResp = $kizeo->rawGet("forms/{$formId}/data/unread/saep_debug_test/1000?format=basic");
+            $unreadData = $unreadResp['data'] ?? $unreadResp;
+            if (!is_array($unreadData)) $unreadData = [];
+
+            // Count statuses
+            $statuses = ['has_answer' => 0, 'no_answer' => 0, 'has_direction' => 0, 'has_recipient' => 0, 'has_transfer_history' => 0];
+            foreach ($unreadData as $r) {
+                if (!empty(trim($r['_answer_time'] ?? ''))) $statuses['has_answer']++;
+                else $statuses['no_answer']++;
+                if (!empty($r['_direction'] ?? '')) $statuses['has_direction']++;
+                if (!empty($r['_recipient_id'] ?? '')) $statuses['has_recipient']++;
+                if (str_contains($r['_history'] ?? '', 'Transferido')) $statuses['has_transfer_history']++;
+            }
+
+            // Find a transferred sample
+            $transferSamples = array_values(array_filter($unreadData, fn($r) =>
+                empty(trim($r['_answer_time'] ?? '')) || !empty($r['_recipient_id'] ?? '')
+            ));
+
+            $results['unread_saep_debug'] = [
+                'count' => count($unreadData),
+                'status_breakdown' => $statuses,
+                'sample_all' => array_map(fn($r) => [
+                    '_id' => $r['_id'] ?? null,
+                    '_answer_time' => $r['_answer_time'] ?? 'NOT SET',
+                    '_direction' => $r['_direction'] ?? 'NOT SET',
+                    '_recipient_id' => $r['_recipient_id'] ?? 'NOT SET',
+                    '_recipient_name' => $r['_recipient_name'] ?? 'NOT SET',
+                    '_history' => $r['_history'] ?? 'NOT SET',
+                    '_origin_answer' => $r['_origin_answer'] ?? 'NOT SET',
+                    '_pull_time' => $r['_pull_time'] ?? 'NOT SET',
+                    '_user_name' => $r['_user_name'] ?? 'NOT SET',
+                ], array_slice($unreadData, 0, 2)),
+                'sample_transfers' => array_map(fn($r) => [
+                    '_id' => $r['_id'] ?? null,
+                    '_answer_time' => $r['_answer_time'] ?? 'NOT SET',
+                    '_direction' => $r['_direction'] ?? 'NOT SET',
+                    '_recipient_id' => $r['_recipient_id'] ?? 'NOT SET',
+                    '_recipient_name' => $r['_recipient_name'] ?? 'NOT SET',
+                    '_history' => $r['_history'] ?? 'NOT SET',
+                    '_origin_answer' => $r['_origin_answer'] ?? 'NOT SET',
+                    '_pull_time' => $r['_pull_time'] ?? 'NOT SET',
+                    '_user_name' => $r['_user_name'] ?? 'NOT SET',
+                ], array_slice($transferSamples, 0, 3)),
+            ];
+        } catch (\Exception $e) {
+            $results['unread_saep_debug'] = ['error' => $e->getMessage()];
+        }
+
+        // 4. push/inbox
+        try {
+            $inboxResp = $kizeo->rawGet("forms/push/inbox");
+            $inboxData = $inboxResp['data'] ?? $inboxResp;
+            if (!is_array($inboxData)) $inboxData = [];
+
+            // Filter for our form
+            $ourFormPushes = array_values(array_filter($inboxData, fn($r) =>
+                ($r['_form_id'] ?? $r['form_id'] ?? '') == $formId
+            ));
+
+            $results['push_inbox'] = [
+                'total_all_forms' => count($inboxData),
+                'our_form_count' => count($ourFormPushes),
+                'sample' => array_map(fn($r) => array_intersect_key($r, array_flip([
+                    '_id', 'id', '_form_id', 'form_id', '_answer_time', '_direction',
+                    '_recipient_id', '_recipient_name', '_history', '_origin_answer',
+                    '_user_name', '_pull_time', 'name',
+                ])), array_slice($ourFormPushes ?: $inboxData, 0, 3)),
+            ];
+        } catch (\Exception $e) {
+            $results['push_inbox'] = ['error' => $e->getMessage()];
+        }
+
+        // 5. All field keys from first advanced record
+        try {
+            $advAll = $kizeo->rawPost("forms/{$formId}/data/advanced", [
+                'limit' => 1,
+            ]);
+            $firstRec = ($advAll['data'] ?? [])[0] ?? [];
+            $results['available_fields'] = array_keys($firstRec);
+        } catch (\Exception $e) {
+            $results['available_fields'] = ['error' => $e->getMessage()];
+        }
+
+        return response()->json($results, 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
 }
