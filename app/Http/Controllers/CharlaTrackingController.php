@@ -12,7 +12,7 @@ class CharlaTrackingController extends Controller
     public function index(Request $request)
     {
         // Filtros
-        $desde  = $request->input('desde', now()->subMonths(3)->format('Y-m-d'));
+        $desde  = $request->input('desde', now()->subDays(30)->format('Y-m-d'));
         $hasta  = $request->input('hasta', now()->format('Y-m-d'));
         $estado = $request->input('estado', 'todos');
         $buscar = $request->input('buscar');
@@ -65,9 +65,8 @@ class CharlaTrackingController extends Controller
             ->pluck('cantidad', 'estatus_kizeo')
             ->toArray();
 
-        // 3. Top asignadores (quién transfiere más charlas)
+        // 3. Top asignadores (quién crea/asigna más charlas — incluye directas y transferidas)
         $topAsignadores = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
-            ->whereNotNull('asignado_a')
             ->selectRaw("asignado_por as usuario,
                          COUNT(*) as total_asignadas,
                          SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,

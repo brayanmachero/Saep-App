@@ -132,21 +132,21 @@
 
     {{-- Gráficos fila 2: Asignadores + Destinatarios --}}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
-        {{-- Quién asigna --}}
+        {{-- Quién crea/asigna --}}
         <div class="glass-card" style="padding:1rem 1.25rem">
-            <h3 class="chart-title"><i class="bi bi-send-fill" style="color:#8b5cf6"></i> Quién Asigna (Transferencias)</h3>
+            <h3 class="chart-title"><i class="bi bi-send-fill" style="color:#8b5cf6"></i> Cumplimiento por Creador</h3>
             @if($topAsignadores->isEmpty())
                 <div style="text-align:center;color:var(--text-muted);padding:2rem">
                     <i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:.3rem"></i>
-                    Sin transferencias en el período
+                    Sin registros en el período
                 </div>
             @else
             <div class="glass-table-container" style="max-height:320px;overflow-y:auto">
                 <table class="glass-table" style="font-size:.8rem">
                     <thead>
                         <tr>
-                            <th style="text-align:left">Asignador</th>
-                            <th style="text-align:center;width:70px">Asignadas</th>
+                            <th style="text-align:left">Creador</th>
+                            <th style="text-align:center;width:70px">Total</th>
                             <th style="text-align:center;width:70px">Completadas</th>
                             <th style="text-align:center;width:70px">Pendientes</th>
                             <th style="text-align:center;width:60px">Tasa</th>
