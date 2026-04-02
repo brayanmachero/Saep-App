@@ -32,6 +32,12 @@ class KizeoService
         return $response->json();
     }
 
+    /** GET crudo (público, sin caché — solo para diagnóstico). */
+    public function rawGet(string $endpoint, int $timeout = 30): array
+    {
+        return $this->get($endpoint, $timeout);
+    }
+
     /**
      * POST request a la API Kizeo.
      */
@@ -46,6 +52,12 @@ class KizeoService
         }
 
         return $response->json();
+    }
+
+    /** POST crudo (público, sin caché — solo para diagnóstico). */
+    public function rawPost(string $endpoint, array $body = [], int $timeout = 30): array
+    {
+        return $this->post($endpoint, $body, $timeout);
     }
 
     /**
