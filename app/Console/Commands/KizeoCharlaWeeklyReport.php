@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Mail\CharlaTrackingReporteMail;
 use App\Models\Configuracion;
 use App\Models\KizeoCharlaTracking;
-use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -120,21 +119,25 @@ class KizeoCharlaWeeklyReport extends Command
             ])
             ->toArray();
 
+        // Verificar si el reporte está activo
+        if (!$this->option('email') && Configuracion::get('charla_report_activo') !== '1') {
+            $this->info('Reporte semanal de charlas desactivado en configuración.');
+            return self::SUCCESS;
+        }
+
         // Destinatarios del email
         $email = $this->option('email');
         if ($email) {
             $destinatarios = [$email];
         } else {
-            $destinatarios = User::whereHas('rol', fn ($q) => $q->where('codigo', 'SUPER_ADMIN'))
-                ->where('activo', true)
-                ->pluck('email')
-                ->filter()
+            // Leer desde configuración de la plataforma
+            $configEmails = Configuracion::get('charla_report_destinatarios', '');
+            $destinatarios = collect(explode(',', $configEmails))
+                ->map(fn ($e) => trim($e))
+                ->filter(fn ($e) => filter_var($e, FILTER_VALIDATE_EMAIL))
+                ->unique()
+                ->values()
                 ->toArray();
-
-            $kizeoNotifyEmail = config('services.kizeo.notify_email');
-            if ($kizeoNotifyEmail && !in_array($kizeoNotifyEmail, $destinatarios)) {
-                $destinatarios[] = $kizeoNotifyEmail;
-            }
         }
 
         if (empty($destinatarios)) {
