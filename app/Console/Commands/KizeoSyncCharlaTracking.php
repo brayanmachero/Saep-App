@@ -112,8 +112,16 @@ class KizeoSyncCharlaTracking extends Command
                 }
 
                 // Título y actividad (campos reales del formulario Kizeo)
-                $titulo = $record['descripcion_'] ?? $record['_summary_title'] ?? '';
+                $descripcion = $record['descripcion_'] ?? '';
                 $actividad = $record['actividad_de_'] ?? '';
+                $summaryTitle = $record['_summary_title'] ?? '';
+                // Usar summary_title (corto) si existe, sino recortar descripcion
+                $titulo = $summaryTitle ?: ($descripcion ? mb_substr($descripcion, 0, 120) : '');
+                if ($actividad && $titulo) {
+                    $titulo = "{$actividad}: {$titulo}";
+                } elseif ($actividad) {
+                    $titulo = $actividad;
+                }
                 $lugar  = $record['antecedentes'] ?? '';
 
                 $existing = KizeoCharlaTracking::where('kizeo_data_id', $dataId)->first();
@@ -124,8 +132,8 @@ class KizeoSyncCharlaTracking extends Command
                     'asignado_por_id'  => $userId,
                     'asignado_a'       => $asignadoA,
                     'asignado_a_id'    => $asignadoAId,
-                    'titulo_actividad' => $actividad ? "{$actividad}: {$titulo}" : ($titulo ?: null),
-                    'lugar'            => $lugar ?: null,
+                    'titulo_actividad' => $titulo ? mb_substr($titulo, 0, 295) : null,
+                    'lugar'            => $lugar ? mb_substr($lugar, 0, 195) : null,
                     'estado'           => $estado,
                     'estatus_kizeo'    => $estatusKizeo,
                     'fecha_creacion'   => $createTime,
