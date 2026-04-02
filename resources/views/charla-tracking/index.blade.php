@@ -16,12 +16,17 @@
                 @endif
             </p>
         </div>
-        <form method="POST" action="{{ route('charla-tracking.sync') }}" id="sync-form">
-            @csrf
-            <button type="submit" class="btn-premium" id="sync-btn" style="padding:.5rem 1rem;font-size:.82rem">
-                <i class="bi bi-arrow-clockwise" id="sync-icon"></i> Sincronizar desde Kizeo
-            </button>
-        </form>
+        <div style="display:flex;gap:.5rem;align-items:center">
+            <a href="{{ route('charla-tracking.debug') }}" target="_blank" class="btn-ghost" style="padding:.5rem 1rem;font-size:.82rem">
+                <i class="bi bi-bug"></i> Debug API
+            </a>
+            <form method="POST" action="{{ route('charla-tracking.sync') }}" id="sync-form">
+                @csrf
+                <button type="submit" class="btn-premium" id="sync-btn" style="padding:.5rem 1rem;font-size:.82rem">
+                    <i class="bi bi-arrow-clockwise" id="sync-icon"></i> Sincronizar desde Kizeo
+                </button>
+            </form>
+        </div>
     </div>
 
     @if(session('success'))
