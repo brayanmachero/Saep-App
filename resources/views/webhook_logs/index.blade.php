@@ -115,6 +115,7 @@
                             'observacion_conducta' => 'badge-primary',
                             'inspeccion_sst' => 'badge-secondary',
                             'visita_terreno' => 'badge-info',
+                            'accidente_sst' => 'badge-danger',
                             'vehiculo' => 'badge-info',
                         ];
                         $tipoLabels = [
@@ -124,6 +125,7 @@
                             'observacion_conducta' => 'Obs. Conducta',
                             'inspeccion_sst' => 'Inspección SST',
                             'visita_terreno' => 'Visita Terreno',
+                            'accidente_sst' => 'Accidente SST',
                             'no_registrado' => 'No Registrado',
                             'sin_identificar' => 'Sin Identificar',
                         ];
