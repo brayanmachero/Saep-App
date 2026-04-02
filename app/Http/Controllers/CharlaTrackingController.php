@@ -9,52 +9,40 @@ use Illuminate\Support\Facades\Artisan;
 
 class CharlaTrackingController extends Controller
 {
-    /**
-     * Dashboard de seguimiento de charlas.
-     */
     public function index(Request $request)
     {
         // Filtros
-        $desde = $request->input('desde', now()->subMonths(3)->format('Y-m-d'));
-        $hasta = $request->input('hasta', now()->format('Y-m-d'));
+        $desde  = $request->input('desde', now()->subMonths(3)->format('Y-m-d'));
+        $hasta  = $request->input('hasta', now()->format('Y-m-d'));
         $estado = $request->input('estado');
         $buscar = $request->input('buscar');
 
         $desdeCarbon = Carbon::parse($desde)->startOfDay();
         $hastaCarbon = Carbon::parse($hasta)->endOfDay();
 
-        // KPIs
-        $baseQuery = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon);
-        $total       = (clone $baseQuery)->count();
-        $completadas = (clone $baseQuery)->completados()->count();
-        $pendientes  = (clone $baseQuery)->pendientes()->count();
-        $tasa        = $total > 0 ? round(($completadas / $total) * 100, 1) : 0;
+        // === KPIs ===
+        $baseQuery    = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon);
+        $total        = (clone $baseQuery)->count();
+        $completadas  = (clone $baseQuery)->completados()->count();
+        $transferidos = (clone $baseQuery)->transferidos()->count();
+        $pendientes   = (clone $baseQuery)->pendientes()->count();
+        $tasa         = $total > 0 ? round(($completadas / $total) * 100, 1) : 0;
 
         // Promedio días pendientes
         $promDias = KizeoCharlaTracking::pendientes()
             ->enPeriodo($desdeCarbon, $hastaCarbon)
-            ->selectRaw('AVG(DATEDIFF(NOW(), fecha_creacion)) as prom')
+            ->selectRaw('AVG(DATEDIFF(NOW(), COALESCE(fecha_asignacion, fecha_creacion))) as prom')
             ->value('prom');
         $promDias = $promDias ? round($promDias, 1) : 0;
 
         // === DATOS PARA GRÁFICOS ===
 
-        // 1. Cumplimiento por usuario (horizontal bar)
-        $porUsuario = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
-            ->selectRaw("asignado_por as usuario,
-                         SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
-                         SUM(CASE WHEN estado='pendiente' THEN 1 ELSE 0 END) as pendientes")
-            ->groupBy('asignado_por')
-            ->orderByRaw("SUM(CASE WHEN estado='pendiente' THEN 1 ELSE 0 END) DESC")
-            ->limit(15)
-            ->get();
-
-        // 2. Tendencia semanal (line chart)
+        // 1. Tendencia semanal
         $tendencia = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
             ->selectRaw("anio, semana,
                          COUNT(*) as total,
                          SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
-                         SUM(CASE WHEN estado='pendiente' THEN 1 ELSE 0 END) as pendientes")
+                         SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) as pendientes")
             ->groupBy('anio', 'semana')
             ->orderBy('anio')
             ->orderBy('semana')
@@ -70,52 +58,110 @@ class CharlaTrackingController extends Controller
                 ];
             });
 
-        // 3. Distribución estado (doughnut)
-        $distribucion = [
-            'completadas' => $completadas,
-            'pendientes'  => $pendientes,
-        ];
+        // 2. Distribución por estatus Kizeo (doughnut)
+        $distribucion = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
+            ->selectRaw("estatus_kizeo, COUNT(*) as cantidad")
+            ->groupBy('estatus_kizeo')
+            ->pluck('cantidad', 'estatus_kizeo')
+            ->toArray();
 
-        // 4. Tabla de pendientes (detalle)
-        $queryPendientes = KizeoCharlaTracking::pendientes()
-            ->enPeriodo($desdeCarbon, $hastaCarbon);
+        // 3. Top asignadores (quién transfiere más charlas)
+        $topAsignadores = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
+            ->whereNotNull('asignado_a')
+            ->selectRaw("asignado_por as usuario,
+                         COUNT(*) as total_asignadas,
+                         SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
+                         SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) as pendientes")
+            ->groupBy('asignado_por')
+            ->orderByDesc('total_asignadas')
+            ->limit(10)
+            ->get();
 
-        if ($buscar) {
-            $queryPendientes->where(function ($q) use ($buscar) {
-                $q->where('asignado_por', 'like', "%{$buscar}%")
-                  ->orWhere('asignado_a', 'like', "%{$buscar}%")
-                  ->orWhere('kizeo_data_id', 'like', "%{$buscar}%");
-            });
-        }
+        // 4. Cumplimiento por destinatario
+        $porDestinatario = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
+            ->whereNotNull('asignado_a')
+            ->selectRaw("asignado_a as destinatario,
+                         COUNT(*) as total_recibidas,
+                         SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
+                         SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) as pendientes")
+            ->groupBy('asignado_a')
+            ->orderByRaw("SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) DESC")
+            ->limit(10)
+            ->get();
 
-        $pendientesList = $queryPendientes
-            ->orderBy('fecha_creacion')
-            ->paginate(20)
-            ->withQueryString();
+        // 5. Cumplimiento por usuario (creador)
+        $porUsuario = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
+            ->selectRaw("asignado_por as usuario,
+                         COUNT(*) as total,
+                         SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
+                         SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) as pendientes")
+            ->groupBy('asignado_por')
+            ->orderByRaw("SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) DESC")
+            ->limit(15)
+            ->get();
 
-        // 5. Top pendientes: usuarios con más tiempo sin completar
+        // 6. Distribución por lugar/CD
+        $porLugar = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
+            ->whereNotNull('lugar')
+            ->where('lugar', '!=', '')
+            ->selectRaw("lugar, COUNT(*) as total,
+                         SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
+                         SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) as pendientes")
+            ->groupBy('lugar')
+            ->orderByDesc('total')
+            ->limit(10)
+            ->get();
+
+        // 7. Top pendientes por responsable
         $topPendientes = KizeoCharlaTracking::pendientes()
             ->enPeriodo($desdeCarbon, $hastaCarbon)
-            ->selectRaw("asignado_por as usuario, COUNT(*) as cantidad, MIN(fecha_creacion) as mas_antigua, MAX(DATEDIFF(NOW(), fecha_creacion)) as dias_max")
-            ->groupBy('asignado_por')
+            ->selectRaw("COALESCE(asignado_a, asignado_por) as responsable,
+                         COUNT(*) as cantidad,
+                         MIN(COALESCE(fecha_asignacion, fecha_creacion)) as mas_antigua,
+                         MAX(DATEDIFF(NOW(), COALESCE(fecha_asignacion, fecha_creacion))) as dias_max")
+            ->groupBy('responsable')
             ->orderByDesc('dias_max')
             ->limit(10)
             ->get();
 
-        // Última sincronización
+        // 8. Tabla detalle filtrable
+        $queryDetalle = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon);
+
+        if ($estado && $estado !== 'todos') {
+            if ($estado === 'pendiente') {
+                $queryDetalle->pendientes();
+            } elseif ($estado === 'completado') {
+                $queryDetalle->completados();
+            } elseif ($estado === 'transferido') {
+                $queryDetalle->transferidos();
+            }
+        }
+
+        if ($buscar) {
+            $queryDetalle->where(function ($q) use ($buscar) {
+                $q->where('asignado_por', 'like', "%{$buscar}%")
+                  ->orWhere('asignado_a', 'like', "%{$buscar}%")
+                  ->orWhere('titulo_actividad', 'like', "%{$buscar}%")
+                  ->orWhere('lugar', 'like', "%{$buscar}%");
+            });
+        }
+
+        $registrosList = $queryDetalle
+            ->orderByDesc('fecha_creacion')
+            ->paginate(20)
+            ->withQueryString();
+
         $ultimaSync = KizeoCharlaTracking::max('updated_at');
 
         return view('charla-tracking.index', compact(
             'desde', 'hasta', 'estado', 'buscar',
-            'total', 'completadas', 'pendientes', 'tasa', 'promDias',
+            'total', 'completadas', 'pendientes', 'transferidos', 'tasa', 'promDias',
             'porUsuario', 'tendencia', 'distribucion',
-            'pendientesList', 'topPendientes', 'ultimaSync'
+            'topAsignadores', 'porDestinatario', 'porLugar',
+            'registrosList', 'topPendientes', 'ultimaSync'
         ));
     }
 
-    /**
-     * Forzar sincronización desde Kizeo API.
-     */
     public function sync()
     {
         Artisan::call('kizeo:sync-charla-tracking', ['--months' => 6]);
@@ -123,5 +169,4 @@ class CharlaTrackingController extends Controller
 
         return back()->with('success', 'Sincronización completada. ' . trim($output));
     }
-
 }

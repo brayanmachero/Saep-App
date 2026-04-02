@@ -42,10 +42,11 @@ class KizeoSyncCharlaTracking extends Command
             $this->info('Registros obtenidos de Kizeo: ' . count($records));
 
             // 2. Procesar y upsert cada registro
-            $created   = 0;
-            $updated   = 0;
-            $completed = 0;
-            $pending   = 0;
+            $created     = 0;
+            $updated     = 0;
+            $completed   = 0;
+            $pending     = 0;
+            $transferred = 0;
 
             foreach ($records as $record) {
                 $dataId       = (string) ($record['_id'] ?? '');
@@ -63,14 +64,33 @@ class KizeoSyncCharlaTracking extends Command
 
                 if (!$dataId) continue;
 
-                // === Determinar estado ===
-                // Completado: tiene _answer_time con valor real
-                // Pendiente: _answer_time vacío (fue transferido/asignado pero no completado)
-                $hasAnswer = !empty(trim($answerTime));
-                $estado = $hasAnswer ? 'completado' : 'pendiente';
+                // === Determinar estado y estatus Kizeo ===
+                $hasAnswer    = !empty(trim($answerTime));
+                $isTransfer   = str_contains($history, 'Transferido por');
+                $hasRecipient = !empty($recipientId);
+
+                // Estatus Kizeo (refleja lo que muestra Kizeo Forms UI)
+                if ($hasAnswer && !$isTransfer) {
+                    $estatusKizeo = 'registrado';   // ✓ Completado directamente
+                    $estado = 'completado';
+                } elseif ($hasAnswer && $isTransfer) {
+                    $estatusKizeo = 'terminado';     // ✓ Fue transferido y completado
+                    $estado = 'completado';
+                } elseif (!$hasAnswer && $isTransfer && !empty(trim($pullTime))) {
+                    $estatusKizeo = 'recuperado';    // Transferido y recuperado al dispositivo
+                    $estado = 'transferido';
+                } elseif (!$hasAnswer && ($isTransfer || $hasRecipient)) {
+                    $estatusKizeo = 'transferido';   // 🔄 Transferido, pendiente
+                    $estado = 'transferido';
+                } else {
+                    $estatusKizeo = $hasAnswer ? 'registrado' : 'pendiente';
+                    $estado = $hasAnswer ? 'completado' : 'pendiente';
+                }
 
                 if ($estado === 'completado') {
                     $completed++;
+                } elseif ($estado === 'transferido') {
+                    $transferred++;
                 } else {
                     $pending++;
                 }
@@ -81,34 +101,42 @@ class KizeoSyncCharlaTracking extends Command
                 $semana   = (int) $carbon->isoWeek();
                 $anio     = (int) $carbon->isoWeekYear();
 
-                // Determinar asignado_a (destinatario del transfer/push)
+                // Determinar asignado_a (destinatario del transfer)
                 $asignadoA   = $recipientNm ?: null;
                 $asignadoAId = $recipientId ? (string) $recipientId : null;
 
-                // Título de la charla
+                // Fecha de asignación (cuando se transfirió)
+                $fechaAsignacion = null;
+                if ($isTransfer && preg_match('/el (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/', $history, $m)) {
+                    $fechaAsignacion = $m[1];
+                }
+
+                // Título y lugar
                 $titulo = $record['titulo_actividad'] ?? '';
                 $lugar  = $record['lugar_de_la_capacitacion'] ?? '';
 
                 $existing = KizeoCharlaTracking::where('kizeo_data_id', $dataId)->first();
 
                 $data = [
-                    'kizeo_form_id'   => $formId,
-                    'asignado_por'    => $userName,
-                    'asignado_por_id' => $userId,
-                    'asignado_a'      => $asignadoA,
-                    'asignado_a_id'   => $asignadoAId,
-                    'estado'          => $estado,
-                    'fecha_creacion'  => $createTime,
-                    'fecha_respuesta' => $hasAnswer ? $answerTime : null,
-                    'semana'          => $semana,
-                    'anio'            => $anio,
-                    'metadata'        => [
-                        'direction'     => $direction,
-                        'origin_answer' => $originAnswer,
-                        'history'       => $history,
-                        'pull_time'     => $pullTime,
-                        'titulo'        => $titulo,
-                        'lugar'         => $lugar,
+                    'kizeo_form_id'    => $formId,
+                    'asignado_por'     => $userName,
+                    'asignado_por_id'  => $userId,
+                    'asignado_a'       => $asignadoA,
+                    'asignado_a_id'    => $asignadoAId,
+                    'titulo_actividad' => $titulo ?: null,
+                    'lugar'            => $lugar ?: null,
+                    'estado'           => $estado,
+                    'estatus_kizeo'    => $estatusKizeo,
+                    'fecha_creacion'   => $createTime,
+                    'fecha_asignacion' => $fechaAsignacion,
+                    'fecha_respuesta'  => $hasAnswer ? $answerTime : null,
+                    'origin_answer'    => $originAnswer,
+                    'direction'        => $direction,
+                    'semana'           => $semana,
+                    'anio'             => $anio,
+                    'metadata'         => [
+                        'history'   => $history,
+                        'pull_time' => $pullTime,
                     ],
                 ];
 
@@ -124,18 +152,20 @@ class KizeoSyncCharlaTracking extends Command
             }
 
             $this->info("Sincronización completada:");
-            $this->info("  Nuevos:      {$created}");
+            $this->info("  Nuevos:       {$created}");
             $this->info("  Actualizados: {$updated}");
             $this->info("  Completados:  {$completed}");
+            $this->info("  Transferidos: {$transferred}");
             $this->info("  Pendientes:   {$pending}");
 
             Log::info('kizeo:sync-charla-tracking completado', [
-                'form_id'   => $formId,
-                'total'     => count($records),
-                'created'   => $created,
-                'updated'   => $updated,
-                'completed' => $completed,
-                'pending'   => $pending,
+                'form_id'     => $formId,
+                'total'       => count($records),
+                'created'     => $created,
+                'updated'     => $updated,
+                'completed'   => $completed,
+                'transferred' => $transferred,
+                'pending'     => $pending,
             ]);
 
             return self::SUCCESS;

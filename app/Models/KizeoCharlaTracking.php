@@ -15,18 +15,25 @@ class KizeoCharlaTracking extends Model
         'asignado_por_id',
         'asignado_a',
         'asignado_a_id',
+        'titulo_actividad',
+        'lugar',
         'estado',
+        'estatus_kizeo',
         'fecha_creacion',
+        'fecha_asignacion',
         'fecha_respuesta',
+        'origin_answer',
+        'direction',
         'semana',
         'anio',
         'metadata',
     ];
 
     protected $casts = [
-        'fecha_creacion'  => 'datetime',
-        'fecha_respuesta' => 'datetime',
-        'metadata'        => 'array',
+        'fecha_creacion'   => 'datetime',
+        'fecha_asignacion' => 'datetime',
+        'fecha_respuesta'  => 'datetime',
+        'metadata'         => 'array',
     ];
 
     /* ---- Scopes ---- */
@@ -38,7 +45,12 @@ class KizeoCharlaTracking extends Model
 
     public function scopePendientes($q)
     {
-        return $q->where('estado', 'pendiente');
+        return $q->whereIn('estado', ['pendiente', 'transferido']);
+    }
+
+    public function scopeTransferidos($q)
+    {
+        return $q->where('estado', 'transferido');
     }
 
     public function scopeEnPeriodo($q, string $desde, string $hasta)
@@ -58,8 +70,28 @@ class KizeoCharlaTracking extends Model
         if ($this->estado === 'completado') {
             return null;
         }
-        return $this->fecha_creacion
-            ? (int) $this->fecha_creacion->diffInDays(now())
-            : null;
+        $ref = $this->fecha_asignacion ?? $this->fecha_creacion;
+        return $ref ? (int) $ref->diffInDays(now()) : null;
+    }
+
+    public function getEstatusLabelAttribute(): string
+    {
+        return match ($this->estatus_kizeo) {
+            'registrado'  => 'Registrado',
+            'transferido' => 'Transferido',
+            'recuperado'  => 'Recuperado',
+            'terminado'   => 'Terminado',
+            default       => ucfirst($this->estado),
+        };
+    }
+
+    public function getEstatusColorAttribute(): string
+    {
+        return match ($this->estatus_kizeo) {
+            'registrado', 'terminado' => '#22c55e',
+            'transferido'             => '#f97316',
+            'recuperado'              => '#3b82f6',
+            default                   => '#6b7280',
+        };
     }
 }
