@@ -16,7 +16,19 @@
                 @endif
             </p>
         </div>
+        <form method="POST" action="{{ route('charla-tracking.sync') }}" id="sync-form">
+            @csrf
+            <button type="submit" class="btn-premium" id="sync-btn" style="padding:.5rem 1rem;font-size:.82rem">
+                <i class="bi bi-arrow-clockwise" id="sync-icon"></i> Sincronizar desde Kizeo
+            </button>
+        </form>
     </div>
+
+    @if(session('success'))
+    <div class="glass-card" style="padding:.75rem 1.25rem;margin-bottom:1rem;border-left:4px solid #22c55e;font-size:.85rem;color:#15803d;background:rgba(34,197,94,.06)">
+        <i class="bi bi-check-circle-fill"></i> {{ session('success') }}
+    </div>
+    @endif
 
     {{-- Filtros --}}
     <form method="GET" action="{{ route('charla-tracking.index') }}" class="filter-form">
@@ -399,11 +411,26 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+    // Sync button loading state
+    const syncForm = document.getElementById('sync-form');
+    if (syncForm) {
+        syncForm.addEventListener('submit', function() {
+            const btn = document.getElementById('sync-btn');
+            const icon = document.getElementById('sync-icon');
+            btn.disabled = true;
+            btn.style.opacity = '.6';
+            icon.classList.add('spin-animation');
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise spin-animation"></i> Sincronizando...';
+        });
+    }
 </script>
 @endpush
 
 @push('styles')
 <style>
+.spin-animation { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @media (max-width: 900px) {
     .page-container > div[style*="grid-template-columns: 2fr"] { grid-template-columns: 1fr !important; }
     .page-container > div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }

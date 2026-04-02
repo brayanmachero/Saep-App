@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\KizeoCharlaTracking;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 
 class CharlaTrackingController extends Controller
@@ -111,5 +112,16 @@ class CharlaTrackingController extends Controller
             'porUsuario', 'tendencia', 'distribucion',
             'pendientesList', 'topPendientes', 'ultimaSync'
         ));
+    }
+
+    /**
+     * Forzar sincronización desde Kizeo API.
+     */
+    public function sync()
+    {
+        Artisan::call('kizeo:sync-charla-tracking', ['--months' => 6, '--force' => true]);
+        $output = Artisan::output();
+
+        return back()->with('success', 'Sincronización completada. ' . trim($output));
     }
 }

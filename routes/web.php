@@ -170,6 +170,7 @@ Route::middleware('auth')->group(function () {
         Route::get('kizeo/api/media/{formId}/{recordId}/{mediaId}', [KizeoDashboardController::class, 'media'])->name('kizeo.api.media');
         Route::get('kizeo/api/record/{formId}/{recordId}', [KizeoDashboardController::class, 'recordDetail'])->name('kizeo.api.record');
         Route::get('charla-tracking', [CharlaTrackingController::class, 'index'])->name('charla-tracking.index');
+        Route::post('charla-tracking/sync', [CharlaTrackingController::class, 'sync'])->name('charla-tracking.sync');
     });
 
     // --- SST: INSPECCIONES ---
