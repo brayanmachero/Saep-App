@@ -477,7 +477,7 @@ document.addEventListener('DOMContentLoaded', function() {
             afterDraw(chart) {
                 const { ctx, width, height } = chart;
                 const total = chart.data.datasets[0].data.reduce((a,b) => a+b, 0);
-                const comp = dist.registrado || 0 + (dist.terminado || 0);
+                const comp = (dist.registrado || 0) + (dist.terminado || 0);
                 const pct = total > 0 ? Math.round((comp / total) * 100) : 0;
                 ctx.save();
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -567,9 +567,14 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 .spin-animation { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Pagination fix */
+.page-container nav[role="navigation"] { font-size:.82rem; }
+.page-container nav[role="navigation"] svg { width:1rem;height:1rem; }
+.page-container nav .relative.inline-flex { display:inline-flex;gap:.15rem; }
+
 @media (max-width: 900px) {
-    .page-container > div[style*="grid-template-columns: 2fr"] { grid-template-columns: 1fr !important; }
-    .page-container > div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+    .page-container > div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
 }
 </style>
 @endpush

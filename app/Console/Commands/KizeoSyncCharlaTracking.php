@@ -111,9 +111,10 @@ class KizeoSyncCharlaTracking extends Command
                     $fechaAsignacion = $m[1];
                 }
 
-                // Título y lugar
-                $titulo = $record['titulo_actividad'] ?? '';
-                $lugar  = $record['lugar_de_la_capacitacion'] ?? '';
+                // Título y actividad (campos reales del formulario Kizeo)
+                $titulo = $record['descripcion_'] ?? $record['_summary_title'] ?? '';
+                $actividad = $record['actividad_de_'] ?? '';
+                $lugar  = $record['antecedentes'] ?? '';
 
                 $existing = KizeoCharlaTracking::where('kizeo_data_id', $dataId)->first();
 
@@ -123,7 +124,7 @@ class KizeoSyncCharlaTracking extends Command
                     'asignado_por_id'  => $userId,
                     'asignado_a'       => $asignadoA,
                     'asignado_a_id'    => $asignadoAId,
-                    'titulo_actividad' => $titulo ?: null,
+                    'titulo_actividad' => $actividad ? "{$actividad}: {$titulo}" : ($titulo ?: null),
                     'lugar'            => $lugar ?: null,
                     'estado'           => $estado,
                     'estatus_kizeo'    => $estatusKizeo,
@@ -193,7 +194,12 @@ class KizeoSyncCharlaTracking extends Command
         do {
             $response = $kizeo->rawPost("forms/{$formId}/data/advanced", [
                 'filters' => [
-                    ['type' => 'OR', 'col' => '_create_time', 'op' => 'ge', 'val' => $desde],
+                    [
+                        'type'     => 'simple',
+                        'field'    => '_create_time',
+                        'operator' => '>=',
+                        'val'      => $desde,
+                    ],
                 ],
                 'order' => [['col' => '_create_time', 'type' => 'desc']],
                 'limit' => $limit,
