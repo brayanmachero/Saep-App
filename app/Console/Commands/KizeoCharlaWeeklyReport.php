@@ -37,24 +37,34 @@ class KizeoCharlaWeeklyReport extends Command
         $periodo = $desde->format('d/m/Y') . ' al ' . $hasta->format('d/m/Y');
 
         // Stats generales del período
-        $total      = KizeoCharlaTracking::enPeriodo($desde, $hasta)->count();
+        $total       = KizeoCharlaTracking::enPeriodo($desde, $hasta)->count();
         $completadas = KizeoCharlaTracking::enPeriodo($desde, $hasta)->completados()->count();
         $pendientes  = KizeoCharlaTracking::enPeriodo($desde, $hasta)->pendientes()->count();
+        $transferidos = KizeoCharlaTracking::enPeriodo($desde, $hasta)->transferidos()->count();
         $tasa        = $total > 0 ? round(($completadas / $total) * 100, 1) : 0;
+
+        $promDias = KizeoCharlaTracking::pendientes()
+            ->enPeriodo($desde, $hasta)
+            ->selectRaw('AVG(DATEDIFF(NOW(), COALESCE(fecha_asignacion, fecha_creacion))) as prom')
+            ->value('prom');
 
         $stats = [
             'total'             => $total,
             'completadas'       => $completadas,
             'pendientes'        => $pendientes,
+            'transferidos'      => $transferidos,
             'tasa_cumplimiento' => $tasa,
+            'prom_dias'         => $promDias ? round($promDias, 1) : 0,
         ];
 
-        // Pendientes agrupados por usuario (asignado_por)
+        // Pendientes agrupados por responsable
         $pendientesPorUsuario = KizeoCharlaTracking::pendientes()
             ->enPeriodo($desde, $hasta)
-            ->selectRaw('asignado_por as nombre, COUNT(*) as cantidad, MIN(fecha_creacion) as fecha_min')
-            ->groupBy('asignado_por')
+            ->selectRaw('COALESCE(asignado_a, asignado_por) as nombre, COUNT(*) as cantidad,
+                         MIN(COALESCE(fecha_asignacion, fecha_creacion)) as fecha_min')
+            ->groupBy('nombre')
             ->orderByDesc('cantidad')
+            ->limit(10)
             ->get()
             ->map(function ($row) {
                 $fechaMin = $row->fecha_min ? Carbon::parse($row->fecha_min) : null;
@@ -74,17 +84,59 @@ class KizeoCharlaWeeklyReport extends Command
             $semEnd   = now()->subWeeks($i)->endOfWeek();
             $semTotal = KizeoCharlaTracking::enPeriodo($semStart, $semEnd)->count();
             $semComp  = KizeoCharlaTracking::enPeriodo($semStart, $semEnd)->completados()->count();
+            $semTransf = KizeoCharlaTracking::enPeriodo($semStart, $semEnd)->transferidos()->count();
 
             $resumenSemanal[] = [
-                'semana'      => (int) $semStart->isoWeek(),
-                'anio'        => (int) $semStart->isoWeekYear(),
-                'total'       => $semTotal,
-                'completadas' => $semComp,
-                'tasa'        => $semTotal > 0 ? round(($semComp / $semTotal) * 100, 1) : 0,
+                'semana'       => (int) $semStart->isoWeek(),
+                'anio'         => (int) $semStart->isoWeekYear(),
+                'fecha'        => $semStart->format('d/m'),
+                'total'        => $semTotal,
+                'completadas'  => $semComp,
+                'transferidos' => $semTransf,
+                'tasa'         => $semTotal > 0 ? round(($semComp / $semTotal) * 100, 1) : 0,
             ];
         }
 
-        // Destinatarios
+        // Top creadores/asignadores
+        $topCreadores = KizeoCharlaTracking::enPeriodo($desde, $hasta)
+            ->selectRaw("asignado_por as nombre, COUNT(*) as total,
+                         SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
+                         SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) as pendientes")
+            ->groupBy('asignado_por')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get()
+            ->map(fn ($r) => [
+                'nombre'     => $r->nombre ?? 'Desconocido',
+                'total'      => $r->total,
+                'completadas'=> $r->completadas,
+                'pendientes' => $r->pendientes,
+                'tasa'       => $r->total > 0 ? round(($r->completadas / $r->total) * 100) : 0,
+            ])
+            ->toArray();
+
+        // Top destinatarios
+        $topDestinatarios = KizeoCharlaTracking::enPeriodo($desde, $hasta)
+            ->whereNotNull('asignado_a')
+            ->selectRaw("asignado_a as nombre, COUNT(*) as total,
+                         SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
+                         SUM(CASE WHEN estatus_kizeo='recuperado' THEN 1 ELSE 0 END) as recuperadas,
+                         SUM(CASE WHEN estatus_kizeo='transferido' THEN 1 ELSE 0 END) as sin_descargar")
+            ->groupBy('asignado_a')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get()
+            ->map(fn ($r) => [
+                'nombre'        => $r->nombre ?? 'Desconocido',
+                'total'         => $r->total,
+                'completadas'   => $r->completadas,
+                'recuperadas'   => $r->recuperadas,
+                'sin_descargar' => $r->sin_descargar,
+                'tasa'          => $r->total > 0 ? round(($r->completadas / $r->total) * 100) : 0,
+            ])
+            ->toArray();
+
+        // Destinatarios del email
         $email = $this->option('email');
         if ($email) {
             $destinatarios = [$email];
@@ -95,7 +147,6 @@ class KizeoCharlaWeeklyReport extends Command
                 ->filter()
                 ->toArray();
 
-            // Agregar email de notificación de Kizeo si está configurado
             $kizeoNotifyEmail = config('services.kizeo.notify_email');
             if ($kizeoNotifyEmail && !in_array($kizeoNotifyEmail, $destinatarios)) {
                 $destinatarios[] = $kizeoNotifyEmail;
@@ -108,7 +159,10 @@ class KizeoCharlaWeeklyReport extends Command
         }
 
         // Enviar email
-        $mailable = new CharlaTrackingReporteMail($stats, $pendientesPorUsuario, $resumenSemanal, $periodo);
+        $mailable = new CharlaTrackingReporteMail(
+            $stats, $pendientesPorUsuario, $resumenSemanal,
+            $topCreadores, $topDestinatarios, $periodo
+        );
 
         foreach ($destinatarios as $dest) {
             try {
@@ -132,5 +186,115 @@ class KizeoCharlaWeeklyReport extends Command
         ]);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Build the report data (used by preview route and email).
+     */
+    public static function buildReportData(): array
+    {
+        $hasta = now();
+        $desde = now()->subWeeks(4)->startOfWeek();
+        $periodo = $desde->format('d/m/Y') . ' al ' . $hasta->format('d/m/Y');
+
+        $total       = KizeoCharlaTracking::enPeriodo($desde, $hasta)->count();
+        $completadas = KizeoCharlaTracking::enPeriodo($desde, $hasta)->completados()->count();
+        $pendientes  = KizeoCharlaTracking::enPeriodo($desde, $hasta)->pendientes()->count();
+        $transferidos = KizeoCharlaTracking::enPeriodo($desde, $hasta)->transferidos()->count();
+        $tasa        = $total > 0 ? round(($completadas / $total) * 100, 1) : 0;
+
+        $promDias = KizeoCharlaTracking::pendientes()
+            ->enPeriodo($desde, $hasta)
+            ->selectRaw('AVG(DATEDIFF(NOW(), COALESCE(fecha_asignacion, fecha_creacion))) as prom')
+            ->value('prom');
+
+        $stats = [
+            'total'             => $total,
+            'completadas'       => $completadas,
+            'pendientes'        => $pendientes,
+            'transferidos'      => $transferidos,
+            'tasa_cumplimiento' => $tasa,
+            'prom_dias'         => $promDias ? round($promDias, 1) : 0,
+        ];
+
+        $pendientesPorUsuario = KizeoCharlaTracking::pendientes()
+            ->enPeriodo($desde, $hasta)
+            ->selectRaw('COALESCE(asignado_a, asignado_por) as nombre, COUNT(*) as cantidad,
+                         MIN(COALESCE(fecha_asignacion, fecha_creacion)) as fecha_min')
+            ->groupBy('nombre')
+            ->orderByDesc('cantidad')
+            ->limit(10)
+            ->get()
+            ->map(function ($row) {
+                $fechaMin = $row->fecha_min ? Carbon::parse($row->fecha_min) : null;
+                return [
+                    'nombre'             => $row->nombre ?? 'Desconocido',
+                    'cantidad'           => $row->cantidad,
+                    'fecha_mas_antigua'  => $fechaMin?->format('d/m/Y'),
+                    'dias_max'           => $fechaMin ? (int) $fechaMin->diffInDays(now()) : 0,
+                ];
+            })
+            ->toArray();
+
+        $resumenSemanal = [];
+        for ($i = 3; $i >= 0; $i--) {
+            $semStart = now()->subWeeks($i)->startOfWeek();
+            $semEnd   = now()->subWeeks($i)->endOfWeek();
+            $semTotal = KizeoCharlaTracking::enPeriodo($semStart, $semEnd)->count();
+            $semComp  = KizeoCharlaTracking::enPeriodo($semStart, $semEnd)->completados()->count();
+            $semTransf = KizeoCharlaTracking::enPeriodo($semStart, $semEnd)->transferidos()->count();
+
+            $resumenSemanal[] = [
+                'semana'       => (int) $semStart->isoWeek(),
+                'anio'         => (int) $semStart->isoWeekYear(),
+                'fecha'        => $semStart->format('d/m'),
+                'total'        => $semTotal,
+                'completadas'  => $semComp,
+                'transferidos' => $semTransf,
+                'tasa'         => $semTotal > 0 ? round(($semComp / $semTotal) * 100, 1) : 0,
+            ];
+        }
+
+        $topCreadores = KizeoCharlaTracking::enPeriodo($desde, $hasta)
+            ->selectRaw("asignado_por as nombre, COUNT(*) as total,
+                         SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
+                         SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) as pendientes")
+            ->groupBy('asignado_por')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get()
+            ->map(fn ($r) => [
+                'nombre'     => $r->nombre ?? 'Desconocido',
+                'total'      => $r->total,
+                'completadas'=> $r->completadas,
+                'pendientes' => $r->pendientes,
+                'tasa'       => $r->total > 0 ? round(($r->completadas / $r->total) * 100) : 0,
+            ])
+            ->toArray();
+
+        $topDestinatarios = KizeoCharlaTracking::enPeriodo($desde, $hasta)
+            ->whereNotNull('asignado_a')
+            ->selectRaw("asignado_a as nombre, COUNT(*) as total,
+                         SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
+                         SUM(CASE WHEN estatus_kizeo='recuperado' THEN 1 ELSE 0 END) as recuperadas,
+                         SUM(CASE WHEN estatus_kizeo='transferido' THEN 1 ELSE 0 END) as sin_descargar")
+            ->groupBy('asignado_a')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get()
+            ->map(fn ($r) => [
+                'nombre'        => $r->nombre ?? 'Desconocido',
+                'total'         => $r->total,
+                'completadas'   => $r->completadas,
+                'recuperadas'   => $r->recuperadas,
+                'sin_descargar' => $r->sin_descargar,
+                'tasa'          => $r->total > 0 ? round(($r->completadas / $r->total) * 100) : 0,
+            ])
+            ->toArray();
+
+        return compact(
+            'stats', 'pendientesPorUsuario', 'resumenSemanal',
+            'topCreadores', 'topDestinatarios', 'periodo'
+        );
     }
 }

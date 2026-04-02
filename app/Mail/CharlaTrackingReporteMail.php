@@ -16,6 +16,8 @@ class CharlaTrackingReporteMail extends Mailable
         public array $stats,
         public array $pendientesPorUsuario,
         public array $resumenSemanal,
+        public array $topCreadores,
+        public array $topDestinatarios,
         public string $periodo,
     ) {}
 
@@ -23,7 +25,7 @@ class CharlaTrackingReporteMail extends Mailable
     {
         $tasa = $this->stats['tasa_cumplimiento'] ?? 0;
         return new Envelope(
-            subject: "📊 Reporte Semanal Charlas SST — Cumplimiento {$tasa}% — {$this->periodo}",
+            subject: "Reporte Semanal Charlas SST — Cumplimiento {$tasa}% — {$this->periodo}",
         );
     }
 

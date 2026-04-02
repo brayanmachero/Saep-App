@@ -1,150 +1,312 @@
-<!DOCTYPE html>
-<html lang="es">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Reporte Semanal Charlas SST</title>
+<!--[if mso]>
+<style type="text/css">
+body, table, td { font-family: Arial, Helvetica, sans-serif !important; }
+</style>
+<![endif]-->
 </head>
-<body style="margin:0;padding:0;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f2f5;color:#1e293b">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f5;padding:24px 0">
-<tr><td align="center">
-<table width="640" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">
+<body style="margin:0; padding:0; background-color:#f4f5f7; font-family:Arial, Helvetica, sans-serif; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
+@php
+    $tasa = $stats['tasa_cumplimiento'] ?? 0;
+    $tasaColor = $tasa >= 80 ? '#15803d' : ($tasa >= 50 ? '#b45309' : '#dc2626');
+    $tasaBg = $tasa >= 80 ? '#ecfdf5' : ($tasa >= 50 ? '#fffbeb' : '#fef2f2');
+@endphp
 
-{{-- Header --}}
-<tr>
-<td style="background:linear-gradient(135deg,#0f172a 0%,#1e40af 100%);padding:28px 32px;text-align:center">
-    <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700;letter-spacing:.3px">
-        📊 Reporte Semanal — Charlas de Seguridad
-    </h1>
-    <p style="margin:6px 0 0;color:#93c5fd;font-size:13px">{{ $periodo }}</p>
-</td>
-</tr>
+<!-- Wrapper -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f5f7;">
+<tr><td align="center" style="padding:24px 12px;">
 
-{{-- KPIs --}}
+<!-- Container 660px -->
+<table role="presentation" width="660" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff; border:1px solid #e2e8f0; max-width:660px;">
+
+{{-- ===== HEADER ===== --}}
 <tr>
-<td style="padding:24px 32px 16px">
-    <table width="100%" cellpadding="0" cellspacing="0">
+<td style="background-color:#0f172a; padding:28px 32px; text-align:center;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr>
-        <td width="25%" style="text-align:center;padding:8px">
-            <div style="background:#f0f9ff;border-radius:10px;padding:14px 8px;border:1px solid #bae6fd">
-                <div style="font-size:28px;font-weight:800;color:#0369a1">{{ $stats['total'] ?? 0 }}</div>
-                <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Total</div>
-            </div>
-        </td>
-        <td width="25%" style="text-align:center;padding:8px">
-            <div style="background:#f0fdf4;border-radius:10px;padding:14px 8px;border:1px solid #bbf7d0">
-                <div style="font-size:28px;font-weight:800;color:#15803d">{{ $stats['completadas'] ?? 0 }}</div>
-                <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Completadas</div>
-            </div>
-        </td>
-        <td width="25%" style="text-align:center;padding:8px">
-            <div style="background:#fef2f2;border-radius:10px;padding:14px 8px;border:1px solid #fecaca">
-                <div style="font-size:28px;font-weight:800;color:#dc2626">{{ $stats['pendientes'] ?? 0 }}</div>
-                <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Pendientes</div>
-            </div>
-        </td>
-        <td width="25%" style="text-align:center;padding:8px">
-            @php
-                $tasa = $stats['tasa_cumplimiento'] ?? 0;
-                $tasaColor = $tasa >= 80 ? '#15803d' : ($tasa >= 50 ? '#d97706' : '#dc2626');
-                $tasaBg = $tasa >= 80 ? '#f0fdf4' : ($tasa >= 50 ? '#fffbeb' : '#fef2f2');
-                $tasaBorder = $tasa >= 80 ? '#bbf7d0' : ($tasa >= 50 ? '#fde68a' : '#fecaca');
-            @endphp
-            <div style="background:{{ $tasaBg }};border-radius:10px;padding:14px 8px;border:1px solid {{ $tasaBorder }}">
-                <div style="font-size:28px;font-weight:800;color:{{ $tasaColor }}">{{ $tasa }}%</div>
-                <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Cumplimiento</div>
-            </div>
+        <td style="text-align:center;">
+            <h1 style="margin:0; color:#ffffff; font-size:20px; font-weight:bold; font-family:Arial, Helvetica, sans-serif; letter-spacing:0.3px;">
+                Reporte Semanal &mdash; Charlas de Seguridad
+            </h1>
+            <p style="margin:8px 0 0; color:#93c5fd; font-size:13px; font-family:Arial, Helvetica, sans-serif;">{{ $periodo }}</p>
         </td>
     </tr>
     </table>
 </td>
 </tr>
 
-{{-- Pendientes por usuario --}}
+{{-- ===== TASA BANNER ===== --}}
+<tr>
+<td style="background-color:{{ $tasaBg }}; padding:16px 32px; text-align:center; border-bottom:2px solid {{ $tasaColor }};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+        <td style="text-align:center;">
+            <span style="font-size:32px; font-weight:bold; color:{{ $tasaColor }}; font-family:Arial, Helvetica, sans-serif;">{{ $tasa }}%</span>
+            <span style="font-size:13px; color:#64748b; font-family:Arial, Helvetica, sans-serif; display:inline; margin-left:8px;">Tasa de Cumplimiento</span>
+        </td>
+    </tr>
+    </table>
+</td>
+</tr>
+
+{{-- ===== KPIs 5 COLUMNAS ===== --}}
+<tr>
+<td style="padding:24px 20px 16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+        {{-- Total --}}
+        <td width="20%" align="center" valign="top" style="padding:0 4px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0; background-color:#f8fafc;">
+            <tr><td style="padding:14px 4px 4px; text-align:center;">
+                <span style="font-size:26px; font-weight:bold; color:#0369a1; font-family:Arial, Helvetica, sans-serif;">{{ $stats['total'] ?? 0 }}</span>
+            </td></tr>
+            <tr><td style="padding:2px 4px 12px; text-align:center;">
+                <span style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif;">Total</span>
+            </td></tr>
+            </table>
+        </td>
+        {{-- Completadas --}}
+        <td width="20%" align="center" valign="top" style="padding:0 4px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #bbf7d0; background-color:#f0fdf4;">
+            <tr><td style="padding:14px 4px 4px; text-align:center;">
+                <span style="font-size:26px; font-weight:bold; color:#15803d; font-family:Arial, Helvetica, sans-serif;">{{ $stats['completadas'] ?? 0 }}</span>
+            </td></tr>
+            <tr><td style="padding:2px 4px 12px; text-align:center;">
+                <span style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif;">Completadas</span>
+            </td></tr>
+            </table>
+        </td>
+        {{-- Transferidos --}}
+        <td width="20%" align="center" valign="top" style="padding:0 4px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #c4b5fd; background-color:#f5f3ff;">
+            <tr><td style="padding:14px 4px 4px; text-align:center;">
+                <span style="font-size:26px; font-weight:bold; color:#7c3aed; font-family:Arial, Helvetica, sans-serif;">{{ $stats['transferidos'] ?? 0 }}</span>
+            </td></tr>
+            <tr><td style="padding:2px 4px 12px; text-align:center;">
+                <span style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif;">Transferidos</span>
+            </td></tr>
+            </table>
+        </td>
+        {{-- Pendientes --}}
+        <td width="20%" align="center" valign="top" style="padding:0 4px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #fecaca; background-color:#fef2f2;">
+            <tr><td style="padding:14px 4px 4px; text-align:center;">
+                <span style="font-size:26px; font-weight:bold; color:#dc2626; font-family:Arial, Helvetica, sans-serif;">{{ $stats['pendientes'] ?? 0 }}</span>
+            </td></tr>
+            <tr><td style="padding:2px 4px 12px; text-align:center;">
+                <span style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif;">Pendientes</span>
+            </td></tr>
+            </table>
+        </td>
+        {{-- Prom Días --}}
+        <td width="20%" align="center" valign="top" style="padding:0 4px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #fed7aa; background-color:#fff7ed;">
+            <tr><td style="padding:14px 4px 4px; text-align:center;">
+                <span style="font-size:26px; font-weight:bold; color:#c2410c; font-family:Arial, Helvetica, sans-serif;">{{ $stats['prom_dias'] ?? 0 }}</span>
+            </td></tr>
+            <tr><td style="padding:2px 4px 12px; text-align:center;">
+                <span style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif;">Prom. D&iacute;as</span>
+            </td></tr>
+            </table>
+        </td>
+    </tr>
+    </table>
+</td>
+</tr>
+
+{{-- ===== TOP CREADORES ===== --}}
+@if(!empty($topCreadores))
+<tr>
+<td style="padding:8px 24px 20px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr><td style="padding:0 0 10px; border-bottom:2px solid #1e40af;">
+        <span style="font-size:14px; font-weight:bold; color:#1e293b; font-family:Arial, Helvetica, sans-serif;">Top Creadores / Asignadores</span>
+    </td></tr>
+    <tr><td style="padding-top:8px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+        {{-- Header --}}
+        <tr style="background-color:#f1f5f9;">
+            <th align="left" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Creador</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Total</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">OK</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Pend.</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Tasa</th>
+        </tr>
+        @foreach($topCreadores as $creador)
+        @php
+            $cTasa = $creador['tasa'] ?? 0;
+            $cColor = $cTasa >= 80 ? '#15803d' : ($cTasa >= 50 ? '#b45309' : '#dc2626');
+        @endphp
+        <tr>
+            <td style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#1e293b; font-weight:bold; font-family:Arial, Helvetica, sans-serif;">{{ $creador['nombre'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#334155; font-family:Arial, Helvetica, sans-serif;">{{ $creador['total'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#15803d; font-weight:bold; font-family:Arial, Helvetica, sans-serif;">{{ $creador['completadas'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#dc2626; font-family:Arial, Helvetica, sans-serif;">{{ $creador['pendientes'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; font-weight:bold; color:{{ $cColor }}; font-family:Arial, Helvetica, sans-serif;">{{ $cTasa }}%</td>
+        </tr>
+        @endforeach
+        </table>
+    </td></tr>
+    </table>
+</td>
+</tr>
+@endif
+
+{{-- ===== TOP DESTINATARIOS ===== --}}
+@if(!empty($topDestinatarios))
+<tr>
+<td style="padding:8px 24px 20px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr><td style="padding:0 0 10px; border-bottom:2px solid #7c3aed;">
+        <span style="font-size:14px; font-weight:bold; color:#1e293b; font-family:Arial, Helvetica, sans-serif;">Destinatarios</span>
+    </td></tr>
+    <tr><td style="padding-top:8px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+        <tr style="background-color:#f1f5f9;">
+            <th align="left" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Destinatario</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Total</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">OK</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Recup.</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Sin desc.</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Tasa</th>
+        </tr>
+        @foreach($topDestinatarios as $dest)
+        @php
+            $dTasa = $dest['tasa'] ?? 0;
+            $dColor = $dTasa >= 80 ? '#15803d' : ($dTasa >= 50 ? '#b45309' : '#dc2626');
+        @endphp
+        <tr>
+            <td style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#1e293b; font-weight:bold; font-family:Arial, Helvetica, sans-serif;">{{ $dest['nombre'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#334155; font-family:Arial, Helvetica, sans-serif;">{{ $dest['total'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#15803d; font-weight:bold; font-family:Arial, Helvetica, sans-serif;">{{ $dest['completadas'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#0369a1; font-family:Arial, Helvetica, sans-serif;">{{ $dest['recuperadas'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#dc2626; font-family:Arial, Helvetica, sans-serif;">{{ $dest['sin_descargar'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; font-weight:bold; color:{{ $dColor }}; font-family:Arial, Helvetica, sans-serif;">{{ $dTasa }}%</td>
+        </tr>
+        @endforeach
+        </table>
+    </td></tr>
+    </table>
+</td>
+</tr>
+@endif
+
+{{-- ===== PENDIENTES POR USUARIO ===== --}}
 @if(!empty($pendientesPorUsuario))
 <tr>
-<td style="padding:8px 32px 16px">
-    <h2 style="font-size:14px;color:#334155;margin:0 0 12px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">
-        ⚠ Usuarios con tareas pendientes
-    </h2>
-    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;border-collapse:collapse">
-    <tr style="background:#f8fafc">
-        <th style="text-align:left;padding:8px 12px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0">Usuario</th>
-        <th style="text-align:center;padding:8px 12px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0">Pendientes</th>
-        <th style="text-align:center;padding:8px 12px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0">Más antigua</th>
-        <th style="text-align:center;padding:8px 12px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0">Días</th>
-    </tr>
-    @foreach($pendientesPorUsuario as $usuario)
-    @php
-        $dias = $usuario['dias_max'] ?? 0;
-        $diasColor = $dias > 14 ? '#dc2626' : ($dias > 7 ? '#d97706' : '#64748b');
-    @endphp
-    <tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600">{{ $usuario['nombre'] }}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center">
-            <span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:700">{{ $usuario['cantidad'] }}</span>
-        </td>
-        <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center;color:#64748b;font-size:12px">{{ $usuario['fecha_mas_antigua'] ?? '-' }}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center;font-weight:700;color:{{ $diasColor }}">{{ $dias }}d</td>
-    </tr>
-    @endforeach
+<td style="padding:8px 24px 20px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr><td style="padding:0 0 10px; border-bottom:2px solid #dc2626;">
+        <span style="font-size:14px; font-weight:bold; color:#1e293b; font-family:Arial, Helvetica, sans-serif;">Usuarios con Tareas Pendientes</span>
+    </td></tr>
+    <tr><td style="padding-top:8px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+        <tr style="background-color:#f1f5f9;">
+            <th align="left" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Responsable</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Pend.</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">M&aacute;s antigua</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">D&iacute;as</th>
+        </tr>
+        @foreach($pendientesPorUsuario as $usuario)
+        @php
+            $dias = $usuario['dias_max'] ?? 0;
+            $diasColor = $dias > 14 ? '#dc2626' : ($dias > 7 ? '#b45309' : '#64748b');
+        @endphp
+        <tr>
+            <td style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; font-weight:bold; color:#1e293b; font-family:Arial, Helvetica, sans-serif;">{{ $usuario['nombre'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; font-weight:bold; color:#dc2626; font-family:Arial, Helvetica, sans-serif;">{{ $usuario['cantidad'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:12px; color:#64748b; font-family:Arial, Helvetica, sans-serif;">{{ $usuario['fecha_mas_antigua'] ?? '-' }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; font-weight:bold; color:{{ $diasColor }}; font-family:Arial, Helvetica, sans-serif;">{{ $dias }}d</td>
+        </tr>
+        @endforeach
+        </table>
+    </td></tr>
     </table>
 </td>
 </tr>
 @endif
 
-{{-- Resumen semanal --}}
+{{-- ===== EVOLUCIÓN SEMANAL ===== --}}
 @if(!empty($resumenSemanal))
 <tr>
-<td style="padding:8px 32px 16px">
-    <h2 style="font-size:14px;color:#334155;margin:0 0 12px;border-bottom:2px solid #e2e8f0;padding-bottom:8px">
-        📈 Evolución últimas semanas
-    </h2>
-    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;border-collapse:collapse">
-    <tr style="background:#f8fafc">
-        <th style="text-align:left;padding:8px 12px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0">Semana</th>
-        <th style="text-align:center;padding:8px 12px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0">Total</th>
-        <th style="text-align:center;padding:8px 12px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0">Completadas</th>
-        <th style="text-align:center;padding:8px 12px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0">Tasa</th>
-    </tr>
-    @foreach($resumenSemanal as $sem)
-    @php
-        $tSem = $sem['tasa'] ?? 0;
-        $tColor = $tSem >= 80 ? '#15803d' : ($tSem >= 50 ? '#d97706' : '#dc2626');
-    @endphp
-    <tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600">S{{ $sem['semana'] }} — {{ $sem['anio'] }}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center">{{ $sem['total'] }}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center;color:#15803d;font-weight:600">{{ $sem['completadas'] }}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center;font-weight:700;color:{{ $tColor }}">{{ $tSem }}%</td>
-    </tr>
-    @endforeach
+<td style="padding:8px 24px 20px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr><td style="padding:0 0 10px; border-bottom:2px solid #0369a1;">
+        <span style="font-size:14px; font-weight:bold; color:#1e293b; font-family:Arial, Helvetica, sans-serif;">Evoluci&oacute;n &Uacute;ltimas Semanas</span>
+    </td></tr>
+    <tr><td style="padding-top:8px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+        <tr style="background-color:#f1f5f9;">
+            <th align="left" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Semana</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Total</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">OK</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Transf.</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Tasa</th>
+        </tr>
+        @foreach($resumenSemanal as $sem)
+        @php
+            $tSem = $sem['tasa'] ?? 0;
+            $tColor = $tSem >= 80 ? '#15803d' : ($tSem >= 50 ? '#b45309' : '#dc2626');
+        @endphp
+        <tr>
+            <td style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; font-weight:bold; color:#1e293b; font-family:Arial, Helvetica, sans-serif;">S{{ $sem['semana'] }} ({{ $sem['fecha'] }})</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#334155; font-family:Arial, Helvetica, sans-serif;">{{ $sem['total'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#15803d; font-weight:bold; font-family:Arial, Helvetica, sans-serif;">{{ $sem['completadas'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#7c3aed; font-family:Arial, Helvetica, sans-serif;">{{ $sem['transferidos'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; font-weight:bold; color:{{ $tColor }}; font-family:Arial, Helvetica, sans-serif;">{{ $tSem }}%</td>
+        </tr>
+        @endforeach
+        </table>
+    </td></tr>
     </table>
 </td>
 </tr>
 @endif
 
-{{-- CTA --}}
+{{-- ===== CTA BUTTON ===== --}}
 <tr>
-<td style="padding:16px 32px;text-align:center">
-    <a href="{{ url('/charla-tracking') }}" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">
-        Ver Dashboard Completo
-    </a>
+<td style="padding:20px 32px; text-align:center;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+    <tr>
+        <td align="center" style="background-color:#1e40af; padding:0;">
+            <!--[if mso]>
+            <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{ url('/charla-tracking') }}" style="height:44px;v-text-anchor:middle;width:240px;" arcsize="14%" strokecolor="#1e40af" fillcolor="#1e40af">
+            <w:anchorlock/>
+            <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;">Ver Dashboard Completo</center>
+            </v:roundrect>
+            <![endif]-->
+            <!--[if !mso]><!-->
+            <a href="{{ url('/charla-tracking') }}" style="display:inline-block; background-color:#1e40af; color:#ffffff; padding:12px 32px; text-decoration:none; font-weight:bold; font-size:14px; font-family:Arial, Helvetica, sans-serif; border-radius:6px; line-height:20px;">
+                Ver Dashboard Completo
+            </a>
+            <!--<![endif]-->
+        </td>
+    </tr>
+    </table>
 </td>
 </tr>
 
-{{-- Footer --}}
+{{-- ===== FOOTER ===== --}}
 <tr>
-<td style="padding:16px 32px 24px;text-align:center;border-top:1px solid #e2e8f0">
-    <p style="margin:0;color:#94a3b8;font-size:11px">
-        Este reporte se genera automáticamente cada lunes a las 08:00 AM.<br>
-        SAEP Platform — Prevención de Riesgos
+<td style="background-color:#f8fafc; padding:20px 32px; text-align:center; border-top:1px solid #e2e8f0;">
+    <p style="margin:0; color:#94a3b8; font-size:11px; font-family:Arial, Helvetica, sans-serif; line-height:18px;">
+        Este reporte se genera autom&aacute;ticamente cada lunes a las 08:00 AM.<br />
+        <strong style="color:#64748b;">SAEP Platform</strong> &mdash; Prevenci&oacute;n de Riesgos
     </p>
 </td>
 </tr>
 
 </table>
+<!-- /Container -->
+
 </td></tr>
 </table>
+<!-- /Wrapper -->
+
 </body>
 </html>

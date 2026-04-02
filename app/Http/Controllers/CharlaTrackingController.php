@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Console\Commands\KizeoCharlaWeeklyReport;
+use App\Mail\CharlaTrackingReporteMail;
 use App\Models\KizeoCharlaTracking;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -168,5 +170,21 @@ class CharlaTrackingController extends Controller
         $output = Artisan::output();
 
         return back()->with('success', 'Sincronización completada. ' . trim($output));
+    }
+
+    public function emailPreview()
+    {
+        $data = KizeoCharlaWeeklyReport::buildReportData();
+
+        $mailable = new CharlaTrackingReporteMail(
+            $data['stats'],
+            $data['pendientesPorUsuario'],
+            $data['resumenSemanal'],
+            $data['topCreadores'],
+            $data['topDestinatarios'],
+            $data['periodo'],
+        );
+
+        return $mailable->render();
     }
 }
