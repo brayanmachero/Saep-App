@@ -171,7 +171,6 @@ Route::middleware('auth')->group(function () {
         Route::get('kizeo/api/record/{formId}/{recordId}', [KizeoDashboardController::class, 'recordDetail'])->name('kizeo.api.record');
         Route::get('charla-tracking', [CharlaTrackingController::class, 'index'])->name('charla-tracking.index');
         Route::get('charla-tracking/email-preview', [CharlaTrackingController::class, 'emailPreview'])->name('charla-tracking.email-preview');
-        Route::get('charla-tracking/debug-data', [CharlaTrackingController::class, 'debugData'])->name('charla-tracking.debug-data');
         Route::post('charla-tracking/sync', [CharlaTrackingController::class, 'sync'])->name('charla-tracking.sync');
     });
 
