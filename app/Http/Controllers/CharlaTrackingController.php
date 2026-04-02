@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\KizeoCharlaTracking;
+use App\Services\KizeoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -123,5 +124,36 @@ class CharlaTrackingController extends Controller
         $output = Artisan::output();
 
         return back()->with('success', 'Sincronización completada. ' . trim($output));
+    }
+
+    /**
+     * Diagnóstico: muestra datos crudos de la API Kizeo para analizar estructura.
+     */
+    public function debug(KizeoService $kizeo)
+    {
+        $formId = config('services.kizeo.charla_form_id');
+
+        // Obtener metadata de los últimos registros
+        $records = $kizeo->getFormData($formId, true);
+        usort($records, fn($a, $b) => ($b['update_time'] ?? '') <=> ($a['update_time'] ?? ''));
+        $sample = array_slice($records, 0, 20);
+
+        // Obtener 3 registros completos (deep) para comparar campos
+        $deep = [];
+        foreach (array_slice($sample, 0, 3) as $r) {
+            try {
+                $full = $kizeo->getRecord($formId, $r['id']);
+                $deep[$r['id']] = $full;
+            } catch (\Exception $e) {
+                $deep[$r['id']] = ['error' => $e->getMessage()];
+            }
+        }
+
+        return response()->json([
+            'form_id'        => $formId,
+            'total_records'  => count($records),
+            'sample_metadata (20 most recent)' => $sample,
+            'deep_records (first 3)' => $deep,
+        ], 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 }
