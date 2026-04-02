@@ -92,14 +92,14 @@ body, table, td { font-family: Arial, Helvetica, sans-serif !important; }
             </td></tr>
             </table>
         </td>
-        {{-- Pendientes --}}
+        {{-- Sin Gestión --}}
         <td width="20%" align="center" valign="top" style="padding:0 4px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #fecaca; background-color:#fef2f2;">
             <tr><td style="padding:14px 4px 4px; text-align:center;">
-                <span style="font-size:26px; font-weight:bold; color:#dc2626; font-family:Arial, Helvetica, sans-serif;">{{ $stats['pendientes'] ?? 0 }}</span>
+                <span style="font-size:26px; font-weight:bold; color:#dc2626; font-family:Arial, Helvetica, sans-serif;">{{ $stats['sin_gestion'] ?? 0 }}</span>
             </td></tr>
             <tr><td style="padding:2px 4px 12px; text-align:center;">
-                <span style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif;">Pendientes</span>
+                <span style="font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif;">Sin Gesti&oacute;n</span>
             </td></tr>
             </table>
         </td>
@@ -134,7 +134,8 @@ body, table, td { font-family: Arial, Helvetica, sans-serif !important; }
             <th align="left" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Creador</th>
             <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Total</th>
             <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">OK</th>
-            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Pend.</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Transf.</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">S/G</th>
             <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Tasa</th>
         </tr>
         @foreach($topCreadores as $creador)
@@ -146,7 +147,8 @@ body, table, td { font-family: Arial, Helvetica, sans-serif !important; }
             <td style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#1e293b; font-weight:bold; font-family:Arial, Helvetica, sans-serif;">{{ $creador['nombre'] }}</td>
             <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#334155; font-family:Arial, Helvetica, sans-serif;">{{ $creador['total'] }}</td>
             <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#15803d; font-weight:bold; font-family:Arial, Helvetica, sans-serif;">{{ $creador['completadas'] }}</td>
-            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#dc2626; font-family:Arial, Helvetica, sans-serif;">{{ $creador['pendientes'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#7c3aed; font-family:Arial, Helvetica, sans-serif;">{{ $creador['transferidas'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#dc2626; font-family:Arial, Helvetica, sans-serif;">{{ $creador['sin_gestion'] }}</td>
             <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; font-weight:bold; color:{{ $cColor }}; font-family:Arial, Helvetica, sans-serif;">{{ $cTasa }}%</td>
         </tr>
         @endforeach
@@ -202,7 +204,7 @@ body, table, td { font-family: Arial, Helvetica, sans-serif !important; }
 <td style="padding:8px 24px 20px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr><td style="padding:0 0 10px; border-bottom:2px solid #dc2626;">
-        <span style="font-size:14px; font-weight:bold; color:#1e293b; font-family:Arial, Helvetica, sans-serif;">Usuarios con Tareas Pendientes</span>
+        <span style="font-size:14px; font-weight:bold; color:#1e293b; font-family:Arial, Helvetica, sans-serif;">Charlas Sin Completar por Responsable</span>
     </td></tr>
     <tr><td style="padding-top:8px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
