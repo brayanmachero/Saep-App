@@ -186,20 +186,22 @@
                     <thead>
                         <tr>
                             <th style="text-align:left">Destinatario</th>
-                            <th style="text-align:center;width:70px">Recibidas</th>
-                            <th style="text-align:center;width:70px">Completadas</th>
-                            <th style="text-align:center;width:70px">Pendientes</th>
-                            <th style="text-align:center;width:60px">Tasa</th>
+                            <th style="text-align:center;width:65px">Recibidas</th>
+                            <th style="text-align:center;width:65px">Completadas</th>
+                            <th style="text-align:center;width:65px" title="Descargadas al dispositivo, en progreso">Recuperadas</th>
+                            <th style="text-align:center;width:65px" title="Aún no descargadas">Sin descargar</th>
+                            <th style="text-align:center;width:55px">Tasa</th>
                         </tr>
                     </thead>
                     <tbody>
                     @foreach($porDestinatario as $d)
                         @php $dTasa = $d->total_recibidas > 0 ? round(($d->completadas / $d->total_recibidas) * 100) : 0; @endphp
                         <tr>
-                            <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ $d->destinatario }}">{{ $d->destinatario }}</td>
+                            <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ $d->destinatario }}">{{ $d->destinatario }}</td>
                             <td style="text-align:center;font-weight:600">{{ $d->total_recibidas }}</td>
                             <td style="text-align:center;color:#15803d">{{ $d->completadas }}</td>
-                            <td style="text-align:center;color:#dc2626">{{ $d->pendientes }}</td>
+                            <td style="text-align:center;color:#2563eb">{{ $d->recuperadas }}</td>
+                            <td style="text-align:center;color:#dc2626">{{ $d->sin_descargar }}</td>
                             <td style="text-align:center">
                                 <span style="font-size:.72rem;padding:2px 6px;border-radius:4px;font-weight:600;
                                     {{ $dTasa >= 80 ? 'background:rgba(34,197,94,.12);color:#15803d' : ($dTasa >= 50 ? 'background:rgba(217,119,6,.12);color:#d97706' : 'background:rgba(239,68,68,.12);color:#dc2626') }}">{{ $dTasa }}%</span>

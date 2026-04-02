@@ -82,7 +82,8 @@ class CharlaTrackingController extends Controller
             ->selectRaw("asignado_a as destinatario,
                          COUNT(*) as total_recibidas,
                          SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
-                         SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) as pendientes")
+                         SUM(CASE WHEN estatus_kizeo='recuperado' THEN 1 ELSE 0 END) as recuperadas,
+                         SUM(CASE WHEN estatus_kizeo='transferido' THEN 1 ELSE 0 END) as sin_descargar")
             ->groupBy('asignado_a')
             ->orderByRaw("SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) DESC")
             ->limit(10)
