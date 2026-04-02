@@ -17,9 +17,6 @@
             </p>
         </div>
         <div style="display:flex;gap:.5rem;align-items:center">
-            <a href="{{ route('charla-tracking.debug') }}" target="_blank" class="btn-ghost" style="padding:.5rem 1rem;font-size:.82rem">
-                <i class="bi bi-bug"></i> Debug API
-            </a>
             <form method="POST" action="{{ route('charla-tracking.sync') }}" id="sync-form">
                 @csrf
                 <button type="submit" class="btn-premium" id="sync-btn" style="padding:.5rem 1rem;font-size:.82rem">
@@ -199,12 +196,12 @@
             <table class="glass-table">
                 <thead>
                     <tr>
-                        <th>ID Kizeo</th>
+                        <th>Título</th>
                         <th>Asignado Por</th>
                         <th>Destinatario</th>
+                        <th>Lugar</th>
                         <th style="text-align:center">Fecha Creación</th>
                         <th style="text-align:center">Días Pendiente</th>
-                        <th style="text-align:center">Estado</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -212,20 +209,21 @@
                     @php
                         $dias = $item->fecha_creacion ? (int) $item->fecha_creacion->diffInDays(now()) : 0;
                         $diasStyle = $dias > 14 ? 'color:#dc2626;font-weight:700' : ($dias > 7 ? 'color:#d97706;font-weight:600' : 'color:var(--text-muted)');
+                        $meta = $item->metadata ?? [];
                     @endphp
                     <tr>
-                        <td style="font-family:monospace;font-size:.78rem">{{ $item->kizeo_data_id }}</td>
+                        <td style="font-size:.82rem;max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ $meta['titulo'] ?? '' }}">
+                            {{ $meta['titulo'] ?? '—' }}
+                        </td>
                         <td>{{ $item->asignado_por ?? '-' }}</td>
                         <td>{{ $item->asignado_a ?? '—' }}</td>
+                        <td style="font-size:.8rem;color:var(--text-muted)">{{ $meta['lugar'] ?? '—' }}</td>
                         <td style="text-align:center;font-size:.8rem">{{ $item->fecha_creacion?->format('d/m/Y H:i') ?? '-' }}</td>
                         <td style="text-align:center;{{ $diasStyle }}">{{ $dias }}d</td>
-                        <td style="text-align:center">
-                            <span class="badge danger" style="font-size:.7rem">Pendiente</span>
-                        </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" style="text-align:center;color:var(--text-muted);padding:2rem">
+                        <td colspan="7" style="text-align:center;color:var(--text-muted);padding:2rem">
                             No hay registros pendientes en el período seleccionado.
                         </td>
                     </tr>

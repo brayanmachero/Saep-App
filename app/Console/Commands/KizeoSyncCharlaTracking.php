@@ -11,8 +11,7 @@ use Illuminate\Support\Facades\Log;
 class KizeoSyncCharlaTracking extends Command
 {
     protected $signature = 'kizeo:sync-charla-tracking
-                            {--months=6 : Meses de historial a sincronizar}
-                            {--force : Forzar refresh de caché Kizeo}';
+                            {--months=6 : Meses de historial a sincronizar}';
 
     protected $description = 'Sincroniza registros de Charlas de Seguridad desde Kizeo API para seguimiento de cumplimiento';
 
@@ -26,14 +25,14 @@ class KizeoSyncCharlaTracking extends Command
         }
 
         $months = (int) $this->option('months');
-        $force  = (bool) $this->option('force');
 
         $this->info("Sincronizando charlas (form {$formId}) — últimos {$months} meses...");
 
         try {
-            // 1. Obtener registros desde Kizeo
-            $records = $kizeo->getFormData($formId, $force);
-            $userDic = $kizeo->getUserDictionary();
+            // 1. Obtener registros desde Kizeo usando data/advanced
+            //    que incluye _answer_time, _direction, _recipient_id, _recipient_name
+            $desde = now()->subMonths($months)->startOfDay()->format('Y-m-d H:i:s');
+            $records = $this->fetchAllAdvanced($kizeo, $formId, $desde);
 
             if (empty($records)) {
                 $this->warn('No se encontraron registros en Kizeo.');
@@ -42,35 +41,33 @@ class KizeoSyncCharlaTracking extends Command
 
             $this->info('Registros obtenidos de Kizeo: ' . count($records));
 
-            // 2. Filtrar por rango de fechas
-            $desde = now()->subMonths($months)->startOfDay()->toDateTimeString();
-            $filtered = array_filter($records, function ($r) use ($desde) {
-                $date = $r['update_time'] ?? $r['create_time'] ?? '';
-                return $date >= $desde;
-            });
-
-            $this->info('Registros en período: ' . count($filtered));
-
-            // 3. Procesar y upsert cada registro
+            // 2. Procesar y upsert cada registro
             $created   = 0;
             $updated   = 0;
             $completed = 0;
             $pending   = 0;
 
-            foreach ($filtered as $record) {
-                $dataId      = (string) ($record['id'] ?? '');
-                $userId      = (string) ($record['user_id'] ?? '');
-                $userName    = $userDic[$userId] ?? ($record['user_name'] ?? null) ?? "Usuario-{$userId}";
-                $createTime  = $record['create_time'] ?? null;
-                $answerTime  = $record['answer_time'] ?? null;
-                $updateTime  = $record['update_time'] ?? null;
+            foreach ($records as $record) {
+                $dataId       = (string) ($record['_id'] ?? '');
+                $userId       = (string) ($record['_user_id'] ?? '');
+                $userName     = $record['_user_name'] ?? "Usuario-{$userId}";
+                $createTime   = $record['_create_time'] ?? null;
+                $answerTime   = $record['_answer_time'] ?? '';
+                $updateTime   = $record['_update_time'] ?? null;
+                $direction    = $record['_direction'] ?? null;
+                $recipientId  = $record['_recipient_id'] ?? null;
+                $recipientNm  = $record['_recipient_name'] ?? null;
+                $originAnswer = $record['_origin_answer'] ?? null;
+                $history      = $record['_history'] ?? '';
+                $pullTime     = $record['_pull_time'] ?? '';
 
                 if (!$dataId) continue;
 
-                // Determinar estado basado en answer_time
-                $estado = (!empty($answerTime) && $answerTime !== 'null')
-                    ? 'completado'
-                    : 'pendiente';
+                // === Determinar estado ===
+                // Completado: tiene _answer_time con valor real
+                // Pendiente: _answer_time vacío (fue transferido/asignado pero no completado)
+                $hasAnswer = !empty(trim($answerTime));
+                $estado = $hasAnswer ? 'completado' : 'pendiente';
 
                 if ($estado === 'completado') {
                     $completed++;
@@ -84,18 +81,13 @@ class KizeoSyncCharlaTracking extends Command
                 $semana   = (int) $carbon->isoWeek();
                 $anio     = (int) $carbon->isoWeekYear();
 
-                // Determinar asignado_a (destinatario)
-                // Kizeo puede incluir update_user_id cuando hay transferencia
-                $updateUserId   = (string) ($record['update_user_id'] ?? '');
-                $updateUserName = $updateUserId ? ($userDic[$updateUserId] ?? null) : null;
+                // Determinar asignado_a (destinatario del transfer/push)
+                $asignadoA   = $recipientNm ?: null;
+                $asignadoAId = $recipientId ? (string) $recipientId : null;
 
-                // Si update_user_id es distinto de user_id, puede ser el destinatario
-                $asignadoA   = null;
-                $asignadoAId = null;
-                if ($updateUserId && $updateUserId !== $userId) {
-                    $asignadoA   = $updateUserName;
-                    $asignadoAId = $updateUserId;
-                }
+                // Título de la charla
+                $titulo = $record['titulo_actividad'] ?? '';
+                $lugar  = $record['lugar_de_la_capacitacion'] ?? '';
 
                 $existing = KizeoCharlaTracking::where('kizeo_data_id', $dataId)->first();
 
@@ -107,12 +99,16 @@ class KizeoSyncCharlaTracking extends Command
                     'asignado_a_id'   => $asignadoAId,
                     'estado'          => $estado,
                     'fecha_creacion'  => $createTime,
-                    'fecha_respuesta' => ($estado === 'completado') ? ($answerTime ?? $updateTime) : null,
+                    'fecha_respuesta' => $hasAnswer ? $answerTime : null,
                     'semana'          => $semana,
                     'anio'            => $anio,
                     'metadata'        => [
-                        'update_time'    => $updateTime,
-                        'update_user_id' => $updateUserId ?: null,
+                        'direction'     => $direction,
+                        'origin_answer' => $originAnswer,
+                        'history'       => $history,
+                        'pull_time'     => $pullTime,
+                        'titulo'        => $titulo,
+                        'lugar'         => $lugar,
                     ],
                 ];
 
@@ -135,7 +131,7 @@ class KizeoSyncCharlaTracking extends Command
 
             Log::info('kizeo:sync-charla-tracking completado', [
                 'form_id'   => $formId,
-                'total'     => count($filtered),
+                'total'     => count($records),
                 'created'   => $created,
                 'updated'   => $updated,
                 'completed' => $completed,
@@ -152,5 +148,36 @@ class KizeoSyncCharlaTracking extends Command
             ]);
             return self::FAILURE;
         }
+    }
+
+    /**
+     * Obtiene TODOS los registros usando data/advanced con paginación.
+     * Incluye campos _answer_time, _direction, _recipient_id que data/all no tiene.
+     */
+    private function fetchAllAdvanced(KizeoService $kizeo, string $formId, string $desde): array
+    {
+        $allRecords = [];
+        $limit = 500;
+        $offset = 0;
+
+        do {
+            $response = $kizeo->rawPost("forms/{$formId}/data/advanced", [
+                'filters' => [
+                    ['type' => 'OR', 'col' => '_create_time', 'op' => 'ge', 'val' => $desde],
+                ],
+                'order' => [['col' => '_create_time', 'type' => 'desc']],
+                'limit' => $limit,
+                'offset' => $offset,
+            ]);
+
+            $data = $response['data'] ?? [];
+            $count = count($data);
+            $allRecords = array_merge($allRecords, $data);
+            $offset += $limit;
+
+            $this->line("  Batch: +{$count} registros (offset {$offset})...");
+        } while ($count >= $limit);
+
+        return $allRecords;
     }
 }

@@ -3,11 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\KizeoCharlaTracking;
-use App\Services\KizeoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\DB;
 
 class CharlaTrackingController extends Controller
 {
@@ -120,103 +118,10 @@ class CharlaTrackingController extends Controller
      */
     public function sync()
     {
-        Artisan::call('kizeo:sync-charla-tracking', ['--months' => 6, '--force' => true]);
+        Artisan::call('kizeo:sync-charla-tracking', ['--months' => 6]);
         $output = Artisan::output();
 
         return back()->with('success', 'Sincronización completada. ' . trim($output));
     }
 
-    /**
-     * Diagnóstico: explora TODOS los endpoints Kizeo para encontrar datos de asignaciones.
-     */
-    public function debug(KizeoService $kizeo)
-    {
-        $formId = config('services.kizeo.charla_form_id');
-        $results = ['form_id' => $formId];
-
-        // 1. data/all — registros enviados (metadata ligera)
-        try {
-            $allData = $kizeo->getFormData($formId, true);
-            usort($allData, fn($a, $b) => ($b['update_time'] ?? '') <=> ($a['update_time'] ?? ''));
-            $results['1_data_all'] = [
-                'total' => count($allData),
-                'fields_available' => !empty($allData) ? array_keys($allData[0]) : [],
-                'sample_5' => array_slice($allData, 0, 5),
-            ];
-        } catch (\Exception $e) {
-            $results['1_data_all'] = ['error' => $e->getMessage()];
-        }
-
-        // 2. data/advanced — filtrado avanzado con distintos filtros
-        try {
-            $advanced = $kizeo->rawPost("forms/{$formId}/data/advanced", [
-                'filters' => [],
-                'order' => [['col' => '_update_time', 'type' => 'desc']],
-            ]);
-            $results['2_data_advanced'] = [
-                'total' => count($advanced['data'] ?? []),
-                'fields_available' => !empty($advanced['data']) ? array_keys($advanced['data'][0]) : [],
-                'sample_5' => array_slice($advanced['data'] ?? [], 0, 5),
-            ];
-        } catch (\Exception $e) {
-            $results['2_data_advanced'] = ['error' => $e->getMessage()];
-        }
-
-        // 3. data/unread — registros no leídos por acción
-        foreach (['update', 'push', 'read', 'new'] as $action) {
-            try {
-                $unread = $kizeo->rawGet("forms/{$formId}/data/unread/{$action}/50");
-                $results["3_unread_{$action}"] = [
-                    'total' => count($unread['data'] ?? $unread),
-                    'fields_available' => !empty($unread['data']) ? array_keys($unread['data'][0]) : [],
-                    'sample_3' => array_slice($unread['data'] ?? (is_array($unread) ? $unread : []), 0, 3),
-                    'raw_keys' => array_keys($unread),
-                ];
-            } catch (\Exception $e) {
-                $results["3_unread_{$action}"] = ['error' => $e->getMessage()];
-            }
-        }
-
-        // 4. push/inbox — formularios push enviados pendientes
-        try {
-            $pushInbox = $kizeo->rawGet("forms/push/inbox");
-            $results['4_push_inbox'] = $pushInbox;
-        } catch (\Exception $e) {
-            $results['4_push_inbox'] = ['error' => $e->getMessage()];
-        }
-
-        // 5. 2 registros deep completos — comparar campos
-        $deep = [];
-        foreach (array_slice($allData ?? [], 0, 2) as $r) {
-            try {
-                $full = $kizeo->getRecord($formId, $r['id']);
-                $deep[$r['id']] = [
-                    'top_level_keys' => $full ? array_keys($full) : [],
-                    'full_data'      => $full,
-                ];
-            } catch (\Exception $e) {
-                $deep[$r['id'] ?? 'err'] = ['error' => $e->getMessage()];
-            }
-        }
-        $results['5_deep_records'] = $deep;
-
-        // 6. Form definition — ver campos del formulario
-        try {
-            $formDef = $kizeo->rawGet("forms/{$formId}");
-            $results['6_form_definition'] = [
-                'name' => $formDef['form']['name'] ?? null,
-                'fields' => array_map(function($f) {
-                    return [
-                        'caption' => $f['caption'] ?? null,
-                        'type' => $f['type'] ?? null,
-                        'word' => $f['word'] ?? null,
-                    ];
-                }, $formDef['form']['fields'] ?? []),
-            ];
-        } catch (\Exception $e) {
-            $results['6_form_definition'] = ['error' => $e->getMessage()];
-        }
-
-        return response()->json($results, 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    }
 }
