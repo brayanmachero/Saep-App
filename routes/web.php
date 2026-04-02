@@ -15,6 +15,7 @@ use App\Http\Controllers\DocumentacionController;
 use App\Http\Controllers\ExportController;
 use App\Http\Controllers\FormularioController;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\CharlaTrackingController;
 use App\Http\Controllers\KizeoDashboardController;
 use App\Http\Controllers\KizeoWebhookController;
 use App\Http\Controllers\LeyKarinController;
@@ -168,6 +169,7 @@ Route::middleware('auth')->group(function () {
         Route::get('kizeo/api/deep/{formId}', [KizeoDashboardController::class, 'deepData'])->name('kizeo.api.deep');
         Route::get('kizeo/api/media/{formId}/{recordId}/{mediaId}', [KizeoDashboardController::class, 'media'])->name('kizeo.api.media');
         Route::get('kizeo/api/record/{formId}/{recordId}', [KizeoDashboardController::class, 'recordDetail'])->name('kizeo.api.record');
+        Route::get('charla-tracking', [CharlaTrackingController::class, 'index'])->name('charla-tracking.index');
     });
 
     // --- SST: INSPECCIONES ---

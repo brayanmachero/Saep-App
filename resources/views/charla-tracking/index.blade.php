@@ -1,0 +1,413 @@
+@extends('layouts.app')
+@section('title', 'Seguimiento Charlas SST')
+@section('content')
+<div class="page-container">
+
+    {{-- Header --}}
+    <div class="page-header">
+        <div>
+            <h2 class="page-heading"><i class="bi bi-clipboard-data" style="color:var(--accent-color)"></i> Seguimiento Charlas de Seguridad</h2>
+            <p class="page-subheading">
+                Control de cumplimiento de charlas asignadas desde Kizeo Forms
+                @if($ultimaSync)
+                    <span style="font-size:.72rem;color:var(--text-muted);margin-left:.5rem">
+                        <i class="bi bi-arrow-repeat"></i> Última sincronización: {{ \Carbon\Carbon::parse($ultimaSync)->diffForHumans() }}
+                    </span>
+                @endif
+            </p>
+        </div>
+    </div>
+
+    {{-- Filtros --}}
+    <form method="GET" action="{{ route('charla-tracking.index') }}" class="filter-form">
+        <div class="filter-group">
+            <label>Desde</label>
+            <input type="date" name="desde" value="{{ $desde }}" class="form-input">
+        </div>
+        <div class="filter-group">
+            <label>Hasta</label>
+            <input type="date" name="hasta" value="{{ $hasta }}" class="form-input">
+        </div>
+        <div class="filter-group">
+            <label>Buscar</label>
+            <input type="text" name="buscar" value="{{ $buscar }}" placeholder="Usuario, ID..." class="form-input">
+        </div>
+        <div class="filter-group" style="align-self:flex-end;display:flex;gap:.5rem">
+            <button type="submit" class="btn-secondary"><i class="bi bi-funnel-fill"></i> Filtrar</button>
+            <a href="{{ route('charla-tracking.index') }}" class="btn-ghost"><i class="bi bi-x-circle"></i></a>
+        </div>
+    </form>
+
+    {{-- KPIs --}}
+    <div class="stats-grid" style="margin-bottom:1.5rem">
+        <div class="stat-item">
+            <div class="stat-icon" style="background:rgba(59,130,246,.12);color:#3b82f6">
+                <i class="bi bi-files"></i>
+            </div>
+            <div>
+                <div class="stat-value">{{ number_format($total) }}</div>
+                <div class="stat-label">Total Registros</div>
+            </div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-icon" style="background:rgba(34,197,94,.12);color:#22c55e">
+                <i class="bi bi-check-circle-fill"></i>
+            </div>
+            <div>
+                <div class="stat-value" style="color:#15803d">{{ number_format($completadas) }}</div>
+                <div class="stat-label">Completadas</div>
+            </div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-icon" style="background:rgba(239,68,68,.12);color:#ef4444">
+                <i class="bi bi-exclamation-circle-fill"></i>
+            </div>
+            <div>
+                <div class="stat-value" style="color:#dc2626">{{ number_format($pendientes) }}</div>
+                <div class="stat-label">Pendientes</div>
+            </div>
+        </div>
+        <div class="stat-item">
+            @php
+                $tasaColor = $tasa >= 80 ? '#15803d' : ($tasa >= 50 ? '#d97706' : '#dc2626');
+            @endphp
+            <div class="stat-icon" style="background:rgba(139,92,246,.12);color:#8b5cf6">
+                <i class="bi bi-percent"></i>
+            </div>
+            <div>
+                <div class="stat-value" style="color:{{ $tasaColor }}">{{ $tasa }}%</div>
+                <div class="stat-label">Tasa de Cumplimiento</div>
+            </div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-icon" style="background:rgba(249,115,22,.12);color:#f97316">
+                <i class="bi bi-clock-history"></i>
+            </div>
+            <div>
+                <div class="stat-value">{{ $promDias }}</div>
+                <div class="stat-label">Prom. Días Pendiente</div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Gráficos fila 1 --}}
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1.5rem">
+        {{-- Tendencia semanal --}}
+        <div class="glass-card" style="padding:1rem 1.25rem">
+            <h3 style="font-size:.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:1rem">
+                <i class="bi bi-graph-up"></i> Tendencia Semanal
+            </h3>
+            <div style="position:relative;height:280px">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+
+        {{-- Distribución estado --}}
+        <div class="glass-card" style="padding:1rem 1.25rem">
+            <h3 style="font-size:.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:1rem">
+                <i class="bi bi-pie-chart-fill"></i> Estado General
+            </h3>
+            <div style="position:relative;height:280px;display:flex;align-items:center;justify-content:center">
+                <canvas id="donutChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    {{-- Gráficos fila 2 --}}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+        {{-- Cumplimiento por usuario --}}
+        <div class="glass-card" style="padding:1rem 1.25rem">
+            <h3 style="font-size:.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:1rem">
+                <i class="bi bi-people-fill"></i> Cumplimiento por Usuario
+            </h3>
+            <div style="position:relative;height:{{ max(250, count($porUsuario) * 32) }}px">
+                <canvas id="userChart"></canvas>
+            </div>
+        </div>
+
+        {{-- Top pendientes --}}
+        <div class="glass-card" style="padding:1rem 1.25rem;max-height:500px;display:flex;flex-direction:column">
+            <h3 style="font-size:.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:.75rem">
+                <i class="bi bi-exclamation-triangle-fill" style="color:#f97316"></i> Usuarios con Mayor Retraso
+            </h3>
+            <div class="glass-table-container" style="flex:1;overflow-y:auto">
+                <table class="glass-table" style="font-size:.8rem">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left">Usuario</th>
+                            <th style="text-align:center;width:80px">Pendientes</th>
+                            <th style="text-align:center;width:120px">Más Antigua</th>
+                            <th style="text-align:center;width:80px">Días</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @forelse($topPendientes as $tp)
+                        @php
+                            $diasMax = $tp->dias_max ?? 0;
+                            $diasClass = $diasMax > 14 ? 'color:#dc2626;font-weight:700' : ($diasMax > 7 ? 'color:#d97706;font-weight:600' : '');
+                        @endphp
+                        <tr>
+                            <td>{{ $tp->usuario ?? 'Desconocido' }}</td>
+                            <td style="text-align:center">
+                                <span class="badge danger" style="font-size:.72rem">{{ $tp->cantidad }}</span>
+                            </td>
+                            <td style="text-align:center;font-size:.75rem;color:var(--text-muted)">
+                                {{ $tp->mas_antigua ? \Carbon\Carbon::parse($tp->mas_antigua)->format('d/m/Y') : '-' }}
+                            </td>
+                            <td style="text-align:center;{{ $diasClass }}">{{ $diasMax }}d</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem">
+                                <i class="bi bi-check-circle-fill" style="font-size:1.5rem;color:#22c55e;display:block;margin-bottom:.3rem"></i>
+                                Sin pendientes — ¡Todo al día!
+                            </td>
+                        </tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {{-- Tabla de registros pendientes --}}
+    <div class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1.5rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+            <h3 style="font-size:.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin:0">
+                <i class="bi bi-list-check"></i> Detalle de Registros Pendientes
+                <span class="badge danger" style="font-size:.65rem;margin-left:.3rem;vertical-align:middle">{{ $pendientesList->total() }}</span>
+            </h3>
+        </div>
+        <div class="glass-table-container">
+            <table class="glass-table">
+                <thead>
+                    <tr>
+                        <th>ID Kizeo</th>
+                        <th>Asignado Por</th>
+                        <th>Destinatario</th>
+                        <th style="text-align:center">Fecha Creación</th>
+                        <th style="text-align:center">Días Pendiente</th>
+                        <th style="text-align:center">Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @forelse($pendientesList as $item)
+                    @php
+                        $dias = $item->fecha_creacion ? (int) $item->fecha_creacion->diffInDays(now()) : 0;
+                        $diasStyle = $dias > 14 ? 'color:#dc2626;font-weight:700' : ($dias > 7 ? 'color:#d97706;font-weight:600' : 'color:var(--text-muted)');
+                    @endphp
+                    <tr>
+                        <td style="font-family:monospace;font-size:.78rem">{{ $item->kizeo_data_id }}</td>
+                        <td>{{ $item->asignado_por ?? '-' }}</td>
+                        <td>{{ $item->asignado_a ?? '—' }}</td>
+                        <td style="text-align:center;font-size:.8rem">{{ $item->fecha_creacion?->format('d/m/Y H:i') ?? '-' }}</td>
+                        <td style="text-align:center;{{ $diasStyle }}">{{ $dias }}d</td>
+                        <td style="text-align:center">
+                            <span class="badge danger" style="font-size:.7rem">Pendiente</span>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="6" style="text-align:center;color:var(--text-muted);padding:2rem">
+                            No hay registros pendientes en el período seleccionado.
+                        </td>
+                    </tr>
+                @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        {{-- Paginación --}}
+        @if($pendientesList->hasPages())
+        <div style="margin-top:1rem;display:flex;justify-content:center">
+            {{ $pendientesList->links() }}
+        </div>
+        @endif
+    </div>
+
+</div>
+
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+    const isDark = document.documentElement.classList.contains('dark') ||
+                   document.body.classList.contains('dark-mode');
+    const gridColor = isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)';
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+
+    Chart.defaults.color = textColor;
+    Chart.defaults.font.size = 11;
+    Chart.defaults.font.family = "'Segoe UI','Helvetica Neue',sans-serif";
+
+    // === 1. Tendencia Semanal ===
+    const trendData = @json($tendencia);
+    new Chart(document.getElementById('trendChart'), {
+        type: 'line',
+        data: {
+            labels: trendData.map(d => d.label),
+            datasets: [
+                {
+                    label: 'Completadas',
+                    data: trendData.map(d => d.completadas),
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34,197,94,.1)',
+                    fill: true,
+                    tension: .3,
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#22c55e'
+                },
+                {
+                    label: 'Pendientes',
+                    data: trendData.map(d => d.pendientes),
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239,68,68,.1)',
+                    fill: true,
+                    tension: .3,
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#ef4444'
+                },
+                {
+                    label: 'Tasa %',
+                    data: trendData.map(d => d.tasa),
+                    borderColor: '#8b5cf6',
+                    borderDash: [5, 3],
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#8b5cf6',
+                    yAxisID: 'y1',
+                    fill: false,
+                    tension: .3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16 } },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            if (ctx.dataset.yAxisID === 'y1') return `Tasa: ${ctx.raw}%`;
+                            return `${ctx.dataset.label}: ${ctx.raw}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y:  { beginAtZero: true, grid: { color: gridColor }, ticks: { precision: 0 } },
+                y1: { position: 'right', beginAtZero: true, max: 100, grid: { display: false },
+                      ticks: { callback: v => v + '%' } },
+                x:  { grid: { display: false } }
+            }
+        }
+    });
+
+    // === 2. Doughnut Estado ===
+    const dist = @json($distribucion);
+    new Chart(document.getElementById('donutChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Completadas', 'Pendientes'],
+            datasets: [{
+                data: [dist.completadas, dist.pendientes],
+                backgroundColor: ['#22c55e', '#ef4444'],
+                borderWidth: 0,
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16 } },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            const total = ctx.dataset.data.reduce((a,b) => a+b, 0);
+                            const pct = total > 0 ? ((ctx.raw / total) * 100).toFixed(1) : 0;
+                            return `${ctx.label}: ${ctx.raw} (${pct}%)`;
+                        }
+                    }
+                }
+            }
+        },
+        plugins: [{
+            id: 'centerText',
+            afterDraw(chart) {
+                const { ctx, width, height } = chart;
+                const total = chart.data.datasets[0].data.reduce((a,b) => a+b, 0);
+                const completed = chart.data.datasets[0].data[0];
+                const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = 'bold 28px Segoe UI';
+                ctx.fillStyle = pct >= 80 ? '#15803d' : (pct >= 50 ? '#d97706' : '#dc2626');
+                ctx.fillText(pct + '%', width / 2, height / 2 - 6);
+                ctx.font = '11px Segoe UI';
+                ctx.fillStyle = textColor;
+                ctx.fillText('Cumplimiento', width / 2, height / 2 + 16);
+                ctx.restore();
+            }
+        }]
+    });
+
+    // === 3. Cumplimiento por Usuario (horizontal bar) ===
+    const userData = @json($porUsuario);
+    new Chart(document.getElementById('userChart'), {
+        type: 'bar',
+        data: {
+            labels: userData.map(d => {
+                const name = d.usuario || 'Desconocido';
+                return name.length > 25 ? name.substring(0, 22) + '...' : name;
+            }),
+            datasets: [
+                {
+                    label: 'Completadas',
+                    data: userData.map(d => d.completadas),
+                    backgroundColor: '#22c55e',
+                    borderRadius: 4,
+                    barPercentage: .7
+                },
+                {
+                    label: 'Pendientes',
+                    data: userData.map(d => d.pendientes),
+                    backgroundColor: '#ef4444',
+                    borderRadius: 4,
+                    barPercentage: .7
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16 } }
+            },
+            scales: {
+                x: { stacked: true, beginAtZero: true, grid: { color: gridColor }, ticks: { precision: 0 } },
+                y: { stacked: true, grid: { display: false } }
+            }
+        }
+    });
+});
+</script>
+@endpush
+
+@push('styles')
+<style>
+@media (max-width: 900px) {
+    .page-container > div[style*="grid-template-columns: 2fr"] { grid-template-columns: 1fr !important; }
+    .page-container > div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+}
+</style>
+@endpush
+@endsection

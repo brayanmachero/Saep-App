@@ -65,9 +65,13 @@
             @if(auth()->user()->tieneAcceso('kizeo_analytics') || auth()->user()->tieneAcceso('charlas') || auth()->user()->tieneAcceso('carta_gantt') || auth()->user()->tieneAcceso('visitas_sst') || auth()->user()->tieneAcceso('auditorias_sst') || auth()->user()->tieneAcceso('accidentes_sst') || auth()->user()->tieneAcceso('ley_karin') || auth()->user()->tieneAcceso('ley_karin_denuncia'))
             <div class="nav-section-label">Prevención SST</div>
             @if(auth()->user()->tieneAcceso('kizeo_analytics'))
-            <a href="{{ route('kizeo.dashboard') }}" class="nav-item {{ request()->routeIs('kizeo.*') ? 'active' : '' }}">
+            <a href="{{ route('kizeo.dashboard') }}" class="nav-item {{ request()->routeIs('kizeo.*') && !request()->routeIs('charla-tracking.*') ? 'active' : '' }}">
                 <i class="bi bi-activity"></i>
                 <span>Kizeo Analytics</span>
+            </a>
+            <a href="{{ route('charla-tracking.index') }}" class="nav-item {{ request()->routeIs('charla-tracking.*') ? 'active' : '' }}">
+                <i class="bi bi-clipboard-data"></i>
+                <span>Seguimiento Charlas</span>
             </a>
             @endif
             @if(auth()->user()->tieneAcceso('charlas'))
