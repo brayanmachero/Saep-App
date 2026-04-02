@@ -119,75 +119,39 @@ body, table, td { font-family: Arial, Helvetica, sans-serif !important; }
 </td>
 </tr>
 
-{{-- ===== TOP CREADORES ===== --}}
-@if(!empty($topCreadores))
-<tr>
-<td style="padding:8px 24px 20px;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td style="padding:0 0 10px; border-bottom:2px solid #1e40af;">
-        <span style="font-size:14px; font-weight:bold; color:#1e293b; font-family:Arial, Helvetica, sans-serif;">Top Creadores / Asignadores</span>
-    </td></tr>
-    <tr><td style="padding-top:8px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-        {{-- Header --}}
-        <tr style="background-color:#f1f5f9;">
-            <th align="left" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Creador</th>
-            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Total</th>
-            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">OK</th>
-            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Transf.</th>
-            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">S/G</th>
-            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Tasa</th>
-        </tr>
-        @foreach($topCreadores as $creador)
-        @php
-            $cTasa = $creador['tasa'] ?? 0;
-            $cColor = $cTasa >= 80 ? '#15803d' : ($cTasa >= 50 ? '#b45309' : '#dc2626');
-        @endphp
-        <tr>
-            <td style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#1e293b; font-weight:bold; font-family:Arial, Helvetica, sans-serif;">{{ $creador['nombre'] }}</td>
-            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#334155; font-family:Arial, Helvetica, sans-serif;">{{ $creador['total'] }}</td>
-            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#15803d; font-weight:bold; font-family:Arial, Helvetica, sans-serif;">{{ $creador['completadas'] }}</td>
-            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#7c3aed; font-family:Arial, Helvetica, sans-serif;">{{ $creador['transferidas'] }}</td>
-            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#dc2626; font-family:Arial, Helvetica, sans-serif;">{{ $creador['sin_gestion'] }}</td>
-            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; font-weight:bold; color:{{ $cColor }}; font-family:Arial, Helvetica, sans-serif;">{{ $cTasa }}%</td>
-        </tr>
-        @endforeach
-        </table>
-    </td></tr>
-    </table>
-</td>
-</tr>
-@endif
-
-{{-- ===== TOP DESTINATARIOS ===== --}}
+{{-- ===== CUMPLIMIENTO POR DESTINATARIO (secci\u00f3n principal) ===== --}}
 @if(!empty($topDestinatarios))
 <tr>
 <td style="padding:8px 24px 20px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td style="padding:0 0 10px; border-bottom:2px solid #7c3aed;">
-        <span style="font-size:14px; font-weight:bold; color:#1e293b; font-family:Arial, Helvetica, sans-serif;">Destinatarios</span>
+    <tr><td style="padding:0 0 10px; border-bottom:2px solid #dc2626;">
+        <span style="font-size:14px; font-weight:bold; color:#1e293b; font-family:Arial, Helvetica, sans-serif;">Formularios Pendientes por Responsable</span>
     </td></tr>
     <tr><td style="padding-top:8px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
         <tr style="background-color:#f1f5f9;">
-            <th align="left" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Destinatario</th>
-            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Total</th>
+            <th align="left" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Responsable</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Pend.</th>
             <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">OK</th>
+            <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Total</th>
             <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Recup.</th>
             <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Sin desc.</th>
             <th align="center" style="padding:8px 10px; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-family:Arial, Helvetica, sans-serif; border-bottom:1px solid #e2e8f0; font-weight:bold;">Tasa</th>
         </tr>
         @foreach($topDestinatarios as $dest)
         @php
+            $dPend = $dest['pendientes'] ?? 0;
             $dTasa = $dest['tasa'] ?? 0;
             $dColor = $dTasa >= 80 ? '#15803d' : ($dTasa >= 50 ? '#b45309' : '#dc2626');
+            $rowBg = $dPend > 0 ? '#fff5f5' : '#ffffff';
         @endphp
-        <tr>
+        <tr style="background-color:{{ $rowBg }};">
             <td style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#1e293b; font-weight:bold; font-family:Arial, Helvetica, sans-serif;">{{ $dest['nombre'] }}</td>
-            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#334155; font-family:Arial, Helvetica, sans-serif;">{{ $dest['total'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:14px; font-weight:bold; color:#dc2626; font-family:Arial, Helvetica, sans-serif;">{{ $dPend }}</td>
             <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#15803d; font-weight:bold; font-family:Arial, Helvetica, sans-serif;">{{ $dest['completadas'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#334155; font-family:Arial, Helvetica, sans-serif;">{{ $dest['total'] }}</td>
             <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#0369a1; font-family:Arial, Helvetica, sans-serif;">{{ $dest['recuperadas'] }}</td>
-            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#dc2626; font-family:Arial, Helvetica, sans-serif;">{{ $dest['sin_descargar'] }}</td>
+            <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; color:#b45309; font-family:Arial, Helvetica, sans-serif;">{{ $dest['sin_descargar'] }}</td>
             <td align="center" style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; font-weight:bold; color:{{ $dColor }}; font-family:Arial, Helvetica, sans-serif;">{{ $dTasa }}%</td>
         </tr>
         @endforeach

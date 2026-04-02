@@ -16,7 +16,6 @@ class CharlaTrackingReporteMail extends Mailable
         public array $stats,
         public array $pendientesPorUsuario,
         public array $resumenSemanal,
-        public array $topCreadores,
         public array $topDestinatarios,
         public string $periodo,
     ) {}

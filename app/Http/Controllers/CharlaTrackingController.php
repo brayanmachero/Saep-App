@@ -180,7 +180,6 @@ class CharlaTrackingController extends Controller
             $data['stats'],
             $data['pendientesPorUsuario'],
             $data['resumenSemanal'],
-            $data['topCreadores'],
             $data['topDestinatarios'],
             $data['periodo'],
         );
