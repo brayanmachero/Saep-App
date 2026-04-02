@@ -187,4 +187,71 @@ class CharlaTrackingController extends Controller
 
         return $mailable->render();
     }
+
+    /**
+     * Debug temporal: ver datos raw para investigar asignaciones.
+     */
+    public function debugData(Request $request)
+    {
+        $buscar = $request->input('user', 'bmachero');
+        $desde = now()->subWeeks(4)->startOfWeek();
+        $hasta = now();
+
+        // Registros donde este usuario es creador
+        $comoCreador = KizeoCharlaTracking::enPeriodo($desde, $hasta)
+            ->where('asignado_por', 'like', "%{$buscar}%")
+            ->select('id', 'kizeo_data_id', 'asignado_por', 'asignado_por_id', 'asignado_a', 'asignado_a_id',
+                     'estado', 'estatus_kizeo', 'direction', 'origin_answer',
+                     'titulo_actividad', 'fecha_creacion', 'fecha_asignacion', 'metadata')
+            ->orderBy('fecha_creacion')
+            ->get();
+
+        // Registros donde es destinatario
+        $comoDestinatario = KizeoCharlaTracking::enPeriodo($desde, $hasta)
+            ->where('asignado_a', 'like', "%{$buscar}%")
+            ->select('id', 'kizeo_data_id', 'asignado_por', 'asignado_por_id', 'asignado_a', 'asignado_a_id',
+                     'estado', 'estatus_kizeo', 'direction', 'origin_answer',
+                     'titulo_actividad', 'fecha_creacion', 'fecha_asignacion', 'metadata')
+            ->orderBy('fecha_creacion')
+            ->get();
+
+        // Resumen de directions y estados
+        $directionCounts = KizeoCharlaTracking::enPeriodo($desde, $hasta)
+            ->where('asignado_por', 'like', "%{$buscar}%")
+            ->selectRaw('direction, estado, estatus_kizeo, COUNT(*) as qty')
+            ->groupBy('direction', 'estado', 'estatus_kizeo')
+            ->get();
+
+        // Muestra 3 ejemplos con metadata completa
+        $samples = KizeoCharlaTracking::enPeriodo($desde, $hasta)
+            ->where('asignado_por', 'like', "%{$buscar}%")
+            ->limit(3)
+            ->get(['kizeo_data_id', 'asignado_por', 'asignado_por_id', 'asignado_a',
+                    'estado', 'estatus_kizeo', 'direction', 'origin_answer', 'metadata']);
+
+        // Todos los user_ids únicos que aparecen como creadores
+        $allCreatorIds = KizeoCharlaTracking::enPeriodo($desde, $hasta)
+            ->selectRaw('asignado_por, asignado_por_id, COUNT(*) as qty')
+            ->groupBy('asignado_por', 'asignado_por_id')
+            ->orderByDesc('qty')
+            ->get();
+
+        return response()->json([
+            'buscar' => $buscar,
+            'periodo' => $desde->format('Y-m-d') . ' al ' . $hasta->format('Y-m-d'),
+            'como_creador' => [
+                'total' => $comoCreador->count(),
+                'por_estado' => $comoCreador->groupBy('estado')->map->count(),
+                'por_direction' => $comoCreador->groupBy('direction')->map->count(),
+                'tiene_asignado_a' => $comoCreador->whereNotNull('asignado_a')->count(),
+                'sin_asignado_a' => $comoCreador->whereNull('asignado_a')->count(),
+            ],
+            'como_destinatario' => [
+                'total' => $comoDestinatario->count(),
+            ],
+            'direction_detail' => $directionCounts,
+            'samples_raw' => $samples,
+            'all_creator_ids' => $allCreatorIds,
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
 }
