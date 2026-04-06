@@ -320,15 +320,6 @@
         margin-top: .25rem;
     }
 
-    /* ── Save bar ── */
-    .settings-save-bar {
-        display: flex;
-        justify-content: flex-end;
-        padding: 1.25rem 0 0;
-        margin-top: 1rem;
-        border-top: 1px solid var(--surface-border);
-    }
-
     /* ── Responsive ── */
     @media (max-width: 768px) {
         .settings-layout {
@@ -499,13 +490,6 @@
                             </div>
                         @endforeach
                         @endif
-
-                        {{-- Per-section save button (mobile-friendly) --}}
-                        <div class="settings-save-bar">
-                            <button type="submit" class="btn-premium">
-                                <i class="bi bi-floppy-fill"></i> Guardar Cambios
-                            </button>
-                        </div>
                     </div>
                 @endforeach
 
