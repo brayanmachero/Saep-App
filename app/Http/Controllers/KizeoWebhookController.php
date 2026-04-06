@@ -81,6 +81,7 @@ class KizeoWebhookController extends Controller
             $inspeccionFormId  = config('services.kizeo.inspeccion_form_id');
             $visitaFormId      = config('services.kizeo.visita_form_id');
             $accidenteFormId   = config('services.kizeo.accidente_form_id');
+            $declaracionFormId = config('services.kizeo.declaracion_form_id');
 
             if ($vehicleFormId && $formId == $vehicleFormId) {
                 return $this->handleVehiculo($formId, $dataId, $payload, $request->ip());
@@ -104,6 +105,10 @@ class KizeoWebhookController extends Controller
 
             if ($accidenteFormId && $formId == $accidenteFormId) {
                 return $this->handleAccidenteSst($formId, $dataId, $payload, $request->ip());
+            }
+
+            if ($declaracionFormId && $formId == $declaracionFormId) {
+                return $this->handleDeclaracionIncidente($formId, $dataId, $payload, $request->ip());
             }
 
             Log::info("Webhook recibido para formulario no registrado", ['formId' => $formId]);
@@ -1112,6 +1117,149 @@ class KizeoWebhookController extends Controller
                 'data_id'       => $dataId,
                 'tipo'          => 'accidente_sst',
                 'resumen'       => 'Error al procesar Accidente SST',
+                'error_message' => $e->getMessage(),
+                'ip'            => $ip,
+            ]);
+            return response()->json(['status' => 'error', 'message' => 'Internal processing error'], 500);
+        }
+    }
+
+    /**
+     * Handler para formulario Declaración de Incidente/Accidente (Form 997877).
+     * Descarga el PDF generado por Kizeo y lo sube a SharePoint.
+     *
+     * Campos: nombre_trabajador, rut_trabajador, encargado_de_turno,
+     * fecha_y_hora1, centro_de_distribucion, parte_del_cuerpo_afectada,
+     * parte_del_cuerpo_lesionada1, declaracion, declaracion_por_voz,
+     * foto1, subir_audio_whatsapp, firma1
+     */
+    private function handleDeclaracionIncidente(string $formId, string $dataId, array $payload, ?string $ip = null)
+    {
+        try {
+            $record = $this->kizeo->getRecord($formId, $dataId);
+            $fields = $record['fields'] ?? [];
+            $recordMeta = $record ?? [];
+
+            $getVal = function (string $key) use ($fields) {
+                if (!isset($fields[$key])) return '-';
+                $field = $fields[$key];
+                $res = $field['result'] ?? $field['value'] ?? $field;
+                if ($res === null) return '-';
+                if (is_string($res)) return $res;
+                if (isset($res['value'])) {
+                    $val = $res['value'];
+                    if (is_array($val) && isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
+                    if (is_array($val) && isset($val['date'])) return $val['date'];
+                    if (is_string($val)) return $val;
+                    if (is_bool($val)) return $val ? 'Sí' : 'No';
+                }
+                return is_string($res) ? $res : '-';
+            };
+
+            // Extraer datos
+            $fechaHora     = $getVal('fecha_y_hora1');
+            $cd            = $getVal('centro_de_distribucion');
+            $trabajador    = $getVal('nombre_trabajador');
+            $rutTrabajador = $getVal('rut_trabajador');
+            $encargado     = $getVal('encargado_de_turno');
+            $parteCuerpo   = $getVal('parte_del_cuerpo_afectada');
+            $parteLesion   = $getVal('parte_del_cuerpo_lesionada1');
+            $declaracion   = $getVal('declaracion');
+
+            // Fallbacks
+            if ($fechaHora === '-') $fechaHora = date('Y-m-d');
+            if ($trabajador === '-') {
+                $trabajador = trim(($recordMeta['first_name'] ?? '') . ' ' . ($recordMeta['last_name'] ?? ''));
+                if (!$trabajador || trim($trabajador) === '') {
+                    $trabajador = $recordMeta['user_name'] ?? 'Desconocido';
+                }
+            }
+
+            // Slug de fecha (extraer solo YYYY-MM-DD de un posible datetime)
+            $fechaSlug = preg_replace('/[^0-9-]/', '', substr($fechaHora, 0, 10));
+            if (!$fechaSlug) $fechaSlug = date('Y-m-d');
+
+            // Componentes de fecha para carpetas
+            $ts = strtotime($fechaSlug) ?: time();
+            $anio = date('Y', $ts);
+            $mesNum = date('m', $ts);
+            $meses = ['01'=>'Enero','02'=>'Febrero','03'=>'Marzo','04'=>'Abril','05'=>'Mayo','06'=>'Junio',
+                       '07'=>'Julio','08'=>'Agosto','09'=>'Septiembre','10'=>'Octubre','11'=>'Noviembre','12'=>'Diciembre'];
+            $mesNombre = "{$mesNum} - " . ($meses[$mesNum] ?? $mesNum);
+
+            $sanitize = fn($v) => trim(preg_replace('/[\\\\\/\:*?"<>|]/u', '', $v)) ?: 'Sin especificar';
+
+            $cdFolder = $sanitize($cd !== '-' ? $cd : 'Sin CD');
+
+            Log::info("Procesando Declaración de Incidente", [
+                'formId' => $formId, 'dataId' => $dataId,
+                'fecha' => $fechaHora, 'trabajador' => $trabajador,
+                'cd' => $cd, 'parteCuerpo' => $parteCuerpo,
+            ]);
+
+            // Descargar PDF de Kizeo
+            $pdfContent = $this->kizeo->downloadPdf($formId, $dataId);
+
+            if (!$pdfContent || strlen($pdfContent) < 100) {
+                Log::warning('PDF de Declaración Incidente vacío o inválido', ['size' => strlen($pdfContent ?? '')]);
+                return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
+            }
+
+            // Nombre: 2026-04-01 - Juan Pérez (Declaración Incidente).pdf
+            $trabajadorClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $trabajador);
+            $filename = "{$fechaSlug} - " . substr(trim($trabajadorClean), 0, 60) . " (Declaracion Incidente).pdf";
+
+            // Estructura: Declaraciones SST / 2026 / 04 - Abril / CD Santiago / archivo.pdf
+            $sharepointPath = null;
+            try {
+                $oneDrive = app(OneDriveService::class);
+                if ($oneDrive->isConfigured()) {
+                    $rootFolder = config('services.kizeo.declaracion_sharepoint_folder', 'Declaraciones SST');
+                    $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
+                    $oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', true);
+                    $sharepointPath = $remotePath;
+                    Log::info("Declaración de Incidente subida a SharePoint", ['path' => $remotePath]);
+                } else {
+                    Log::warning('SharePoint no configurado, PDF de Declaración no se pudo subir');
+                }
+            } catch (\Throwable $e) {
+                Log::warning('SharePoint upload de Declaración falló (no crítico): ' . $e->getMessage());
+            }
+
+            // Registrar en webhook_logs
+            WebhookLog::logSuccess([
+                'origen'          => 'kizeo',
+                'form_id'         => $formId,
+                'data_id'         => $dataId,
+                'tipo'            => 'declaracion_incidente',
+                'resumen'         => "Declaración Incidente - {$trabajador} ({$cd})",
+                'archivo'         => $filename,
+                'sharepoint_path' => $sharepointPath,
+                'email_enviado'   => false,
+                'destinatarios'   => [],
+                'metadata'        => [
+                    'trabajador'     => $trabajador,
+                    'rut'            => $rutTrabajador,
+                    'encargado'      => $encargado,
+                    'parte_cuerpo'   => $parteCuerpo,
+                    'parte_lesion'   => $parteLesion,
+                    'declaracion'    => substr($declaracion, 0, 200),
+                    'cd'             => $cd,
+                    'fecha'          => $fechaHora,
+                ],
+                'ip' => $ip,
+            ]);
+
+            return response()->json(['status' => 'success', 'message' => 'Declaración de Incidente procesada correctamente']);
+
+        } catch (\Throwable $e) {
+            Log::error('Error en Kizeo Webhook (Declaración Incidente): ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            WebhookLog::logError([
+                'origen'        => 'kizeo',
+                'form_id'       => $formId,
+                'data_id'       => $dataId,
+                'tipo'          => 'declaracion_incidente',
+                'resumen'       => 'Error al procesar Declaración de Incidente',
                 'error_message' => $e->getMessage(),
                 'ip'            => $ip,
             ]);

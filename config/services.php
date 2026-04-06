@@ -51,6 +51,8 @@ return [
         'visita_sharepoint_folder'    => env('KIZEO_VISITA_SHAREPOINT_FOLDER', 'Visitas Terreno'),
         'accidente_form_id'           => env('KIZEO_ACCIDENTE_FORM_ID'),
         'accidente_sharepoint_folder' => env('KIZEO_ACCIDENTE_SHAREPOINT_FOLDER', 'Accidentes SST'),
+        'declaracion_form_id'            => env('KIZEO_DECLARACION_FORM_ID'),
+        'declaracion_sharepoint_folder'  => env('KIZEO_DECLARACION_SHAREPOINT_FOLDER', 'Declaraciones SST'),
     ],
 
     'google' => [
