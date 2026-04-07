@@ -625,28 +625,6 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 </td>
 </tr>
 
-{{-- ═══════════ CTA BUTTON ═══════════ --}}
-<tr>
-<td style="padding:20px 32px; text-align:center;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
-    <tr>
-        <td style="background-color:#7f1d1d; border-radius:8px;">
-            <!--[if mso]>
-            <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{ url('/stop-dashboard') }}" style="height:44px;v-text-anchor:middle;width:260px;" arcsize="18%" fillcolor="#7f1d1d" stroke="f">
-            <center style="color:#ffffff;font-family:Arial;font-size:14px;font-weight:bold;">Ver Dashboard Completo</center>
-            </v:roundrect>
-            <![endif]-->
-            <!--[if !mso]><!-->
-            <a href="{{ url('/stop-dashboard') }}" style="display:inline-block; padding:12px 40px; color:#ffffff; text-decoration:none; font-size:14px; font-weight:bold; line-height:20px;">
-                Ver Dashboard Completo
-            </a>
-            <!--<![endif]-->
-        </td>
-    </tr>
-    </table>
-</td>
-</tr>
-
 {{-- ═══════════ FOOTER ═══════════ --}}
 <tr>
 <td style="padding:14px 32px; background-color:#f8fafc; text-align:center; border-top:1px solid #e2e8f0; border-radius:0 0 4px 4px;">
