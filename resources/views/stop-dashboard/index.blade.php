@@ -148,7 +148,17 @@
         $topNeg = $analytics['topNegTrabajadores'] ?? [];
         $topPos = $analytics['topPosTrabajadores'] ?? [];
         $byMonth = $analytics['byMonth'] ?? [];
+        $byMonthNeg = $analytics['byMonthNeg'] ?? [];
+        $byMonthPos = $analytics['byMonthPos'] ?? [];
         $byYear = $analytics['byYear'] ?? [];
+        $centrosNeg = $analytics['centrosNeg'] ?? [];
+        $centrosPos = $analytics['centrosPos'] ?? [];
+        $areasNeg = $analytics['areasNeg'] ?? [];
+        $areasPos = $analytics['areasPos'] ?? [];
+        $empresasNeg = $analytics['empresasNeg'] ?? [];
+        $empresasPos = $analytics['empresasPos'] ?? [];
+        $observadoresNeg = $analytics['observadoresNeg'] ?? [];
+        $observadoresPos = $analytics['observadoresPos'] ?? [];
 
         $positivas = $clasificacion['Positiva'] ?? $clasificacion['positiva'] ?? 0;
         $negativas = $clasificacion['Negativa'] ?? $clasificacion['negativa'] ?? 0;
@@ -315,15 +325,17 @@
             </h3>
             <div style="max-height:350px;overflow-y:auto">
                 <table class="glass-table" style="font-size:.8rem">
-                    <thead><tr><th>Centro</th><th style="text-align:center">Cant.</th><th style="text-align:center">%</th><th style="width:100px"></th></tr></thead>
+                    <thead><tr><th>Centro</th><th style="text-align:center">Total</th><th style="text-align:center;color:#991b1b">Neg</th><th style="text-align:center;color:#22c55e">Pos</th><th style="width:120px"></th></tr></thead>
                     <tbody>
                         @php $maxC = !empty($centros) ? max($centros) : 1; @endphp
                         @foreach($centros as $c => $count)
+                        @php $cN = $centrosNeg[$c] ?? 0; $cP = $centrosPos[$c] ?? 0; $wN = round(($cN / $maxC) * 100); $wP = round(($cP / $maxC) * 100); @endphp
                         <tr>
-                            <td title="{{ $c }}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ $c }}</td>
+                            <td title="{{ $c }}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ $c }}</td>
                             <td style="text-align:center;font-weight:600">{{ number_format($count) }}</td>
-                            <td style="text-align:center;color:var(--text-muted)">{{ round(($count / $totalRows) * 100, 1) }}%</td>
-                            <td><div style="background:rgba(59,130,246,.1);border-radius:4px;overflow:hidden;height:16px"><div style="background:linear-gradient(90deg,#3b82f6,#8b5cf6);height:100%;width:{{ round(($count / $maxC) * 100) }}%;border-radius:4px"></div></div></td>
+                            <td style="text-align:center;font-weight:600;color:#991b1b">{{ $cN }}</td>
+                            <td style="text-align:center;font-weight:600;color:#22c55e">{{ $cP }}</td>
+                            <td><div style="display:flex;border-radius:4px;overflow:hidden;height:16px;background:rgba(0,0,0,.05)">@if($wN > 0)<div style="background:#991b1b;width:{{ $wN }}%;height:100%"></div>@endif @if($wP > 0)<div style="background:#22c55e;width:{{ $wP }}%;height:100%"></div>@endif</div></td>
                         </tr>
                         @endforeach
                     </tbody>
@@ -336,14 +348,17 @@
             </h3>
             <div style="max-height:350px;overflow-y:auto">
                 <table class="glass-table" style="font-size:.8rem">
-                    <thead><tr><th>Area</th><th style="text-align:center">Cant.</th><th style="width:90px"></th></tr></thead>
+                    <thead><tr><th>Area</th><th style="text-align:center">Total</th><th style="text-align:center;color:#991b1b">Neg</th><th style="text-align:center;color:#22c55e">Pos</th><th style="width:100px"></th></tr></thead>
                     <tbody>
                         @php $maxA = !empty($areas) ? max($areas) : 1; @endphp
                         @foreach(array_slice($areas, 0, 20, true) as $a => $count)
+                        @php $aN = $areasNeg[$a] ?? 0; $aP = $areasPos[$a] ?? 0; $wN = round(($aN / $maxA) * 100); $wP = round(($aP / $maxA) * 100); @endphp
                         <tr>
-                            <td title="{{ $a }}" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ $a }}</td>
+                            <td title="{{ $a }}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ $a }}</td>
                             <td style="text-align:center;font-weight:600">{{ number_format($count) }}</td>
-                            <td><div style="background:rgba(6,182,212,.1);border-radius:4px;overflow:hidden;height:14px"><div style="background:#06b6d4;height:100%;width:{{ round(($count / $maxA) * 100) }}%;border-radius:4px"></div></div></td>
+                            <td style="text-align:center;font-weight:600;color:#991b1b">{{ $aN }}</td>
+                            <td style="text-align:center;font-weight:600;color:#22c55e">{{ $aP }}</td>
+                            <td><div style="display:flex;border-radius:4px;overflow:hidden;height:14px;background:rgba(0,0,0,.05)">@if($wN > 0)<div style="background:#991b1b;width:{{ $wN }}%;height:100%"></div>@endif @if($wP > 0)<div style="background:#22c55e;width:{{ $wP }}%;height:100%"></div>@endif</div></td>
                         </tr>
                         @endforeach
                     </tbody>
@@ -360,15 +375,19 @@
             </h3>
             <div style="max-height:380px;overflow-y:auto">
                 <table class="glass-table" style="font-size:.78rem">
-                    <thead><tr><th style="width:30px">#</th><th>Observador</th><th style="text-align:center">Obs.</th><th style="width:100px"></th></tr></thead>
+                    <thead><tr><th style="width:30px">#</th><th>Observador</th><th style="text-align:center">Total</th><th style="text-align:center;color:#991b1b">Neg</th><th style="text-align:center;color:#22c55e">Pos</th><th style="width:100px"></th></tr></thead>
                     <tbody>
                         @php $rank = 1; $maxObs = !empty($topObservadores) ? max($topObservadores) : 1; @endphp
                         @foreach($topObservadores as $nombre => $count)
+                        @php $oN = $observadoresNeg[$nombre] ?? 0; $oP = $observadoresPos[$nombre] ?? 0; @endphp
                         <tr>
                             <td style="text-align:center;font-weight:700;color:{{ $rank <= 3 ? '#f59e0b' : 'var(--text-muted)' }}">@if($rank <= 3)<i class="bi bi-trophy-fill"></i> @endif{{ $rank }}</td>
                             <td title="{{ $nombre }}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:capitalize">{{ mb_strtolower($nombre) }}</td>
                             <td style="text-align:center;font-weight:600">{{ number_format($count) }}</td>
-                            <td><div style="background:rgba(245,158,11,.1);border-radius:4px;overflow:hidden;height:14px"><div style="background:linear-gradient(90deg,#f59e0b,#f97316);height:100%;width:{{ round(($count / $maxObs) * 100) }}%;border-radius:4px"></div></div></td>
+                            <td style="text-align:center;font-weight:600;color:#991b1b">{{ $oN }}</td>
+                            <td style="text-align:center;font-weight:600;color:#22c55e">{{ $oP }}</td>
+                            @php $wN = round(($oN / $maxObs) * 100); $wP = round(($oP / $maxObs) * 100); @endphp
+                            <td><div style="display:flex;border-radius:4px;overflow:hidden;height:14px;background:rgba(0,0,0,.05)">@if($wN > 0)<div style="background:#991b1b;width:{{ $wN }}%;height:100%"></div>@endif @if($wP > 0)<div style="background:#22c55e;width:{{ $wP }}%;height:100%"></div>@endif</div></td>
                         </tr>
                         @php $rank++; @endphp
                         @endforeach
@@ -565,26 +584,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
     @if(isset($analytics))
 
-    // 1. Timeline Mensual
+    // 1. Timeline Mensual (barras apiladas Neg/Pos)
     @if(!empty($byMonth))
     new Chart(document.getElementById('timelineChart'), {
         type: 'bar',
         data: {
             labels: {!! json_encode(array_keys($byMonth)) !!},
-            datasets: [{
-                label: 'Observaciones',
-                data: {!! json_encode(array_values($byMonth)) !!},
-                backgroundColor: 'rgba(59,130,246,0.6)',
-                borderColor: '#3b82f6',
-                borderWidth: 1, borderRadius: 4,
-            }]
+            datasets: [
+                {
+                    label: 'Negativas',
+                    data: {!! json_encode(array_values(array_replace(array_fill_keys(array_keys($byMonth), 0), $byMonthNeg))) !!},
+                    backgroundColor: 'rgba(153,27,27,0.75)',
+                    borderColor: '#991b1b',
+                    borderWidth: 1, borderRadius: 2,
+                },
+                {
+                    label: 'Positivas',
+                    data: {!! json_encode(array_values(array_replace(array_fill_keys(array_keys($byMonth), 0), $byMonthPos))) !!},
+                    backgroundColor: 'rgba(34,197,94,0.75)',
+                    borderColor: '#22c55e',
+                    borderWidth: 1, borderRadius: 2,
+                }
+            ]
         },
         options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: { legend: { position: 'top', labels: { boxWidth: 12, padding: 8, font: { size: 10 } } } },
             scales: {
-                y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: gridColor } },
-                x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } }
+                y: { beginAtZero: true, stacked: true, ticks: { precision: 0 }, grid: { color: gridColor } },
+                x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } }
             }
         }
     });

@@ -197,6 +197,13 @@ class GoogleDriveService
         $negPorTipo = $posPorTipo = [];
         $topNegTrabajadores = $topPosTrabajadores = [];
 
+        // Desgloses neg/pos para barras apiladas
+        $centrosNeg = $centrosPos = [];
+        $areasNeg = $areasPos = [];
+        $empresasNeg = $empresasPos = [];
+        $observadoresNeg = $observadoresPos = [];
+        $byMonthNeg = $byMonthPos = [];
+
         // Contadores para filterOptions (SIEMPRE sin filtrar)
         $foEmpObs = $foEmpObsdo = $foTipos = $foCentros = $foAnios = [];
 
@@ -289,17 +296,39 @@ class GoogleDriveService
                 $observadores[$key] = ($observadores[$key] ?? 0) + 1;
             }
 
-            if (stripos($clasif, 'negativa') !== false && $tipoObs !== '') {
+            // Desgloses neg/pos por dimensión
+            $esNeg = stripos($clasif, 'negativa') !== false;
+            $esPos = stripos($clasif, 'positiva') !== false;
+
+            if ($centro !== '') {
+                if ($esNeg) $centrosNeg[$centro] = ($centrosNeg[$centro] ?? 0) + 1;
+                if ($esPos) $centrosPos[$centro] = ($centrosPos[$centro] ?? 0) + 1;
+            }
+            if ($area !== '') {
+                if ($esNeg) $areasNeg[$area] = ($areasNeg[$area] ?? 0) + 1;
+                if ($esPos) $areasPos[$area] = ($areasPos[$area] ?? 0) + 1;
+            }
+            if ($empObsdo !== '') {
+                if ($esNeg) $empresasNeg[$empObsdo] = ($empresasNeg[$empObsdo] ?? 0) + 1;
+                if ($esPos) $empresasPos[$empObsdo] = ($empresasPos[$empObsdo] ?? 0) + 1;
+            }
+            if ($nombreObs !== '') {
+                $key = mb_strtoupper($nombreObs);
+                if ($esNeg) $observadoresNeg[$key] = ($observadoresNeg[$key] ?? 0) + 1;
+                if ($esPos) $observadoresPos[$key] = ($observadoresPos[$key] ?? 0) + 1;
+            }
+
+            if ($esNeg && $tipoObs !== '') {
                 $negPorTipo[$tipoObs] = ($negPorTipo[$tipoObs] ?? 0) + 1;
             }
-            if (stripos($clasif, 'positiva') !== false && $tipoObs !== '') {
+            if ($esPos && $tipoObs !== '') {
                 $posPorTipo[$tipoObs] = ($posPorTipo[$tipoObs] ?? 0) + 1;
             }
-            if (stripos($clasif, 'negativa') !== false && $nombreObsdo !== '') {
+            if ($esNeg && $nombreObsdo !== '') {
                 $k = mb_strtoupper($nombreObsdo);
                 $topNegTrabajadores[$k] = ($topNegTrabajadores[$k] ?? 0) + 1;
             }
-            if (stripos($clasif, 'positiva') !== false && $nombreObsdo !== '') {
+            if ($esPos && $nombreObsdo !== '') {
                 $k = mb_strtoupper($nombreObsdo);
                 $topPosTrabajadores[$k] = ($topPosTrabajadores[$k] ?? 0) + 1;
             }
@@ -309,6 +338,8 @@ class GoogleDriveService
                 $mk = $this->extractMonthKey($fecha);
                 if ($mk) {
                     $byMonth[$mk] = ($byMonth[$mk] ?? 0) + 1;
+                    if ($esNeg) $byMonthNeg[$mk] = ($byMonthNeg[$mk] ?? 0) + 1;
+                    if ($esPos) $byMonthPos[$mk] = ($byMonthPos[$mk] ?? 0) + 1;
                     $yk = substr($mk, 0, 4);
                     if ($yk !== '') $byYear[$yk] = ($byYear[$yk] ?? 0) + 1;
                 }
@@ -324,7 +355,7 @@ class GoogleDriveService
         arsort($turnos); arsort($antiguedades); arsort($empresasObs);
         arsort($cargos); arsort($negPorTipo); arsort($posPorTipo);
         arsort($topNegTrabajadores); arsort($topPosTrabajadores);
-        ksort($byMonth); ksort($byYear);
+        ksort($byMonth); ksort($byMonthNeg); ksort($byMonthPos); ksort($byYear);
         ksort($foEmpObs); ksort($foEmpObsdo); ksort($foTipos); ksort($foCentros); ksort($foAnios);
 
         return [
@@ -345,7 +376,17 @@ class GoogleDriveService
             'topNegTrabajadores'  => array_slice($topNegTrabajadores, 0, 20, true),
             'topPosTrabajadores'  => array_slice($topPosTrabajadores, 0, 20, true),
             'byMonth'             => $byMonth,
+            'byMonthNeg'          => $byMonthNeg,
+            'byMonthPos'          => $byMonthPos,
             'byYear'              => $byYear,
+            'centrosNeg'          => $centrosNeg,
+            'centrosPos'          => $centrosPos,
+            'areasNeg'            => $areasNeg,
+            'areasPos'            => $areasPos,
+            'empresasNeg'         => $empresasNeg,
+            'empresasPos'         => $empresasPos,
+            'observadoresNeg'     => $observadoresNeg,
+            'observadoresPos'     => $observadoresPos,
             'filterOptions'       => [
                 'empresas_observador' => array_keys($foEmpObs),
                 'empresas_observado'  => array_keys($foEmpObsdo),
