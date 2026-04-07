@@ -177,9 +177,10 @@ Route::middleware('auth')->group(function () {
 
     // --- TARJETA STOP (Google Drive) ---
     Route::middleware('modulo:kizeo_analytics')->group(function () {
-        Route::get('stop-dashboard', [StopDashboardController::class, 'index'])->name('stop-dashboard.index');
+        Route::get('stop-dashboard', [StopDashboardController::class, 'index'])->name('stop-dashboard');
         Route::post('stop-dashboard/sync', [StopDashboardController::class, 'sync'])->name('stop-dashboard.sync');
         Route::get('stop-dashboard/api/data', [StopDashboardController::class, 'apiData'])->name('stop-dashboard.api.data');
+        Route::get('stop-dashboard/reporte/preview', [StopDashboardController::class, 'reportePreview'])->name('stop-dashboard.reporte.preview');
     });
 
     // --- SST: INSPECCIONES ---

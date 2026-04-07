@@ -73,7 +73,7 @@
                 <i class="bi bi-clipboard-data"></i>
                 <span>Seguimiento Charlas</span>
             </a>
-            <a href="{{ route('stop-dashboard.index') }}" class="nav-item {{ request()->routeIs('stop-dashboard.*') ? 'active' : '' }}">
+            <a href="{{ route('stop-dashboard') }}" class="nav-item {{ request()->routeIs('stop-dashboard*') ? 'active' : '' }}">
                 <i class="bi bi-hand-index-fill"></i>
                 <span>Tarjeta STOP</span>
             </a>

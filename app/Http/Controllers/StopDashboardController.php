@@ -25,20 +25,43 @@ class StopDashboardController extends Controller
             ]);
         }
 
-        // Analíticas optimizadas: solo lee columnas A-S (metadata) — eficiente con 26K+ filas
-        $analytics = $drive->getStopAnalytics();
+        // Filtros activos
+        $filters = array_filter([
+            'empresa_observador' => $request->input('empresa_observador'),
+            'empresa_observado'  => $request->input('empresa_observado'),
+            'tipo_observacion'   => $request->input('tipo_observacion'),
+            'centro'             => $request->input('centro'),
+            'clasificacion'      => $request->input('clasificacion'),
+            'fecha_desde'        => $request->input('fecha_desde'),
+            'fecha_hasta'        => $request->input('fecha_hasta'),
+            'mes'                => $request->input('mes'),
+            'anio'               => $request->input('anio'),
+        ]);
+
+        // Analíticas filtradas
+        $analytics = $drive->getFilteredAnalytics($filters);
 
         if (!$analytics || ($analytics['totalRows'] ?? 0) === 0) {
+            $filterOptions = $drive->getFilterOptions();
             return view('stop-dashboard.index', [
-                'error' => 'No se pudieron obtener datos del archivo. Verifique que la carpeta esté compartida con la cuenta de servicio.',
-                'fileInfo' => $fileInfo,
+                'error' => empty($filters)
+                    ? 'No se pudieron obtener datos del archivo. Verifique que la carpeta esté compartida con la cuenta de servicio.'
+                    : 'No se encontraron datos con los filtros seleccionados.',
+                'fileInfo'      => $fileInfo,
+                'filters'       => $filters,
+                'filterOptions' => $filterOptions,
             ]);
         }
 
-        // Analíticas de checklist (EPP, Reglas de Oro, etc.)
+        // Opciones para filtros (sin filtrar)
+        $filterOptions = $drive->getFilterOptions();
+
+        // Checklist (sin filtros, datos globales)
         $checklist = $drive->getChecklistAnalytics();
 
-        return view('stop-dashboard.index', compact('fileInfo', 'analytics', 'checklist'));
+        return view('stop-dashboard.index', compact(
+            'fileInfo', 'analytics', 'checklist', 'filters', 'filterOptions'
+        ));
     }
 
     public function sync()
@@ -50,12 +73,25 @@ class StopDashboardController extends Controller
     }
 
     /**
-     * API endpoint para obtener datos en JSON (para gráficos dinámicos).
+     * API endpoint para obtener datos filtrados en JSON.
      */
-    public function apiData()
+    public function apiData(Request $request)
     {
         $drive = new GoogleDriveService();
-        $analytics = $drive->getStopAnalytics();
+
+        $filters = array_filter([
+            'empresa_observador' => $request->input('empresa_observador'),
+            'empresa_observado'  => $request->input('empresa_observado'),
+            'tipo_observacion'   => $request->input('tipo_observacion'),
+            'centro'             => $request->input('centro'),
+            'clasificacion'      => $request->input('clasificacion'),
+            'fecha_desde'        => $request->input('fecha_desde'),
+            'fecha_hasta'        => $request->input('fecha_hasta'),
+            'mes'                => $request->input('mes'),
+            'anio'               => $request->input('anio'),
+        ]);
+
+        $analytics = $drive->getFilteredAnalytics($filters);
 
         if (!$analytics) {
             return response()->json(['error' => 'No se pudieron obtener datos'], 500);
@@ -67,5 +103,30 @@ class StopDashboardController extends Controller
             'analytics' => $analytics,
             'checklist' => $checklist,
         ]);
+    }
+
+    /**
+     * Preview del reporte email en el navegador.
+     */
+    public function reportePreview(Request $request)
+    {
+        $data = \App\Console\Commands\StopWeeklyReport::buildReportData(
+            $request->input('mes'),
+            $request->input('anio'),
+        );
+
+        return new \App\Mail\StopReporteMail(
+            stats: $data['stats'],
+            topNegTrabajadores: $data['topNegTrabajadores'] ?? [],
+            topPosTrabajadores: $data['topPosTrabajadores'] ?? [],
+            negPorTipo: $data['negPorTipo'] ?? [],
+            posPorTipo: $data['posPorTipo'] ?? [],
+            centros: $data['centros'] ?? [],
+            areas: $data['areas'] ?? [],
+            topObservadores: $data['topObservadores'] ?? [],
+            antiguedades: $data['antiguedades'] ?? [],
+            periodo: $data['periodo'] ?? now()->format('d/m/Y'),
+            mesLabel: $data['mesLabel'] ?? null,
+        );
     }
 }

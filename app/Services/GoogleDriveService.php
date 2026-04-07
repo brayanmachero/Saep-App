@@ -134,6 +134,281 @@ class GoogleDriveService
     }
 
     /**
+     * Obtener datos filtrados. Lee filas compactas del cache, aplica filtros y reagrupa.
+     */
+    public function getFilteredAnalytics(array $filters = []): ?array
+    {
+        $rows = $this->getCompactRows();
+        if ($rows === null) return null;
+
+        // Aplicar filtros
+        if (!empty($filters)) {
+            $rows = array_filter($rows, function ($r) use ($filters) {
+                if (!empty($filters['empresa_observador']) && $r['empresa_observador'] !== $filters['empresa_observador']) return false;
+                if (!empty($filters['empresa_observado']) && $r['empresa_observado'] !== $filters['empresa_observado']) return false;
+                if (!empty($filters['tipo_observacion']) && $r['tipo_observacion'] !== $filters['tipo_observacion']) return false;
+                if (!empty($filters['centro']) && $r['centro'] !== $filters['centro']) return false;
+                if (!empty($filters['clasificacion']) && $r['clasificacion'] !== $filters['clasificacion']) return false;
+                if (!empty($filters['fecha_desde'])) {
+                    $rowDate = $this->parseDate($r['fecha_tarjeta'] ?: $r['marca_temporal']);
+                    if (!$rowDate || $rowDate < $filters['fecha_desde']) return false;
+                }
+                if (!empty($filters['fecha_hasta'])) {
+                    $rowDate = $this->parseDate($r['fecha_tarjeta'] ?: $r['marca_temporal']);
+                    if (!$rowDate || $rowDate > $filters['fecha_hasta']) return false;
+                }
+                if (!empty($filters['mes'])) {
+                    $fecha = $r['fecha_tarjeta'] ?: $r['marca_temporal'];
+                    $monthKey = $this->extractMonthKey($fecha);
+                    if ($monthKey !== $filters['mes']) return false;
+                }
+                if (!empty($filters['anio'])) {
+                    $fecha = $r['fecha_tarjeta'] ?: $r['marca_temporal'];
+                    $monthKey = $this->extractMonthKey($fecha);
+                    if (!$monthKey || substr($monthKey, 0, 4) !== $filters['anio']) return false;
+                }
+                return true;
+            });
+        }
+
+        return $this->aggregateRows($rows);
+    }
+
+    /**
+     * Obtener filas compactas cacheadas (solo campos necesarios para filtros y agregación).
+     */
+    public function getCompactRows(): ?array
+    {
+        $fileInfo = $this->getLatestFile();
+        if (!$fileInfo || $fileInfo['mimeType'] !== 'application/vnd.google-apps.spreadsheet') {
+            return null;
+        }
+
+        $cacheKey = 'gdrive_stop_rows_' . md5($fileInfo['id'] . $fileInfo['modifiedTime']);
+
+        return Cache::remember($cacheKey, 3600, function () use ($fileInfo) {
+            try {
+                return $this->readCompactRows($fileInfo['id']);
+            } catch (\Exception $e) {
+                Log::error('GoogleDrive: Error leyendo filas compactas', [
+                    'error' => $e->getMessage(),
+                ]);
+                return null;
+            }
+        });
+    }
+
+    /**
+     * Lee las columnas A-S y devuelve un array compacto por fila.
+     */
+    private function readCompactRows(string $spreadsheetId): array
+    {
+        $sheets = new Sheets($this->getClient());
+        $spreadsheet = $sheets->spreadsheets->get($spreadsheetId);
+        $sheetTitle = null;
+        foreach ($spreadsheet->getSheets() as $sheet) {
+            if ($sheet->getProperties()->getTitle() === self::SHEET_NAME) {
+                $sheetTitle = self::SHEET_NAME;
+                break;
+            }
+        }
+        if (!$sheetTitle) {
+            $sheetTitle = $spreadsheet->getSheets()[0]->getProperties()->getTitle();
+        }
+
+        $range = "'{$sheetTitle}'!A:S";
+        $response = $sheets->spreadsheets_values->get($spreadsheetId, $range);
+        $values = $response->getValues();
+
+        if (empty($values) || count($values) < 2) return [];
+
+        $rows = [];
+        $skipTest = true;
+        for ($i = 1; $i < count($values); $i++) {
+            $row = $values[$i] ?? [];
+            $centro = trim($row[4] ?? '');
+            if ($skipTest && strtolower($centro) === 'prueba') { $skipTest = false; continue; }
+            $skipTest = false;
+
+            $rows[] = [
+                'marca_temporal'    => trim($row[0] ?? ''),
+                'fecha_tarjeta'     => trim($row[2] ?? ''),
+                'centro'            => $centro,
+                'empresa_observador'=> trim($row[5] ?? ''),
+                'nombre_observador' => trim($row[6] ?? ''),
+                'clasificacion'     => trim($row[8] ?? ''),
+                'turno'             => trim($row[9] ?? ''),
+                'nombre_observado'  => trim($row[10] ?? ''),
+                'interno_externo'   => trim($row[11] ?? ''),
+                'antiguedad'        => trim($row[12] ?? ''),
+                'area_proceso'      => trim($row[13] ?? ''),
+                'empresa_observado' => trim($row[14] ?? ''),
+                'cargo_observado'   => trim($row[15] ?? ''),
+                'tipo_observacion'  => trim($row[16] ?? ''),
+            ];
+        }
+        return $rows;
+    }
+
+    /**
+     * Agregar un array de filas compactas en estadísticas de dashboard.
+     */
+    private function aggregateRows(array $rows): array
+    {
+        $totalRows = count($rows);
+        $clasificacion = $centros = $areas = $tiposObservacion = [];
+        $internoExterno = $empresas = $turnos = $antiguedades = [];
+        $observadores = $byMonth = $byYear = [];
+        $empresasObs = $cargos = [];
+        $negPorTipo = $posPorTipo = [];
+        $topNegTrabajadores = $topPosTrabajadores = [];
+
+        foreach ($rows as $r) {
+            $clasif    = $r['clasificacion'];
+            $centro    = $r['centro'];
+            $area      = $r['area_proceso'];
+            $tipoObs   = $r['tipo_observacion'];
+            $intExt    = $r['interno_externo'];
+            $empObsdo  = $r['empresa_observado'];
+            $turno     = $r['turno'];
+            $antig     = $r['antiguedad'];
+            $nombreObs = $r['nombre_observador'];
+            $nombreObsdo = $r['nombre_observado'];
+            $empObs    = $r['empresa_observador'];
+            $cargo     = $r['cargo_observado'];
+
+            if ($clasif !== '')    $clasificacion[$clasif] = ($clasificacion[$clasif] ?? 0) + 1;
+            if ($centro !== '')    $centros[$centro] = ($centros[$centro] ?? 0) + 1;
+            if ($area !== '')      $areas[$area] = ($areas[$area] ?? 0) + 1;
+            if ($tipoObs !== '')   $tiposObservacion[$tipoObs] = ($tiposObservacion[$tipoObs] ?? 0) + 1;
+            if ($intExt !== '')    $internoExterno[$intExt] = ($internoExterno[$intExt] ?? 0) + 1;
+            if ($empObsdo !== '')  $empresas[$empObsdo] = ($empresas[$empObsdo] ?? 0) + 1;
+            if ($turno !== '')     $turnos[$turno] = ($turnos[$turno] ?? 0) + 1;
+            if ($antig !== '')     $antiguedades[$antig] = ($antiguedades[$antig] ?? 0) + 1;
+            if ($empObs !== '')    $empresasObs[$empObs] = ($empresasObs[$empObs] ?? 0) + 1;
+            if ($cargo !== '')     $cargos[$cargo] = ($cargos[$cargo] ?? 0) + 1;
+
+            // Observador (para top)
+            if ($nombreObs !== '') {
+                $key = mb_strtoupper($nombreObs);
+                $observadores[$key] = ($observadores[$key] ?? 0) + 1;
+            }
+
+            // Tarjetas negativas por tipo de falta
+            if (stripos($clasif, 'negativa') !== false && $tipoObs !== '') {
+                $negPorTipo[$tipoObs] = ($negPorTipo[$tipoObs] ?? 0) + 1;
+            }
+            // Tarjetas positivas por tipo
+            if (stripos($clasif, 'positiva') !== false && $tipoObs !== '') {
+                $posPorTipo[$tipoObs] = ($posPorTipo[$tipoObs] ?? 0) + 1;
+            }
+
+            // Top trabajadores con más tarjetas negativas
+            if (stripos($clasif, 'negativa') !== false && $nombreObsdo !== '') {
+                $k = mb_strtoupper($nombreObsdo);
+                $topNegTrabajadores[$k] = ($topNegTrabajadores[$k] ?? 0) + 1;
+            }
+            // Top trabajadores con más tarjetas positivas
+            if (stripos($clasif, 'positiva') !== false && $nombreObsdo !== '') {
+                $k = mb_strtoupper($nombreObsdo);
+                $topPosTrabajadores[$k] = ($topPosTrabajadores[$k] ?? 0) + 1;
+            }
+
+            // Timeline
+            $fecha = $r['fecha_tarjeta'] ?: $r['marca_temporal'];
+            if ($fecha !== '') {
+                $mk = $this->extractMonthKey($fecha);
+                if ($mk) {
+                    $byMonth[$mk] = ($byMonth[$mk] ?? 0) + 1;
+                    $yk = substr($mk, 0, 4);
+                    if ($yk !== '') $byYear[$yk] = ($byYear[$yk] ?? 0) + 1;
+                }
+            }
+        }
+
+        // Ordenar
+        arsort($clasificacion); arsort($centros); arsort($areas);
+        arsort($tiposObservacion); arsort($empresas); arsort($observadores);
+        arsort($turnos); arsort($antiguedades); arsort($empresasObs);
+        arsort($cargos); arsort($negPorTipo); arsort($posPorTipo);
+        arsort($topNegTrabajadores); arsort($topPosTrabajadores);
+        ksort($byMonth); ksort($byYear);
+
+        return [
+            'totalRows'           => $totalRows,
+            'clasificacion'       => $clasificacion,
+            'centros'             => $centros,
+            'areas'               => $areas,
+            'tiposObservacion'    => $tiposObservacion,
+            'internoExterno'     => $internoExterno,
+            'empresas'            => array_slice($empresas, 0, 15, true),
+            'empresasObservador'  => array_slice($empresasObs, 0, 15, true),
+            'turnos'              => $turnos,
+            'antiguedades'        => $antiguedades,
+            'cargos'              => array_slice($cargos, 0, 15, true),
+            'topObservadores'     => array_slice($observadores, 0, 20, true),
+            'negPorTipo'          => $negPorTipo,
+            'posPorTipo'          => $posPorTipo,
+            'topNegTrabajadores'  => array_slice($topNegTrabajadores, 0, 20, true),
+            'topPosTrabajadores'  => array_slice($topPosTrabajadores, 0, 20, true),
+            'byMonth'             => $byMonth,
+            'byYear'              => $byYear,
+        ];
+    }
+
+    /**
+     * Obtener listas únicas de valores para filtros.
+     */
+    public function getFilterOptions(): array
+    {
+        $rows = $this->getCompactRows();
+        if (!$rows) return [];
+
+        $empresasObs = $empresasObsdo = $tipos = $centros = $anios = [];
+        foreach ($rows as $r) {
+            if ($r['empresa_observador'] !== '') $empresasObs[$r['empresa_observador']] = true;
+            if ($r['empresa_observado'] !== '')  $empresasObsdo[$r['empresa_observado']] = true;
+            if ($r['tipo_observacion'] !== '')    $tipos[$r['tipo_observacion']] = true;
+            if ($r['centro'] !== '')              $centros[$r['centro']] = true;
+            $fecha = $r['fecha_tarjeta'] ?: $r['marca_temporal'];
+            if ($fecha !== '') {
+                $mk = $this->extractMonthKey($fecha);
+                if ($mk) $anios[substr($mk, 0, 4)] = true;
+            }
+        }
+
+        ksort($anios);
+        ksort($centros);
+        ksort($empresasObs);
+        ksort($empresasObsdo);
+        ksort($tipos);
+
+        return [
+            'empresas_observador' => array_keys($empresasObs),
+            'empresas_observado'  => array_keys($empresasObsdo),
+            'tipos_observacion'   => array_keys($tipos),
+            'centros'             => array_keys($centros),
+            'anios'               => array_keys($anios),
+        ];
+    }
+
+    /**
+     * Parsear fecha a Y-m-d string para comparaciones.
+     */
+    private function parseDate(string $value): ?string
+    {
+        $value = trim($value);
+        if (empty($value)) return null;
+        if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})#', $value, $m)) {
+            return sprintf('%s-%02d-%02d', $m[3], (int)$m[2], (int)$m[1]);
+        }
+        if (preg_match('#^(\d{4})-(\d{1,2})-(\d{1,2})#', $value, $m)) {
+            return sprintf('%s-%02d-%02d', $m[1], (int)$m[2], (int)$m[3]);
+        }
+        return null;
+    }
+
+    /**
      * Leer columnas de metadata (A-S) y calcular analíticas.
      */
     private function computeAnalytics(string $spreadsheetId): array
@@ -504,6 +779,7 @@ class GoogleDriveService
             $key = md5($fileInfo['id'] . $fileInfo['modifiedTime']);
             Cache::forget('gdrive_stop_analytics_' . $key);
             Cache::forget('gdrive_stop_checklist_' . $key);
+            Cache::forget('gdrive_stop_rows_' . $key);
         }
     }
 }
