@@ -74,4 +74,9 @@ return [
         'key' => env('OPENAI_API_KEY'),
     ],
 
+    'google_drive' => [
+        'credentials_path' => env('GOOGLE_DRIVE_CREDENTIALS_PATH', 'google-credentials.json'),
+        'folder_id'        => env('GOOGLE_DRIVE_FOLDER_ID'),
+    ],
+
 ];

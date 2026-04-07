@@ -28,6 +28,7 @@ use App\Http\Controllers\RespuestaController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VisitaSstController;
 use App\Http\Controllers\LeyKarinPublicoController;
+use App\Http\Controllers\StopDashboardController;
 use Illuminate\Support\Facades\Route;
 
 // --- WEBHOOK KIZEO (público, sin auth ni CSRF) ---
@@ -172,6 +173,13 @@ Route::middleware('auth')->group(function () {
         Route::get('charla-tracking', [CharlaTrackingController::class, 'index'])->name('charla-tracking.index');
         Route::get('charla-tracking/email-preview', [CharlaTrackingController::class, 'emailPreview'])->name('charla-tracking.email-preview');
         Route::post('charla-tracking/sync', [CharlaTrackingController::class, 'sync'])->name('charla-tracking.sync');
+    });
+
+    // --- TARJETA STOP (Google Drive) ---
+    Route::middleware('modulo:kizeo_analytics')->group(function () {
+        Route::get('stop-dashboard', [StopDashboardController::class, 'index'])->name('stop-dashboard.index');
+        Route::post('stop-dashboard/sync', [StopDashboardController::class, 'sync'])->name('stop-dashboard.sync');
+        Route::get('stop-dashboard/api/data', [StopDashboardController::class, 'apiData'])->name('stop-dashboard.api.data');
     });
 
     // --- SST: INSPECCIONES ---

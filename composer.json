@@ -8,9 +8,11 @@
     "require": {
         "php": "^8.2",
         "barryvdh/laravel-dompdf": "^3.1",
+        "google/apiclient": "^2.19",
         "laravel/framework": "^11.31",
         "laravel/socialite": "*",
         "laravel/tinker": "^2.9",
+        "phpoffice/phpspreadsheet": "^5.5",
         "resend/resend-laravel": "*"
     },
     "require-dev": {

@@ -73,6 +73,10 @@
                 <i class="bi bi-clipboard-data"></i>
                 <span>Seguimiento Charlas</span>
             </a>
+            <a href="{{ route('stop-dashboard.index') }}" class="nav-item {{ request()->routeIs('stop-dashboard.*') ? 'active' : '' }}">
+                <i class="bi bi-hand-index-fill"></i>
+                <span>Tarjeta STOP</span>
+            </a>
             @endif
             @if(auth()->user()->tieneAcceso('charlas'))
             <a href="{{ route('charlas.index') }}" class="nav-item {{ request()->routeIs('charlas.*') ? 'active' : '' }}">
