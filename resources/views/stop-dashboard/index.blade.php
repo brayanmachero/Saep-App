@@ -126,7 +126,7 @@
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
                 <i class="bi bi-graph-up" style="color:#3b82f6"></i> Tendencia Mensual
             </h3>
-            <canvas id="timelineChart" height="220"></canvas>
+            <div style="position:relative;height:250px"><canvas id="timelineChart"></canvas></div>
         </div>
 
         {{-- Clasificacion Positiva/Negativa --}}
@@ -134,8 +134,8 @@
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
                 <i class="bi bi-pie-chart-fill" style="color:#8b5cf6"></i> Clasificacion
             </h3>
-            <div style="max-width:220px;margin:0 auto">
-                <canvas id="clasificacionChart" height="220"></canvas>
+            <div style="position:relative;height:200px;max-width:220px;margin:0 auto">
+                <canvas id="clasificacionChart"></canvas>
             </div>
             <div style="display:flex;justify-content:center;gap:1.5rem;margin-top:.75rem;font-size:.8rem">
                 <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e;margin-right:.3rem"></span>Positiva: {{ number_format($positivas) }}</span>
@@ -180,7 +180,7 @@
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
                 <i class="bi bi-tags-fill" style="color:#f59e0b"></i> Tipo de Observacion
             </h3>
-            <canvas id="tipoObsChart" height="250"></canvas>
+            <div style="position:relative;height:280px"><canvas id="tipoObsChart"></canvas></div>
         </div>
     </div>
 
@@ -217,7 +217,7 @@
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
                 <i class="bi bi-clock-fill" style="color:#f97316"></i> Turno
             </h3>
-            <canvas id="turnoChart" height="220"></canvas>
+            <div style="position:relative;height:220px"><canvas id="turnoChart"></canvas></div>
         </div>
 
         {{-- Interno / Externo --}}
@@ -225,8 +225,8 @@
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
                 <i class="bi bi-person-badge-fill" style="color:#ec4899"></i> Interno / Externo
             </h3>
-            <div style="max-width:200px;margin:0 auto">
-                <canvas id="internoExternoChart" height="200"></canvas>
+            <div style="position:relative;height:180px;max-width:200px;margin:0 auto">
+                <canvas id="internoExternoChart"></canvas>
             </div>
             <div style="display:flex;justify-content:center;gap:1rem;margin-top:.75rem;font-size:.78rem">
                 @foreach($internoExterno as $tipo => $count)
@@ -275,7 +275,7 @@
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
                 <i class="bi bi-hourglass-split" style="color:#8b5cf6"></i> Antiguedad Observados
             </h3>
-            <canvas id="antiguedadChart" height="280"></canvas>
+            <div style="position:relative;height:300px"><canvas id="antiguedadChart"></canvas></div>
         </div>
     </div>
 
@@ -312,7 +312,7 @@
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
                 <i class="bi bi-calendar3" style="color:#14b8a6"></i> Observaciones por Ano
             </h3>
-            <canvas id="yearChart" height="220"></canvas>
+            <div style="position:relative;height:220px"><canvas id="yearChart"></canvas></div>
         </div>
     </div>
 
