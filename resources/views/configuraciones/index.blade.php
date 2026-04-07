@@ -42,6 +42,8 @@
         'kizeo_vehiculos_destinatarios'=> 'Emails separados por coma (,)',
         'charla_report_activo'        => 'Activar reporte semanal de charlas',
         'charla_report_destinatarios' => 'Emails separados por coma (,)',
+        'stop_report_activo'          => 'Activar reporte semanal de Tarjeta STOP',
+        'stop_report_destinatarios'   => 'Emails separados por coma (,)',
     ];
 
     $tipos_email = [
@@ -531,6 +533,36 @@
                             </div>
                             <div class="preview-card-desc">Resumen semanal de cumplimiento de charlas de seguridad.</div>
                             <span class="preview-card-link" style="color:#0f1b4c">
+                                <i class="bi bi-eye"></i> Ver Preview
+                            </span>
+                        </a>
+                    </div>
+                    @endif
+
+                    @if(Route::has('stop-dashboard.reporte.preview'))
+                    <div class="setting-subsection" style="margin-top:1.5rem">Reporte Semanal — Tarjeta STOP</div>
+                    <div class="preview-grid">
+                        <a href="{{ route('stop-dashboard.reporte.preview') }}" target="_blank"
+                           class="preview-card"
+                           onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor=''">
+                            <div class="preview-card-title">
+                                <i class="bi bi-hand-index-fill" style="color:#3b82f6"></i>
+                                Reporte Semanal STOP
+                            </div>
+                            <div class="preview-card-desc">Observaciones de seguridad: positivas, negativas, tipos de falta y trabajadores destacados.</div>
+                            <span class="preview-card-link" style="color:#3b82f6">
+                                <i class="bi bi-eye"></i> Ver Preview
+                            </span>
+                        </a>
+                        <a href="{{ route('stop-dashboard.reporte.preview', ['anio' => now()->format('Y')]) }}" target="_blank"
+                           class="preview-card"
+                           onmouseover="this.style.borderColor='#8b5cf6'" onmouseout="this.style.borderColor=''">
+                            <div class="preview-card-title">
+                                <i class="bi bi-calendar-range" style="color:#8b5cf6"></i>
+                                Acumulado Anual STOP
+                            </div>
+                            <div class="preview-card-desc">Vista acumulada del año {{ now()->format('Y') }} completo.</div>
+                            <span class="preview-card-link" style="color:#8b5cf6">
                                 <i class="bi bi-eye"></i> Ver Preview
                             </span>
                         </a>
