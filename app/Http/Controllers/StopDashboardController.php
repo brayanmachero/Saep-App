@@ -38,11 +38,13 @@ class StopDashboardController extends Controller
             'anio'               => $request->input('anio'),
         ]);
 
-        // Analíticas filtradas
+        // Analíticas filtradas (incluye filterOptions en la misma respuesta)
         $analytics = $drive->getFilteredAnalytics($filters);
 
+        // Las opciones de filtro vienen incluidas en analytics para evitar doble lectura
+        $filterOptions = $analytics['filterOptions'] ?? [];
+
         if (!$analytics || ($analytics['totalRows'] ?? 0) === 0) {
-            $filterOptions = $drive->getFilterOptions();
             return view('stop-dashboard.index', [
                 'error' => empty($filters)
                     ? 'No se pudieron obtener datos del archivo. Verifique que la carpeta esté compartida con la cuenta de servicio.'
@@ -52,9 +54,6 @@ class StopDashboardController extends Controller
                 'filterOptions' => $filterOptions,
             ]);
         }
-
-        // Opciones para filtros (sin filtrar)
-        $filterOptions = $drive->getFilterOptions();
 
         // Checklist (sin filtros, datos globales)
         $checklist = $drive->getChecklistAnalytics();
