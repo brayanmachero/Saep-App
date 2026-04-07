@@ -25,15 +25,16 @@ class StopDashboardController extends Controller
             ]);
         }
 
-        // Filtros activos
+        // Filtros activos — por defecto mes en curso
+        $isClean = !$request->hasAny(['empresa_observador','empresa_observado','tipo_observacion','centro','clasificacion','fecha_desde','fecha_hasta','mes','anio','all']);
         $filters = array_filter([
             'empresa_observador' => $request->input('empresa_observador'),
             'empresa_observado'  => $request->input('empresa_observado'),
             'tipo_observacion'   => $request->input('tipo_observacion'),
             'centro'             => $request->input('centro'),
             'clasificacion'      => $request->input('clasificacion'),
-            'fecha_desde'        => $request->input('fecha_desde'),
-            'fecha_hasta'        => $request->input('fecha_hasta'),
+            'fecha_desde'        => $request->input('fecha_desde', $isClean ? now()->startOfMonth()->format('Y-m-d') : null),
+            'fecha_hasta'        => $request->input('fecha_hasta', $isClean ? now()->endOfMonth()->format('Y-m-d') : null),
             'mes'                => $request->input('mes'),
             'anio'               => $request->input('anio'),
         ]);
@@ -115,15 +116,7 @@ class StopDashboardController extends Controller
         );
 
         return new \App\Mail\StopReporteMail(
-            stats: $data['stats'],
-            topNegTrabajadores: $data['topNegTrabajadores'] ?? [],
-            topPosTrabajadores: $data['topPosTrabajadores'] ?? [],
-            negPorTipo: $data['negPorTipo'] ?? [],
-            posPorTipo: $data['posPorTipo'] ?? [],
-            centros: $data['centros'] ?? [],
-            areas: $data['areas'] ?? [],
-            topObservadores: $data['topObservadores'] ?? [],
-            antiguedades: $data['antiguedades'] ?? [],
+            analytics: $data['analytics'],
             periodo: $data['periodo'] ?? now()->format('d/m/Y'),
             mesLabel: $data['mesLabel'] ?? null,
         );

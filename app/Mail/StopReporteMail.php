@@ -13,23 +13,16 @@ class StopReporteMail extends Mailable
     use Queueable, SerializesModels;
 
     public function __construct(
-        public array $stats,
-        public array $topNegTrabajadores,
-        public array $topPosTrabajadores,
-        public array $negPorTipo,
-        public array $posPorTipo,
-        public array $centros,
-        public array $areas,
-        public array $topObservadores,
-        public array $antiguedades,
+        public array $analytics,
         public string $periodo,
         public ?string $mesLabel = null,
     ) {}
 
     public function envelope(): Envelope
     {
-        $total = $this->stats['total'] ?? 0;
-        $neg = $this->stats['negativas'] ?? 0;
+        $total = $this->analytics['totalRows'] ?? 0;
+        $clasif = $this->analytics['clasificacion'] ?? [];
+        $neg = $clasif['Negativa'] ?? $clasif['negativa'] ?? 0;
         $label = $this->mesLabel ?? $this->periodo;
 
         return new Envelope(

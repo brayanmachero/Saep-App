@@ -93,15 +93,7 @@ class StopWeeklyReport extends Command
         }
 
         $mailable = new StopReporteMail(
-            stats: $stats,
-            topNegTrabajadores: $analytics['topNegTrabajadores'] ?? [],
-            topPosTrabajadores: $analytics['topPosTrabajadores'] ?? [],
-            negPorTipo: $analytics['negPorTipo'] ?? [],
-            posPorTipo: $analytics['posPorTipo'] ?? [],
-            centros: $analytics['centros'] ?? [],
-            areas: $analytics['areas'] ?? [],
-            topObservadores: $analytics['topObservadores'] ?? [],
-            antiguedades: $analytics['antiguedades'] ?? [],
+            analytics: $analytics,
             periodo: $periodo,
             mesLabel: $mesLabel,
         );
@@ -119,10 +111,10 @@ class StopWeeklyReport extends Command
             }
         }
 
-        $this->info("Reporte STOP — Total: {$stats['total']} | Pos: {$positivas} | Neg: {$negativas}");
+        $this->info("Reporte STOP — Total: {$analytics['totalRows']} | Pos: {$positivas} | Neg: {$negativas}");
 
         Log::info('stop:weekly-report enviado', [
-            'stats'         => $stats,
+            'total'         => $analytics['totalRows'],
             'destinatarios' => count($destinatarios),
             'periodo'       => $periodo,
         ]);
@@ -154,29 +146,13 @@ class StopWeeklyReport extends Command
         $analytics = $drive->getFilteredAnalytics($filters);
 
         if (!$analytics || ($analytics['totalRows'] ?? 0) === 0) {
-            return ['stats' => ['total' => 0, 'positivas' => 0, 'negativas' => 0, 'centros' => 0, 'observadores' => 0]];
+            return ['analytics' => ['totalRows' => 0], 'periodo' => $mesLabel, 'mesLabel' => $mesLabel];
         }
 
-        $clasificacion = $analytics['clasificacion'] ?? [];
-
         return [
-            'stats' => [
-                'total'        => $analytics['totalRows'],
-                'positivas'    => $clasificacion['Positiva'] ?? $clasificacion['positiva'] ?? 0,
-                'negativas'    => $clasificacion['Negativa'] ?? $clasificacion['negativa'] ?? 0,
-                'centros'      => count($analytics['centros'] ?? []),
-                'observadores' => count($analytics['topObservadores'] ?? []),
-            ],
-            'topNegTrabajadores' => $analytics['topNegTrabajadores'] ?? [],
-            'topPosTrabajadores' => $analytics['topPosTrabajadores'] ?? [],
-            'negPorTipo'         => $analytics['negPorTipo'] ?? [],
-            'posPorTipo'         => $analytics['posPorTipo'] ?? [],
-            'centros'            => $analytics['centros'] ?? [],
-            'areas'              => $analytics['areas'] ?? [],
-            'topObservadores'    => $analytics['topObservadores'] ?? [],
-            'antiguedades'       => $analytics['antiguedades'] ?? [],
-            'periodo'            => $mesLabel ?? now()->format('d/m/Y'),
-            'mesLabel'           => $mesLabel,
+            'analytics' => $analytics,
+            'periodo'   => $mesLabel ?? now()->format('d/m/Y'),
+            'mesLabel'  => $mesLabel,
         ];
     }
 }

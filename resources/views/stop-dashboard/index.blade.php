@@ -8,7 +8,7 @@
         <div>
             <h2 class="page-heading"><i class="bi bi-hand-index-fill" style="color:var(--accent-color)"></i> Dashboard Tarjeta STOP</h2>
             <p class="page-subheading">
-                Observaciones de seguridad — Google Sheets
+                Observaciones de seguridad &mdash; Google Sheets
                 @if(isset($fileInfo))
                     <span style="font-size:.72rem;color:var(--text-muted);margin-left:.5rem">
                         <i class="bi bi-cloud-check"></i> {{ $fileInfo['name'] ?? 'N/A' }}
@@ -91,7 +91,7 @@
                 </div>
                 {{-- Anio --}}
                 <div>
-                    <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">Ano</label>
+                    <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">A&ntilde;o</label>
                     <select name="anio" class="filter-select" onchange="this.form.submit()">
                         <option value="">Todos (acumulado)</option>
                         @foreach($filterOptions['anios'] ?? [] as $opt)
@@ -295,13 +295,13 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
-                <i class="bi bi-exclamation-triangle-fill" style="color:#ef4444"></i> Tipos de Falta — Tarjetas Negativas
+                <i class="bi bi-exclamation-triangle-fill" style="color:#ef4444"></i> Tipos de Falta ï¿½ Tarjetas Negativas
             </h3>
             <div style="position:relative;height:250px"><canvas id="negPorTipoChart"></canvas></div>
         </div>
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
-                <i class="bi bi-star-fill" style="color:#22c55e"></i> Tipos de Felicitacion — Tarjetas Positivas
+                <i class="bi bi-star-fill" style="color:#22c55e"></i> Tipos de Felicitacion ï¿½ Tarjetas Positivas
             </h3>
             <div style="position:relative;height:250px"><canvas id="posPorTipoChart"></canvas></div>
         </div>
