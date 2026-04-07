@@ -128,7 +128,6 @@
             </h3>
             <canvas id="timelineChart" height="220"></canvas>
         </div>
-        @endif
 
         {{-- Clasificacion Positiva/Negativa --}}
         <div class="glass-card" style="padding:1.25rem">
