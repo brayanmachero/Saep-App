@@ -15,13 +15,18 @@ class StopWeeklyReport extends Command
     protected $signature = 'stop:weekly-report
                             {--email= : Enviar a email específico}
                             {--mes= : Filtrar por mes (YYYY-MM)}
-                            {--anio= : Filtrar por año (YYYY)}';
+                            {--anio= : Filtrar por año (YYYY)}
+                            {--empresa= : Filtrar por empresa observador}
+                            {--frecuencia=semanal : semanal o mensual}';
 
     protected $description = 'Genera y envía el reporte semanal/mensual de Tarjeta STOP';
 
     public function handle(): int
     {
-        $this->info('Generando reporte Tarjeta STOP...');
+        $frecuencia = strtolower($this->option('frecuencia') ?? 'semanal');
+        $esMensual  = $frecuencia === 'mensual';
+
+        $this->info("Generando reporte Tarjeta STOP ({$frecuencia})...");
 
         $drive = new GoogleDriveService();
 
@@ -30,7 +35,11 @@ class StopWeeklyReport extends Command
             return self::FAILURE;
         }
 
-        // Determinar filtros del período
+        // --- Empresa filter (option > config > none) ---
+        $empresa = $this->option('empresa')
+            ?: Configuracion::get('stop_report_empresa', '');
+
+        // --- Determinar filtros del período ---
         $filters = [];
         $mesLabel = null;
 
@@ -40,10 +49,21 @@ class StopWeeklyReport extends Command
         } elseif ($anio = $this->option('anio')) {
             $filters['anio'] = $anio;
             $mesLabel = "Año {$anio}";
+        } elseif ($esMensual) {
+            // Mensual automático: mes anterior completo
+            $prev = now()->subMonth();
+            $filters['mes'] = $prev->format('Y-m');
+            $mesLabel = $prev->translatedFormat('F Y');
         } else {
-            // Por defecto: mes actual
+            // Semanal automático: mes en curso
             $filters['mes'] = now()->format('Y-m');
             $mesLabel = now()->translatedFormat('F Y');
+        }
+
+        // Aplicar filtro de empresa
+        if ($empresa) {
+            $filters['empresa_observador'] = $empresa;
+            $this->info("Filtrando por empresa: {$empresa}");
         }
 
         $analytics = $drive->getFilteredAnalytics($filters);
@@ -59,26 +79,26 @@ class StopWeeklyReport extends Command
         $positivas = $clasificacion['Positiva'] ?? $clasificacion['positiva'] ?? 0;
         $negativas = $clasificacion['Negativa'] ?? $clasificacion['negativa'] ?? 0;
 
-        $stats = [
-            'total'        => $analytics['totalRows'],
-            'positivas'    => $positivas,
-            'negativas'    => $negativas,
-            'centros'      => count($analytics['centros'] ?? []),
-            'observadores' => count($analytics['topObservadores'] ?? []),
-        ];
+        // --- Verificar si el reporte está activo ---
+        $configActivo = $esMensual
+            ? 'stop_report_mensual_activo'
+            : 'stop_report_activo';
 
-        // Verificar si el reporte está activo
-        if (!$this->option('email') && Configuracion::get('stop_report_activo') !== '1') {
-            $this->info('Reporte STOP desactivado en configuración.');
+        if (!$this->option('email') && Configuracion::get($configActivo) !== '1') {
+            $this->info("Reporte STOP ({$frecuencia}) desactivado en configuración.");
             return self::SUCCESS;
         }
 
-        // Destinatarios
+        // --- Destinatarios ---
         $email = $this->option('email');
         if ($email) {
             $destinatarios = [$email];
         } else {
-            $configEmails = Configuracion::get('stop_report_destinatarios', '');
+            $configKey = $esMensual
+                ? 'stop_report_mensual_destinatarios'
+                : 'stop_report_destinatarios';
+
+            $configEmails = Configuracion::get($configKey, '');
             $destinatarios = collect(explode(',', $configEmails))
                 ->map(fn ($e) => trim($e))
                 ->filter(fn ($e) => filter_var($e, FILTER_VALIDATE_EMAIL))
@@ -88,14 +108,17 @@ class StopWeeklyReport extends Command
         }
 
         if (empty($destinatarios)) {
-            $this->warn('No hay destinatarios configurados para el reporte STOP.');
+            $this->warn("No hay destinatarios configurados para el reporte STOP ({$frecuencia}).");
             return self::SUCCESS;
         }
+
+        $frecLabel = $esMensual ? 'Mensual' : 'Semanal';
 
         $mailable = new StopReporteMail(
             analytics: $analytics,
             periodo: $periodo,
             mesLabel: $mesLabel,
+            frecuencia: $frecLabel,
         );
 
         foreach ($destinatarios as $dest) {
@@ -104,19 +127,20 @@ class StopWeeklyReport extends Command
                 $this->info("Reporte enviado a: {$dest}");
             } catch (\Exception $e) {
                 $this->error("Error enviando a {$dest}: {$e->getMessage()}");
-                Log::error('stop:weekly-report: error enviando email', [
+                Log::error("stop:weekly-report ({$frecuencia}): error enviando email", [
                     'email' => $dest,
                     'error' => $e->getMessage(),
                 ]);
             }
         }
 
-        $this->info("Reporte STOP — Total: {$analytics['totalRows']} | Pos: {$positivas} | Neg: {$negativas}");
+        $this->info("Reporte STOP ({$frecLabel}) — Total: {$analytics['totalRows']} | Pos: {$positivas} | Neg: {$negativas}");
 
-        Log::info('stop:weekly-report enviado', [
+        Log::info("stop:weekly-report ({$frecuencia}) enviado", [
             'total'         => $analytics['totalRows'],
             'destinatarios' => count($destinatarios),
             'periodo'       => $periodo,
+            'empresa'       => $empresa ?: '(todas)',
         ]);
 
         return self::SUCCESS;
@@ -125,7 +149,7 @@ class StopWeeklyReport extends Command
     /**
      * Build report data for preview routes.
      */
-    public static function buildReportData(?string $mes = null, ?string $anio = null): array
+    public static function buildReportData(?string $mes = null, ?string $anio = null, ?string $empresa = null): array
     {
         $drive = new GoogleDriveService();
 
@@ -141,6 +165,12 @@ class StopWeeklyReport extends Command
         } else {
             $filters['mes'] = now()->format('Y-m');
             $mesLabel = now()->translatedFormat('F Y');
+        }
+
+        // Usar empresa pasada o la de configuración
+        $emp = $empresa ?: Configuracion::get('stop_report_empresa', '');
+        if ($emp) {
+            $filters['empresa_observador'] = $emp;
         }
 
         $analytics = $drive->getFilteredAnalytics($filters);

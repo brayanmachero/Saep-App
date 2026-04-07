@@ -20,5 +20,8 @@ Schedule::command('kizeo:charla-weekly-report --sync')->weeklyOn(1, '08:00')->wi
 // SST: enviar recordatorios de actividades próximas a vencer / vencidas (cada día a las 8:00 AM)
 Schedule::command('sst:enviar-recordatorios')->dailyAt('08:00')->withoutOverlapping();
 
-// Reporte semanal de Tarjeta STOP (lunes 08:30 AM — mes en curso)
-Schedule::command('stop:weekly-report')->weeklyOn(1, '08:30')->withoutOverlapping();
+// Reporte semanal de Tarjeta STOP (lunes 08:30 AM — mes en curso, filtrado por empresa)
+Schedule::command('stop:weekly-report --frecuencia=semanal')->weeklyOn(1, '08:30')->withoutOverlapping();
+
+// Reporte mensual de Tarjeta STOP (día 1 de cada mes a las 09:00 AM — mes anterior, filtrado por empresa)
+Schedule::command('stop:weekly-report --frecuencia=mensual')->monthlyOn(1, '09:00')->withoutOverlapping();

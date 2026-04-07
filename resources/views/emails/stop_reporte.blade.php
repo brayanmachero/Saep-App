@@ -62,7 +62,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <tr>
 <td style="background-color:#7f1d1d; padding:24px 32px; text-align:center; border-radius:4px 4px 0 0;">
     <h1 style="margin:0; color:#ffffff; font-size:22px; font-weight:bold; letter-spacing:0.5px;">
-        AUDITOR&Iacute;AS STOP
+        AUDITOR&Iacute;AS STOP &mdash; Reporte {{ $frecuencia ?? 'Semanal' }}
     </h1>
     <p style="margin:6px 0 0; color:#fca5a5; font-size:13px;">
         Reporte de Observaciones de Seguridad &mdash; {{ $mesLabel ?? $periodo }}

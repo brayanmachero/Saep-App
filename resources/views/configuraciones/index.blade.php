@@ -44,6 +44,9 @@
         'charla_report_destinatarios' => 'Emails separados por coma (,)',
         'stop_report_activo'          => 'Activar reporte semanal de Tarjeta STOP',
         'stop_report_destinatarios'   => 'Emails separados por coma (,)',
+        'stop_report_empresa'         => 'Empresa para filtrar reportes STOP (observador)',
+        'stop_report_mensual_activo'  => 'Activar reporte mensual de Tarjeta STOP',
+        'stop_report_mensual_destinatarios' => 'Emails separados por coma (,)',
     ];
 
     $tipos_email = [

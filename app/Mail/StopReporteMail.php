@@ -16,6 +16,7 @@ class StopReporteMail extends Mailable
         public array $analytics,
         public string $periodo,
         public ?string $mesLabel = null,
+        public string $frecuencia = 'Semanal',
     ) {}
 
     public function envelope(): Envelope
@@ -26,7 +27,7 @@ class StopReporteMail extends Mailable
         $label = $this->mesLabel ?? $this->periodo;
 
         return new Envelope(
-            subject: "Reporte Tarjeta STOP — {$total} obs. ({$neg} neg.) — {$label}",
+            subject: "Reporte {$this->frecuencia} Tarjeta STOP — {$total} obs. ({$neg} neg.) — {$label}",
         );
     }
 
