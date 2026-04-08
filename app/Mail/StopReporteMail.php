@@ -37,8 +37,15 @@ class StopReporteMail extends Mailable
         $neg = $clasif['Negativa'] ?? $clasif['negativa'] ?? 0;
         $label = $this->mesLabel ?? $this->periodo;
 
+        // Para reportes semanales, incluir número de semana anterior
+        $weekTag = '';
+        if (strtolower($this->frecuencia) === 'semanal') {
+            $weekNum = now()->subWeek()->isoFormat('W');
+            $weekTag = " — Semana {$weekNum}";
+        }
+
         return new Envelope(
-            subject: "Reporte {$this->frecuencia} Tarjeta STOP — {$total} obs. ({$neg} neg.) — {$label}",
+            subject: "Reporte {$this->frecuencia} Tarjeta STOP{$weekTag} — {$total} obs. ({$neg} neg.) — {$label}",
         );
     }
 

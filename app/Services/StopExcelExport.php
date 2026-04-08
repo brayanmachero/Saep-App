@@ -68,8 +68,11 @@ class StopExcelExport
         $pctNeg = $total > 0 ? $neg / $total : 0;
 
         // Header
+        $weekTag = strtolower($this->frecuencia) === 'semanal'
+            ? ' — Semana ' . now()->subWeek()->isoFormat('W')
+            : '';
         $sheet->mergeCells('A1:F1');
-        $sheet->setCellValue('A1', "AUDITORÍAS STOP — Reporte {$this->frecuencia}");
+        $sheet->setCellValue('A1', "AUDITORÍAS STOP — Reporte {$this->frecuencia}{$weekTag}");
         $this->styleHeader($sheet, 'A1:F1');
         $sheet->getRowDimension(1)->setRowHeight(36);
 
