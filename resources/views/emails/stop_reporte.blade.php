@@ -60,7 +60,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 
 {{-- ═══════════ HEADER ═══════════ --}}
 <tr>
-<td style="background-color:#7f1d1d; padding:24px 32px; text-align:center; border-radius:4px 4px 0 0;">
+<td style="background-color:#1B5E20; padding:24px 32px; text-align:center; border-radius:4px 4px 0 0;">
     <h1 style="margin:0; color:#ffffff; font-size:22px; font-weight:bold; letter-spacing:0.5px;">
         AUDITOR&Iacute;AS STOP &mdash; Reporte {{ $frecuencia ?? 'Semanal' }}
     </h1>
@@ -76,7 +76,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr>
         <td width="33%" style="padding:4px;">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#7f1d1d; border-radius:6px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1B5E20; border-radius:6px;">
             <tr><td style="padding:14px 8px; text-align:center;">
                 <span style="font-size:11px; color:#fca5a5; text-transform:uppercase; letter-spacing:1px;">Tarjetas STOP</span><br/>
                 <span style="font-size:32px; font-weight:bold; color:#ffffff;">{{ number_format($total) }}</span>
@@ -137,7 +137,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <tr>
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td style="background-color:#7f1d1d; padding:8px 12px; text-align:center; border-radius:4px;">
+    <tr><td style="background-color:#1B5E20; padding:8px 12px; text-align:center; border-radius:4px;">
         <span style="color:#ffffff; font-size:13px; font-weight:bold;">Tarjetas STOP por Centro</span>
     </td></tr>
     </table>
@@ -176,7 +176,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <tr>
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td style="background-color:#7f1d1d; padding:8px 12px; text-align:center; border-radius:4px;">
+    <tr><td style="background-color:#1B5E20; padding:8px 12px; text-align:center; border-radius:4px;">
         <span style="color:#ffffff; font-size:13px; font-weight:bold;">&Aacute;rea o Proceso donde Ocurri&oacute;</span>
     </td></tr>
     </table>
@@ -215,7 +215,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <tr>
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td style="background-color:#7f1d1d; padding:8px 12px; text-align:center; border-radius:4px;">
+    <tr><td style="background-color:#1B5E20; padding:8px 12px; text-align:center; border-radius:4px;">
         <span style="color:#ffffff; font-size:13px; font-weight:bold;">Tarjetas STOP por Mes</span>
     </td></tr>
     </table>
@@ -258,7 +258,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <tr>
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td style="background-color:#7f1d1d; padding:8px 12px; text-align:center; border-radius:4px;">
+    <tr><td style="background-color:#1B5E20; padding:8px 12px; text-align:center; border-radius:4px;">
         <span style="color:#ffffff; font-size:13px; font-weight:bold;">Principal Raz&oacute;n &mdash; Tarjetas Negativas</span>
     </td></tr>
     </table>
@@ -300,7 +300,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <tr>
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td style="background-color:#7f1d1d; padding:8px 12px; text-align:center; border-radius:4px;">
+    <tr><td style="background-color:#1B5E20; padding:8px 12px; text-align:center; border-radius:4px;">
         <span style="color:#ffffff; font-size:13px; font-weight:bold;">Tarjetas Emitidas por Empresa</span>
     </td></tr>
     </table>
@@ -339,7 +339,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <tr>
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td style="background-color:#7f1d1d; padding:8px 12px; text-align:center; border-radius:4px;">
+    <tr><td style="background-color:#1B5E20; padding:8px 12px; text-align:center; border-radius:4px;">
         <span style="color:#ffffff; font-size:13px; font-weight:bold;">Total de Tarjetas por Observador</span>
     </td></tr>
     </table>
@@ -388,7 +388,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <tr>
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td style="background-color:#7f1d1d; padding:8px 12px; text-align:center; border-radius:4px;">
+    <tr><td style="background-color:#1B5E20; padding:8px 12px; text-align:center; border-radius:4px;">
         <span style="color:#ffffff; font-size:13px; font-weight:bold;">Trabajador con Mayor Tarjetas STOP Negativas</span>
     </td></tr>
     </table>
@@ -481,7 +481,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <tr>
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td style="background-color:#7f1d1d; padding:8px 12px; text-align:center; border-radius:4px;">
+    <tr><td style="background-color:#1B5E20; padding:8px 12px; text-align:center; border-radius:4px;">
         <span style="color:#ffffff; font-size:13px; font-weight:bold;">Persona que Pas&oacute; la Tarjeta &mdash; por Empresa</span>
     </td></tr>
     </table>
@@ -532,7 +532,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
         @if(!empty($antiguedades))
         <td width="32%" valign="top">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-            <tr><td style="background-color:#7f1d1d; padding:6px 8px; text-align:center; border-radius:4px;">
+            <tr><td style="background-color:#1B5E20; padding:6px 8px; text-align:center; border-radius:4px;">
                 <span style="color:#ffffff; font-size:11px; font-weight:bold;">Antig&uuml;edad</span>
             </td></tr>
             </table>
@@ -540,7 +540,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
                 @foreach(array_slice($antiguedades, 0, 8, true) as $antig => $cnt)
                 <tr>
                     <td style="padding:2px 4px; border-bottom:1px solid #f1f5f9; color:#334155;">{{ $antig }}</td>
-                    <td style="padding:2px 4px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:bold; color:#7f1d1d; width:30px;">{{ $cnt }}</td>
+                    <td style="padding:2px 4px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:bold; color:#1B5E20; width:30px;">{{ $cnt }}</td>
                 </tr>
                 @endforeach
             </table>
@@ -550,7 +550,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
         @if(!empty($cargos))
         <td width="32%" valign="top">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-            <tr><td style="background-color:#7f1d1d; padding:6px 8px; text-align:center; border-radius:4px;">
+            <tr><td style="background-color:#1B5E20; padding:6px 8px; text-align:center; border-radius:4px;">
                 <span style="color:#ffffff; font-size:11px; font-weight:bold;">Cargo</span>
             </td></tr>
             </table>
@@ -558,7 +558,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
                 @foreach(array_slice($cargos, 0, 8, true) as $cargo => $cnt)
                 <tr>
                     <td style="padding:2px 4px; border-bottom:1px solid #f1f5f9; color:#334155;">{{ $cargo }}</td>
-                    <td style="padding:2px 4px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:bold; color:#7f1d1d; width:30px;">{{ $cnt }}</td>
+                    <td style="padding:2px 4px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:bold; color:#1B5E20; width:30px;">{{ $cnt }}</td>
                 </tr>
                 @endforeach
             </table>
@@ -568,7 +568,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
         @if(!empty($turnos))
         <td width="32%" valign="top">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-            <tr><td style="background-color:#7f1d1d; padding:6px 8px; text-align:center; border-radius:4px;">
+            <tr><td style="background-color:#1B5E20; padding:6px 8px; text-align:center; border-radius:4px;">
                 <span style="color:#ffffff; font-size:11px; font-weight:bold;">Turno</span>
             </td></tr>
             </table>
@@ -576,7 +576,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
                 @foreach($turnos as $turno => $cnt)
                 <tr>
                     <td style="padding:2px 4px; border-bottom:1px solid #f1f5f9; color:#334155;">{{ $turno }}</td>
-                    <td style="padding:2px 4px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:bold; color:#7f1d1d; width:30px;">{{ $cnt }}</td>
+                    <td style="padding:2px 4px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:bold; color:#1B5E20; width:30px;">{{ $cnt }}</td>
                 </tr>
                 @endforeach
             </table>

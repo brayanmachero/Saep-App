@@ -17,7 +17,7 @@ class StopExcelExport
     private string $frecuencia;
 
     // CCU brand colors
-    private const RED_DARK  = '7F1D1D';
+    private const CCU_GREEN = '1B5E20';
     private const RED       = '991B1B';
     private const GREEN     = '16A34A';
     private const GRAY_BG   = 'F1F5F9';
@@ -81,7 +81,7 @@ class StopExcelExport
         // KPI cards row
         $row = 4;
         $kpis = [
-            ['Total Tarjetas', $total, self::RED_DARK],
+            ['Total Tarjetas', $total, self::CCU_GREEN],
             ['Positivas', $pos, self::GREEN],
             ['Negativas', $neg, self::RED],
         ];
@@ -324,7 +324,7 @@ class StopExcelExport
             $sheet->setCellValue("A{$row}", 'Empresa del Observador (Quien pasó la tarjeta)');
             $sheet->getStyle("A{$row}:C{$row}")->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['argb' => self::WHITE], 'size' => 11],
-                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::RED_DARK]],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::CCU_GREEN]],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
             ]);
             $sheet->getRowDimension($row)->setRowHeight(28);
@@ -515,7 +515,7 @@ class StopExcelExport
             $sheet->setCellValue("A{$row}", 'Distribución por Antigüedad');
             $sheet->getStyle("A{$row}:B{$row}")->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['argb' => self::WHITE], 'size' => 11],
-                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::RED_DARK]],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::CCU_GREEN]],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
             ]);
             $sheet->getRowDimension($row)->setRowHeight(28);
@@ -540,7 +540,7 @@ class StopExcelExport
             $sheet->setCellValue("A{$row}", 'Distribución por Cargo');
             $sheet->getStyle("A{$row}:B{$row}")->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['argb' => self::WHITE], 'size' => 11],
-                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::RED_DARK]],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::CCU_GREEN]],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
             ]);
             $sheet->getRowDimension($row)->setRowHeight(28);
@@ -565,7 +565,7 @@ class StopExcelExport
     {
         $sheet->getStyle($range)->applyFromArray([
             'font' => ['bold' => true, 'color' => ['argb' => self::WHITE], 'size' => 14],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::RED_DARK]],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::CCU_GREEN]],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
         ]);
     }
