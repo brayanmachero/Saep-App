@@ -639,10 +639,10 @@ class KizeoWebhookController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
             }
 
-            // Nombre: 2026-04-01 - Juan Pérez (Positiva).pdf
-            $trabajadorClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $trabajador);
+            // Nombre: 2026-04-01 - Nombre Observador (Positiva).pdf
+            $observadorClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $observador);
             $tipoClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $tipoObs);
-            $filename = "{$fechaSlug} - " . substr(trim($trabajadorClean), 0, 60) . " ({$tipoClean}).pdf";
+            $filename = "{$fechaSlug} - " . substr(trim($observadorClean), 0, 60) . " ({$tipoClean}).pdf";
 
             // Estructura: Observaciones Conducta / 2026 / 04 - Abril / CD Santiago / archivo.pdf
             $sharepointPath = null;
