@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\StopReporteMail;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class StopDashboardController extends Controller
 {
@@ -106,19 +108,71 @@ class StopDashboardController extends Controller
     }
 
     /**
-     * Preview del reporte email en el navegador.
+     * Preview del reporte email en el navegador con toolbar de envío de prueba.
      */
     public function reportePreview(Request $request)
     {
+        $mes  = $request->input('mes');
+        $anio = $request->input('anio');
+        $freq = $request->input('frecuencia', 'Semanal');
+
+        $data = \App\Console\Commands\StopWeeklyReport::buildReportData($mes, $anio);
+
+        $mailable = new StopReporteMail(
+            analytics: $data['analytics'],
+            periodo: $data['periodo'] ?? now()->format('d/m/Y'),
+            mesLabel: $data['mesLabel'] ?? null,
+            frecuencia: $freq,
+        );
+
+        $emailHtml = $mailable->render();
+
+        return view('stop-dashboard.reporte-preview', [
+            'emailHtml'  => $emailHtml,
+            'mes'        => $mes,
+            'anio'       => $anio,
+            'frecuencia' => $freq,
+            'periodo'    => $data['periodo'] ?? now()->format('d/m/Y'),
+            'totalRows'  => $data['analytics']['totalRows'] ?? 0,
+            'success'    => session('success'),
+            'error'      => session('error'),
+        ]);
+    }
+
+    /**
+     * Enviar reporte de prueba a un email específico.
+     */
+    public function sendTestReport(Request $request)
+    {
+        $request->validate([
+            'email'      => 'required|email',
+            'frecuencia' => 'in:Semanal,Mensual',
+        ]);
+
         $data = \App\Console\Commands\StopWeeklyReport::buildReportData(
             $request->input('mes'),
             $request->input('anio'),
         );
 
-        return new \App\Mail\StopReporteMail(
+        if (($data['analytics']['totalRows'] ?? 0) === 0) {
+            return back()->with('error', 'No hay datos para el período seleccionado.');
+        }
+
+        $freq = $request->input('frecuencia', 'Semanal');
+
+        $mailable = new StopReporteMail(
             analytics: $data['analytics'],
             periodo: $data['periodo'] ?? now()->format('d/m/Y'),
             mesLabel: $data['mesLabel'] ?? null,
+            frecuencia: $freq,
         );
+
+        try {
+            Mail::to($request->input('email'))->send($mailable);
+
+            return back()->with('success', "Reporte de prueba enviado a {$request->input('email')}");
+        } catch (\Exception $e) {
+            return back()->with('error', "Error al enviar: {$e->getMessage()}");
+        }
     }
 }

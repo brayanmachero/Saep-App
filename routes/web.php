@@ -181,6 +181,7 @@ Route::middleware('auth')->group(function () {
         Route::post('stop-dashboard/sync', [StopDashboardController::class, 'sync'])->name('stop-dashboard.sync');
         Route::get('stop-dashboard/api/data', [StopDashboardController::class, 'apiData'])->name('stop-dashboard.api.data');
         Route::get('stop-dashboard/reporte/preview', [StopDashboardController::class, 'reportePreview'])->name('stop-dashboard.reporte.preview');
+        Route::post('stop-dashboard/reporte/test-send', [StopDashboardController::class, 'sendTestReport'])->name('stop-dashboard.reporte.test-send');
     });
 
     // --- SST: INSPECCIONES ---
