@@ -76,6 +76,9 @@ class StopWeeklyReport extends Command
         // Comparativa año anterior + acumulado YTD
         $comparison = self::buildComparison($drive, $filters, $empresa);
 
+        // Detalle de evaluación negativas
+        $evalDetail = $drive->getEvaluationDetail($filters) ?? [];
+
         $periodo = $mesLabel ?? now()->format('d/m/Y');
 
         $clasificacion = $analytics['clasificacion'] ?? [];
@@ -123,6 +126,7 @@ class StopWeeklyReport extends Command
             mesLabel: $mesLabel,
             frecuencia: $frecLabel,
             comparison: $comparison,
+            evalDetail: $evalDetail,
         );
 
         foreach ($destinatarios as $dest) {
@@ -186,11 +190,15 @@ class StopWeeklyReport extends Command
         // --- Comparativa: YTD año actual + año anterior ---
         $comparison = self::buildComparison($drive, $filters, $emp);
 
+        // --- Detalle de evaluación negativas ---
+        $evalDetail = $drive->getEvaluationDetail($filters) ?? [];
+
         return [
             'analytics'  => $analytics,
             'periodo'    => $mesLabel ?? now()->format('d/m/Y'),
             'mesLabel'   => $mesLabel,
             'comparison' => $comparison,
+            'evalDetail' => $evalDetail,
         ];
     }
 

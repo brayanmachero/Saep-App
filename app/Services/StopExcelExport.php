@@ -14,7 +14,7 @@ class StopExcelExport
 {
     private Spreadsheet $spreadsheet;
     private string $periodo;
-    private array $comparison;
+    private array $evalDetail;
 
     // CCU brand colors
     private const CCU_GREEN = '1B5E20';
@@ -24,11 +24,12 @@ class StopExcelExport
     private const GRAY_HDR  = 'E2E8F0';
     private const WHITE     = 'FFFFFF';
 
-    public function generate(array $analytics, string $periodo, string $frecuencia = 'Semanal', array $comparison = []): string
+    public function generate(array $analytics, string $periodo, string $frecuencia = 'Semanal', array $comparison = [], array $evalDetail = []): string
     {
         $this->periodo    = $periodo;
         $this->frecuencia = $frecuencia;
         $this->comparison = $comparison;
+        $this->evalDetail = $evalDetail;
         $this->spreadsheet = new Spreadsheet();
         $this->spreadsheet->getProperties()
             ->setCreator('SAEP')
@@ -36,6 +37,11 @@ class StopExcelExport
             ->setSubject('Auditorías STOP');
 
         $this->buildResumen($analytics);
+        // Evaluation detail sheets right after Resumen (prominent position)
+        if (!empty($this->evalDetail['workers']) || !empty($this->evalDetail['itemRanking'])) {
+            $this->buildEvalResumen();
+            $this->buildEvalDetalle();
+        }
         $this->buildCentros($analytics);
         $this->buildAreas($analytics);
         $this->buildObservadores($analytics);
@@ -162,6 +168,154 @@ class StopExcelExport
         }
 
         $this->autoWidth($sheet, 'A', 'F');
+    }
+
+    /* ── Evaluaciones — Resumen de Ítems ─────────────────────── */
+    private function buildEvalResumen(): void
+    {
+        $sheet = $this->spreadsheet->createSheet();
+        $sheet->setTitle('Eval. Resumen');
+
+        $weekTag = strtolower($this->frecuencia) === 'semanal'
+            ? ' — Semana ' . now()->subWeek()->isoFormat('W')
+            : '';
+        $this->writeTitle($sheet, 'A1:D1', "Ítems con Mayor Incumplimiento{$weekTag} — {$this->periodo}");
+
+        // Item ranking
+        $itemRank = $this->evalDetail['itemRanking'] ?? [];
+        $itemCumple = $this->evalDetail['itemCumple'] ?? [];
+
+        $row = 3;
+        $sheet->setCellValue("A{$row}", '#');
+        $sheet->setCellValue("B{$row}", 'Categoría');
+        $sheet->setCellValue("C{$row}", 'Ítem Evaluado');
+        $sheet->setCellValue("D{$row}", 'No Cumple');
+        $this->styleHeader($sheet, "A{$row}:D{$row}");
+
+        $startRow = $row + 1;
+        $row++;
+        $i = 1;
+        foreach ($itemRank as $key => $cnt) {
+            [$cat, $q] = explode(' | ', $key, 2);
+            $sheet->setCellValue("A{$row}", $i++);
+            $sheet->setCellValue("B{$row}", $cat);
+            $sheet->setCellValue("C{$row}", $q);
+            $sheet->setCellValue("D{$row}", $cnt);
+            $sheet->getStyle("D{$row}")->getFont()->getColor()->setARGB('FF' . self::RED);
+            $sheet->getStyle("D{$row}")->getFont()->setBold(true);
+            $this->stripeRow($sheet, "A{$row}:D{$row}", $row);
+            $row++;
+        }
+        if ($startRow <= $row - 1) {
+            $this->addTableBorder($sheet, "A{$startRow}:D" . ($row - 1));
+        }
+
+        // Top ítems cumplidos
+        if (!empty($itemCumple)) {
+            $row += 2;
+            $this->writeTitle($sheet, "A{$row}:D{$row}", 'Ítems con Mayor Cumplimiento');
+            $row++;
+            $sheet->setCellValue("A{$row}", '#');
+            $sheet->setCellValue("B{$row}", 'Categoría');
+            $sheet->setCellValue("C{$row}", 'Ítem Evaluado');
+            $sheet->setCellValue("D{$row}", 'Cumple');
+            $this->styleHeader($sheet, "A{$row}:D{$row}");
+
+            $startRow = $row + 1;
+            $row++;
+            $i = 1;
+            foreach (array_slice($itemCumple, 0, 20, true) as $key => $cnt) {
+                [$cat, $q] = explode(' | ', $key, 2);
+                $sheet->setCellValue("A{$row}", $i++);
+                $sheet->setCellValue("B{$row}", $cat);
+                $sheet->setCellValue("C{$row}", $q);
+                $sheet->setCellValue("D{$row}", $cnt);
+                $sheet->getStyle("D{$row}")->getFont()->getColor()->setARGB('FF' . self::GREEN);
+                $sheet->getStyle("D{$row}")->getFont()->setBold(true);
+                $this->stripeRow($sheet, "A{$row}:D{$row}", $row);
+                $row++;
+            }
+            if ($startRow <= $row - 1) {
+                $this->addTableBorder($sheet, "A{$startRow}:D" . ($row - 1));
+            }
+        }
+
+        $this->autoWidth($sheet, 'A', 'D');
+    }
+
+    /* ── Evaluaciones — Detalle por Trabajador ────────────────── */
+    private function buildEvalDetalle(): void
+    {
+        $sheet = $this->spreadsheet->createSheet();
+        $sheet->setTitle('Eval. Detalle');
+
+        $weekTag = strtolower($this->frecuencia) === 'semanal'
+            ? ' — Semana ' . now()->subWeek()->isoFormat('W')
+            : '';
+        $this->writeTitle($sheet, 'A1:K1', "Detalle Evaluaciones Negativas{$weekTag} — {$this->periodo}");
+
+        $workers = $this->evalDetail['workers'] ?? [];
+
+        $row = 3;
+        $headers = ['#', 'Fecha', 'Trabajador', 'Centro', 'Área', 'Empresa', 'Cargo', 'Antigüedad', 'Tipo Obs.', 'Ítems No Cumple', 'Ítems Cumple'];
+        foreach ($headers as $c => $h) {
+            $col = chr(65 + $c);
+            $sheet->setCellValue("{$col}{$row}", $h);
+        }
+        $this->styleHeader($sheet, 'A' . $row . ':K' . $row);
+
+        $startRow = $row + 1;
+        $row++;
+        foreach ($workers as $idx => $w) {
+            $sheet->setCellValue("A{$row}", $idx + 1);
+            $sheet->setCellValue("B{$row}", $w['fecha']);
+            $sheet->setCellValue("C{$row}", $w['trabajador']);
+            $sheet->setCellValue("D{$row}", $w['centro']);
+            $sheet->setCellValue("E{$row}", $w['area']);
+            $sheet->setCellValue("F{$row}", $w['empresa']);
+            $sheet->setCellValue("G{$row}", $w['cargo']);
+            $sheet->setCellValue("H{$row}", $w['antiguedad']);
+            $sheet->setCellValue("I{$row}", $w['tipoObs']);
+
+            // Join NO CUMPLE items with line breaks
+            $ncText = implode("\n", $w['noCumple'] ?? []);
+            $cText = implode("\n", $w['cumple'] ?? []);
+            $sheet->setCellValue("J{$row}", $ncText);
+            $sheet->setCellValue("K{$row}", $cText);
+
+            // Color the NO CUMPLE / CUMPLE cells
+            if (!empty($ncText)) {
+                $sheet->getStyle("J{$row}")->getFont()->getColor()->setARGB('FF' . self::RED);
+            }
+            if (!empty($cText)) {
+                $sheet->getStyle("K{$row}")->getFont()->getColor()->setARGB('FF' . self::GREEN);
+            }
+
+            // Enable wrap text for items columns
+            $sheet->getStyle("J{$row}")->getAlignment()->setWrapText(true);
+            $sheet->getStyle("K{$row}")->getAlignment()->setWrapText(true);
+            $sheet->getStyle("A{$row}:K{$row}")->getAlignment()->setVertical(Alignment::VERTICAL_TOP);
+
+            $this->stripeRow($sheet, "A{$row}:K{$row}", $row);
+            $row++;
+        }
+
+        if ($startRow <= $row - 1) {
+            $this->addTableBorder($sheet, "A{$startRow}:K" . ($row - 1));
+        }
+
+        // Set column widths for readability
+        $sheet->getColumnDimension('A')->setWidth(5);
+        $sheet->getColumnDimension('B')->setWidth(12);
+        $sheet->getColumnDimension('C')->setWidth(25);
+        $sheet->getColumnDimension('D')->setWidth(18);
+        $sheet->getColumnDimension('E')->setWidth(18);
+        $sheet->getColumnDimension('F')->setWidth(18);
+        $sheet->getColumnDimension('G')->setWidth(18);
+        $sheet->getColumnDimension('H')->setWidth(15);
+        $sheet->getColumnDimension('I')->setWidth(18);
+        $sheet->getColumnDimension('J')->setWidth(50);
+        $sheet->getColumnDimension('K')->setWidth(50);
     }
 
     /* ── Centros de Trabajo ───────────────────────────────────── */

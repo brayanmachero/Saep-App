@@ -22,6 +22,7 @@ class StopReporteMail extends Mailable
         public ?string $mesLabel = null,
         public string $frecuencia = 'Semanal',
         public array $comparison = [],
+        public array $evalDetail = [],
     ) {
         // Generate Excel attachment
         $this->excelPath = (new StopExcelExport())->generate(
@@ -29,6 +30,7 @@ class StopReporteMail extends Mailable
             $this->periodo,
             $this->frecuencia,
             $this->comparison,
+            $this->evalDetail,
         );
     }
 

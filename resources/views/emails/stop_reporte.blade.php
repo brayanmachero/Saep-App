@@ -818,6 +818,91 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 </td>
 </tr>
 
+{{-- ═══════════ DETALLE EVALUACIONES NEGATIVAS ═══════════ --}}
+@php
+    $ed = $evalDetail ?? [];
+    $edWorkers = $ed['workers'] ?? [];
+    $edItemRank = $ed['itemRanking'] ?? [];
+    $hasEval = !empty($edWorkers) || !empty($edItemRank);
+@endphp
+@if($hasEval)
+
+{{-- Ranking ítems más incumplidos --}}
+@if(!empty($edItemRank))
+<tr>
+<td style="padding:12px 24px 4px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr><td style="background-color:#991b1b; padding:8px 12px; text-align:center; border-radius:4px;">
+        <span style="color:#ffffff; font-size:14px; font-weight:bold;">&#128269; &Iacute;tems con Mayor Incumplimiento</span>
+    </td></tr>
+    </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:4px; border:1px solid #e2e8f0; border-collapse:collapse;">
+    <tr style="background-color:#fef2f2;">
+        <th style="padding:5px 8px; font-size:10px; color:#991b1b; text-align:left; border:1px solid #e2e8f0;">#</th>
+        <th style="padding:5px 8px; font-size:10px; color:#991b1b; text-align:left; border:1px solid #e2e8f0;">Categor&iacute;a</th>
+        <th style="padding:5px 8px; font-size:10px; color:#991b1b; text-align:left; border:1px solid #e2e8f0;">&Iacute;tem Evaluado</th>
+        <th style="padding:5px 8px; font-size:10px; color:#991b1b; text-align:center; border:1px solid #e2e8f0;">No Cumple</th>
+    </tr>
+    @foreach(array_slice($edItemRank, 0, 15, true) as $itemKey => $cnt)
+    @php [$itemCat, $itemQ] = explode(' | ', $itemKey, 2); @endphp
+    <tr style="background-color:{{ $loop->index % 2 === 1 ? '#fef2f2' : '#fff' }};">
+        <td style="padding:4px 8px; font-size:11px; color:#991b1b; border:1px solid #e2e8f0;">{{ $loop->iteration }}</td>
+        <td style="padding:4px 8px; font-size:10px; color:#64748b; border:1px solid #e2e8f0;">{{ $itemCat }}</td>
+        <td style="padding:4px 8px; font-size:11px; color:#1e293b; border:1px solid #e2e8f0;">{{ $itemQ }}</td>
+        <td style="padding:4px 8px; font-size:11px; color:#991b1b; text-align:center; font-weight:bold; border:1px solid #e2e8f0;">{{ $cnt }}</td>
+    </tr>
+    @endforeach
+    </table>
+</td>
+</tr>
+@endif
+
+{{-- Detalle por trabajador (máx 20 en email) --}}
+@if(!empty($edWorkers))
+<tr>
+<td style="padding:12px 24px 4px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr><td style="background-color:#7f1d1d; padding:8px 12px; text-align:center; border-radius:4px;">
+        <span style="color:#ffffff; font-size:14px; font-weight:bold;">&#128203; Detalle Evaluaciones Negativas por Trabajador</span>
+        <br/><span style="color:#fca5a5; font-size:10px;">({{ count($edWorkers) }} evaluaciones &mdash; mostrando m&aacute;x. 20)</span>
+    </td></tr>
+    </table>
+    @foreach(array_slice($edWorkers, 0, 20) as $w)
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:6px; border:1px solid #e2e8f0; border-collapse:collapse;">
+    <tr style="background-color:#fef2f2;">
+        <td colspan="2" style="padding:6px 8px; border:1px solid #e2e8f0;">
+            <span style="font-size:12px; font-weight:bold; color:#991b1b;">{{ $w['trabajador'] }}</span>
+            <span style="font-size:10px; color:#64748b;"> &mdash; {{ $w['centro'] }} &mdash; {{ $w['area'] }} &mdash; {{ $w['cargo'] }}</span>
+            <br/><span style="font-size:10px; color:#64748b;">{{ $w['empresa'] }} | Antig.: {{ $w['antiguedad'] }} | Turno: {{ $w['turno'] }} | Tipo: {{ $w['tipoObs'] }} | Fecha: {{ $w['fecha'] }}</span>
+        </td>
+    </tr>
+    @if(!empty($w['noCumple']))
+    <tr>
+        <td width="70" style="padding:4px 8px; font-size:10px; color:#991b1b; font-weight:bold; border:1px solid #e2e8f0; vertical-align:top;">NO CUMPLE<br/>({{ $w['totalNC'] }})</td>
+        <td style="padding:4px 8px; font-size:10px; color:#991b1b; border:1px solid #e2e8f0;">
+            @foreach($w['noCumple'] as $nc)
+            &bull; {{ $nc }}<br/>
+            @endforeach
+        </td>
+    </tr>
+    @endif
+    @if(!empty($w['cumple']))
+    <tr>
+        <td width="70" style="padding:4px 8px; font-size:10px; color:#16a34a; font-weight:bold; border:1px solid #e2e8f0; vertical-align:top;">CUMPLE<br/>({{ $w['totalC'] }})</td>
+        <td style="padding:4px 8px; font-size:10px; color:#16a34a; border:1px solid #e2e8f0;">
+            @foreach($w['cumple'] as $c)
+            &bull; {{ $c }}<br/>
+            @endforeach
+        </td>
+    </tr>
+    @endif
+    </table>
+    @endforeach
+</td>
+</tr>
+@endif
+@endif
+
 {{-- ═══════════ CONCLUSION AUTO-GENERADA ═══════════ --}}
 <tr>
 <td style="padding:16px 24px 8px;">

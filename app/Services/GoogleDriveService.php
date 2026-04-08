@@ -791,9 +791,6 @@ class GoogleDriveService
      */
     public function clearCache(): void
     {
-        // Al limpiar la info del archivo, se fuerza re-fetch desde Drive.
-        // Si el archivo cambió (nuevo modifiedTime), todos los cache keys derivados
-        // serán diferentes automáticamente, y los viejos expiran en 3600s.
         Cache::forget('gdrive_latest_file_info');
 
         $fileInfo = $this->getLatestFile();
@@ -801,8 +798,211 @@ class GoogleDriveService
             $key = md5($fileInfo['id'] . $fileInfo['modifiedTime']);
             Cache::forget('gdrive_stop_analytics_' . $key);
             Cache::forget('gdrive_stop_checklist_' . $key);
-            // Limpiar cache sin filtros (la más común)
             Cache::forget('gdrive_stop_filtered_' . $key . '_' . md5(serialize([])));
         }
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+     * Detalle de evaluación (columnas T:DI) con filtros
+     * ───────────────────────────────────────────────────────────── */
+
+    /**
+     * Get per-worker evaluation detail for negative observations (filtered).
+     */
+    public function getEvaluationDetail(array $filters = []): ?array
+    {
+        $fileInfo = $this->getLatestFile();
+        if (!$fileInfo || $fileInfo['mimeType'] !== 'application/vnd.google-apps.spreadsheet') {
+            return null;
+        }
+
+        $filterKey = 'gdrive_stop_evaldetail_' . md5($fileInfo['id'] . $fileInfo['modifiedTime']) . '_' . md5(serialize($filters));
+
+        return Cache::remember($filterKey, 3600, function () use ($fileInfo, $filters) {
+            try {
+                return $this->computeEvaluationDetail($fileInfo['id'], $filters);
+            } catch (\Exception $e) {
+                Log::error('GoogleDrive: Error calculando detalle evaluación', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                return null;
+            }
+        });
+    }
+
+    /**
+     * Compute evaluation detail: reads A:DI in a single pass.
+     * Only stores detail for Negativa rows. Memory-efficient: drops each row after processing.
+     */
+    private function computeEvaluationDetail(string $spreadsheetId, array $filters = []): array
+    {
+        $sheets = new Sheets($this->getClient());
+        $spreadsheet = $sheets->spreadsheets->get($spreadsheetId);
+        $sheetTitle = self::SHEET_NAME;
+        $found = false;
+        foreach ($spreadsheet->getSheets() as $sheet) {
+            if ($sheet->getProperties()->getTitle() === $sheetTitle) {
+                $found = true;
+                break;
+            }
+        }
+        if (!$found) {
+            $sheetTitle = $spreadsheet->getSheets()[0]->getProperties()->getTitle();
+        }
+
+        // Read headers to identify eval columns
+        $headerResp = $sheets->spreadsheets_values->get($spreadsheetId, "'{$sheetTitle}'!1:1");
+        $allHeaders = $headerResp->getValues()[0] ?? [];
+
+        // Map eval columns (index 19+) to category + question
+        $checklistPrefixes = [
+            'EPP'              => 'EPP [',
+            'Reglas de ORO'    => 'Reglas de ORO [',
+            'Equipos Móviles'  => 'Observaciones de operación de equipos móviles [',
+            'Procedimientos'   => 'Seleccione los siguientes procedimientos [',
+            'Operación Segura' => 'Responda las siguientes preguntas',
+        ];
+
+        $evalCols = []; // index => [category, question, header]
+        foreach ($allHeaders as $idx => $header) {
+            if ($idx < 19) continue;
+            $h = trim($header);
+            foreach ($checklistPrefixes as $catName => $prefix) {
+                if (stripos($h, $prefix) !== false) {
+                    $question = $h;
+                    if (preg_match('/\[(.+)\]/', $h, $m)) {
+                        $question = trim($m[1]);
+                    }
+                    $evalCols[$idx] = ['category' => $catName, 'question' => $question, 'header' => $h];
+                    break;
+                }
+            }
+        }
+
+        if (empty($evalCols)) {
+            return ['workers' => [], 'itemRanking' => [], 'evalCols' => []];
+        }
+
+        // Read full data: A:DI
+        $maxColLetter = $this->colIndexToLetter(max(array_keys($evalCols)));
+        $range = "'{$sheetTitle}'!A:{$maxColLetter}";
+        $response = $sheets->spreadsheets_values->get($spreadsheetId, $range);
+        $values = $response->getValues();
+
+        if (empty($values) || count($values) < 2) {
+            return ['workers' => [], 'itemRanking' => [], 'evalCols' => $evalCols];
+        }
+
+        $hasFilters = !empty($filters);
+        $rowCount = count($values);
+
+        // Aggregation: per-worker detail + global item ranking
+        $workerRows = [];    // array of [worker info + items]
+        $itemNoCumple = [];  // question => count of NO CUMPLE
+        $itemCumple = [];    // question => count of CUMPLE
+
+        for ($i = 1; $i < $rowCount; $i++) {
+            $row = $values[$i] ?? [];
+            $values[$i] = null; // free memory
+
+            // Extract metadata (same as computeFilteredAnalytics)
+            $marcaTemporal = trim($row[0] ?? '');
+            $fechaTarjeta  = trim($row[2] ?? '');
+            $centro        = trim($row[4] ?? '');
+            $empObs        = trim($row[5] ?? '');
+            $nombreObs     = trim($row[6] ?? '');
+            $clasif        = trim($row[8] ?? '');
+            $turno         = trim($row[9] ?? '');
+            $nombreObsdo   = trim($row[10] ?? '');
+            $intExt        = trim($row[11] ?? '');
+            $antig         = trim($row[12] ?? '');
+            $area          = trim($row[13] ?? '');
+            $empObsdo      = trim($row[14] ?? '');
+            $cargo         = trim($row[15] ?? '');
+            $tipoObs       = trim($row[16] ?? '');
+
+            // Apply filters (same logic as computeFilteredAnalytics)
+            if ($hasFilters) {
+                if (!empty($filters['empresa_observador']) && $empObs !== $filters['empresa_observador']) continue;
+                if (!empty($filters['empresa_observado']) && $empObsdo !== $filters['empresa_observado']) continue;
+                if (!empty($filters['tipo_observacion']) && $tipoObs !== $filters['tipo_observacion']) continue;
+                if (!empty($filters['centro']) && $centro !== $filters['centro']) continue;
+                if (!empty($filters['clasificacion']) && $clasif !== $filters['clasificacion']) continue;
+                if (!empty($filters['fecha_desde'])) {
+                    $rowDate = $this->parseDate($fechaTarjeta ?: $marcaTemporal);
+                    if (!$rowDate || $rowDate < $filters['fecha_desde']) continue;
+                }
+                if (!empty($filters['fecha_hasta'])) {
+                    $rowDate = $this->parseDate($fechaTarjeta ?: $marcaTemporal);
+                    if (!$rowDate || $rowDate > $filters['fecha_hasta']) continue;
+                }
+                if (!empty($filters['mes'])) {
+                    $monthKey = $this->extractMonthKey($fechaTarjeta ?: $marcaTemporal);
+                    if ($monthKey !== $filters['mes']) continue;
+                }
+                if (!empty($filters['anio'])) {
+                    $monthKey = $this->extractMonthKey($fechaTarjeta ?: $marcaTemporal);
+                    if (!$monthKey || substr($monthKey, 0, 4) !== $filters['anio']) continue;
+                }
+            }
+
+            // Process eval columns for ALL rows (for global item ranking)
+            $noCumpleItems = [];
+            $cumpleItems = [];
+            foreach ($evalCols as $colIdx => $info) {
+                $val = strtoupper(trim($row[$colIdx] ?? ''));
+                if ($val === '' || $val === '-' || $val === 'PRUEBA') continue;
+
+                $key = $info['category'] . ' | ' . $info['question'];
+                if (str_contains($val, 'NO CUMPLE')) {
+                    $noCumpleItems[] = $info;
+                    $itemNoCumple[$key] = ($itemNoCumple[$key] ?? 0) + 1;
+                } elseif (str_contains($val, 'CUMPLE')) {
+                    $cumpleItems[] = $info;
+                    $itemCumple[$key] = ($itemCumple[$key] ?? 0) + 1;
+                }
+            }
+
+            // Only store row detail for Negativa observations
+            $isNeg = strtolower($clasif) === 'negativa';
+            if ($isNeg && (!empty($noCumpleItems) || !empty($cumpleItems))) {
+                $fecha = $fechaTarjeta ?: $marcaTemporal;
+                $monthKey = $this->extractMonthKey($fecha);
+
+                $workerRows[] = [
+                    'fecha'       => $fecha,
+                    'mes'         => $monthKey,
+                    'trabajador'  => $nombreObsdo,
+                    'centro'      => $centro,
+                    'area'        => $area,
+                    'empresa'     => $empObsdo,
+                    'cargo'       => $cargo,
+                    'antiguedad'  => $antig,
+                    'tipoObs'     => $tipoObs,
+                    'observador'  => $nombreObs,
+                    'turno'       => $turno,
+                    'noCumple'    => array_map(fn($i) => $i['category'] . ' → ' . $i['question'], $noCumpleItems),
+                    'cumple'      => array_map(fn($i) => $i['category'] . ' → ' . $i['question'], $cumpleItems),
+                    'totalNC'     => count($noCumpleItems),
+                    'totalC'      => count($cumpleItems),
+                ];
+            }
+        }
+
+        // Sort item ranking by NO CUMPLE desc
+        arsort($itemNoCumple);
+        arsort($itemCumple);
+
+        // Sort worker rows by totalNC desc, then by trabajador
+        usort($workerRows, fn($a, $b) => $b['totalNC'] <=> $a['totalNC'] ?: strcmp($a['trabajador'], $b['trabajador']));
+
+        return [
+            'workers'     => $workerRows,
+            'itemRanking' => array_slice($itemNoCumple, 0, 30, true),
+            'itemCumple'  => array_slice($itemCumple, 0, 30, true),
+            'totalNeg'    => count($workerRows),
+            'evalCols'    => $evalCols,
+        ];
     }
 }

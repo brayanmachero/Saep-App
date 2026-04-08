@@ -124,6 +124,7 @@ class StopDashboardController extends Controller
             mesLabel: $data['mesLabel'] ?? null,
             frecuencia: $freq,
             comparison: $data['comparison'] ?? [],
+            evalDetail: $data['evalDetail'] ?? [],
         );
 
         $emailHtml = $mailable->render();
@@ -167,6 +168,7 @@ class StopDashboardController extends Controller
             mesLabel: $data['mesLabel'] ?? null,
             frecuencia: $freq,
             comparison: $data['comparison'] ?? [],
+            evalDetail: $data['evalDetail'] ?? [],
         );
 
         try {
