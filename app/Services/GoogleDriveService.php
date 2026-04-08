@@ -832,8 +832,8 @@ class GoogleDriveService
     }
 
     /**
-     * Compute evaluation detail: reads A:DI in a single pass.
-     * Only stores detail for Negativa rows. Memory-efficient: drops each row after processing.
+     * Compute evaluation detail: reads A:DI in batched chunks to avoid OOM.
+     * Only stores detail for Negativa rows. Processes 3000 rows at a time.
      */
     private function computeEvaluationDetail(string $spreadsheetId, array $filters = []): array
     {
@@ -881,113 +881,125 @@ class GoogleDriveService
         }
 
         if (empty($evalCols)) {
-            return ['workers' => [], 'itemRanking' => [], 'evalCols' => []];
+            return ['workers' => [], 'itemRanking' => [], 'itemCumple' => [], 'evalCols' => []];
         }
 
-        // Read full data: A:DI
         $maxColLetter = $this->colIndexToLetter(max(array_keys($evalCols)));
-        $range = "'{$sheetTitle}'!A:{$maxColLetter}";
-        $response = $sheets->spreadsheets_values->get($spreadsheetId, $range);
-        $values = $response->getValues();
-
-        if (empty($values) || count($values) < 2) {
-            return ['workers' => [], 'itemRanking' => [], 'evalCols' => $evalCols];
-        }
-
         $hasFilters = !empty($filters);
-        $rowCount = count($values);
 
-        // Aggregation: per-worker detail + global item ranking
-        $workerRows = [];    // array of [worker info + items]
-        $itemNoCumple = [];  // question => count of NO CUMPLE
-        $itemCumple = [];    // question => count of CUMPLE
+        // Aggregation accumulators
+        $workerRows = [];
+        $itemNoCumple = [];
+        $itemCumple = [];
 
-        for ($i = 1; $i < $rowCount; $i++) {
-            $row = $values[$i] ?? [];
-            $values[$i] = null; // free memory
+        // Process in batches of 3000 rows to avoid OOM
+        $batchSize = 3000;
+        $startRow = 2; // skip header
 
-            // Extract metadata (same as computeFilteredAnalytics)
-            $marcaTemporal = trim($row[0] ?? '');
-            $fechaTarjeta  = trim($row[2] ?? '');
-            $centro        = trim($row[4] ?? '');
-            $empObs        = trim($row[5] ?? '');
-            $nombreObs     = trim($row[6] ?? '');
-            $clasif        = trim($row[8] ?? '');
-            $turno         = trim($row[9] ?? '');
-            $nombreObsdo   = trim($row[10] ?? '');
-            $intExt        = trim($row[11] ?? '');
-            $antig         = trim($row[12] ?? '');
-            $area          = trim($row[13] ?? '');
-            $empObsdo      = trim($row[14] ?? '');
-            $cargo         = trim($row[15] ?? '');
-            $tipoObs       = trim($row[16] ?? '');
+        while (true) {
+            $endRow = $startRow + $batchSize - 1;
+            $range = "'{$sheetTitle}'!A{$startRow}:{$maxColLetter}{$endRow}";
 
-            // Apply filters (same logic as computeFilteredAnalytics)
-            if ($hasFilters) {
-                if (!empty($filters['empresa_observador']) && $empObs !== $filters['empresa_observador']) continue;
-                if (!empty($filters['empresa_observado']) && $empObsdo !== $filters['empresa_observado']) continue;
-                if (!empty($filters['tipo_observacion']) && $tipoObs !== $filters['tipo_observacion']) continue;
-                if (!empty($filters['centro']) && $centro !== $filters['centro']) continue;
-                if (!empty($filters['clasificacion']) && $clasif !== $filters['clasificacion']) continue;
-                if (!empty($filters['fecha_desde'])) {
-                    $rowDate = $this->parseDate($fechaTarjeta ?: $marcaTemporal);
-                    if (!$rowDate || $rowDate < $filters['fecha_desde']) continue;
+            $response = $sheets->spreadsheets_values->get($spreadsheetId, $range);
+            $values = $response->getValues();
+
+            if (empty($values)) {
+                break; // no more data
+            }
+
+            foreach ($values as $row) {
+                // Extract metadata
+                $marcaTemporal = trim($row[0] ?? '');
+                $fechaTarjeta  = trim($row[2] ?? '');
+                $centro        = trim($row[4] ?? '');
+                $empObs        = trim($row[5] ?? '');
+                $nombreObs     = trim($row[6] ?? '');
+                $clasif        = trim($row[8] ?? '');
+                $turno         = trim($row[9] ?? '');
+                $nombreObsdo   = trim($row[10] ?? '');
+                $antig         = trim($row[12] ?? '');
+                $area          = trim($row[13] ?? '');
+                $empObsdo      = trim($row[14] ?? '');
+                $cargo         = trim($row[15] ?? '');
+                $tipoObs       = trim($row[16] ?? '');
+
+                // Apply filters
+                if ($hasFilters) {
+                    if (!empty($filters['empresa_observador']) && $empObs !== $filters['empresa_observador']) continue;
+                    if (!empty($filters['empresa_observado']) && $empObsdo !== $filters['empresa_observado']) continue;
+                    if (!empty($filters['tipo_observacion']) && $tipoObs !== $filters['tipo_observacion']) continue;
+                    if (!empty($filters['centro']) && $centro !== $filters['centro']) continue;
+                    if (!empty($filters['clasificacion']) && $clasif !== $filters['clasificacion']) continue;
+                    if (!empty($filters['fecha_desde'])) {
+                        $rowDate = $this->parseDate($fechaTarjeta ?: $marcaTemporal);
+                        if (!$rowDate || $rowDate < $filters['fecha_desde']) continue;
+                    }
+                    if (!empty($filters['fecha_hasta'])) {
+                        $rowDate = $this->parseDate($fechaTarjeta ?: $marcaTemporal);
+                        if (!$rowDate || $rowDate > $filters['fecha_hasta']) continue;
+                    }
+                    if (!empty($filters['mes'])) {
+                        $monthKey = $this->extractMonthKey($fechaTarjeta ?: $marcaTemporal);
+                        if ($monthKey !== $filters['mes']) continue;
+                    }
+                    if (!empty($filters['anio'])) {
+                        $monthKey = $this->extractMonthKey($fechaTarjeta ?: $marcaTemporal);
+                        if (!$monthKey || substr($monthKey, 0, 4) !== $filters['anio']) continue;
+                    }
                 }
-                if (!empty($filters['fecha_hasta'])) {
-                    $rowDate = $this->parseDate($fechaTarjeta ?: $marcaTemporal);
-                    if (!$rowDate || $rowDate > $filters['fecha_hasta']) continue;
+
+                // Process eval columns
+                $noCumpleItems = [];
+                $cumpleItems = [];
+                foreach ($evalCols as $colIdx => $info) {
+                    $val = strtoupper(trim($row[$colIdx] ?? ''));
+                    if ($val === '' || $val === '-' || $val === 'PRUEBA') continue;
+
+                    $key = $info['category'] . ' | ' . $info['question'];
+                    if (str_contains($val, 'NO CUMPLE')) {
+                        $noCumpleItems[] = $info;
+                        $itemNoCumple[$key] = ($itemNoCumple[$key] ?? 0) + 1;
+                    } elseif (str_contains($val, 'CUMPLE')) {
+                        $cumpleItems[] = $info;
+                        $itemCumple[$key] = ($itemCumple[$key] ?? 0) + 1;
+                    }
                 }
-                if (!empty($filters['mes'])) {
-                    $monthKey = $this->extractMonthKey($fechaTarjeta ?: $marcaTemporal);
-                    if ($monthKey !== $filters['mes']) continue;
-                }
-                if (!empty($filters['anio'])) {
-                    $monthKey = $this->extractMonthKey($fechaTarjeta ?: $marcaTemporal);
-                    if (!$monthKey || substr($monthKey, 0, 4) !== $filters['anio']) continue;
+
+                // Only store row detail for Negativa observations
+                $isNeg = strtolower($clasif) === 'negativa';
+                if ($isNeg && (!empty($noCumpleItems) || !empty($cumpleItems))) {
+                    $fecha = $fechaTarjeta ?: $marcaTemporal;
+                    $monthKey = $this->extractMonthKey($fecha);
+
+                    $workerRows[] = [
+                        'fecha'       => $fecha,
+                        'mes'         => $monthKey,
+                        'trabajador'  => $nombreObsdo,
+                        'centro'      => $centro,
+                        'area'        => $area,
+                        'empresa'     => $empObsdo,
+                        'cargo'       => $cargo,
+                        'antiguedad'  => $antig,
+                        'tipoObs'     => $tipoObs,
+                        'observador'  => $nombreObs,
+                        'turno'       => $turno,
+                        'noCumple'    => array_map(fn($i) => $i['category'] . ' → ' . $i['question'], $noCumpleItems),
+                        'cumple'      => array_map(fn($i) => $i['category'] . ' → ' . $i['question'], $cumpleItems),
+                        'totalNC'     => count($noCumpleItems),
+                        'totalC'      => count($cumpleItems),
+                    ];
                 }
             }
 
-            // Process eval columns for ALL rows (for global item ranking)
-            $noCumpleItems = [];
-            $cumpleItems = [];
-            foreach ($evalCols as $colIdx => $info) {
-                $val = strtoupper(trim($row[$colIdx] ?? ''));
-                if ($val === '' || $val === '-' || $val === 'PRUEBA') continue;
+            // Free batch memory
+            $rowsInBatch = count($values);
+            unset($values, $response);
 
-                $key = $info['category'] . ' | ' . $info['question'];
-                if (str_contains($val, 'NO CUMPLE')) {
-                    $noCumpleItems[] = $info;
-                    $itemNoCumple[$key] = ($itemNoCumple[$key] ?? 0) + 1;
-                } elseif (str_contains($val, 'CUMPLE')) {
-                    $cumpleItems[] = $info;
-                    $itemCumple[$key] = ($itemCumple[$key] ?? 0) + 1;
-                }
+            // If we got less than batchSize rows, we're done
+            if ($rowsInBatch < $batchSize) {
+                break;
             }
-
-            // Only store row detail for Negativa observations
-            $isNeg = strtolower($clasif) === 'negativa';
-            if ($isNeg && (!empty($noCumpleItems) || !empty($cumpleItems))) {
-                $fecha = $fechaTarjeta ?: $marcaTemporal;
-                $monthKey = $this->extractMonthKey($fecha);
-
-                $workerRows[] = [
-                    'fecha'       => $fecha,
-                    'mes'         => $monthKey,
-                    'trabajador'  => $nombreObsdo,
-                    'centro'      => $centro,
-                    'area'        => $area,
-                    'empresa'     => $empObsdo,
-                    'cargo'       => $cargo,
-                    'antiguedad'  => $antig,
-                    'tipoObs'     => $tipoObs,
-                    'observador'  => $nombreObs,
-                    'turno'       => $turno,
-                    'noCumple'    => array_map(fn($i) => $i['category'] . ' → ' . $i['question'], $noCumpleItems),
-                    'cumple'      => array_map(fn($i) => $i['category'] . ' → ' . $i['question'], $cumpleItems),
-                    'totalNC'     => count($noCumpleItems),
-                    'totalC'      => count($cumpleItems),
-                ];
-            }
+            $startRow = $endRow + 1;
         }
 
         // Sort item ranking by NO CUMPLE desc
