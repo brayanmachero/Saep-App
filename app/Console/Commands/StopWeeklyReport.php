@@ -73,6 +73,9 @@ class StopWeeklyReport extends Command
             return self::SUCCESS;
         }
 
+        // Comparativa año anterior + acumulado YTD
+        $comparison = self::buildComparison($drive, $filters, $empresa);
+
         $periodo = $mesLabel ?? now()->format('d/m/Y');
 
         $clasificacion = $analytics['clasificacion'] ?? [];
@@ -119,6 +122,7 @@ class StopWeeklyReport extends Command
             periodo: $periodo,
             mesLabel: $mesLabel,
             frecuencia: $frecLabel,
+            comparison: $comparison,
         );
 
         foreach ($destinatarios as $dest) {
@@ -176,13 +180,92 @@ class StopWeeklyReport extends Command
         $analytics = $drive->getFilteredAnalytics($filters);
 
         if (!$analytics || ($analytics['totalRows'] ?? 0) === 0) {
-            return ['analytics' => ['totalRows' => 0], 'periodo' => $mesLabel, 'mesLabel' => $mesLabel];
+            return ['analytics' => ['totalRows' => 0], 'periodo' => $mesLabel, 'mesLabel' => $mesLabel, 'comparison' => []];
+        }
+
+        // --- Comparativa: YTD año actual + año anterior ---
+        $comparison = self::buildComparison($drive, $filters, $emp);
+
+        return [
+            'analytics'  => $analytics,
+            'periodo'    => $mesLabel ?? now()->format('d/m/Y'),
+            'mesLabel'   => $mesLabel,
+            'comparison' => $comparison,
+        ];
+    }
+
+    /**
+     * Compute year-over-year and YTD comparison data.
+     */
+    private static function buildComparison(GoogleDriveService $drive, array $baseFilters, ?string $empresa): array
+    {
+        $currentYear  = (int) ($baseFilters['anio'] ?? now()->format('Y'));
+        $prevYear     = $currentYear - 1;
+        $currentMonth = $baseFilters['mes'] ?? now()->format('Y-m');
+        $monthNum     = (int) substr($currentMonth, 5, 2); // e.g. 04
+
+        // Previous year same month key (e.g. 2025-04)
+        $prevYearMonth = $prevYear . '-' . str_pad($monthNum, 2, '0', STR_PAD_LEFT);
+
+        $empFilter = $empresa ? ['empresa_observador' => $empresa] : [];
+
+        try {
+            // YTD current year
+            $ytdData = $drive->getFilteredAnalytics(array_merge(['anio' => (string) $currentYear], $empFilter)) ?? [];
+            // Previous year full
+            $prevData = $drive->getFilteredAnalytics(array_merge(['anio' => (string) $prevYear], $empFilter)) ?? [];
+        } catch (\Throwable $e) {
+            Log::warning('stop:weekly-report: error obteniendo datos comparativos', ['error' => $e->getMessage()]);
+            return [];
+        }
+
+        $ytdClasif  = $ytdData['clasificacion'] ?? [];
+        $prevClasif = $prevData['clasificacion'] ?? [];
+
+        // Previous year same month from byMonth
+        $prevMonthTotal = ($prevData['byMonth'][$prevYearMonth] ?? 0);
+        $prevMonthNeg   = ($prevData['byMonthNeg'][$prevYearMonth] ?? 0);
+        $prevMonthPos   = ($prevData['byMonthPos'][$prevYearMonth] ?? 0);
+
+        // Previous year YTD (Jan to same month)
+        $prevYtdTotal = 0;
+        $prevYtdPos = 0;
+        $prevYtdNeg = 0;
+        for ($m = 1; $m <= $monthNum; $m++) {
+            $key = $prevYear . '-' . str_pad($m, 2, '0', STR_PAD_LEFT);
+            $prevYtdTotal += ($prevData['byMonth'][$key] ?? 0);
+            $prevYtdPos   += ($prevData['byMonthPos'][$key] ?? 0);
+            $prevYtdNeg   += ($prevData['byMonthNeg'][$key] ?? 0);
         }
 
         return [
-            'analytics' => $analytics,
-            'periodo'   => $mesLabel ?? now()->format('d/m/Y'),
-            'mesLabel'  => $mesLabel,
+            'ytd' => [
+                'total'      => $ytdData['totalRows'] ?? 0,
+                'pos'        => $ytdClasif['Positiva'] ?? $ytdClasif['positiva'] ?? 0,
+                'neg'        => $ytdClasif['Negativa'] ?? $ytdClasif['negativa'] ?? 0,
+                'topNeg'     => array_slice($ytdData['topNegTrabajadores'] ?? [], 0, 10, true),
+                'topPos'     => array_slice($ytdData['topPosTrabajadores'] ?? [], 0, 10, true),
+                'negPorTipo' => array_slice($ytdData['negPorTipo'] ?? [], 0, 10, true),
+                'posPorTipo' => array_slice($ytdData['posPorTipo'] ?? [], 0, 10, true),
+                'byMonth'    => $ytdData['byMonth'] ?? [],
+                'byMonthNeg' => $ytdData['byMonthNeg'] ?? [],
+                'byMonthPos' => $ytdData['byMonthPos'] ?? [],
+            ],
+            'prevYear' => [
+                'year'           => $prevYear,
+                'total'          => $prevData['totalRows'] ?? 0,
+                'pos'            => $prevClasif['Positiva'] ?? $prevClasif['positiva'] ?? 0,
+                'neg'            => $prevClasif['Negativa'] ?? $prevClasif['negativa'] ?? 0,
+                'sameMonthTotal' => $prevMonthTotal,
+                'sameMonthPos'   => $prevMonthPos,
+                'sameMonthNeg'   => $prevMonthNeg,
+                'ytdTotal'       => $prevYtdTotal,
+                'ytdPos'         => $prevYtdPos,
+                'ytdNeg'         => $prevYtdNeg,
+                'byMonth'        => $prevData['byMonth'] ?? [],
+                'byMonthNeg'     => $prevData['byMonthNeg'] ?? [],
+                'byMonthPos'     => $prevData['byMonthPos'] ?? [],
+            ],
         ];
     }
 }

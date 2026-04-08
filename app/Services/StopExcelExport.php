@@ -14,7 +14,7 @@ class StopExcelExport
 {
     private Spreadsheet $spreadsheet;
     private string $periodo;
-    private string $frecuencia;
+    private array $comparison;
 
     // CCU brand colors
     private const CCU_GREEN = '1B5E20';
@@ -24,10 +24,11 @@ class StopExcelExport
     private const GRAY_HDR  = 'E2E8F0';
     private const WHITE     = 'FFFFFF';
 
-    public function generate(array $analytics, string $periodo, string $frecuencia = 'Semanal'): string
+    public function generate(array $analytics, string $periodo, string $frecuencia = 'Semanal', array $comparison = []): string
     {
         $this->periodo    = $periodo;
         $this->frecuencia = $frecuencia;
+        $this->comparison = $comparison;
         $this->spreadsheet = new Spreadsheet();
         $this->spreadsheet->getProperties()
             ->setCreator('SAEP')
@@ -43,6 +44,9 @@ class StopExcelExport
         $this->buildTiposObservacion($analytics);
         $this->buildTendencia($analytics);
         $this->buildDetalleExtra($analytics);
+        if (!empty($this->comparison)) {
+            $this->buildComparativa($analytics);
+        }
 
         // Set Resumen as the active sheet
         $this->spreadsheet->setActiveSheetIndex(0);
@@ -560,6 +564,170 @@ class StopExcelExport
         }
 
         $this->autoWidth($sheet, 'A', 'B');
+    }
+
+    /* ── Comparativa Año Anterior ─────────────────────────────── */
+    private function buildComparativa(array $a): void
+    {
+        $sheet = $this->spreadsheet->createSheet();
+        $sheet->setTitle('Comparativa');
+
+        $ytd  = $this->comparison['ytd'] ?? [];
+        $prev = $this->comparison['prevYear'] ?? [];
+        $prevYear = $prev['year'] ?? ((int) date('Y') - 1);
+        $currYear = date('Y');
+
+        $total = $a['totalRows'] ?? 0;
+        $clasif = $a['clasificacion'] ?? [];
+        $pos = $clasif['Positiva'] ?? $clasif['positiva'] ?? 0;
+        $neg = $clasif['Negativa'] ?? $clasif['negativa'] ?? 0;
+
+        // Header
+        $weekTag = strtolower($this->frecuencia) === 'semanal'
+            ? ' — Semana ' . now()->subWeek()->isoFormat('W')
+            : '';
+        $this->writeTitle($sheet, 'A1:G1', "Comparativa vs {$prevYear} — Reporte {$this->frecuencia}{$weekTag} — {$this->periodo}");
+
+        // --- Resumen comparativo ---
+        $row = 3;
+        $sheet->setCellValue("A{$row}", 'Métrica');
+        $sheet->setCellValue("B{$row}", 'Periodo Actual');
+        $sheet->setCellValue("C{$row}", "Mismo Mes {$prevYear}");
+        $sheet->setCellValue("D{$row}", 'Variación');
+        $sheet->setCellValue("E{$row}", "Acum. {$currYear}");
+        $sheet->setCellValue("F{$row}", "Acum. {$prevYear} (mismo corte)");
+        $sheet->setCellValue("G{$row}", 'Var. Acum.');
+        $this->styleHeader($sheet, "A{$row}:G{$row}");
+
+        $dataRows = [
+            ['Total Tarjetas', $total, $prev['sameMonthTotal'] ?? 0, $ytd['total'] ?? 0, $prev['ytdTotal'] ?? 0],
+            ['Negativas', $neg, $prev['sameMonthNeg'] ?? 0, $ytd['neg'] ?? 0, $prev['ytdNeg'] ?? 0],
+            ['Positivas', $pos, $prev['sameMonthPos'] ?? 0, $ytd['pos'] ?? 0, $prev['ytdPos'] ?? 0],
+        ];
+        $row++;
+        foreach ($dataRows as $d) {
+            $delta = $d[1] - $d[2];
+            $deltaYtd = $d[3] - $d[4];
+            $sheet->setCellValue("A{$row}", $d[0]);
+            $sheet->setCellValue("B{$row}", $d[1]);
+            $sheet->setCellValue("C{$row}", $d[2]);
+            $sheet->setCellValue("D{$row}", ($delta >= 0 ? '+' : '') . $delta);
+            $sheet->setCellValue("E{$row}", $d[3]);
+            $sheet->setCellValue("F{$row}", $d[4]);
+            $sheet->setCellValue("G{$row}", ($deltaYtd >= 0 ? '+' : '') . $deltaYtd);
+
+            // Color the delta
+            $color = $delta > 0 ? self::RED : ($delta < 0 ? self::GREEN : '64748B');
+            $sheet->getStyle("D{$row}")->getFont()->getColor()->setARGB("FF{$color}");
+            $colorYtd = $deltaYtd > 0 ? self::RED : ($deltaYtd < 0 ? self::GREEN : '64748B');
+            $sheet->getStyle("G{$row}")->getFont()->getColor()->setARGB("FF{$colorYtd}");
+
+            $this->stripeRow($sheet, "A{$row}:G{$row}", $row);
+            $row++;
+        }
+        $this->addTableBorder($sheet, 'A3:G' . ($row - 1));
+
+        // --- Tendencia mensual comparativa ---
+        $row += 2;
+        $this->writeTitle($sheet, "A{$row}:G{$row}", "Tendencia Mensual — {$currYear} vs {$prevYear}");
+        $row++;
+        $sheet->setCellValue("A{$row}", 'Mes');
+        $sheet->setCellValue("B{$row}", "{$currYear} Total");
+        $sheet->setCellValue("C{$row}", "{$currYear} Neg");
+        $sheet->setCellValue("D{$row}", "{$currYear} Pos");
+        $sheet->setCellValue("E{$row}", "{$prevYear} Total");
+        $sheet->setCellValue("F{$row}", "{$prevYear} Neg");
+        $sheet->setCellValue("G{$row}", "{$prevYear} Pos");
+        $this->styleHeader($sheet, "A{$row}:G{$row}");
+
+        $meses = ['01'=>'Enero','02'=>'Febrero','03'=>'Marzo','04'=>'Abril','05'=>'Mayo','06'=>'Junio','07'=>'Julio','08'=>'Agosto','09'=>'Septiembre','10'=>'Octubre','11'=>'Noviembre','12'=>'Diciembre'];
+        $startRow = $row + 1;
+        $row++;
+        $ytdByMonth    = $ytd['byMonth'] ?? [];
+        $ytdByMonthNeg = $ytd['byMonthNeg'] ?? [];
+        $ytdByMonthPos = $ytd['byMonthPos'] ?? [];
+        $prevByMonth    = $prev['byMonth'] ?? [];
+        $prevByMonthNeg = $prev['byMonthNeg'] ?? [];
+        $prevByMonthPos = $prev['byMonthPos'] ?? [];
+
+        foreach ($meses as $m => $name) {
+            $curKey = "{$currYear}-{$m}";
+            $prvKey = "{$prevYear}-{$m}";
+            $cT = $ytdByMonth[$curKey] ?? 0;
+            $pT = $prevByMonth[$prvKey] ?? 0;
+            if ($cT === 0 && $pT === 0) continue;
+
+            $sheet->setCellValue("A{$row}", $name);
+            $sheet->setCellValue("B{$row}", $cT);
+            $sheet->setCellValue("C{$row}", $ytdByMonthNeg[$curKey] ?? 0);
+            $sheet->setCellValue("D{$row}", $ytdByMonthPos[$curKey] ?? 0);
+            $sheet->setCellValue("E{$row}", $pT);
+            $sheet->setCellValue("F{$row}", $prevByMonthNeg[$prvKey] ?? 0);
+            $sheet->setCellValue("G{$row}", $prevByMonthPos[$prvKey] ?? 0);
+            $this->stripeRow($sheet, "A{$row}:G{$row}", $row);
+            $row++;
+        }
+        // Total row
+        $sheet->setCellValue("A{$row}", 'TOTAL');
+        $sheet->setCellValue("B{$row}", $ytd['total'] ?? 0);
+        $sheet->setCellValue("C{$row}", $ytd['neg'] ?? 0);
+        $sheet->setCellValue("D{$row}", $ytd['pos'] ?? 0);
+        $sheet->setCellValue("E{$row}", $prev['total'] ?? 0);
+        $sheet->setCellValue("F{$row}", $prev['neg'] ?? 0);
+        $sheet->setCellValue("G{$row}", $prev['pos'] ?? 0);
+        $sheet->getStyle("A{$row}:G{$row}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$row}:G{$row}")->getFill()->setFillType(Fill::FILL_SOLID);
+        $sheet->getStyle("A{$row}:G{$row}")->getFill()->getStartColor()->setARGB('FF' . self::CCU_GREEN);
+        $sheet->getStyle("A{$row}:G{$row}")->getFont()->getColor()->setARGB('FF' . self::WHITE);
+        if ($startRow <= $row) {
+            $this->addTableBorder($sheet, "A{$startRow}:G{$row}");
+        }
+
+        // --- Top Negativos YTD ---
+        if (!empty($ytd['topNeg'])) {
+            $row += 2;
+            $this->writeTitle($sheet, "A{$row}:C{$row}", "Top Trabajadores Negativos — Acumulado {$currYear}");
+            $row++;
+            $sheet->setCellValue("A{$row}", '#');
+            $sheet->setCellValue("B{$row}", 'Trabajador');
+            $sheet->setCellValue("C{$row}", 'Tarjetas Neg.');
+            $this->styleHeader($sheet, "A{$row}:C{$row}");
+            $startRow = $row + 1;
+            $row++;
+            $i = 1;
+            foreach ($ytd['topNeg'] as $nombre => $cnt) {
+                $sheet->setCellValue("A{$row}", $i++);
+                $sheet->setCellValue("B{$row}", $nombre);
+                $sheet->setCellValue("C{$row}", $cnt);
+                $this->stripeRow($sheet, "A{$row}:C{$row}", $row);
+                $row++;
+            }
+            $this->addTableBorder($sheet, "A{$startRow}:C" . ($row - 1));
+        }
+
+        // --- Top Tipos Falta Negativa YTD ---
+        if (!empty($ytd['negPorTipo'])) {
+            $row += 2;
+            $this->writeTitle($sheet, "A{$row}:C{$row}", "Tipos de Falta Negativa — Acumulado {$currYear}");
+            $row++;
+            $sheet->setCellValue("A{$row}", '#');
+            $sheet->setCellValue("B{$row}", 'Tipo de Falta');
+            $sheet->setCellValue("C{$row}", 'Cantidad');
+            $this->styleHeader($sheet, "A{$row}:C{$row}");
+            $startRow = $row + 1;
+            $row++;
+            $i = 1;
+            foreach ($ytd['negPorTipo'] as $tipo => $cnt) {
+                $sheet->setCellValue("A{$row}", $i++);
+                $sheet->setCellValue("B{$row}", $tipo);
+                $sheet->setCellValue("C{$row}", $cnt);
+                $this->stripeRow($sheet, "A{$row}:C{$row}", $row);
+                $row++;
+            }
+            $this->addTableBorder($sheet, "A{$startRow}:C" . ($row - 1));
+        }
+
+        $this->autoWidth($sheet, 'A', 'G');
     }
 
     /* ━━━━━━ Styling helpers ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */

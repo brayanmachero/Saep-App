@@ -21,12 +21,14 @@ class StopReporteMail extends Mailable
         public string $periodo,
         public ?string $mesLabel = null,
         public string $frecuencia = 'Semanal',
+        public array $comparison = [],
     ) {
         // Generate Excel attachment
         $this->excelPath = (new StopExcelExport())->generate(
             $this->analytics,
             $this->periodo,
             $this->frecuencia,
+            $this->comparison,
         );
     }
 

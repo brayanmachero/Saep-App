@@ -123,6 +123,7 @@ class StopDashboardController extends Controller
             periodo: $data['periodo'] ?? now()->format('d/m/Y'),
             mesLabel: $data['mesLabel'] ?? null,
             frecuencia: $freq,
+            comparison: $data['comparison'] ?? [],
         );
 
         $emailHtml = $mailable->render();
@@ -165,6 +166,7 @@ class StopDashboardController extends Controller
             periodo: $data['periodo'] ?? now()->format('d/m/Y'),
             mesLabel: $data['mesLabel'] ?? null,
             frecuencia: $freq,
+            comparison: $data['comparison'] ?? [],
         );
 
         try {
