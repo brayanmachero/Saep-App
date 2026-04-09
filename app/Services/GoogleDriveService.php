@@ -355,6 +355,16 @@ class GoogleDriveService
         arsort($turnos); arsort($antiguedades); arsort($empresasObs);
         arsort($cargos); arsort($negPorTipo); arsort($posPorTipo);
         arsort($topNegTrabajadores); arsort($topPosTrabajadores);
+
+        // Excluir registros sin nombre válido de los rankings de trabajadores
+        $invalidNames = ['', 'SIN NOMBRE', 'N/A', 'S/N', '-', '.', 'X', 'XX', 'XXX', 'PRUEBA'];
+        $topNegTrabajadores = array_filter($topNegTrabajadores, function ($v, $k) use ($invalidNames) {
+            return !in_array(trim($k), $invalidNames) && mb_strlen(trim($k)) >= 3;
+        }, ARRAY_FILTER_USE_BOTH);
+        $topPosTrabajadores = array_filter($topPosTrabajadores, function ($v, $k) use ($invalidNames) {
+            return !in_array(trim($k), $invalidNames) && mb_strlen(trim($k)) >= 3;
+        }, ARRAY_FILTER_USE_BOTH);
+
         ksort($byMonth); ksort($byMonthNeg); ksort($byMonthPos); ksort($byYear);
         ksort($foEmpObs); ksort($foEmpObsdo); ksort($foTipos); ksort($foCentros); ksort($foAnios);
 

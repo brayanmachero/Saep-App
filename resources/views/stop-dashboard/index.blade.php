@@ -29,6 +29,15 @@
         </div>
     </div>
 
+    {{-- Loading overlay --}}
+    <div id="loading-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,27,76,.45);z-index:9999;justify-content:center;align-items:center;backdrop-filter:blur(2px)">
+        <div style="background:var(--card-bg,#fff);padding:2rem 2.5rem;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center">
+            <div style="width:40px;height:40px;border:3px solid rgba(15,27,76,.15);border-top-color:#0f1b4c;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto .75rem"></div>
+            <p style="font-size:.85rem;font-weight:600;color:var(--text-primary,#1e293b);margin:0">Cargando datos...</p>
+            <p style="font-size:.72rem;color:var(--text-muted,#94a3b8);margin:.25rem 0 0">Procesando observaciones</p>
+        </div>
+    </div>
+
     {{-- Mensajes --}}
     @if(session('success'))
     <div class="glass-card" style="padding:.75rem 1.25rem;margin-bottom:1rem;border-left:4px solid #22c55e;font-size:.85rem;color:#15803d;background:rgba(34,197,94,.06)">
@@ -451,7 +460,7 @@
         </div>
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
-                <i class="bi bi-pie-chart-fill" style="color:#8b5cf6"></i> Clasificacion
+                <i class="bi bi-pie-chart-fill" style="color:#8b5cf6"></i> Clasificación
             </h3>
             <div style="position:relative;height:200px;max-width:220px;margin:0 auto"><canvas id="clasificacionChart"></canvas></div>
             <div style="display:flex;justify-content:center;gap:1.5rem;margin-top:.75rem;font-size:.8rem">
@@ -906,6 +915,10 @@ function clearMesFilter() {
     var m = document.getElementById('filter-mes');
     if (m) m.value = '';
 }
+function showLoading() {
+    var o = document.getElementById('loading-overlay');
+    if (o) o.style.display = 'flex';
+}
 </script>
 @endpush
 
@@ -916,9 +929,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const colors = ['#3b82f6','#8b5cf6','#f59e0b','#22c55e','#ef4444','#06b6d4','#ec4899','#f97316','#14b8a6','#6366f1','#a855f7','#84cc16'];
     const gridColor = 'rgba(128,128,128,0.08)';
 
+    // Loading spinner para filtros
+    const filterForm = document.getElementById('filter-form');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function() { showLoading(); });
+    }
+
     const syncForm = document.getElementById('sync-form');
     if (syncForm) {
         syncForm.addEventListener('submit', function() {
+            showLoading();
             document.getElementById('sync-btn').disabled = true;
             document.getElementById('sync-btn').style.opacity = '0.7';
             document.getElementById('sync-icon').style.animation = 'spin 1s linear infinite';
@@ -955,7 +975,7 @@ document.addEventListener('DOMContentLoaded', function() {
             plugins: { legend: { position: 'top', labels: { boxWidth: 12, padding: 8, font: { size: 10 } } } },
             scales: {
                 y: { beginAtZero: true, stacked: true, ticks: { precision: 0 }, grid: { color: gridColor } },
-                x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } }
+                x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 45, maxTicksLimit: 12, autoSkip: true, font: { size: 10 } } }
             }
         }
     });
