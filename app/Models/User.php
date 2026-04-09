@@ -102,6 +102,7 @@ class User extends Authenticatable
             'acepta_politica_datos' => 'boolean',
             'fecha_aceptacion_politica' => 'datetime',
             'must_change_password' => 'boolean',
+            'ultimo_acceso' => 'datetime',
         ];
     }
 }
