@@ -100,8 +100,8 @@
                     </div>
                     <div class="form-group">
                         <label>RUT</label>
-                        <input type="text" name="denunciante_rut" value="{{ old('denunciante_rut') }}"
-                               class="form-input" placeholder="12.345.678-9">
+                        <input type="text" name="denunciante_rut" data-rut value="{{ old('denunciante_rut') }}"
+                               class="form-input">
                     </div>
                     <div class="form-group" style="grid-column:span 2;">
                         <label>O seleccionar usuario interno</label>

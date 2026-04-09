@@ -80,6 +80,13 @@ class DocumentacionController extends Controller
                 'estado'      => 'completo',
                 'version'     => '1.0',
             ],
+            'seguridad' => [
+                'titulo'      => 'Seguridad y Perfil de Usuario',
+                'icono'       => 'bi-shield-lock-fill',
+                'descripcion' => 'Perfil de usuario, foto, contraseñas, notificaciones, soft deletes y políticas de seguridad.',
+                'estado'      => 'completo',
+                'version'     => '1.0',
+            ],
             'configuracion' => [
                 'titulo'      => 'Configuración',
                 'icono'       => 'bi-gear-fill',

@@ -24,6 +24,7 @@ use App\Http\Controllers\WebhookLogController;
 use App\Http\Controllers\NotaPersonalController;
 use App\Http\Controllers\PdfController;
 use App\Http\Controllers\PermisoController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProteccionDatosController;
 use App\Http\Controllers\RespuestaController;
 use App\Http\Controllers\UserController;
@@ -84,8 +85,28 @@ Route::middleware('auth')->group(function () {
     Route::post('/proteccion-datos/aceptar-politica', [ProteccionDatosController::class, 'aceptarPolitica'])
         ->name('proteccion-datos.aceptar-politica');
 
+    // --- MI PERFIL ---
+    Route::get('perfil', [ProfileController::class, 'show'])->name('perfil.show');
+    Route::put('perfil', [ProfileController::class, 'update'])->name('perfil.update');
+    Route::put('perfil/password', [ProfileController::class, 'updatePassword'])->name('perfil.password');
+    Route::post('perfil/foto', [ProfileController::class, 'updatePhoto'])->name('perfil.foto');
+    Route::delete('perfil/foto', [ProfileController::class, 'deletePhoto'])->name('perfil.foto.delete');
+
+    // --- NOTIFICACIONES ---
+    Route::get('notificaciones', function () {
+        return response()->json(auth()->user()->unreadNotifications->take(20));
+    })->name('notificaciones.index');
+    Route::post('notificaciones/{id}/read', function ($id) {
+        auth()->user()->notifications()->where('id', $id)->first()?->markAsRead();
+        return response()->json(['ok' => true]);
+    })->name('notificaciones.read');
+    Route::post('notificaciones/read-all', function () {
+        auth()->user()->unreadNotifications->markAsRead();
+        return response()->json(['ok' => true]);
+    })->name('notificaciones.read-all');
+
     // Rutas protegidas por consentimiento
-    Route::middleware('consentimiento')->group(function () {
+    Route::middleware(['consentimiento', 'force.password'])->group(function () {
 
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 

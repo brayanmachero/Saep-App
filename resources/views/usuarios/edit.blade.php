@@ -52,8 +52,8 @@
 
                 <div class="form-group">
                     <label>RUT</label>
-                    <input type="text" name="rut" class="form-input @error('rut') is-invalid @enderror"
-                        value="{{ old('rut', $usuario->rut) }}" placeholder="12.345.678-9">
+                    <input type="text" name="rut" data-rut class="form-input @error('rut') is-invalid @enderror"
+                        value="{{ old('rut', $usuario->rut) }}">
                     @error('rut') <span class="error-msg">{{ $message }}</span> @enderror
                 </div>
 

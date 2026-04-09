@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 
 class PasswordResetController extends Controller
 {
@@ -61,7 +62,7 @@ class PasswordResetController extends Controller
         $request->validate([
             'token'    => ['required'],
             'email'    => ['required', 'email'],
-            'password' => ['required', 'min:8', 'confirmed'],
+            'password' => ['required', 'confirmed', Password::min(8)->letters()->mixedCase()->numbers()],
         ]);
 
         $record = DB::table('password_reset_tokens')
@@ -89,7 +90,10 @@ class PasswordResetController extends Controller
             return back()->withErrors(['email' => 'No se encontró el usuario.']);
         }
 
-        $user->update(['password' => $request->password]);
+        $user->update([
+            'password' => $request->password,
+            'must_change_password' => false,
+        ]);
 
         // Eliminar token usado
         DB::table('password_reset_tokens')->where('email', $request->email)->delete();

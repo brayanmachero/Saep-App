@@ -218,13 +218,19 @@
         </nav>
 
         <div class="user-profile">
-            <div class="avatar">
-                {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 1)) }}{{ strtoupper(substr(strstr(auth()->user()->name ?? ' X', ' '), 1, 1)) }}
-            </div>
-            <div class="user-info">
-                <span class="user-name">{{ auth()->user()->name ?? 'Usuario' }}</span>
-                <span class="user-role">{{ auth()->user()->rol->nombre ?? 'Sin Rol' }}</span>
-            </div>
+            <a href="{{ route('perfil.show') }}" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:.65rem;width:100%;">
+                @if(auth()->user()->foto_perfil)
+                    <img src="{{ asset('storage/' . auth()->user()->foto_perfil) }}" alt="Foto" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+                @else
+                    <div class="avatar">
+                        {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 1)) }}{{ strtoupper(substr(strstr(auth()->user()->name ?? ' X', ' '), 1, 1)) }}
+                    </div>
+                @endif
+                <div class="user-info">
+                    <span class="user-name">{{ auth()->user()->name ?? 'Usuario' }}</span>
+                    <span class="user-role">{{ auth()->user()->rol->nombre ?? 'Sin Rol' }}</span>
+                </div>
+            </a>
         </div>
         <form method="POST" action="{{ route('logout') }}" style="padding: 0 1rem 1rem;">
             @csrf
@@ -248,9 +254,31 @@
                 <button class="icon-btn" id="dark-mode-toggle">
                     <i class="bi bi-moon-fill"></i>
                 </button>
-                <button class="icon-btn">
-                    <i class="bi bi-bell-fill"></i>
-                </button>
+                <div style="position:relative;" id="notif-wrapper">
+                    <button class="icon-btn" id="notif-toggle" style="position:relative;">
+                        <i class="bi bi-bell-fill"></i>
+                        <span id="notif-badge" style="display:none;position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:#ef4444;color:#fff;font-size:.65rem;font-weight:700;line-height:18px;text-align:center;">0</span>
+                    </button>
+                    <div id="notif-dropdown" style="display:none;position:absolute;right:0;top:calc(100% + 8px);width:360px;max-height:420px;overflow-y:auto;background:var(--card-bg,#fff);border:1px solid var(--border-color,#e2e8f0);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,0.12);z-index:9999;">
+                        <div style="padding:.85rem 1rem;border-bottom:1px solid var(--border-color,#e2e8f0);display:flex;align-items:center;justify-content:space-between;">
+                            <span style="font-weight:600;font-size:.95rem;color:var(--text-color);">Notificaciones</span>
+                            <button id="notif-read-all" style="background:none;border:none;color:var(--primary-color,#0f1b4c);font-size:.8rem;cursor:pointer;font-weight:500;">Marcar todas</button>
+                        </div>
+                        <div id="notif-list" style="padding:.5rem;">
+                            <p id="notif-empty" style="text-align:center;color:var(--text-muted,#94a3b8);font-size:.85rem;padding:2rem 1rem;">
+                                <i class="bi bi-bell" style="font-size:1.5rem;display:block;margin-bottom:.5rem;opacity:.4;"></i>
+                                Sin notificaciones nuevas
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <a href="{{ route('perfil.show') }}" class="icon-btn" title="Mi Perfil" style="text-decoration:none;">
+                    @if(auth()->user()->foto_perfil)
+                        <img src="{{ asset('storage/' . auth()->user()->foto_perfil) }}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">
+                    @else
+                        <i class="bi bi-person-circle"></i>
+                    @endif
+                </a>
             </div>
         </header>
 
@@ -283,6 +311,150 @@
             </button>
         </div>
     </nav>
+
+    {{-- Notification system --}}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggle = document.getElementById('notif-toggle');
+        const dropdown = document.getElementById('notif-dropdown');
+        const badge = document.getElementById('notif-badge');
+        const list = document.getElementById('notif-list');
+        const empty = document.getElementById('notif-empty');
+        const readAll = document.getElementById('notif-read-all');
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+
+        if (!toggle) return;
+
+        toggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const open = dropdown.style.display !== 'none';
+            dropdown.style.display = open ? 'none' : 'block';
+            if (!open) loadNotifications();
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!document.getElementById('notif-wrapper')?.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        readAll.addEventListener('click', function() {
+            fetch('{{ route("notificaciones.read-all") }}', {
+                method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }
+            }).then(() => { loadNotifications(); });
+        });
+
+        function loadNotifications() {
+            fetch('{{ route("notificaciones.index") }}', { headers: { 'Accept': 'application/json' } })
+                .then(r => r.json())
+                .then(data => {
+                    badge.style.display = data.length > 0 ? 'block' : 'none';
+                    badge.textContent = data.length;
+                    if (data.length === 0) {
+                        empty.style.display = 'block';
+                        list.querySelectorAll('.notif-item').forEach(el => el.remove());
+                        return;
+                    }
+                    empty.style.display = 'none';
+                    list.querySelectorAll('.notif-item').forEach(el => el.remove());
+                    data.forEach(n => {
+                        const d = n.data;
+                        const div = document.createElement('div');
+                        div.className = 'notif-item';
+                        div.style.cssText = 'padding:.65rem .75rem;border-radius:10px;cursor:pointer;transition:background .15s;display:flex;gap:.65rem;align-items:flex-start;';
+                        div.onmouseenter = () => div.style.background = 'var(--surface-bg,#f8fafc)';
+                        div.onmouseleave = () => div.style.background = 'transparent';
+                        const iconMap = { info:'bi-info-circle-fill', success:'bi-check-circle-fill', warning:'bi-exclamation-triangle-fill', danger:'bi-x-circle-fill' };
+                        const colorMap = { info:'#3b82f6', success:'#10b981', warning:'#f59e0b', danger:'#ef4444' };
+                        const type = d.type || 'info';
+                        div.innerHTML = `
+                            <div style="width:32px;height:32px;border-radius:8px;background:${colorMap[type]}15;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <i class="bi ${iconMap[type]}" style="color:${colorMap[type]};font-size:.9rem;"></i>
+                            </div>
+                            <div style="flex:1;min-width:0;">
+                                <p style="margin:0;font-size:.85rem;font-weight:500;color:var(--text-color);">${d.title || 'Notificación'}</p>
+                                <p style="margin:.15rem 0 0;font-size:.78rem;color:var(--text-muted);line-height:1.4;">${d.message || ''}</p>
+                                <span style="font-size:.7rem;color:var(--text-muted);opacity:.7;">${timeAgo(n.created_at)}</span>
+                            </div>`;
+                        div.addEventListener('click', () => {
+                            fetch('/notificaciones/' + n.id + '/read', {
+                                method: 'POST', headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }
+                            }).then(() => { div.remove(); loadNotifications(); if (d.url) window.location = d.url; });
+                        });
+                        list.appendChild(div);
+                    });
+                });
+        }
+
+        function timeAgo(dt) {
+            const diff = (Date.now() - new Date(dt)) / 1000;
+            if (diff < 60) return 'Ahora';
+            if (diff < 3600) return Math.floor(diff/60) + ' min';
+            if (diff < 86400) return Math.floor(diff/3600) + ' h';
+            return Math.floor(diff/86400) + ' d';
+        }
+
+        // Initial badge load
+        loadNotifications();
+        setInterval(loadNotifications, 60000);
+    });
+    </script>
+
+    {{-- RUT Formatter — auto-applies to any input[data-rut] --}}
+    <script>
+    (function(){
+        function formatRut(value) {
+            let clean = value.replace(/[^0-9kK]/g, '').toUpperCase();
+            if (!clean) return '';
+            // Separate body from dv
+            let dv = clean.slice(-1);
+            let body = clean.slice(0, -1);
+            if (!body) return clean; // single char, no format yet
+            // Add dots from right
+            let formatted = '';
+            let count = 0;
+            for (let i = body.length - 1; i >= 0; i--) {
+                formatted = body[i] + formatted;
+                count++;
+                if (count % 3 === 0 && i > 0) formatted = '.' + formatted;
+            }
+            return formatted + '-' + dv;
+        }
+
+        function handleRutInput(e) {
+            const input = e.target;
+            const pos = input.selectionStart;
+            const oldLen = input.value.length;
+            input.value = formatRut(input.value);
+            const newLen = input.value.length;
+            const newPos = Math.max(0, pos + (newLen - oldLen));
+            input.setSelectionRange(newPos, newPos);
+        }
+
+        function initRutInputs() {
+            document.querySelectorAll('[data-rut]').forEach(function(input) {
+                if (input.dataset.rutInit) return;
+                input.dataset.rutInit = '1';
+                input.setAttribute('maxlength', '12');
+                input.setAttribute('placeholder', '12.345.678-9');
+                // Format existing value
+                if (input.value) input.value = formatRut(input.value);
+                input.addEventListener('input', handleRutInput);
+                input.addEventListener('paste', function() {
+                    setTimeout(function(){ input.value = formatRut(input.value); }, 0);
+                });
+            });
+        }
+
+        // Initialize on DOM ready and observe for dynamically added inputs
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initRutInputs);
+        } else {
+            initRutInputs();
+        }
+        new MutationObserver(initRutInputs).observe(document.body, { childList: true, subtree: true });
+    })();
+    </script>
 
     @stack('scripts')
 </body>

@@ -426,7 +426,7 @@
                         </div>
                         <div class="form-group">
                             <label>RUT (opcional)</label>
-                            <input type="text" name="denunciante_rut" class="form-input" value="{{ old('denunciante_rut') }}" placeholder="12.345.678-9">
+                            <input type="text" name="denunciante_rut" data-rut class="form-input" value="{{ old('denunciante_rut') }}">
                             <span class="hint">Formato: 12.345.678-9</span>
                         </div>
                     </div>
@@ -801,6 +801,37 @@ document.getElementById('denunciaForm').addEventListener('submit', function() {
     btn.disabled = true;
     btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando...';
 });
+</script>
+<script>
+(function(){
+    function formatRut(value) {
+        let clean = value.replace(/[^0-9kK]/g, '').toUpperCase();
+        if (!clean) return '';
+        let dv = clean.slice(-1);
+        let body = clean.slice(0, -1);
+        if (!body) return clean;
+        let formatted = '';
+        let count = 0;
+        for (let i = body.length - 1; i >= 0; i--) {
+            formatted = body[i] + formatted;
+            count++;
+            if (count % 3 === 0 && i > 0) formatted = '.' + formatted;
+        }
+        return formatted + '-' + dv;
+    }
+    document.querySelectorAll('[data-rut]').forEach(function(input) {
+        input.setAttribute('maxlength', '12');
+        if (input.value) input.value = formatRut(input.value);
+        input.addEventListener('input', function(e) {
+            const pos = input.selectionStart;
+            const oldLen = input.value.length;
+            input.value = formatRut(input.value);
+            const newLen = input.value.length;
+            const newPos = Math.max(0, pos + (newLen - oldLen));
+            input.setSelectionRange(newPos, newPos);
+        });
+    });
+})();
 </script>
 </body>
 </html>

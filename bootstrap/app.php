@@ -3,6 +3,7 @@
 use App\Http\Middleware\CheckModulo;
 use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\CheckRole;
+use App\Http\Middleware\ForcePasswordChange;
 use App\Http\Middleware\VerificarConsentimientoDatos;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => CheckPermission::class,
             'modulo'     => CheckModulo::class,
             'consentimiento' => VerificarConsentimientoDatos::class,
+            'force.password' => ForcePasswordChange::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

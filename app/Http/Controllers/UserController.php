@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class UserController extends Controller
 {
@@ -90,6 +91,7 @@ class UserController extends Controller
         // Generar contraseña provisoria automática
         $tempPassword = Str::upper(Str::random(3)) . rand(100, 999) . Str::random(3);
         $data['password'] = Hash::make($tempPassword);
+        $data['must_change_password'] = true;
         $data['activo'] = $request->boolean('activo', true);
 
         $user = User::create($data);
@@ -134,7 +136,9 @@ class UserController extends Controller
         ]);
 
         if ($request->filled('password')) {
-            $request->validate(['password' => 'min:8|confirmed']);
+            $request->validate([
+                'password' => ['confirmed', Password::min(8)->letters()->mixedCase()->numbers()],
+            ]);
             $data['password'] = Hash::make($request->password);
         }
 

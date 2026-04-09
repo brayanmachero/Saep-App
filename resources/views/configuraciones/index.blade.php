@@ -489,7 +489,8 @@
                                         <input type="{{ strtoupper($config->tipo) === 'NUMBER' ? 'number' : (strtoupper($config->tipo) === 'EMAIL' ? 'email' : 'text') }}"
                                                name="config[{{ $config->clave }}]"
                                                value="{{ old('config.'.$config->clave, $config->valor) }}"
-                                               class="form-input">
+                                               class="form-input"
+                                               @if(str_contains($config->clave, '_rut')) data-rut @endif>
                                     @endif
                                 </div>
                             </div>
