@@ -49,7 +49,7 @@ class StopReporteMail extends Mailable
         }
 
         return new Envelope(
-            subject: "Reporte {$this->frecuencia} Tarjeta STOP{$weekTag} — {$total} obs. ({$neg} neg.) — {$label}",
+            subject: "Reporte {$this->frecuencia} Tarjeta STO CCU{$weekTag} — {$total} obs. ({$neg} neg.) — {$label}",
         );
     }
 
@@ -68,7 +68,7 @@ class StopReporteMail extends Mailable
 
         return [
             Attachment::fromPath($this->excelPath)
-                ->as("Reporte_STOP_{$this->frecuencia}_{$label}.xlsx")
+                ->as("Reporte_STO_CCU_{$this->frecuencia}_{$label}.xlsx")
                 ->withMime('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
         ];
     }

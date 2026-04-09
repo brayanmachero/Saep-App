@@ -3,7 +3,7 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Reporte Tarjeta STOP</title>
+<title>Reporte Tarjeta STO CCU</title>
 <!--[if mso]>
 <style type="text/css">
 body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-serif !important; }
@@ -97,7 +97,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <tr>
 <td style="background-color:#1B5E20; padding:24px 32px; text-align:center; border-radius:4px 4px 0 0;">
     <h1 style="margin:0; color:#ffffff; font-size:22px; font-weight:bold; letter-spacing:0.5px;">
-        AUDITOR&Iacute;AS STOP &mdash; Reporte {{ $frecuencia ?? 'Semanal' }}
+        AUDITOR&Iacute;AS STO CCU &mdash; Reporte {{ $frecuencia ?? 'Semanal' }}
         @if(strtolower($frecuencia ?? 'Semanal') === 'semanal')
         &mdash; Semana {{ now()->subWeek()->isoFormat('W') }}
         @endif
@@ -116,7 +116,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
         <td width="33%" style="padding:4px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1B5E20; border-radius:6px;">
             <tr><td style="padding:14px 8px; text-align:center;">
-                <span style="font-size:11px; color:#fca5a5; text-transform:uppercase; letter-spacing:1px;">Tarjetas STOP</span><br/>
+                <span style="font-size:11px; color:#fca5a5; text-transform:uppercase; letter-spacing:1px;">Tarjetas STO CCU</span><br/>
                 <span style="font-size:32px; font-weight:bold; color:#ffffff;">{{ number_format($total) }}</span>
             </td></tr>
             </table>
@@ -363,13 +363,13 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 @endif
 @endif
 
-{{-- ═══════════ TARJETAS STOP POR CENTRO (barras apiladas) ═══════════ --}}
+{{-- ═══════════ TARJETAS STO CCU POR CENTRO (barras apiladas) ═══════════ --}}
 @if(!empty($centrosData))
 <tr>
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr><td style="background-color:#1B5E20; padding:8px 12px; text-align:center; border-radius:4px;">
-        <span style="color:#ffffff; font-size:13px; font-weight:bold;">Tarjetas STOP por Centro</span>
+        <span style="color:#ffffff; font-size:13px; font-weight:bold;">Tarjetas STO CCU por Centro</span>
     </td></tr>
     </table>
     @php $maxC = max($centrosData); @endphp
@@ -447,7 +447,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr><td style="background-color:#1B5E20; padding:8px 12px; text-align:center; border-radius:4px;">
-        <span style="color:#ffffff; font-size:13px; font-weight:bold;">Tarjetas STOP por Mes</span>
+        <span style="color:#ffffff; font-size:13px; font-weight:bold;">Tarjetas STO CCU por Mes</span>
     </td></tr>
     </table>
     @php
@@ -620,7 +620,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr><td style="background-color:#1B5E20; padding:8px 12px; text-align:center; border-radius:4px;">
-        <span style="color:#ffffff; font-size:13px; font-weight:bold;">Trabajador con Mayor Tarjetas STOP Negativas</span>
+        <span style="color:#ffffff; font-size:13px; font-weight:bold;">Trabajador con Mayor Tarjetas STO CCU Negativas</span>
     </td></tr>
     </table>
     @php $maxTN = max($topNeg); @endphp
@@ -652,7 +652,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr><td style="background-color:#166534; padding:8px 12px; text-align:center; border-radius:4px;">
-        <span style="color:#ffffff; font-size:13px; font-weight:bold;">Trabajadores con Tarjetas STOP Positivas</span>
+        <span style="color:#ffffff; font-size:13px; font-weight:bold;">Trabajadores con Tarjetas STO CCU Positivas</span>
     </td></tr>
     </table>
     @php $maxTP = max($topPos); @endphp
@@ -914,7 +914,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px; background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">
     <tr><td style="padding:14px 16px; font-size:12px; color:#334155; line-height:1.6;">
         Durante el per&iacute;odo <strong>{{ $mesLabel ?? $periodo }}</strong> se cursaron
-        <strong>{{ number_format($total) }} tarjetas STOP</strong>, de las cuales
+        <strong>{{ number_format($total) }} tarjetas STO CCU</strong>, de las cuales
         <strong style="color:#22c55e;">{{ number_format($pos) }}</strong> son positivas y
         <strong style="color:#991b1b;">{{ number_format($neg) }}</strong> son negativas,
         lo que representa una tasa de observaciones positivas del <strong>{{ $pctPos }}%</strong>.
@@ -936,7 +936,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
     </td></tr>
     </table>
     <p style="margin:8px 0 0; font-size:10px; color:#94a3b8; font-style:italic;">
-        Nota: La informaci&oacute;n obtenida de tarjetas STOP se encuentra en la base de datos.
+        Nota: La informaci&oacute;n obtenida de tarjetas STO CCU se encuentra en la base de datos.
     </p>
 </td>
 </tr>

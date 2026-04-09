@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Console\Commands\StopWeeklyReport;
 use App\Mail\StopReporteMail;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
@@ -35,8 +36,8 @@ class StopDashboardController extends Controller
             'tipo_observacion'   => $request->input('tipo_observacion'),
             'centro'             => $request->input('centro'),
             'clasificacion'      => $request->input('clasificacion'),
-            'fecha_desde'        => $request->input('fecha_desde', $isClean ? now()->startOfMonth()->format('Y-m-d') : null),
-            'fecha_hasta'        => $request->input('fecha_hasta', $isClean ? now()->endOfMonth()->format('Y-m-d') : null),
+            'fecha_desde'        => $request->input('fecha_desde', $isClean && !$request->input('mes') && !$request->input('anio') ? now()->startOfMonth()->format('Y-m-d') : null),
+            'fecha_hasta'        => $request->input('fecha_hasta', $isClean && !$request->input('mes') && !$request->input('anio') ? now()->endOfMonth()->format('Y-m-d') : null),
             'mes'                => $request->input('mes'),
             'anio'               => $request->input('anio'),
         ]);
@@ -61,8 +62,15 @@ class StopDashboardController extends Controller
         // Checklist (sin filtros, datos globales)
         $checklist = $drive->getChecklistAnalytics();
 
+        // Comparativa año anterior + acumulado YTD (como en el email)
+        $empresa = $filters['empresa_observador'] ?? null;
+        $comparison = StopWeeklyReport::buildComparison($drive, $filters, $empresa);
+
+        // Detalle de evaluación negativas (como en el email)
+        $evalDetail = $drive->getEvaluationDetail($filters) ?? [];
+
         return view('stop-dashboard.index', compact(
-            'fileInfo', 'analytics', 'checklist', 'filters', 'filterOptions'
+            'fileInfo', 'analytics', 'checklist', 'filters', 'filterOptions', 'comparison', 'evalDetail'
         ));
     }
 

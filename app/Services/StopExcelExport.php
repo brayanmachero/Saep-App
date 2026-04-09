@@ -33,8 +33,8 @@ class StopExcelExport
         $this->spreadsheet = new Spreadsheet();
         $this->spreadsheet->getProperties()
             ->setCreator('SAEP')
-            ->setTitle("Reporte {$frecuencia} Tarjeta STOP — {$periodo}")
-            ->setSubject('Auditorías STOP');
+            ->setTitle("Reporte {$frecuencia} Tarjeta STO CCU — {$periodo}")
+            ->setSubject('Auditorías STO CCU');
 
         $this->buildResumen($analytics);
         // Evaluation detail sheets right after Resumen (prominent position)
@@ -82,7 +82,7 @@ class StopExcelExport
             ? ' — Semana ' . now()->subWeek()->isoFormat('W')
             : '';
         $sheet->mergeCells('A1:F1');
-        $sheet->setCellValue('A1', "AUDITORÍAS STOP — Reporte {$this->frecuencia}{$weekTag}");
+        $sheet->setCellValue('A1', "AUDITORÍAS STO CCU — Reporte {$this->frecuencia}{$weekTag}");
         $this->styleHeader($sheet, 'A1:F1');
         $sheet->getRowDimension(1)->setRowHeight(36);
 
@@ -328,7 +328,7 @@ class StopExcelExport
         $centrosNeg = $a['centrosNeg'] ?? [];
         $centrosPos = $a['centrosPos'] ?? [];
 
-        $this->writeTitle($sheet, 'A1:E1', 'Tarjetas STOP por Centro de Trabajo');
+        $this->writeTitle($sheet, 'A1:E1', 'Tarjetas STO CCU por Centro de Trabajo');
 
         $headers = ['Centro', 'Total', 'Negativas', 'Positivas', '% Positivas'];
         $this->writeTableHeader($sheet, 2, $headers);
@@ -366,7 +366,7 @@ class StopExcelExport
         $areasNeg = $a['areasNeg'] ?? [];
         $areasPos = $a['areasPos'] ?? [];
 
-        $this->writeTitle($sheet, 'A1:E1', 'Tarjetas STOP por Área o Proceso');
+        $this->writeTitle($sheet, 'A1:E1', 'Tarjetas STO CCU por Área o Proceso');
 
         $headers = ['Área / Zona', 'Total', 'Negativas', 'Positivas', '% Positivas'];
         $this->writeTableHeader($sheet, 2, $headers);
@@ -451,7 +451,7 @@ class StopExcelExport
         $empresasNeg = $a['empresasNeg'] ?? [];
         $empresasPos = $a['empresasPos'] ?? [];
 
-        $this->writeTitle($sheet, 'A1:E1', 'Tarjetas STOP por Empresa (Observado)');
+        $this->writeTitle($sheet, 'A1:E1', 'Tarjetas STO CCU por Empresa (Observado)');
 
         $headers = ['Empresa', 'Total', 'Negativas', 'Positivas', '% Positivas'];
         $this->writeTableHeader($sheet, 2, $headers);
@@ -513,7 +513,7 @@ class StopExcelExport
 
         // Top Negativos
         $topNeg = $a['topNegTrabajadores'] ?? [];
-        $this->writeTitle($sheet, 'A1:C1', 'Trabajadores con Mayor Tarjetas STOP Negativas');
+        $this->writeTitle($sheet, 'A1:C1', 'Trabajadores con Mayor Tarjetas STO CCU Negativas');
 
         $headers = ['#', 'Trabajador', 'Negativas'];
         $this->writeTableHeader($sheet, 2, $headers);
@@ -537,7 +537,7 @@ class StopExcelExport
             $row += 2;
             $startRow = $row;
             $sheet->mergeCells("A{$row}:C{$row}");
-            $sheet->setCellValue("A{$row}", 'Trabajadores con Tarjetas STOP Positivas');
+            $sheet->setCellValue("A{$row}", 'Trabajadores con Tarjetas STO CCU Positivas');
             $sheet->getStyle("A{$row}:C{$row}")->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['argb' => self::WHITE], 'size' => 11],
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::GREEN]],
@@ -608,7 +608,7 @@ class StopExcelExport
         $byMonthNeg = $a['byMonthNeg'] ?? [];
         $byMonthPos = $a['byMonthPos'] ?? [];
 
-        $this->writeTitle($sheet, 'A1:D1', 'Tendencia Mensual — Tarjetas STOP');
+        $this->writeTitle($sheet, 'A1:D1', 'Tendencia Mensual — Tarjetas STO CCU');
 
         $this->writeTableHeader($sheet, 2, ['Mes', 'Total', 'Negativas', 'Positivas']);
 

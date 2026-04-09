@@ -19,14 +19,14 @@ class StopWeeklyReport extends Command
                             {--empresa= : Filtrar por empresa observador}
                             {--frecuencia=semanal : semanal o mensual}';
 
-    protected $description = 'Genera y envía el reporte semanal/mensual de Tarjeta STOP';
+    protected $description = 'Genera y envía el reporte semanal/mensual de Tarjeta STO CCU';
 
     public function handle(): int
     {
         $frecuencia = strtolower($this->option('frecuencia') ?? 'semanal');
         $esMensual  = $frecuencia === 'mensual';
 
-        $this->info("Generando reporte Tarjeta STOP ({$frecuencia})...");
+        $this->info("Generando reporte Tarjeta STO CCU ({$frecuencia})...");
 
         $drive = new GoogleDriveService();
 
@@ -91,7 +91,7 @@ class StopWeeklyReport extends Command
             : 'stop_report_activo';
 
         if (!$this->option('email') && Configuracion::get($configActivo) !== '1') {
-            $this->info("Reporte STOP ({$frecuencia}) desactivado en configuración.");
+            $this->info("Reporte STO CCU ({$frecuencia}) desactivado en configuración.");
             return self::SUCCESS;
         }
 
@@ -114,7 +114,7 @@ class StopWeeklyReport extends Command
         }
 
         if (empty($destinatarios)) {
-            $this->warn("No hay destinatarios configurados para el reporte STOP ({$frecuencia}).");
+            $this->warn("No hay destinatarios configurados para el reporte STO CCU ({$frecuencia}).");
             return self::SUCCESS;
         }
 
@@ -142,7 +142,7 @@ class StopWeeklyReport extends Command
             }
         }
 
-        $this->info("Reporte STOP ({$frecLabel}) — Total: {$analytics['totalRows']} | Pos: {$positivas} | Neg: {$negativas}");
+        $this->info("Reporte STO CCU ({$frecLabel}) — Total: {$analytics['totalRows']} | Pos: {$positivas} | Neg: {$negativas}");
 
         Log::info("stop:weekly-report ({$frecuencia}) enviado", [
             'total'         => $analytics['totalRows'],
@@ -205,7 +205,7 @@ class StopWeeklyReport extends Command
     /**
      * Compute year-over-year and YTD comparison data.
      */
-    private static function buildComparison(GoogleDriveService $drive, array $baseFilters, ?string $empresa): array
+    public static function buildComparison(GoogleDriveService $drive, array $baseFilters, ?string $empresa): array
     {
         $currentYear  = (int) ($baseFilters['anio'] ?? now()->format('Y'));
         $prevYear     = $currentYear - 1;

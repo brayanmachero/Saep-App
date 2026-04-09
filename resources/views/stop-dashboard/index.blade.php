@@ -1,12 +1,12 @@
 @extends('layouts.app')
-@section('title', 'Dashboard Tarjeta STOP')
+@section('title', 'Dashboard Tarjeta STO CCU')
 @section('content')
 <div class="page-container">
 
     {{-- Header --}}
     <div class="page-header">
         <div>
-            <h2 class="page-heading"><i class="bi bi-hand-index-fill" style="color:var(--accent-color)"></i> Dashboard Tarjeta STOP</h2>
+            <h2 class="page-heading"><i class="bi bi-hand-index-fill" style="color:var(--accent-color)"></i> Dashboard Tarjeta STO CCU</h2>
             <p class="page-subheading">
                 Observaciones de seguridad &mdash; Google Sheets
                 @if(isset($fileInfo))
@@ -99,15 +99,29 @@
                         @endforeach
                     </select>
                 </div>
+                {{-- Mes --}}
+                <div>
+                    <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">Mes</label>
+                    <input type="month" name="mes" id="filter-mes" class="filter-select" value="{{ $filters['mes'] ?? '' }}" onchange="clearDateFilters(); this.form.submit()">
+                </div>
+                {{-- Clasificacion --}}
+                <div>
+                    <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">Clasificaci&oacute;n</label>
+                    <select name="clasificacion" class="filter-select" onchange="this.form.submit()">
+                        <option value="">Todas</option>
+                        <option value="Positiva" {{ ($filters['clasificacion'] ?? '') === 'Positiva' ? 'selected' : '' }}>Positiva</option>
+                        <option value="Negativa" {{ ($filters['clasificacion'] ?? '') === 'Negativa' ? 'selected' : '' }}>Negativa</option>
+                    </select>
+                </div>
                 {{-- Fecha Desde --}}
                 <div>
                     <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">Fecha Desde</label>
-                    <input type="date" name="fecha_desde" class="filter-select" value="{{ $filters['fecha_desde'] ?? '' }}" onchange="this.form.submit()">
+                    <input type="date" name="fecha_desde" id="filter-fecha-desde" class="filter-select" value="{{ $filters['fecha_desde'] ?? '' }}" onchange="clearMesFilter(); this.form.submit()">
                 </div>
                 {{-- Fecha Hasta --}}
                 <div>
                     <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">Fecha Hasta</label>
-                    <input type="date" name="fecha_hasta" class="filter-select" value="{{ $filters['fecha_hasta'] ?? '' }}" onchange="this.form.submit()">
+                    <input type="date" name="fecha_hasta" id="filter-fecha-hasta" class="filter-select" value="{{ $filters['fecha_hasta'] ?? '' }}" onchange="clearMesFilter(); this.form.submit()">
                 </div>
             </div>
             <div style="display:flex;gap:.5rem">
@@ -218,6 +232,214 @@
             </div>
         </div>
     </div>
+
+    {{-- Comparativa vs Año Anterior --}}
+    @php
+        $comp = $comparison ?? [];
+        $ytd = $comp['ytd'] ?? [];
+        $prev = $comp['prevYear'] ?? [];
+        $hasComp = !empty($ytd) && !empty($prev);
+    @endphp
+    @if($hasComp)
+    @php
+        $ytdTotal = $ytd['total'] ?? 0;
+        $ytdPos = $ytd['pos'] ?? 0;
+        $ytdNeg = $ytd['neg'] ?? 0;
+        $prevYearLabel = $prev['year'] ?? ((int) date('Y') - 1);
+        $prevTotal = $prev['sameMonthTotal'] ?? 0;
+        $prevPos = $prev['sameMonthPos'] ?? 0;
+        $prevNeg = $prev['sameMonthNeg'] ?? 0;
+        $prevYtdTotal = $prev['ytdTotal'] ?? 0;
+        $prevYtdPos = $prev['ytdPos'] ?? 0;
+        $prevYtdNeg = $prev['ytdNeg'] ?? 0;
+
+        $deltaTotal = $totalRows - $prevTotal;
+        $deltaNeg = $negativas - $prevNeg;
+        $deltaPos = $positivas - $prevPos;
+        $deltaYtdTotal = $ytdTotal - $prevYtdTotal;
+        $deltaYtdNeg = $ytdNeg - $prevYtdNeg;
+        $deltaYtdPos = $ytdPos - $prevYtdPos;
+
+        $arrow = function($val) {
+            if ($val > 0) return ['▲', '#ef4444', '+' . number_format($val)];
+            if ($val < 0) return ['▼', '#16a34a', number_format($val)];
+            return ['─', '#6b7280', '0'];
+        };
+
+        $pctChangeNeg = $prevNeg > 0 ? round((($negativas - $prevNeg) / $prevNeg) * 100, 1) : ($negativas > 0 ? 100 : 0);
+        $pctChangeTotal = $prevTotal > 0 ? round((($totalRows - $prevTotal) / $prevTotal) * 100, 1) : ($totalRows > 0 ? 100 : 0);
+        $pctChangeYtd = $prevYtdTotal > 0 ? round((($ytdTotal - $prevYtdTotal) / $prevYtdTotal) * 100, 1) : ($ytdTotal > 0 ? 100 : 0);
+    @endphp
+    <div class="glass-card" style="padding:1.25rem;margin-bottom:1rem">
+        <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
+            <i class="bi bi-arrow-left-right" style="color:#1B5E20"></i> Comparativa vs {{ $prevYearLabel }} &amp; Acumulado Año
+        </h3>
+        <div style="overflow-x:auto">
+            <table class="glass-table" style="font-size:.8rem;min-width:600px">
+                <thead>
+                    <tr>
+                        <th>Métrica</th>
+                        <th style="text-align:center">Periodo Actual</th>
+                        <th style="text-align:center">Mismo Mes {{ $prevYearLabel }}</th>
+                        <th style="text-align:center">Var.</th>
+                        <th style="text-align:center">Acum. {{ date('Y') }}</th>
+                        <th style="text-align:center">Acum. {{ $prevYearLabel }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @php $compRows = [
+                        ['Total Tarjetas', $totalRows, $prevTotal, $deltaTotal, $ytdTotal, $prevYtdTotal],
+                        ['Negativas', $negativas, $prevNeg, $deltaNeg, $ytdNeg, $prevYtdNeg],
+                        ['Positivas', $positivas, $prevPos, $deltaPos, $ytdPos, $prevYtdPos],
+                    ]; @endphp
+                    @foreach($compRows as $row)
+                    @php [$arrowSym, $arrowColor, $arrowText] = $arrow($row[3]); @endphp
+                    <tr>
+                        <td style="font-weight:700">{{ $row[0] }}</td>
+                        <td style="text-align:center;font-weight:700">{{ number_format($row[1]) }}</td>
+                        <td style="text-align:center;color:var(--text-muted)">{{ number_format($row[2]) }}</td>
+                        <td style="text-align:center;font-weight:700;color:{{ $arrowColor }}">{{ $arrowSym }} {{ $arrowText }}</td>
+                        <td style="text-align:center;font-weight:700">{{ number_format($row[4]) }}</td>
+                        <td style="text-align:center;color:var(--text-muted)">{{ number_format($row[5]) }}</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+        {{-- KPI % deltas --}}
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-top:1rem">
+            <div style="background:rgba(128,128,128,.04);border-radius:10px;padding:.75rem;text-align:center;border:1px solid rgba(128,128,128,.08)">
+                <p style="font-size:.68rem;text-transform:uppercase;color:var(--text-muted);margin:0">Var. Total Mes</p>
+                <p style="font-size:1.5rem;font-weight:800;margin:.2rem 0 0;color:{{ $pctChangeTotal >= 0 ? '#ef4444' : '#16a34a' }}">{{ $pctChangeTotal >= 0 ? '+' : '' }}{{ $pctChangeTotal }}%</p>
+            </div>
+            <div style="background:rgba(128,128,128,.04);border-radius:10px;padding:.75rem;text-align:center;border:1px solid rgba(128,128,128,.08)">
+                <p style="font-size:.68rem;text-transform:uppercase;color:var(--text-muted);margin:0">Var. Negativas</p>
+                <p style="font-size:1.5rem;font-weight:800;margin:.2rem 0 0;color:{{ $pctChangeNeg >= 0 ? '#ef4444' : '#16a34a' }}">{{ $pctChangeNeg >= 0 ? '+' : '' }}{{ $pctChangeNeg }}%</p>
+            </div>
+            <div style="background:rgba(128,128,128,.04);border-radius:10px;padding:.75rem;text-align:center;border:1px solid rgba(128,128,128,.08)">
+                <p style="font-size:.68rem;text-transform:uppercase;color:var(--text-muted);margin:0">Var. Acum. Año</p>
+                <p style="font-size:1.5rem;font-weight:800;margin:.2rem 0 0;color:{{ $pctChangeYtd >= 0 ? '#ef4444' : '#16a34a' }}">{{ $pctChangeYtd >= 0 ? '+' : '' }}{{ $pctChangeYtd }}%</p>
+            </div>
+        </div>
+    </div>
+
+    {{-- Top Trabajadores Negativos YTD + Tipos Falta Negativa YTD --}}
+    @if(!empty($ytd['topNeg']) || !empty($ytd['negPorTipo']))
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+        @if(!empty($ytd['topNeg']))
+        <div class="glass-card" style="padding:1.25rem">
+            <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
+                <i class="bi bi-exclamation-diamond-fill" style="color:#991b1b"></i> Top Trabajadores Negativos — Acumulado {{ date('Y') }}
+            </h3>
+            <div style="max-height:320px;overflow-y:auto">
+                <table class="glass-table" style="font-size:.78rem">
+                    <thead><tr><th style="width:30px">#</th><th>Trabajador</th><th style="text-align:center">Neg.</th></tr></thead>
+                    <tbody>
+                        @foreach(array_slice($ytd['topNeg'], 0, 10, true) as $nombre => $cnt)
+                        <tr>
+                            <td style="text-align:center;font-weight:700;color:{{ $loop->iteration <= 3 ? '#991b1b' : 'var(--text-muted)' }}">{{ $loop->iteration }}</td>
+                            <td style="text-transform:capitalize">{{ mb_strtolower($nombre) }}</td>
+                            <td style="text-align:center;font-weight:600;color:#991b1b">{{ $cnt }}</td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        @endif
+        @if(!empty($ytd['negPorTipo']))
+        <div class="glass-card" style="padding:1.25rem">
+            <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
+                <i class="bi bi-search" style="color:#7f1d1d"></i> Tipos de Falta Negativa — Acumulado {{ date('Y') }}
+            </h3>
+            <div style="max-height:320px;overflow-y:auto">
+                <table class="glass-table" style="font-size:.78rem">
+                    <thead><tr><th style="width:30px">#</th><th>Tipo de Falta</th><th style="text-align:center">Cant.</th></tr></thead>
+                    <tbody>
+                        @foreach(array_slice($ytd['negPorTipo'], 0, 10, true) as $tipo => $cnt)
+                        <tr>
+                            <td style="text-align:center;font-weight:700;color:#991b1b">{{ $loop->iteration }}</td>
+                            <td>{{ $tipo }}</td>
+                            <td style="text-align:center;font-weight:600;color:#991b1b">{{ $cnt }}</td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        @endif
+    </div>
+    @endif
+
+    {{-- Tendencia Mensual Comparativa (año actual vs anterior) --}}
+    @if(!empty($ytd['byMonth']))
+    <div class="glass-card" style="padding:1.25rem;margin-bottom:1rem">
+        <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
+            <i class="bi bi-calendar3-range" style="color:#1B5E20"></i> Tendencia Mensual — {{ date('Y') }} vs {{ $prevYearLabel }}
+        </h3>
+        <div style="overflow-x:auto">
+            <table class="glass-table" style="font-size:.78rem;min-width:650px">
+                <thead>
+                    <tr>
+                        <th>Mes</th>
+                        <th style="text-align:center">{{ date('Y') }} Total</th>
+                        <th style="text-align:center;color:#ef4444">{{ date('Y') }} Neg</th>
+                        <th style="text-align:center;color:#22c55e">{{ date('Y') }} Pos</th>
+                        <th style="text-align:center">{{ $prevYearLabel }} Total</th>
+                        <th style="text-align:center;color:#ef4444">{{ $prevYearLabel }} Neg</th>
+                        <th style="text-align:center;color:#22c55e">{{ $prevYearLabel }} Pos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @php
+                        $meses = ['01'=>'Ene','02'=>'Feb','03'=>'Mar','04'=>'Abr','05'=>'May','06'=>'Jun','07'=>'Jul','08'=>'Ago','09'=>'Sep','10'=>'Oct','11'=>'Nov','12'=>'Dic'];
+                        $prevByMonth = $prev['byMonth'] ?? [];
+                        $prevByMonthNeg = $prev['byMonthNeg'] ?? [];
+                        $prevByMonthPos = $prev['byMonthPos'] ?? [];
+                        $currYear = date('Y');
+                        $compTotalCurr = 0; $compTotalNegCurr = 0; $compTotalPosCurr = 0;
+                        $compTotalPrev = 0; $compTotalNegPrev = 0; $compTotalPosPrev = 0;
+                    @endphp
+                    @foreach($meses as $mNum => $mName)
+                    @php
+                        $curKey = $currYear . '-' . $mNum;
+                        $prvKey = $prevYearLabel . '-' . $mNum;
+                        $cT = $ytd['byMonth'][$curKey] ?? 0;
+                        $cN = $ytd['byMonthNeg'][$curKey] ?? 0;
+                        $cP = $ytd['byMonthPos'][$curKey] ?? 0;
+                        $pT = $prevByMonth[$prvKey] ?? 0;
+                        $pN = $prevByMonthNeg[$prvKey] ?? 0;
+                        $pP = $prevByMonthPos[$prvKey] ?? 0;
+                        $compTotalCurr += $cT; $compTotalNegCurr += $cN; $compTotalPosCurr += $cP;
+                        $compTotalPrev += $pT; $compTotalNegPrev += $pN; $compTotalPosPrev += $pP;
+                    @endphp
+                    @if($cT > 0 || $pT > 0)
+                    <tr>
+                        <td style="font-weight:700">{{ $mName }}</td>
+                        <td style="text-align:center;font-weight:600">{{ $cT > 0 ? number_format($cT) : '-' }}</td>
+                        <td style="text-align:center;color:#ef4444">{{ $cN > 0 ? number_format($cN) : '-' }}</td>
+                        <td style="text-align:center;color:#22c55e">{{ $cP > 0 ? number_format($cP) : '-' }}</td>
+                        <td style="text-align:center;color:var(--text-muted)">{{ $pT > 0 ? number_format($pT) : '-' }}</td>
+                        <td style="text-align:center;color:#ef4444">{{ $pN > 0 ? number_format($pN) : '-' }}</td>
+                        <td style="text-align:center;color:#22c55e">{{ $pP > 0 ? number_format($pP) : '-' }}</td>
+                    </tr>
+                    @endif
+                    @endforeach
+                    <tr style="font-weight:800;border-top:2px solid var(--border-color,#e2e8f0)">
+                        <td>TOTAL</td>
+                        <td style="text-align:center">{{ number_format($compTotalCurr) }}</td>
+                        <td style="text-align:center;color:#ef4444">{{ number_format($compTotalNegCurr) }}</td>
+                        <td style="text-align:center;color:#22c55e">{{ number_format($compTotalPosCurr) }}</td>
+                        <td style="text-align:center;color:var(--text-muted)">{{ number_format($compTotalPrev) }}</td>
+                        <td style="text-align:center;color:#ef4444">{{ number_format($compTotalNegPrev) }}</td>
+                        <td style="text-align:center;color:#22c55e">{{ number_format($compTotalPosPrev) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    @endif
+    @endif
 
     {{-- Fila 1: Tendencia mensual + Clasificacion --}}
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1rem">
@@ -494,6 +716,115 @@
         </div>
     </div>
 
+    {{-- Detalle de Evaluaciones Negativas --}}
+    @php
+        $ed = $evalDetail ?? [];
+        $edWorkers = $ed['workers'] ?? [];
+        $edItemRank = $ed['itemRanking'] ?? [];
+        $hasEval = !empty($edWorkers) || !empty($edItemRank);
+    @endphp
+    @if($hasEval)
+    {{-- Ítems con mayor incumplimiento --}}
+    @if(!empty($edItemRank))
+    <div class="glass-card" style="padding:1.25rem;margin-bottom:1rem">
+        <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
+            <i class="bi bi-search" style="color:#991b1b"></i> Ítems con Mayor Incumplimiento
+        </h3>
+        <div style="max-height:400px;overflow-y:auto">
+            <table class="glass-table" style="font-size:.78rem">
+                <thead><tr><th style="width:30px">#</th><th>Categoría</th><th>Ítem Evaluado</th><th style="text-align:center">No Cumple</th></tr></thead>
+                <tbody>
+                    @foreach(array_slice($edItemRank, 0, 15, true) as $itemKey => $cnt)
+                    @php [$itemCat, $itemQ] = array_pad(explode(' | ', $itemKey, 2), 2, ''); @endphp
+                    <tr>
+                        <td style="text-align:center;font-weight:700;color:#991b1b">{{ $loop->iteration }}</td>
+                        <td style="color:var(--text-muted);font-size:.72rem">{{ $itemCat }}</td>
+                        <td>{{ $itemQ }}</td>
+                        <td style="text-align:center;font-weight:700;color:#991b1b">{{ $cnt }}</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+    @endif
+
+    {{-- Detalle por trabajador --}}
+    @if(!empty($edWorkers))
+    <div class="glass-card" style="padding:1.25rem;margin-bottom:1rem">
+        <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
+            <i class="bi bi-clipboard-data" style="color:#7f1d1d"></i> Detalle Evaluaciones Negativas por Trabajador
+            <span style="font-size:.7rem;color:var(--text-muted);font-weight:400;margin-left:.5rem">({{ count($edWorkers) }} evaluaciones)</span>
+        </h3>
+        <div style="max-height:600px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:.75rem">
+            @foreach(array_slice($edWorkers, 0, 20) as $w)
+            <div style="background:rgba(128,128,128,.03);border-radius:10px;padding:.85rem;border:1px solid rgba(128,128,128,.08)">
+                <div style="margin-bottom:.5rem">
+                    <strong style="color:#991b1b;font-size:.82rem">{{ $w['trabajador'] }}</strong>
+                    <div style="font-size:.7rem;color:var(--text-muted);margin-top:.15rem">{{ $w['centro'] }} — {{ $w['area'] }} — {{ $w['cargo'] }}</div>
+                    <div style="font-size:.68rem;color:var(--text-muted)">{{ $w['empresa'] }} | Antig.: {{ $w['antiguedad'] }} | Turno: {{ $w['turno'] }} | {{ $w['fecha'] }}</div>
+                </div>
+                @if(!empty($w['noCumple']))
+                <div style="margin-bottom:.35rem">
+                    <span style="font-size:.68rem;font-weight:700;color:#991b1b;text-transform:uppercase">No Cumple ({{ $w['totalNC'] }})</span>
+                    <div style="font-size:.72rem;color:#991b1b;margin-top:.15rem">
+                        @foreach($w['noCumple'] as $nc)
+                        <div style="padding:.1rem 0">• {{ $nc }}</div>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
+                @if(!empty($w['cumple']))
+                <details style="margin-top:.25rem">
+                    <summary style="font-size:.68rem;font-weight:700;color:#16a34a;text-transform:uppercase;cursor:pointer">Cumple ({{ $w['totalC'] }})</summary>
+                    <div style="font-size:.72rem;color:#16a34a;margin-top:.15rem">
+                        @foreach($w['cumple'] as $c)
+                        <div style="padding:.1rem 0">• {{ $c }}</div>
+                        @endforeach
+                    </div>
+                </details>
+                @endif
+            </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
+    @endif
+
+    {{-- Conclusión auto-generada --}}
+    @php
+        $topFaltaNeg = !empty($negPorTipo) ? array_key_first($negPorTipo) : null;
+        $topFaltaNegCnt = $topFaltaNeg ? $negPorTipo[$topFaltaNeg] : 0;
+        $topTrabNeg = !empty($topNeg) ? array_key_first($topNeg) : null;
+        $topTrabNegCnt = $topTrabNeg ? $topNeg[$topTrabNeg] : 0;
+    @endphp
+    <div class="glass-card" style="padding:1.25rem;margin-bottom:1rem;border-left:4px solid #0f172a">
+        <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
+            <i class="bi bi-journal-text" style="color:#0f172a"></i> Conclusión
+        </h3>
+        <p style="font-size:.85rem;color:var(--text-primary);line-height:1.7;margin:0">
+            Durante el período se cursaron
+            <strong>{{ number_format($totalRows) }} tarjetas STO CCU</strong>, de las cuales
+            <strong style="color:#22c55e">{{ number_format($positivas) }}</strong> son positivas y
+            <strong style="color:#991b1b">{{ number_format($negativas) }}</strong> son negativas,
+            lo que representa una tasa de observaciones positivas del <strong>{{ $pctPositiva }}%</strong>.
+            @if($pctPositiva < 60)
+            <br>Se recomienda reforzar las observaciones positivas para alcanzar la meta del 60%.
+            @endif
+            @if($topFaltaNeg)
+            <br>La principal desviación registrada corresponde a <strong>«{{ $topFaltaNeg }}»</strong>
+            con {{ $topFaltaNegCnt }} tarjeta{{ $topFaltaNegCnt > 1 ? 's' : '' }} negativa{{ $topFaltaNegCnt > 1 ? 's' : '' }}.
+            @endif
+            @if($topTrabNeg && $topTrabNegCnt > 1)
+            <br>El trabajador con mayor cantidad de tarjetas negativas es
+            <strong>{{ mb_convert_case(mb_strtolower($topTrabNeg), MB_CASE_TITLE) }}</strong> ({{ $topTrabNegCnt }} neg.).
+            @endif
+            @if(count($centros) > 0)
+            <br>Las observaciones se distribuyeron en <strong>{{ count($centros) }} centro{{ count($centros) > 1 ? 's' : '' }} de trabajo</strong>.
+            @endif
+        </p>
+    </div>
+
     {{-- Fila 8: Checklist de cumplimiento --}}
     @if(!empty($checklistCategories))
     <div class="glass-card" style="padding:1.25rem;margin-bottom:1rem">
@@ -564,6 +895,18 @@
 @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 #sync-icon { display:inline-block; }
 </style>
+<script>
+function clearDateFilters() {
+    var d = document.getElementById('filter-fecha-desde');
+    var h = document.getElementById('filter-fecha-hasta');
+    if (d) d.value = '';
+    if (h) h.value = '';
+}
+function clearMesFilter() {
+    var m = document.getElementById('filter-mes');
+    if (m) m.value = '';
+}
+</script>
 @endpush
 
 @push('scripts')
