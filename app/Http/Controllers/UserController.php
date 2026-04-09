@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\BienvenidaUsuarioMail;
 use App\Models\Cargo;
 use App\Models\CentroCosto;
 use App\Models\Departamento;
@@ -9,6 +10,8 @@ use App\Models\Rol;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -81,17 +84,21 @@ class UserController extends Controller
             'estado_civil'      => ['nullable', 'string', 'max:50'],
             'fecha_ingreso'     => ['nullable', 'date'],
             'telefono'          => ['nullable', 'string', 'max:50'],
-            'password'          => ['required', 'string', 'min:8', 'confirmed'],
             'activo'            => ['boolean'],
         ]);
 
-        $data['password'] = Hash::make($data['password']);
+        // Generar contraseña provisoria automática
+        $tempPassword = Str::upper(Str::random(3)) . rand(100, 999) . Str::random(3);
+        $data['password'] = Hash::make($tempPassword);
         $data['activo'] = $request->boolean('activo', true);
 
-        User::create($data);
+        $user = User::create($data);
+
+        // Enviar email de bienvenida con credenciales
+        Mail::to($user->email)->send(new BienvenidaUsuarioMail($user, $tempPassword));
 
         return redirect()->route('usuarios.index')
-            ->with('success', 'Usuario creado correctamente.');
+            ->with('success', 'Usuario creado correctamente. Se envió un correo con las credenciales provisorias a ' . $user->email);
     }
 
     public function edit(User $usuario)

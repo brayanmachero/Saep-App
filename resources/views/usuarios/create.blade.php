@@ -195,19 +195,11 @@
                     @error('rol_id') <span class="error-msg">{{ $message }}</span> @enderror
                 </div>
 
-                <div class="form-group"></div>
-
-                <div class="form-group">
-                    <label>Contraseña *</label>
-                    <input type="password" name="password" class="form-input @error('password') is-invalid @enderror"
-                        placeholder="Mínimo 8 caracteres">
-                    @error('password') <span class="error-msg">{{ $message }}</span> @enderror
-                </div>
-
-                <div class="form-group">
-                    <label>Confirmar Contraseña *</label>
-                    <input type="password" name="password_confirmation" class="form-input"
-                        placeholder="Repite la contraseña">
+                <div class="form-group" style="display:flex;align-items:center;">
+                    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:0.75rem 1rem;font-size:0.85rem;color:#16a34a;display:flex;align-items:center;gap:0.5rem;width:100%;">
+                        <i class="bi bi-envelope-check-fill"></i>
+                        Se generará una contraseña provisoria y se enviará al correo del usuario.
+                    </div>
                 </div>
             </div>
 

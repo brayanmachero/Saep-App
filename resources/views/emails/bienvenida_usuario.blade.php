@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Restablecer Contraseña — SAEP Platform</title>
+    <title>Bienvenido a SAEP Platform</title>
 </head>
 <body style="font-family:'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background:#eef1f6;margin:0;padding:0;-webkit-text-size-adjust:100%;">
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#eef1f6;padding:40px 16px;">
@@ -29,49 +29,64 @@
         <td style="padding:40px 40px 32px;">
 
             <h1 style="font-size:22px;font-weight:700;color:#0f1b4c;margin:0 0 8px;">
-                Solicitud de restablecimiento de contraseña
+                Bienvenido/a a SAEP Platform
             </h1>
             <p style="font-size:14px;color:#64748b;margin:0 0 28px;line-height:1.5;">
-                Se ha recibido una solicitud asociada a su cuenta
+                Plataforma de gestión de prevención, seguridad y salud ocupacional
             </p>
 
             <p style="font-size:15px;color:#1e293b;margin:0 0 20px;line-height:1.6;">
                 Estimado/a <strong>{{ $userName }}</strong>,
             </p>
             <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 28px;">
-                Hemos recibido una solicitud para restablecer la contraseña de su cuenta
-                en SAEP Platform. Para continuar con el proceso, haga clic en el siguiente botón:
+                Le informamos que se ha creado una cuenta a su nombre en SAEP Platform.
+                A continuación encontrará sus credenciales de acceso provisorias:
             </p>
+
+            {{-- Credenciales --}}
+            <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:28px;">
+                <tr>
+                    <td colspan="2" style="background:#f8fafc;padding:12px 20px;border-bottom:1px solid #e2e8f0;">
+                        <p style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;margin:0;">Credenciales de acceso</p>
+                    </td>
+                </tr>
+                <tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:14px 20px;font-size:13px;color:#64748b;width:40%;vertical-align:middle;">Correo electrónico</td>
+                    <td style="padding:14px 20px;font-size:14px;font-weight:600;color:#1e293b;">{{ $userEmail }}</td>
+                </tr>
+                <tr>
+                    <td style="padding:14px 20px;font-size:13px;color:#64748b;vertical-align:middle;">Contraseña provisoria</td>
+                    <td style="padding:14px 20px;">
+                        <code style="font-size:15px;font-weight:700;color:#0f1b4c;background:#f1f5f9;padding:6px 14px;border-radius:6px;letter-spacing:1.5px;display:inline-block;">{{ $tempPassword }}</code>
+                    </td>
+                </tr>
+            </table>
 
             {{-- Botón --}}
             <div style="text-align:center;margin-bottom:28px;">
-                <a href="{{ $resetUrl }}"
+                <a href="{{ $loginUrl }}"
                    style="background:#0f1b4c;color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;display:inline-block;letter-spacing:0.02em;">
-                    Restablecer contraseña
+                    Acceder a la plataforma
                 </a>
             </div>
 
-            {{-- Información de expiración --}}
+            {{-- Aviso de seguridad --}}
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;margin-bottom:28px;">
                 <tr>
                     <td style="padding:16px 20px;">
-                        <p style="font-size:13px;font-weight:600;color:#92400e;margin:0 0 4px;">Información importante</p>
+                        <p style="font-size:13px;font-weight:600;color:#92400e;margin:0 0 4px;">Aviso de seguridad</p>
                         <p style="font-size:13px;color:#a16207;line-height:1.6;margin:0;">
-                            Este enlace tiene una validez de <strong>60 minutos</strong> desde el momento
-                            de su generación. Transcurrido ese plazo, deberá solicitar uno nuevo.<br><br>
-                            Si usted no realizó esta solicitud, puede ignorar este correo con total
-                            seguridad. Su contraseña actual no será modificada.
+                            Esta es una contraseña provisoria. Por su seguridad, le recomendamos
+                            cambiarla inmediatamente después de su primer inicio de sesión
+                            a través de la opción <em>"Cambiar contraseña"</em> disponible en la plataforma.
                         </p>
                     </td>
                 </tr>
             </table>
 
-            {{-- URL alternativa --}}
-            <p style="font-size:12px;color:#94a3b8;line-height:1.5;margin:0 0 6px;">
-                Si el botón no funciona, copie y pegue la siguiente dirección en su navegador:
-            </p>
-            <p style="font-size:11px;color:#64748b;word-break:break-all;background:#f8fafc;border:1px solid #e2e8f0;padding:12px 16px;border-radius:8px;margin:0 0 24px;line-height:1.6;">
-                {{ $resetUrl }}
+            <p style="font-size:13px;color:#94a3b8;line-height:1.6;margin:0;">
+                Si usted no solicitó esta cuenta o tiene alguna consulta, comuníquese
+                con el administrador del sistema.
             </p>
         </td>
     </tr>
