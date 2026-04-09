@@ -41,7 +41,7 @@
         </div>
     @endif
 
-    <div style="display:grid;grid-template-columns:340px 1fr;gap:1.5rem;align-items:start;">
+    <div class="perfil-grid" style="display:grid;grid-template-columns:340px 1fr;gap:1.5rem;align-items:start;">
 
         {{-- LEFT: Tarjeta de perfil --}}
         <div class="glass-card" style="text-align:center;padding:2rem 1.5rem;">
@@ -307,6 +307,31 @@ function check(id, ok) {
     el.querySelector('i').style.fontSize = ok ? '.75rem' : '.5rem';
 }
 </script>
+<style>
+@media (max-width: 768px) {
+    .perfil-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .perfil-grid .glass-card form {
+        padding: 1rem !important;
+    }
+    .perfil-grid div[style*="grid-template-columns:1fr 1fr"],
+    .perfil-grid div[style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+    .perfil-grid div[style*="display:flex;align-items:center;justify-content:space-between"] {
+        flex-direction: column;
+        gap: .75rem;
+        align-items: stretch !important;
+    }
+    .perfil-grid div[style*="display:flex;align-items:center;justify-content:space-between"] button {
+        width: 100%;
+    }
+    .perfil-grid div[style*="display:grid;grid-template-columns:1fr 1fr;gap:.35rem"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>
 @endpush
 
 @push('styles')

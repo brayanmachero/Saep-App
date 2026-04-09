@@ -37,6 +37,10 @@
                 <i class="bi bi-grid-fill"></i>
                 <span>Panel Principal</span>
             </a>
+            <a href="{{ route('perfil.show') }}" class="nav-item {{ request()->routeIs('perfil.*') ? 'active' : '' }}">
+                <i class="bi bi-person-circle"></i>
+                <span>Mi Perfil</span>
+            </a>
 
             {{-- SOLICITUDES --}}
             @if(auth()->user()->tieneAcceso('respuestas') || auth()->user()->tieneAcceso('formularios') || auth()->user()->tieneAcceso('categorias_formularios'))
