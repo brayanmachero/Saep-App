@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccidenteSstController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\AuditoriaSstController;
 use App\Http\Controllers\CargoController;
 use App\Http\Controllers\CartaGanttController;
@@ -40,6 +41,12 @@ Route::post('/api/kizeo/webhook', [KizeoWebhookController::class, 'handle'])
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+// Recuperar contraseña
+Route::get('/password/forgot', [PasswordResetController::class, 'showForgotForm'])->name('password.request');
+Route::post('/password/email', [PasswordResetController::class, 'sendResetLink'])->name('password.email')->middleware('throttle:3,1');
+Route::get('/password/reset/{token}', [PasswordResetController::class, 'showResetForm'])->name('password.reset');
+Route::post('/password/reset', [PasswordResetController::class, 'reset'])->name('password.update');
 
 // Política de Privacidad (pública, accesible sin auth)
 Route::get('/politica-privacidad', [ProteccionDatosController::class, 'politicaPrivacidad'])

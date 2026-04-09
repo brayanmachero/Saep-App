@@ -358,6 +358,13 @@
                 </div>
                 <p class="login-form__subtitle">Ingresa tus credenciales para acceder</p>
 
+                @if (session('status'))
+                    <div class="global-error" style="background:#f0fdf4;border-color:#bbf7d0;color:#16a34a;">
+                        <i class="bi bi-check-circle-fill"></i>
+                        {{ session('status') }}
+                    </div>
+                @endif
+
                 @if ($errors->any())
                     <div class="global-error">
                         <i class="bi bi-exclamation-circle-fill"></i>
@@ -406,6 +413,8 @@
                             <input type="checkbox" id="remember" name="remember">
                             <label for="remember">Recordarme</label>
                         </div>
+                        <a href="{{ route('password.request') }}" style="font-size:0.85rem;color:#0f1b4c;text-decoration:none;font-weight:500;transition:color 0.2s;"
+                           onmouseover="this.style.color='#f97316'" onmouseout="this.style.color='#0f1b4c'">¿Olvidaste tu contraseña?</a>
                     </div>
 
                     <button type="submit" class="btn-login">
