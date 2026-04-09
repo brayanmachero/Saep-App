@@ -162,6 +162,12 @@
                     <div class="field-type-btn" draggable="true" data-type="select_dynamic">
                         <i class="bi bi-collection"></i> Lista dinámica
                     </div>
+                    <div class="field-type-btn" draggable="true" data-type="select_tabla">
+                        <i class="bi bi-database"></i> Datos del sistema
+                    </div>
+                    <div class="field-type-btn" draggable="true" data-type="auto">
+                        <i class="bi bi-lightning-charge"></i> Campo automático
+                    </div>
                     <div class="field-type-btn" draggable="true" data-type="divider">
                         <i class="bi bi-hr"></i> Separador
                     </div>
@@ -366,13 +372,33 @@
         text: 'Texto corto', textarea: 'Texto largo', number: 'Número',
         date: 'Fecha', select: 'Lista desplegable', radio: 'Opción múltiple',
         checkbox: 'Casilla(s)', file: 'Adjunto', signature: 'Firma digital',
-        select_dynamic: 'Lista dinámica', divider: 'Separador'
+        select_dynamic: 'Lista dinámica', select_tabla: 'Datos del sistema',
+        auto: 'Campo automático', divider: 'Separador'
     };
     const typeIcons = {
         text: 'bi-input-cursor-text', textarea: 'bi-card-text', number: 'bi-123',
         date: 'bi-calendar3', select: 'bi-menu-button-wide', radio: 'bi bi-ui-radios',
         checkbox: 'bi-check2-square', file: 'bi-paperclip', signature: 'bi-pen',
-        select_dynamic: 'bi-collection', divider: 'bi-hr'
+        select_dynamic: 'bi-collection', select_tabla: 'bi-database',
+        auto: 'bi-lightning-charge', divider: 'bi-hr'
+    };
+
+    const autoFuentes = {
+        usuario_nombre: 'Nombre del usuario',
+        usuario_email: 'Email del usuario',
+        usuario_cargo: 'Cargo del usuario',
+        usuario_departamento: 'Departamento del usuario',
+        usuario_centro_costo: 'Centro de costo del usuario',
+        fecha_actual: 'Fecha actual',
+        hora_actual: 'Hora actual',
+        fecha_hora_actual: 'Fecha y hora actual',
+    };
+
+    const tablaOpciones = {
+        usuarios: 'Usuarios del sistema',
+        departamentos: 'Departamentos',
+        cargos: 'Cargos / Puestos',
+        centros_costo: 'Centros de Costo',
     };
 
     // ── Drag from toolbox ──
@@ -426,6 +452,8 @@
                     <span class="field-label">${f.label || f.id}</span>
                     ${f.required ? '<span class="required-badge">* Obligatorio</span>' : ''}
                     ${f.condition ? '<span class="field-type-tag" style="color:#f59e0b;background:rgba(245,158,11,.1)"><i class="bi bi-eye"></i> Cond.</span>' : ''}
+                    ${f.fuente ? `<span class="field-type-tag" style="color:#8b5cf6;background:rgba(139,92,246,.1)"><i class="bi bi-lightning-charge"></i> ${autoFuentes[f.fuente] || f.fuente}</span>` : ''}
+                    ${f.tabla ? `<span class="field-type-tag" style="color:#0ea5e9;background:rgba(14,165,233,.1)"><i class="bi bi-database"></i> ${tablaOpciones[f.tabla] || f.tabla}</span>` : ''}
                     <span class="field-type-tag">${typeLabels[f.type] || f.type}</span>
                     <div class="field-card-actions">
                         <button type="button" class="icon-btn" style="width:26px;height:26px;" onclick="editField(${i})" title="Editar">
@@ -523,6 +551,22 @@
                     <input type="number" id="m-max" class="form-input" value="${f.max ?? ''}">
                 </div>
             </div>` : ''}
+            ${type === 'select_tabla' ? `
+            <div class="form-group">
+                <label>Fuente de datos *</label>
+                <select id="m-tabla" class="form-input">
+                    ${Object.entries(tablaOpciones).map(([k,v]) => `<option value="${k}" ${f.tabla===k?'selected':''}>${v}</option>`).join('')}
+                </select>
+                <small style="color:var(--text-muted);font-size:.72rem">Se poblará automáticamente con los registros activos de la tabla seleccionada</small>
+            </div>` : ''}
+            ${type === 'auto' ? `
+            <div class="form-group">
+                <label>Dato a capturar *</label>
+                <select id="m-fuente" class="form-input">
+                    ${Object.entries(autoFuentes).map(([k,v]) => `<option value="${k}" ${f.fuente===k?'selected':''}>${v}</option>`).join('')}
+                </select>
+                <small style="color:var(--text-muted);font-size:.72rem"><i class="bi bi-info-circle"></i> Se completará automáticamente al responder el formulario (campo de solo lectura)</small>
+            </div>` : ''}
             ${condFieldOpts ? `
             <div style="border-top:1px solid var(--surface-border);margin-top:.75rem;padding-top:.75rem">
                 <label style="font-size:.8rem;color:var(--text-muted);display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem">
@@ -594,6 +638,13 @@
             if (mn !== '') field.min = parseFloat(mn);
             if (mx !== '') field.max = parseFloat(mx);
         }
+        if (type === 'select_tabla') {
+            field.tabla = document.getElementById('m-tabla').value;
+        }
+        if (type === 'auto') {
+            field.fuente = document.getElementById('m-fuente').value;
+            field.required = false;
+        }
 
         // Conditional visibility
         const condField = document.getElementById('m-cond-field');
@@ -646,6 +697,10 @@
                     html += `<div style="border:1px dashed var(--surface-border);border-radius:8px;height:80px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.85rem;"><i class="bi bi-pen" style="margin-right:0.5rem;"></i> Área de firma</div>`;
                 } else if (f.type === 'select_dynamic') {
                     html += `<div style="border:1px dashed var(--surface-border);border-radius:8px;padding:.6rem .75rem;display:flex;align-items:center;gap:.5rem;color:var(--text-muted);font-size:0.85rem;"><i class="bi bi-collection"></i> Lista dinámica — los usuarios podrán buscar o crear opciones</div>`;
+                } else if (f.type === 'select_tabla') {
+                    html += `<div style="border:1px dashed var(--surface-border);border-radius:8px;padding:.6rem .75rem;display:flex;align-items:center;gap:.5rem;color:var(--text-muted);font-size:0.85rem;"><i class="bi bi-database"></i> Vinculado a: ${tablaOpciones[f.tabla] || f.tabla}</div>`;
+                } else if (f.type === 'auto') {
+                    html += `<div style="border:1px dashed var(--surface-border);border-radius:8px;padding:.6rem .75rem;display:flex;align-items:center;gap:.5rem;color:var(--text-muted);font-size:0.85rem;background:rgba(139,92,246,.05);"><i class="bi bi-lightning-charge" style="color:#8b5cf6"></i> Automático: ${autoFuentes[f.fuente] || f.fuente}</div>`;
                 }
                 html += '</div>';
             }

@@ -192,6 +192,64 @@
                                 <input type="hidden" id="field_{{ $field['id'] }}" class="field-input"
                                     data-id="{{ $field['id'] }}" {{ !empty($field['required']) ? 'required' : '' }}>
                             </div>
+
+                        @elseif($field['type'] === 'select_tabla')
+                            @php
+                                $tablaData = [];
+                                $t = $field['tabla'] ?? '';
+                                if ($t === 'usuarios') {
+                                    $tablaData = \App\Models\User::where('activo', true)->orderBy('name')->get()
+                                        ->mapWithKeys(fn($u) => [$u->id => $u->name . ' ' . ($u->apellido_paterno ?? '')]);
+                                } elseif ($t === 'departamentos') {
+                                    $tablaData = \App\Models\Departamento::where('activo', true)->orderBy('nombre')->pluck('nombre', 'id');
+                                } elseif ($t === 'cargos') {
+                                    $tablaData = \App\Models\Cargo::where('activo', true)->orderBy('nombre')->pluck('nombre', 'id');
+                                } elseif ($t === 'centros_costo') {
+                                    $tablaData = \App\Models\CentroCosto::where('activo', true)->orderBy('nombre')->pluck('nombre', 'id');
+                                }
+                            @endphp
+                            <select id="field_{{ $field['id'] }}" class="form-input field-input"
+                                data-id="{{ $field['id'] }}"
+                                {{ !empty($field['required']) ? 'required' : '' }}>
+                                <option value="">Seleccionar...</option>
+                                @foreach($tablaData as $tId => $tNombre)
+                                    <option value="{{ $tNombre }}">{{ $tNombre }}</option>
+                                @endforeach
+                            </select>
+                            <small style="color:var(--text-muted);font-size:.72rem">
+                                <i class="bi bi-database"></i> Datos del sistema
+                            </small>
+
+                        @elseif($field['type'] === 'auto')
+                            @php
+                                $autoVal = '';
+                                $fuente = $field['fuente'] ?? '';
+                                $u = auth()->user();
+                                if ($fuente === 'usuario_nombre') {
+                                    $autoVal = $u->name . ' ' . ($u->apellido_paterno ?? '');
+                                } elseif ($fuente === 'usuario_email') {
+                                    $autoVal = $u->email;
+                                } elseif ($fuente === 'usuario_cargo') {
+                                    $autoVal = optional($u->cargo)->nombre ?? 'Sin cargo';
+                                } elseif ($fuente === 'usuario_departamento') {
+                                    $autoVal = optional($u->departamento)->nombre ?? 'Sin departamento';
+                                } elseif ($fuente === 'usuario_centro_costo') {
+                                    $autoVal = optional($u->centroCosto)->nombre ?? 'Sin centro de costo';
+                                } elseif ($fuente === 'fecha_actual') {
+                                    $autoVal = now()->format('d/m/Y');
+                                } elseif ($fuente === 'hora_actual') {
+                                    $autoVal = now()->format('H:i');
+                                } elseif ($fuente === 'fecha_hora_actual') {
+                                    $autoVal = now()->format('d/m/Y H:i');
+                                }
+                            @endphp
+                            <input type="text" id="field_{{ $field['id'] }}" class="form-input field-input"
+                                data-id="{{ $field['id'] }}"
+                                value="{{ $autoVal }}" readonly
+                                style="background:rgba(139,92,246,.05);border-color:rgba(139,92,246,.2);color:var(--text-color);">
+                            <small style="color:#8b5cf6;font-size:.72rem">
+                                <i class="bi bi-lightning-charge"></i> Completado automáticamente
+                            </small>
                         @endif
                     </div>
                 @endif

@@ -155,7 +155,8 @@
                                             'text'=>'Texto','textarea'=>'Texto largo','number'=>'Número',
                                             'date'=>'Fecha','select'=>'Lista','radio'=>'Opción múltiple',
                                             'checkbox'=>'Casillas','file'=>'Adjunto','signature'=>'Firma',
-                                            'select_dynamic'=>'Lista dinámica'
+                                            'select_dynamic'=>'Lista dinámica','select_tabla'=>'Datos del sistema',
+                                            'auto'=>'Campo automático'
                                         ];
                                     @endphp
                                     <span style="font-size:0.72rem;background:rgba(79,70,229,0.1);
@@ -166,6 +167,26 @@
                                         <span style="font-size:0.72rem;background:rgba(239,68,68,0.1);
                                             color:#ef4444;padding:0.2rem 0.55rem;border-radius:6px;">
                                             Obligatorio
+                                        </span>
+                                    @endif
+                                    @if(!empty($field['fuente']))
+                                        @php
+                                            $autoFuentes = [
+                                                'usuario_nombre'=>'Nombre','usuario_email'=>'Email',
+                                                'usuario_cargo'=>'Cargo','usuario_departamento'=>'Departamento',
+                                                'usuario_centro_costo'=>'Centro costo','fecha_actual'=>'Fecha',
+                                                'hora_actual'=>'Hora','fecha_hora_actual'=>'Fecha/hora',
+                                            ];
+                                        @endphp
+                                        <span style="font-size:0.72rem;background:rgba(139,92,246,0.1);
+                                            color:#8b5cf6;padding:0.2rem 0.55rem;border-radius:6px;">
+                                            <i class="bi bi-lightning-charge"></i> {{ $autoFuentes[$field['fuente']] ?? $field['fuente'] }}
+                                        </span>
+                                    @endif
+                                    @if(!empty($field['tabla']))
+                                        <span style="font-size:0.72rem;background:rgba(14,165,233,0.1);
+                                            color:#0ea5e9;padding:0.2rem 0.55rem;border-radius:6px;">
+                                            <i class="bi bi-database"></i> {{ ucfirst(str_replace('_',' ',$field['tabla'])) }}
                                         </span>
                                     @endif
                                 </div>
