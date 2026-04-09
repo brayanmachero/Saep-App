@@ -160,6 +160,15 @@
                         </div>
                     </div>
 
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+                        <div>
+                            <label style="display:block;font-size:.8rem;font-weight:600;color:var(--text-color);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.03em;">Fecha de nacimiento</label>
+                            <input type="date" name="fecha_nacimiento" value="{{ old('fecha_nacimiento', $user->fecha_nacimiento ? \Carbon\Carbon::parse($user->fecha_nacimiento)->format('Y-m-d') : '') }}"
+                                style="width:100%;padding:.65rem .85rem;border:1.5px solid var(--border-color);border-radius:10px;background:var(--bg-color);color:var(--text-color);font-size:.9rem;font-family:inherit;outline:none;transition:border-color .2s;">
+                        </div>
+                        <div></div>
+                    </div>
+
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem;">
                         <div>
                             <label style="display:block;font-size:.8rem;font-weight:600;color:var(--text-muted);margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.03em;">Fecha de ingreso</label>

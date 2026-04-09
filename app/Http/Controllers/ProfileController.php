@@ -22,6 +22,7 @@ class ProfileController extends Controller
 
         $data = $request->validate([
             'telefono' => ['nullable', 'string', 'max:50'],
+            'fecha_nacimiento' => ['nullable', 'date'],
         ]);
 
         $user->update($data);
