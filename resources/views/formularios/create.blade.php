@@ -27,10 +27,10 @@
             </h3>
             <div class="form-grid-2">
                 <div class="form-group">
-                    <label>Código *</label>
-                    <input type="text" name="codigo" class="form-input @error('codigo') is-invalid @enderror"
-                        value="{{ old('codigo') }}" placeholder="Ej: FORM-EPP-001" style="text-transform:uppercase;">
-                    @error('codigo') <span class="error-msg">{{ $message }}</span> @enderror
+                    <label>Código</label>
+                    <input type="text" class="form-input" value="{{ $nextCodigo }}" readonly
+                        style="text-transform:uppercase;background:rgba(255,255,255,.03);color:var(--text-muted);cursor:not-allowed">
+                    <small style="color:var(--text-muted);font-size:.72rem">Se genera automáticamente</small>
                 </div>
                 <div class="form-group">
                     <label>Nombre *</label>

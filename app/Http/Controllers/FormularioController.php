@@ -43,13 +43,21 @@ class FormularioController extends Controller
         $departamentos = Departamento::where('activo', true)->get();
         $roles      = Rol::all();
         $categorias = CategoriaFormulario::where('activo', true)->orderBy('orden')->get();
-        return view('formularios.create', compact('departamentos', 'roles', 'categorias'));
+
+        // Auto-generate next code
+        $ultimo = Formulario::where('codigo', 'like', 'FORM-%')->orderByDesc('id')->value('codigo');
+        $num = 1;
+        if ($ultimo && preg_match('/FORM-(\d+)/', $ultimo, $m)) {
+            $num = intval($m[1]) + 1;
+        }
+        $nextCodigo = 'FORM-' . str_pad($num, 4, '0', STR_PAD_LEFT);
+
+        return view('formularios.create', compact('departamentos', 'roles', 'categorias', 'nextCodigo'));
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'codigo'              => ['required', 'string', 'max:100', 'unique:formularios,codigo'],
             'nombre'              => ['required', 'string', 'max:200'],
             'descripcion'         => ['nullable', 'string', 'max:1000'],
             'departamento_id'     => ['nullable', 'exists:departamentos,id'],
@@ -63,8 +71,16 @@ class FormularioController extends Controller
             'schema_json'         => ['required', 'json'],
         ]);
 
+        // Auto-generate unique code
+        $ultimo = Formulario::where('codigo', 'like', 'FORM-%')->orderByDesc('id')->value('codigo');
+        $num = 1;
+        if ($ultimo && preg_match('/FORM-(\d+)/', $ultimo, $m)) {
+            $num = intval($m[1]) + 1;
+        }
+        $codigo = 'FORM-' . str_pad($num, 4, '0', STR_PAD_LEFT);
+
         $formulario = Formulario::create([
-            'codigo'              => strtoupper($request->codigo),
+            'codigo'              => $codigo,
             'nombre'              => $request->nombre,
             'descripcion'         => $request->descripcion,
             'departamento_id'     => $request->departamento_id,
