@@ -110,6 +110,8 @@
                         <div class="signature-box">
                             <img src="{{ $val }}" alt="Firma digital">
                         </div>
+                    @elseif($field['type'] === 'file' && is_array($val) && isset($val['name']))
+                        <div class="field-value">📎 {{ $val['name'] }} ({{ isset($val['size']) ? number_format($val['size']/1024, 0) . ' KB' : '' }})</div>
                     @elseif(is_array($val))
                         <div class="field-value">{{ implode(', ', $val) }}</div>
                     @else

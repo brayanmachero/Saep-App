@@ -20,6 +20,9 @@ Schedule::command('kizeo:charla-weekly-report --sync')->weeklyOn(1, '08:00')->wi
 // SST: enviar recordatorios de actividades próximas a vencer / vencidas (cada día a las 8:00 AM)
 Schedule::command('sst:enviar-recordatorios')->dailyAt('08:00')->withoutOverlapping();
 
+// Sincronizar Google Sheets → MySQL cada hora (Tarjeta STO CCU)
+Schedule::command('stop:sync-sheets --force')->hourly()->withoutOverlapping();
+
 // Reporte semanal de Tarjeta STO CCU (lunes 08:30 AM — mes en curso, filtrado por empresa)
 Schedule::command('stop:weekly-report --frecuencia=semanal')->weeklyOn(1, '08:30')->withoutOverlapping();
 

@@ -58,6 +58,46 @@
                         @endforeach
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>Categoría</label>
+                    <select name="categoria_id" class="form-input">
+                        <option value="">Sin categoría</option>
+                        @foreach($categorias as $cat)
+                            <option value="{{ $cat->id }}" {{ old('categoria_id', $formulario->categoria_id) == $cat->id ? 'selected' : '' }}>
+                                {{ $cat->nombre }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            {{-- Programación --}}
+            <h3 style="font-size:1rem;margin:1.25rem 0 0.75rem;color:var(--text-muted);">
+                <i class="bi bi-calendar-range"></i> Programación
+            </h3>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label>Fecha Inicio</label>
+                    <input type="date" name="fecha_inicio" class="form-input"
+                        value="{{ old('fecha_inicio', $formulario->fecha_inicio?->format('Y-m-d')) }}">
+                </div>
+                <div class="form-group">
+                    <label>Fecha Fin</label>
+                    <input type="date" name="fecha_fin" class="form-input"
+                        value="{{ old('fecha_fin', $formulario->fecha_fin?->format('Y-m-d')) }}">
+                </div>
+                <div class="form-group">
+                    <label>Frecuencia</label>
+                    <select name="frecuencia" class="form-input">
+                        <option value="">Sin frecuencia</option>
+                        @php $freq = old('frecuencia', $formulario->frecuencia); @endphp
+                        <option value="unica" {{ $freq === 'unica' ? 'selected' : '' }}>Única vez</option>
+                        <option value="diaria" {{ $freq === 'diaria' ? 'selected' : '' }}>Diaria</option>
+                        <option value="semanal" {{ $freq === 'semanal' ? 'selected' : '' }}>Semanal</option>
+                        <option value="quincenal" {{ $freq === 'quincenal' ? 'selected' : '' }}>Quincenal</option>
+                        <option value="mensual" {{ $freq === 'mensual' ? 'selected' : '' }}>Mensual</option>
+                    </select>
+                </div>
             </div>
 
             <div class="form-grid-2" style="margin-top:0.5rem;">
@@ -127,6 +167,9 @@
                     </div>
                     <div class="field-type-btn" draggable="true" data-type="signature">
                         <i class="bi bi-pen"></i> Firma digital
+                    </div>
+                    <div class="field-type-btn" draggable="true" data-type="select_dynamic">
+                        <i class="bi bi-collection"></i> Lista dinámica
                     </div>
                     <div class="field-type-btn" draggable="true" data-type="divider">
                         <i class="bi bi-hr"></i> Separador
@@ -318,7 +361,7 @@
         text: 'Texto corto', textarea: 'Texto largo', number: 'Número',
         date: 'Fecha', select: 'Lista desplegable', radio: 'Opción múltiple',
         checkbox: 'Casilla(s)', file: 'Adjunto', signature: 'Firma digital',
-        divider: 'Separador'
+        select_dynamic: 'Lista dinámica', divider: 'Separador'
     };
 
     document.querySelectorAll('.field-type-btn').forEach(btn => {
@@ -364,6 +407,7 @@
                     <i class="bi bi-grip-vertical drag-handle"></i>
                     <span class="field-label">${f.label || f.id}</span>
                     ${f.required ? '<span class="required-badge">* Obligatorio</span>' : ''}
+                    ${f.condition ? '<span class="field-type-tag" style="color:#f59e0b;background:rgba(245,158,11,.1)"><i class="bi bi-eye"></i> Cond.</span>' : ''}
                     <span class="field-type-tag">${typeLabels[f.type] || f.type}</span>
                     <div class="field-card-actions">
                         <button type="button" class="icon-btn" style="width:26px;height:26px;" onclick="editField(${i})" title="Editar">
@@ -406,6 +450,15 @@
         modalTitle.textContent = (isEdit ? 'Editar' : 'Agregar') + ' campo: ' + (typeLabels[type] || type);
         const needsOptions = ['select', 'radio', 'checkbox'].includes(type);
         const optionsVal = f.options ? (Array.isArray(f.options) ? f.options.join('\n') : f.options) : '';
+
+        // Build condition field options
+        const condFieldOpts = fields
+            .filter(cf => cf.type !== 'divider' && cf.id !== f.id)
+            .map(cf => `<option value="${cf.id}" ${f.condition?.fieldId === cf.id ? 'selected' : ''}>${cf.label}</option>`)
+            .join('');
+        const condOp = f.condition?.operator || 'equals';
+        const condVal = f.condition?.value || '';
+
         modalBody.innerHTML = `
             <div class="form-group">
                 <label>Etiqueta / Pregunta *</label>
@@ -433,8 +486,45 @@
                 <div class="form-group"><label>Mínimo</label><input type="number" id="m-min" class="form-input" value="${f.min ?? ''}"></div>
                 <div class="form-group"><label>Máximo</label><input type="number" id="m-max" class="form-input" value="${f.max ?? ''}"></div>
             </div>` : ''}
+            ${condFieldOpts ? `
+            <div style="border-top:1px solid var(--surface-border);margin-top:.75rem;padding-top:.75rem">
+                <label style="font-size:.8rem;color:var(--text-muted);display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem">
+                    <i class="bi bi-eye"></i> Visibilidad condicional
+                </label>
+                <div class="form-grid-2" style="gap:.5rem">
+                    <div class="form-group">
+                        <label style="font-size:.8rem">Depende de</label>
+                        <select id="m-cond-field" class="form-input" style="font-size:.82rem">
+                            <option value="">Sin condición</option>
+                            ${condFieldOpts}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size:.8rem">Operador</label>
+                        <select id="m-cond-op" class="form-input" style="font-size:.82rem">
+                            <option value="equals" ${condOp==='equals'?'selected':''}>Igual a</option>
+                            <option value="not_equals" ${condOp==='not_equals'?'selected':''}>Diferente de</option>
+                            <option value="filled" ${condOp==='filled'?'selected':''}>Tiene valor</option>
+                            <option value="empty" ${condOp==='empty'?'selected':''}>Está vacío</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group" id="m-cond-val-wrap" style="margin-top:.4rem;${['filled','empty'].includes(condOp)?'display:none':''}">
+                    <label style="font-size:.8rem">Valor</label>
+                    <input type="text" id="m-cond-val" class="form-input" style="font-size:.82rem" value="${condVal}" placeholder="Valor esperado...">
+                </div>
+            </div>` : ''}
             <input type="hidden" id="m-id" value="${f.id}">
             <input type="hidden" id="m-type" value="${type}">`;
+
+        const condOpSel = document.getElementById('m-cond-op');
+        if (condOpSel) {
+            condOpSel.addEventListener('change', () => {
+                const wrap = document.getElementById('m-cond-val-wrap');
+                wrap.style.display = ['filled','empty'].includes(condOpSel.value) ? 'none' : '';
+            });
+        }
+
         if (!isEdit) editingIndex = null;
         modal.style.display = 'flex';
         document.getElementById('m-label').focus();
@@ -461,6 +551,15 @@
             if (mn !== '') field.min = parseFloat(mn);
             if (mx !== '') field.max = parseFloat(mx);
         }
+        // Conditional visibility
+        const condField = document.getElementById('m-cond-field');
+        if (condField && condField.value) {
+            const op = document.getElementById('m-cond-op').value;
+            field.condition = { fieldId: condField.value, operator: op };
+            if (!['filled', 'empty'].includes(op)) {
+                field.condition.value = document.getElementById('m-cond-val').value;
+            }
+        }
         if (editingIndex !== null) { fields[editingIndex] = field; } else { fields.push(field); }
         editingIndex = null;
         modal.style.display = 'none';
@@ -484,6 +583,7 @@
                 else if (f.type === 'radio') html += (f.options||[]).map(o=>`<label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.35rem;"><input type="radio" disabled> ${o}</label>`).join('');
                 else if (f.type === 'checkbox') html += (f.options||[]).map(o=>`<label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.35rem;"><input type="checkbox" disabled> ${o}</label>`).join('');
                 else if (f.type === 'signature') html += `<div style="border:1px dashed var(--surface-border);border-radius:8px;height:80px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.85rem;"><i class="bi bi-pen" style="margin-right:0.5rem;"></i> Área de firma</div>`;
+                else if (f.type === 'select_dynamic') html += `<div style="border:1px dashed var(--surface-border);border-radius:8px;padding:.6rem .75rem;display:flex;align-items:center;gap:.5rem;color:var(--text-muted);font-size:0.85rem;"><i class="bi bi-collection"></i> Lista dinámica — los usuarios podrán buscar o crear opciones</div>`;
                 html += '</div>';
             }
         });

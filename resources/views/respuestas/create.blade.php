@@ -78,11 +78,17 @@
             @php $schema = json_decode($formulario->schema_json ?? '[]', true); @endphp
 
             @foreach($schema as $field)
+                @php
+                    $hasCond = !empty($field['condition']['fieldId']);
+                    $condAttr = $hasCond ? 'data-cond-field="'.$field['condition']['fieldId'].'" data-cond-op="'.$field['condition']['operator'].'" data-cond-val="'.($field['condition']['value'] ?? '').'"' : '';
+                @endphp
                 @if($field['type'] === 'divider')
-                    <hr style="border-color:var(--surface-border);margin:1.5rem 0;">
-                    <p style="text-align:center;color:var(--text-muted);font-size:0.85rem;">{{ $field['label'] }}</p>
+                    <div class="cond-wrap" {!! $condAttr !!}>
+                        <hr style="border-color:var(--surface-border);margin:1.5rem 0;">
+                        <p style="text-align:center;color:var(--text-muted);font-size:0.85rem;">{{ $field['label'] }}</p>
+                    </div>
                 @else
-                    <div class="form-group">
+                    <div class="form-group cond-wrap" {!! $condAttr !!}>
                         <label>
                             {{ $field['label'] }}
                             @if(!empty($field['required'])) <span style="color:#ef4444">*</span> @endif
@@ -159,6 +165,33 @@
                                     <i class="bi bi-eraser"></i> Limpiar firma
                                 </button>
                             </div>
+
+                        @elseif($field['type'] === 'file')
+                            <input type="file" name="file_{{ $field['id'] }}" id="field_{{ $field['id'] }}"
+                                class="form-input" data-id="{{ $field['id'] }}" data-is-file="1"
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
+                                {{ !empty($field['required']) ? 'required' : '' }}>
+                            <small style="color:var(--text-muted);font-size:.75rem">
+                                PDF, Word, Excel o imágenes (máx. 10MB)
+                            </small>
+
+                        @elseif($field['type'] === 'select_dynamic')
+                            <div class="dynamic-select-wrap" data-field-id="{{ $field['id'] }}"
+                                 data-url="{{ route('campo-opciones.index', [$formulario->id, $field['id']]) }}"
+                                 data-store-url="{{ route('campo-opciones.store', [$formulario->id, $field['id']]) }}">
+                                <div style="position:relative">
+                                    <input type="text" class="form-input ds-search" autocomplete="off"
+                                        placeholder="{{ $field['placeholder'] ?? 'Buscar o agregar...' }}"
+                                        style="padding-right:2.5rem">
+                                    <i class="bi bi-chevron-down" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none"></i>
+                                </div>
+                                <div class="ds-dropdown" style="display:none;position:absolute;z-index:50;width:100%;
+                                    max-height:200px;overflow-y:auto;background:var(--surface-card);border:1px solid var(--surface-border);
+                                    border-radius:8px;margin-top:2px;box-shadow:0 8px 24px rgba(0,0,0,.15)">
+                                </div>
+                                <input type="hidden" id="field_{{ $field['id'] }}" class="field-input"
+                                    data-id="{{ $field['id'] }}" {{ !empty($field['required']) ? 'required' : '' }}>
+                            </div>
                         @endif
                     </div>
                 @endif
@@ -186,7 +219,7 @@ const datos = {};
 
 function getDatos() {
     document.querySelectorAll('.field-input').forEach(el => {
-        if (el.type !== 'hidden') {
+        if (el.type !== 'hidden' && !el.dataset.isFile) {
             datos[el.dataset.id] = el.value;
         }
     });
@@ -238,5 +271,136 @@ window.clearSignature = function(id) {
     document.getElementById('field_' + id).value = '';
     delete datos[id];
 };
+
+// ── Conditional visibility ──
+function evalConditions() {
+    document.querySelectorAll('.cond-wrap[data-cond-field]').forEach(wrap => {
+        const depId = wrap.dataset.condField;
+        const op = wrap.dataset.condOp;
+        const expected = wrap.dataset.condVal;
+
+        // Get current value of the dependency field
+        let val = '';
+        const el = document.getElementById('field_' + depId);
+        if (el) {
+            val = el.value;
+        } else {
+            // Radio button
+            const radio = document.querySelector(`input[name="field_${depId}"]:checked`);
+            if (radio) val = radio.value;
+            // Checkbox group
+            const checks = document.querySelectorAll(`[data-check-group="${depId}"]:checked`);
+            if (checks.length) val = [...checks].map(c => c.value).join(',');
+        }
+
+        let visible = false;
+        switch (op) {
+            case 'equals': visible = val === expected; break;
+            case 'not_equals': visible = val !== expected; break;
+            case 'filled': visible = val !== '' && val !== null && val !== undefined; break;
+            case 'empty': visible = val === '' || val === null || val === undefined; break;
+        }
+
+        wrap.style.display = visible ? '' : 'none';
+        // Disable required on hidden fields so form can submit
+        wrap.querySelectorAll('[required]').forEach(inp => {
+            inp.dataset.wasRequired = '1';
+            if (!visible) inp.removeAttribute('required');
+            else if (inp.dataset.wasRequired) inp.setAttribute('required', '');
+        });
+    });
+}
+
+// Attach listeners to all field inputs
+document.querySelectorAll('.field-input, input[type="radio"], [data-check-group]').forEach(el => {
+    el.addEventListener('change', evalConditions);
+    el.addEventListener('input', evalConditions);
+});
+evalConditions();
+
+// ── Dynamic Select (select_dynamic) ──
+document.querySelectorAll('.dynamic-select-wrap').forEach(wrap => {
+    const fieldId = wrap.dataset.fieldId;
+    const url = wrap.dataset.url;
+    const storeUrl = wrap.dataset.storeUrl;
+    const searchInput = wrap.querySelector('.ds-search');
+    const dropdown = wrap.querySelector('.ds-dropdown');
+    const hidden = wrap.querySelector('input[type="hidden"]');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    let debounceTimer;
+
+    function renderDropdown(items, query) {
+        let html = '';
+        if (items.length === 0 && query.length === 0) {
+            html = '<div style="padding:.6rem .75rem;font-size:.82rem;color:var(--text-muted)">Escribe para buscar o crear...</div>';
+        } else {
+            items.forEach(val => {
+                html += `<div class="ds-option" data-val="${val.replace(/"/g, '&quot;')}"
+                    style="padding:.5rem .75rem;font-size:.85rem;cursor:pointer;transition:background .1s"
+                    onmouseover="this.style.background='rgba(79,70,229,.08)'"
+                    onmouseout="this.style.background=''">${val}</div>`;
+            });
+            if (query.length > 0 && !items.map(i => i.toLowerCase()).includes(query.toLowerCase())) {
+                html += `<div class="ds-option ds-create" data-val="${query.replace(/"/g, '&quot;')}"
+                    style="padding:.5rem .75rem;font-size:.85rem;cursor:pointer;color:var(--primary-color);
+                    border-top:1px solid var(--surface-border);display:flex;align-items:center;gap:.4rem"
+                    onmouseover="this.style.background='rgba(79,70,229,.08)'"
+                    onmouseout="this.style.background=''">
+                    <i class="bi bi-plus-circle"></i> Crear "<strong>${query}</strong>"
+                </div>`;
+            }
+        }
+        dropdown.innerHTML = html;
+        dropdown.style.display = 'block';
+
+        dropdown.querySelectorAll('.ds-option').forEach(opt => {
+            opt.addEventListener('mousedown', e => {
+                e.preventDefault();
+                selectOption(opt.dataset.val, opt.classList.contains('ds-create'));
+            });
+        });
+    }
+
+    function selectOption(val, isNew) {
+        if (isNew) {
+            // POST to create the option
+            fetch(storeUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+                body: JSON.stringify({ valor: val })
+            }).catch(() => {});
+        }
+        searchInput.value = val;
+        hidden.value = val;
+        datos[fieldId] = val;
+        dropdown.style.display = 'none';
+        hidden.dispatchEvent(new Event('change'));
+    }
+
+    searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const q = this.value.trim();
+        debounceTimer = setTimeout(() => {
+            fetch(url + '?q=' + encodeURIComponent(q), {
+                headers: { 'Accept': 'application/json' }
+            })
+            .then(r => r.json())
+            .then(items => renderDropdown(items, q))
+            .catch(() => {});
+        }, 250);
+    });
+
+    searchInput.addEventListener('focus', function() {
+        const q = this.value.trim();
+        fetch(url + '?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } })
+            .then(r => r.json())
+            .then(items => renderDropdown(items, q))
+            .catch(() => {});
+    });
+
+    searchInput.addEventListener('blur', function() {
+        setTimeout(() => { dropdown.style.display = 'none'; }, 200);
+    });
+});
 </script>
 @endpush

@@ -5,24 +5,31 @@ namespace App\Http\Controllers;
 use App\Console\Commands\StopWeeklyReport;
 use App\Mail\StopReporteMail;
 use App\Services\GoogleDriveService;
+use App\Services\StopAnalyticsService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
 
 class StopDashboardController extends Controller
 {
     public function index(Request $request)
     {
+        $sql = new StopAnalyticsService();
+        $useSql = $sql->hasSyncedData();
+
+        // Si no hay data en SQL, necesitamos Google Drive como fuente
         $drive = new GoogleDriveService();
 
-        if (!$drive->isConfigured()) {
+        if (!$useSql && !$drive->isConfigured()) {
             return view('stop-dashboard.index', [
                 'error' => 'Google Drive no está configurado. Verifique las credenciales y el ID de carpeta en el archivo .env',
             ]);
         }
 
-        $fileInfo = $drive->getLatestFile();
+        $fileInfo = $drive->isConfigured() ? $drive->getLatestFile() : null;
+        $syncInfo = $sql->getSyncInfo();
 
-        if (!$fileInfo) {
+        if (!$useSql && !$fileInfo) {
             return view('stop-dashboard.index', [
                 'error' => 'No se encontraron archivos en la carpeta de Google Drive.',
             ]);
@@ -42,11 +49,14 @@ class StopDashboardController extends Controller
             'anio'               => $request->input('anio'),
         ]);
 
-        // Analíticas filtradas (incluye filterOptions en la misma respuesta)
-        $analytics = $drive->getFilteredAnalytics($filters);
-
-        // Las opciones de filtro vienen incluidas en analytics para evitar doble lectura
-        $filterOptions = $analytics['filterOptions'] ?? [];
+        // Obtener analíticas — SQL si hay datos sincronizados, Google Sheets si no
+        if ($useSql) {
+            $analytics = $sql->getFilteredAnalytics($filters);
+            $filterOptions = $analytics['filterOptions'] ?? [];
+        } else {
+            $analytics = $drive->getFilteredAnalytics($filters);
+            $filterOptions = $analytics['filterOptions'] ?? [];
+        }
 
         if (!$analytics || ($analytics['totalRows'] ?? 0) === 0) {
             return view('stop-dashboard.index', [
@@ -54,32 +64,49 @@ class StopDashboardController extends Controller
                     ? 'No se pudieron obtener datos del archivo. Verifique que la carpeta esté compartida con la cuenta de servicio.'
                     : 'No se encontraron datos con los filtros seleccionados.',
                 'fileInfo'      => $fileInfo,
+                'syncInfo'      => $syncInfo,
                 'filters'       => $filters,
                 'filterOptions' => $filterOptions,
             ]);
         }
 
-        // Checklist (sin filtros, datos globales)
-        $checklist = $drive->getChecklistAnalytics();
+        // Checklist
+        $checklist = $useSql ? $sql->getChecklistAnalytics() : $drive->getChecklistAnalytics();
 
-        // Comparativa año anterior + acumulado YTD (como en el email)
+        // Comparativa año anterior + acumulado YTD
         $empresa = $filters['empresa_observador'] ?? null;
-        $comparison = StopWeeklyReport::buildComparison($drive, $filters, $empresa);
+        if ($useSql) {
+            $comparison = $this->buildComparisonFromSql($sql, $filters, $empresa);
+        } else {
+            $comparison = StopWeeklyReport::buildComparison($drive, $filters, $empresa);
+        }
 
-        // Detalle de evaluación negativas (como en el email)
-        $evalDetail = $drive->getEvaluationDetail($filters) ?? [];
+        // Detalle de evaluación negativas
+        $evalDetail = $useSql
+            ? ($sql->getEvaluationDetail($filters) ?? [])
+            : ($drive->getEvaluationDetail($filters) ?? []);
 
         return view('stop-dashboard.index', compact(
-            'fileInfo', 'analytics', 'checklist', 'filters', 'filterOptions', 'comparison', 'evalDetail'
+            'fileInfo', 'syncInfo', 'analytics', 'checklist', 'filters', 'filterOptions', 'comparison', 'evalDetail'
         ));
     }
 
     public function sync()
     {
         $drive = new GoogleDriveService();
-        $drive->clearCache();
 
-        return back()->with('success', 'Cache limpiado. Los datos se recargarán desde Google Drive.');
+        // Ejecutar sincronización a MySQL
+        try {
+            Artisan::call('stop:sync-sheets', ['--force' => true]);
+            $output = Artisan::output();
+
+            // También limpiar caché de Google Drive
+            $drive->clearCache();
+
+            return back()->with('success', 'Datos sincronizados exitosamente desde Google Sheets. ' . trim($output));
+        } catch (\Exception $e) {
+            return back()->with('success', 'Error durante sincronización: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -87,7 +114,8 @@ class StopDashboardController extends Controller
      */
     public function apiData(Request $request)
     {
-        $drive = new GoogleDriveService();
+        $sql = new StopAnalyticsService();
+        $useSql = $sql->hasSyncedData();
 
         $filters = array_filter([
             'empresa_observador' => $request->input('empresa_observador'),
@@ -101,13 +129,18 @@ class StopDashboardController extends Controller
             'anio'               => $request->input('anio'),
         ]);
 
-        $analytics = $drive->getFilteredAnalytics($filters);
+        if ($useSql) {
+            $analytics = $sql->getFilteredAnalytics($filters);
+            $checklist = $sql->getChecklistAnalytics();
+        } else {
+            $drive = new GoogleDriveService();
+            $analytics = $drive->getFilteredAnalytics($filters);
+            $checklist = $drive->getChecklistAnalytics();
+        }
 
         if (!$analytics) {
             return response()->json(['error' => 'No se pudieron obtener datos'], 500);
         }
-
-        $checklist = $drive->getChecklistAnalytics();
 
         return response()->json([
             'analytics' => $analytics,
@@ -186,5 +219,62 @@ class StopDashboardController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', "Error al enviar: {$e->getMessage()}");
         }
+    }
+
+    /**
+     * Build year-over-year comparison using SQL data.
+     */
+    private function buildComparisonFromSql(StopAnalyticsService $sql, array $baseFilters, ?string $empresa): array
+    {
+        $currentYear  = (int) ($baseFilters['anio'] ?? now()->format('Y'));
+        $prevYear     = $currentYear - 1;
+        $currentMonth = $baseFilters['mes'] ?? now()->format('Y-m');
+        $monthNum     = (int) substr($currentMonth, 5, 2);
+
+        $empFilter = $empresa ? ['empresa_observador' => $empresa] : [];
+
+        try {
+            $ytdData  = $sql->getFilteredAnalytics(array_merge(['anio' => (string) $currentYear], $empFilter));
+            $prevData = $sql->getFilteredAnalytics(array_merge(['anio' => (string) $prevYear], $empFilter));
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        $ytdClasif  = $ytdData['clasificacion'] ?? [];
+        $prevClasif = $prevData['clasificacion'] ?? [];
+
+        $prevByMonth    = $prevData['byMonth'] ?? [];
+        $prevByMonthNeg = $prevData['byMonthNeg'] ?? [];
+        $prevByMonthPos = $prevData['byMonthPos'] ?? [];
+
+        $prevYearMonth = $prevYear . '-' . str_pad($monthNum, 2, '0', STR_PAD_LEFT);
+
+        return [
+            'ytd' => [
+                'total'      => $ytdData['totalRows'] ?? 0,
+                'pos'        => $ytdClasif['Positiva'] ?? $ytdClasif['positiva'] ?? 0,
+                'neg'        => $ytdClasif['Negativa'] ?? $ytdClasif['negativa'] ?? 0,
+                'topNeg'     => $ytdData['topNegTrabajadores'] ?? [],
+                'negPorTipo' => $ytdData['negPorTipo'] ?? [],
+                'byMonth'    => $ytdData['byMonth'] ?? [],
+                'byMonthNeg' => $ytdData['byMonthNeg'] ?? [],
+                'byMonthPos' => $ytdData['byMonthPos'] ?? [],
+            ],
+            'prevYear' => [
+                'year'           => $prevYear,
+                'total'          => $prevData['totalRows'] ?? 0,
+                'pos'            => $prevClasif['Positiva'] ?? $prevClasif['positiva'] ?? 0,
+                'neg'            => $prevClasif['Negativa'] ?? $prevClasif['negativa'] ?? 0,
+                'sameMonthTotal' => $prevByMonth[$prevYearMonth] ?? 0,
+                'sameMonthPos'   => $prevByMonthPos[$prevYearMonth] ?? 0,
+                'sameMonthNeg'   => $prevByMonthNeg[$prevYearMonth] ?? 0,
+                'ytdTotal'       => $prevData['totalRows'] ?? 0,
+                'ytdPos'         => $prevClasif['Positiva'] ?? $prevClasif['positiva'] ?? 0,
+                'ytdNeg'         => $prevClasif['Negativa'] ?? $prevClasif['negativa'] ?? 0,
+                'byMonth'        => $prevByMonth,
+                'byMonthNeg'     => $prevByMonthNeg,
+                'byMonthPos'     => $prevByMonthPos,
+            ],
+        ];
     }
 }

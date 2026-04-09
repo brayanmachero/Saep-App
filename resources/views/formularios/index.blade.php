@@ -25,6 +25,16 @@
                     class="form-input" placeholder="Buscar por nombre o código...">
             </div>
             <div class="filter-group">
+                <select name="categoria_id" class="form-input">
+                    <option value="">Todas las categorías</option>
+                    @foreach($categorias as $cat)
+                        <option value="{{ $cat->id }}" {{ request('categoria_id') == $cat->id ? 'selected' : '' }}>
+                            {{ $cat->nombre }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="filter-group">
                 <select name="activo" class="form-input">
                     <option value="">Todos</option>
                     <option value="1" {{ request('activo') === '1' ? 'selected' : '' }}>Activos</option>
@@ -34,7 +44,7 @@
             <button type="submit" class="btn-secondary">
                 <i class="bi bi-search"></i> Filtrar
             </button>
-            @if(request()->hasAny(['buscar','activo']))
+            @if(request()->hasAny(['buscar','activo','categoria_id']))
                 <a href="{{ route('formularios.index') }}" class="btn-ghost">
                     <i class="bi bi-x"></i> Limpiar
                 </a>
@@ -49,11 +59,11 @@
                     <tr>
                         <th>Código</th>
                         <th>Nombre</th>
-                        <th>Departamento</th>
+                        <th>Categoría</th>
+                        <th>Depto.</th>
+                        <th>Vigencia</th>
                         <th>Versión</th>
-                        <th>Aprobación</th>
                         <th>Estado</th>
-                        <th>Creado</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
@@ -65,22 +75,38 @@
                             <a href="{{ route('formularios.show', $form) }}" style="color:var(--primary-color);text-decoration:none;">
                                 {{ $form->nombre }}
                             </a>
-                        </td>
-                        <td>{{ $form->departamento->nombre ?? '—' }}</td>
-                        <td><span class="badge">v{{ $form->version }}</span></td>
-                        <td>
                             @if($form->requiere_aprobacion)
-                                <span class="badge warning"><i class="bi bi-check-circle"></i> Sí</span>
-                            @else
-                                <span class="badge">No</span>
+                                <i class="bi bi-shield-check" style="color:var(--accent-color);font-size:.7rem" title="Requiere aprobación"></i>
+                            @endif
+                            @if($form->frecuencia)
+                                <span class="badge" style="font-size:.65rem;margin-left:.25rem">{{ ucfirst($form->frecuencia) }}</span>
                             @endif
                         </td>
+                        <td>
+                            @if($form->categoria)
+                                <span style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem">
+                                    <i class="bi {{ $form->categoria->icono }}" style="color:{{ $form->categoria->color }}"></i>
+                                    {{ $form->categoria->nombre }}
+                                </span>
+                            @else
+                                <span style="color:var(--text-muted)">—</span>
+                            @endif
+                        </td>
+                        <td>{{ $form->departamento->nombre ?? '—' }}</td>
+                        <td style="font-size:.78rem">
+                            @if($form->fecha_inicio || $form->fecha_fin)
+                                {{ $form->fecha_inicio?->format('d/m/Y') ?? '∞' }}
+                                → {{ $form->fecha_fin?->format('d/m/Y') ?? '∞' }}
+                            @else
+                                <span style="color:var(--text-muted)">Permanente</span>
+                            @endif
+                        </td>
+                        <td><span class="badge">v{{ $form->version }}</span></td>
                         <td>
                             <span class="badge {{ $form->activo ? 'success' : 'danger' }}">
                                 {{ $form->activo ? 'Activo' : 'Inactivo' }}
                             </span>
                         </td>
-                        <td>{{ $form->created_at->format('d/m/Y') }}</td>
                         <td>
                             <div style="display:flex;gap:0.25rem;">
                                 <a href="{{ route('formularios.show', $form) }}" class="icon-btn" title="Ver"
@@ -104,7 +130,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">
+                        <td colspan="9" style="text-align:center;color:var(--text-muted);padding:2rem;">
                             <i class="bi bi-ui-checks-grid" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>
                             No hay formularios. ¡Crea el primero!
                         </td>

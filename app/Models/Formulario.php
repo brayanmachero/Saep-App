@@ -14,9 +14,13 @@ class Formulario extends Model
         'nombre',
         'descripcion',
         'departamento_id',
+        'categoria_id',
         'schema_json',
         'version',
         'activo',
+        'fecha_inicio',
+        'fecha_fin',
+        'frecuencia',
         'requiere_aprobacion',
         'aprobador_rol_id',
         'genera_pdf',
@@ -25,9 +29,22 @@ class Formulario extends Model
         'creado_por',
     ];
 
+    protected $casts = [
+        'activo'              => 'boolean',
+        'requiere_aprobacion' => 'boolean',
+        'genera_pdf'          => 'boolean',
+        'fecha_inicio'        => 'date',
+        'fecha_fin'           => 'date',
+    ];
+
     public function departamento()
     {
         return $this->belongsTo(Departamento::class);
+    }
+
+    public function categoria()
+    {
+        return $this->belongsTo(CategoriaFormulario::class, 'categoria_id');
     }
 
     public function aprobadorRol()
@@ -43,5 +60,29 @@ class Formulario extends Model
     public function respuestas()
     {
         return $this->hasMany(Respuesta::class);
+    }
+
+    public function asignaciones()
+    {
+        return $this->belongsToMany(User::class, 'formulario_usuario')
+                    ->withPivot('estado', 'fecha_limite', 'completado_at')
+                    ->withTimestamps();
+    }
+
+    public function versiones()
+    {
+        return $this->hasMany(FormularioVersion::class)->orderByDesc('version');
+    }
+
+    /**
+     * Check if the form is currently active (within scheduling dates).
+     */
+    public function estaVigente(): bool
+    {
+        if (!$this->activo) return false;
+        $hoy = now()->startOfDay();
+        if ($this->fecha_inicio && $hoy->lt($this->fecha_inicio)) return false;
+        if ($this->fecha_fin && $hoy->gt($this->fecha_fin)) return false;
+        return true;
     }
 }

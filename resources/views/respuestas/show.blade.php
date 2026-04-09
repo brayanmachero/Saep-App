@@ -54,7 +54,15 @@
                                     <span style="color:var(--text-muted);font-style:italic;">Sin firma</span>
                                 @endif
                             @elseif($field['type'] === 'file')
-                                @if($val)
+                                @if($val && is_array($val) && isset($val['path']))
+                                    <a href="{{ asset('storage/' . $val['path']) }}" target="_blank"
+                                       class="btn-secondary" style="width:fit-content;font-size:.85rem">
+                                        <i class="bi bi-download"></i> {{ $val['name'] ?? 'Descargar archivo' }}
+                                        @if(isset($val['size']))
+                                            <small style="color:var(--text-muted);margin-left:.3rem">({{ number_format($val['size']/1024, 0) }} KB)</small>
+                                        @endif
+                                    </a>
+                                @elseif($val)
                                     <a href="{{ $val }}" target="_blank" class="btn-secondary" style="width:fit-content;">
                                         <i class="bi bi-download"></i> Descargar archivo
                                     </a>

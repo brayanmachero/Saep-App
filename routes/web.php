@@ -31,6 +31,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VisitaSstController;
 use App\Http\Controllers\LeyKarinPublicoController;
 use App\Http\Controllers\StopDashboardController;
+use App\Http\Controllers\CampoOpcionController;
 use Illuminate\Support\Facades\Route;
 
 // --- WEBHOOK KIZEO (público, sin auth ni CSRF) ---
@@ -130,6 +131,14 @@ Route::middleware('auth')->group(function () {
     // --- FORMULARIOS Y RESPUESTAS ---
     Route::middleware('modulo:formularios')->group(function () {
         Route::resource('formularios', FormularioController::class);
+        Route::post('formularios/{formulario}/asignar', [FormularioController::class, 'asignar'])
+            ->name('formularios.asignar');
+        Route::delete('formularios/{formulario}/desasignar/{user}', [FormularioController::class, 'desasignar'])
+            ->name('formularios.desasignar');
+        Route::get('formularios/{formulario}/campo-opciones/{campoId}', [CampoOpcionController::class, 'index'])
+            ->name('campo-opciones.index');
+        Route::post('formularios/{formulario}/campo-opciones/{campoId}', [CampoOpcionController::class, 'store'])
+            ->name('campo-opciones.store');
     });
 
     Route::middleware('modulo:respuestas')->group(function () {
@@ -137,6 +146,11 @@ Route::middleware('auth')->group(function () {
         Route::patch('respuestas/{respuesta}/estado', [RespuestaController::class, 'cambiarEstado'])
             ->name('respuestas.estado')
             ->middleware('permission:puede_aprobar');
+        Route::post('respuestas/bulk-estado', [RespuestaController::class, 'bulkEstado'])
+            ->name('respuestas.bulkEstado')
+            ->middleware('permission:puede_aprobar');
+        Route::get('respuestas-exportar', [RespuestaController::class, 'exportar'])
+            ->name('respuestas.exportar');
     });
 
     // --- SST: CHARLAS ---

@@ -8,8 +8,13 @@
         <div>
             <h2 class="page-heading"><i class="bi bi-hand-index-fill" style="color:var(--accent-color)"></i> Dashboard Tarjeta STO CCU</h2>
             <p class="page-subheading">
-                Observaciones de seguridad &mdash; Google Sheets
-                @if(isset($fileInfo))
+                Observaciones de seguridad
+                @if(isset($syncInfo) && $syncInfo)
+                    <span style="font-size:.72rem;color:var(--text-muted);margin-left:.5rem">
+                        <i class="bi bi-database-check" style="color:#22c55e"></i> {{ number_format($syncInfo['total']) }} registros en MySQL
+                        | Sincronizado {{ \Carbon\Carbon::parse($syncInfo['lastSync'])->diffForHumans() }}
+                    </span>
+                @elseif(isset($fileInfo))
                     <span style="font-size:.72rem;color:var(--text-muted);margin-left:.5rem">
                         <i class="bi bi-cloud-check"></i> {{ $fileInfo['name'] ?? 'N/A' }}
                         @if(isset($fileInfo['modifiedTime']))
@@ -23,7 +28,7 @@
             <form method="POST" action="{{ route('stop-dashboard.sync') }}" id="sync-form">
                 @csrf
                 <button type="submit" class="btn-premium" id="sync-btn" style="padding:.5rem 1rem;font-size:.82rem">
-                    <i class="bi bi-arrow-clockwise" id="sync-icon"></i> Actualizar datos
+                    <i class="bi bi-arrow-clockwise" id="sync-icon"></i> Sincronizar datos
                 </button>
             </form>
         </div>

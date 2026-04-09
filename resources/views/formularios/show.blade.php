@@ -43,6 +43,17 @@
                         <p style="font-size:0.75rem;color:var(--text-muted);margin:0 0 0.2rem;">Departamento</p>
                         <p style="font-size:0.9rem;margin:0;">{{ $formulario->departamento->nombre ?? '—' }}</p>
                     </div>
+                    <div>
+                        <p style="font-size:0.75rem;color:var(--text-muted);margin:0 0 0.2rem;">Categoría</p>
+                        <p style="font-size:0.9rem;margin:0;">
+                            @if($formulario->categoria)
+                                <i class="bi {{ $formulario->categoria->icono }}" style="color:{{ $formulario->categoria->color }}"></i>
+                                {{ $formulario->categoria->nombre }}
+                            @else
+                                —
+                            @endif
+                        </p>
+                    </div>
                     @if($formulario->descripcion)
                     <div style="grid-column:1/-1;">
                         <p style="font-size:0.75rem;color:var(--text-muted);margin:0 0 0.2rem;">Descripción</p>
@@ -74,6 +85,16 @@
                     @endif
                     @if($formulario->genera_pdf)
                         <span class="badge info"><i class="bi bi-file-earmark-pdf"></i> Genera PDF</span>
+                    @endif
+                    @if($formulario->frecuencia)
+                        <span class="badge"><i class="bi bi-arrow-repeat"></i> {{ ucfirst($formulario->frecuencia) }}</span>
+                    @endif
+                    @if($formulario->fecha_inicio || $formulario->fecha_fin)
+                        <span class="badge" style="font-size:.72rem">
+                            <i class="bi bi-calendar-range"></i>
+                            {{ $formulario->fecha_inicio?->format('d/m/Y') ?? '∞' }}
+                            → {{ $formulario->fecha_fin?->format('d/m/Y') ?? '∞' }}
+                        </span>
                     @endif
                 </div>
             </div>
@@ -133,7 +154,8 @@
                                         $typeLabels = [
                                             'text'=>'Texto','textarea'=>'Texto largo','number'=>'Número',
                                             'date'=>'Fecha','select'=>'Lista','radio'=>'Opción múltiple',
-                                            'checkbox'=>'Casillas','file'=>'Adjunto','signature'=>'Firma'
+                                            'checkbox'=>'Casillas','file'=>'Adjunto','signature'=>'Firma',
+                                            'select_dynamic'=>'Lista dinámica'
                                         ];
                                     @endphp
                                     <span style="font-size:0.72rem;background:rgba(79,70,229,0.1);
@@ -152,6 +174,66 @@
                     @endforeach
                 @endif
             </div>
+
+            <!-- Historial de versiones -->
+            @if($formulario->versiones->count() > 0)
+            <div class="glass-card">
+                <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:1rem;">
+                    <i class="bi bi-clock-history"></i> Historial de versiones
+                    <span style="font-size:0.8rem;font-weight:400;text-transform:none;letter-spacing:0;">
+                        — {{ $formulario->versiones->count() }} versión(es) anterior(es)
+                    </span>
+                </h3>
+
+                <div style="display:flex;flex-direction:column;gap:.5rem">
+                    {{-- Current version --}}
+                    <div style="display:flex;align-items:center;gap:.75rem;padding:.65rem .75rem;background:rgba(79,70,229,.06);border:1px solid rgba(79,70,229,.15);border-radius:10px;">
+                        <span class="badge success" style="font-size:.75rem">v{{ $formulario->version }}</span>
+                        <div style="flex:1">
+                            <strong style="font-size:.85rem">Versión actual</strong>
+                            <span style="display:block;font-size:.72rem;color:var(--text-muted)">{{ count($schema) }} campo(s)</span>
+                        </div>
+                        <span style="font-size:.72rem;color:var(--text-muted)">{{ $formulario->updated_at->format('d/m/Y H:i') }}</span>
+                    </div>
+
+                    @foreach($formulario->versiones as $v)
+                    @php $vSchema = json_decode($v->schema_json ?? '[]', true); @endphp
+                    <div style="display:flex;align-items:center;gap:.75rem;padding:.65rem .75rem;background:rgba(255,255,255,.03);border:1px solid var(--surface-border);border-radius:10px;">
+                        <span class="badge" style="font-size:.75rem">v{{ $v->version }}</span>
+                        <div style="flex:1">
+                            <span style="font-size:.85rem">{{ count($vSchema) }} campo(s)</span>
+                            @if($v->modificador)
+                                <span style="display:block;font-size:.72rem;color:var(--text-muted)">
+                                    por {{ $v->modificador->name }}
+                                </span>
+                            @endif
+                        </div>
+                        <span style="font-size:.72rem;color:var(--text-muted)">{{ $v->created_at->format('d/m/Y H:i') }}</span>
+                        <button type="button" class="icon-btn" style="width:24px;height:24px;" title="Ver esquema"
+                            onclick="toggleVersionDetail({{ $v->id }})">
+                            <i class="bi bi-chevron-down" id="chevron-{{ $v->id }}" style="font-size:.7rem;transition:transform .2s"></i>
+                        </button>
+                    </div>
+                    <div id="version-detail-{{ $v->id }}" style="display:none;padding:.5rem .75rem;background:rgba(255,255,255,.02);border:1px dashed var(--surface-border);border-radius:8px;margin-top:-.25rem">
+                        @foreach($vSchema as $vi => $vf)
+                            @if($vf['type'] === 'divider')
+                                <div style="text-align:center;font-size:.75rem;color:var(--text-muted);margin:.5rem 0;border-top:1px dashed var(--surface-border);padding-top:.35rem">{{ $vf['label'] }}</div>
+                            @else
+                                <div style="font-size:.8rem;padding:.3rem 0;display:flex;gap:.5rem;align-items:center">
+                                    <span style="color:var(--text-muted)">{{ $vi + 1 }}.</span>
+                                    <span>{{ $vf['label'] }}</span>
+                                    <span style="font-size:.68rem;color:var(--text-muted);background:rgba(107,114,128,.1);padding:.1rem .35rem;border-radius:4px">{{ $vf['type'] }}</span>
+                                    @if(!empty($vf['required']))
+                                        <span style="font-size:.68rem;color:#ef4444">*</span>
+                                    @endif
+                                </div>
+                            @endif
+                        @endforeach
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+            @endif
         </div>
 
         <!-- Columna lateral: estadísticas -->
@@ -220,7 +302,107 @@
                     @endif
                 </div>
             </div>
+
+            {{-- Panel de asignación --}}
+            <div class="glass-card">
+                <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:1rem;">
+                    <i class="bi bi-people-fill"></i> Asignaciones
+                    <span class="badge" style="margin-left:.3rem">{{ $asignados->count() }}</span>
+                </h3>
+
+                <form method="POST" action="{{ route('formularios.asignar', $formulario) }}">
+                    @csrf
+                    <div class="form-group" style="margin-bottom:.75rem">
+                        <select name="modo" id="assign-modo" class="form-input" style="font-size:.82rem">
+                            <option value="usuarios">Por usuario(s)</option>
+                            <option value="departamento">Por departamento</option>
+                        </select>
+                    </div>
+
+                    <div id="assign-usuarios">
+                        <div class="form-group" style="margin-bottom:.75rem">
+                            <select name="user_ids[]" multiple class="form-input" style="font-size:.82rem;min-height:90px">
+                                @foreach($usuariosDisp as $u)
+                                    <option value="{{ $u->id }}">{{ $u->name }}</option>
+                                @endforeach
+                            </select>
+                            <small style="color:var(--text-muted)">Ctrl+click para seleccionar varios</small>
+                        </div>
+                    </div>
+
+                    <div id="assign-depto" style="display:none">
+                        <div class="form-group" style="margin-bottom:.75rem">
+                            <select name="departamento_id" class="form-input" style="font-size:.82rem">
+                                <option value="">Seleccionar depto.</option>
+                                @foreach($departamentos as $dep)
+                                    <option value="{{ $dep->id }}">{{ $dep->nombre }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:.75rem">
+                        <label style="font-size:.78rem;color:var(--text-muted)">Fecha límite</label>
+                        <input type="date" name="fecha_limite" class="form-input" style="font-size:.82rem">
+                    </div>
+
+                    <button type="submit" class="btn-secondary" style="width:100%;justify-content:center;font-size:.82rem">
+                        <i class="bi bi-person-plus-fill"></i> Asignar
+                    </button>
+                </form>
+
+                @if($asignados->count() > 0)
+                    <div style="margin-top:1rem;border-top:1px solid var(--surface-border);padding-top:.75rem;">
+                        @foreach($asignados as $a)
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid rgba(255,255,255,.03);">
+                                <div>
+                                    <span style="font-size:.82rem">{{ $a->name }}</span>
+                                    <span class="badge {{ $a->pivot->estado === 'Completado' ? 'success' : ($a->pivot->estado === 'Vencido' ? 'danger' : 'warning') }}"
+                                          style="font-size:.65rem;margin-left:.3rem">
+                                        {{ $a->pivot->estado }}
+                                    </span>
+                                    @if($a->pivot->fecha_limite)
+                                        <span style="font-size:.7rem;color:var(--text-muted);display:block">
+                                            Límite: {{ \Carbon\Carbon::parse($a->pivot->fecha_limite)->format('d/m/Y') }}
+                                        </span>
+                                    @endif
+                                </div>
+                                @if($a->pivot->estado === 'Pendiente')
+                                    <form method="POST" action="{{ route('formularios.desasignar', [$formulario, $a]) }}"
+                                          onsubmit="return confirm('¿Quitar asignación?')">
+                                        @csrf @method('DELETE')
+                                        <button type="submit" class="icon-btn danger" style="width:22px;height:22px;" title="Quitar">
+                                            <i class="bi bi-x" style="font-size:.7rem"></i>
+                                        </button>
+                                    </form>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
         </div>
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.getElementById('assign-modo')?.addEventListener('change', function() {
+    document.getElementById('assign-usuarios').style.display = this.value === 'usuarios' ? '' : 'none';
+    document.getElementById('assign-depto').style.display = this.value === 'departamento' ? '' : 'none';
+});
+
+window.toggleVersionDetail = function(id) {
+    const detail = document.getElementById('version-detail-' + id);
+    const chevron = document.getElementById('chevron-' + id);
+    if (detail.style.display === 'none') {
+        detail.style.display = '';
+        chevron.style.transform = 'rotate(180deg)';
+    } else {
+        detail.style.display = 'none';
+        chevron.style.transform = '';
+    }
+};
+</script>
+@endpush
