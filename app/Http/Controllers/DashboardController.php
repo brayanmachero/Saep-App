@@ -19,18 +19,14 @@ class DashboardController extends Controller
         ];
         $stats['total'] = $stats['pendientes'] + $stats['completados'] + $stats['vencidos'];
 
-        // Formularios disponibles: pendientes + continuos (sin fecha_fin y frecuencia != unica)
+        // Formularios disponibles: pendientes + permanentes (sin fecha_fin)
         $disponibles = DB::table('formulario_usuario')
             ->join('formularios', 'formularios.id', '=', 'formulario_usuario.formulario_id')
             ->where('formulario_usuario.user_id', $userId)
             ->where('formularios.activo', true)
             ->where(function ($q) {
                 $q->where('formulario_usuario.estado', 'Pendiente')
-                  ->orWhere(function ($sub) {
-                      // Formularios continuos: sin fecha_fin y frecuencia != unica
-                      $sub->whereNull('formularios.fecha_fin')
-                          ->where('formularios.frecuencia', '!=', 'unica');
-                  });
+                  ->orWhereNull('formularios.fecha_fin');
             })
             ->select(
                 'formulario_usuario.*',

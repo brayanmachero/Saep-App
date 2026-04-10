@@ -21,7 +21,7 @@ class FormularioController extends Controller
                 'respuestas as respuestas_pendientes_count' => fn($q) => $q->where('estado', 'Pendiente'),
                 'respuestas as respuestas_aprobadas_count' => fn($q) => $q->where('estado', 'Aprobado'),
                 'asignaciones',
-                'asignaciones as asignaciones_pendientes_count' => fn($q) => $q->wherePivot('estado', 'Pendiente'),
+                'asignaciones as asignaciones_pendientes_count' => fn($q) => $q->where('formulario_usuario.estado', 'Pendiente'),
             ]);
 
         if ($request->filled('buscar')) {

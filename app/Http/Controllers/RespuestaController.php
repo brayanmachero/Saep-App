@@ -91,8 +91,8 @@ class RespuestaController extends Controller
             ->first();
 
         if ($pivot) {
-            // For continuous forms (no end date & not single-use), keep assignment active
-            $esContinuo = !$formulario->fecha_fin && $formulario->frecuencia !== 'unica';
+            // For permanent forms (no end date), keep assignment active
+            $esContinuo = !$formulario->fecha_fin;
 
             if ($esContinuo) {
                 // Update completion timestamp but keep Pendiente so user can submit again
