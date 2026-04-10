@@ -210,19 +210,29 @@ class FormularioController extends Controller
      */
     public function asignar(Request $request, Formulario $formulario)
     {
-        $request->validate([
-            'modo'             => ['required', 'in:usuarios,departamento,cargo,rol,todos'],
-            'user_ids'         => ['required_if:modo,usuarios', 'array'],
-            'user_ids.*'       => ['exists:users,id'],
-            'departamento_id'  => ['required_if:modo,departamento', 'exists:departamentos,id'],
-            'cargo_id'         => ['required_if:modo,cargo', 'exists:cargos,id'],
-            'rol_id'           => ['required_if:modo,rol', 'exists:roles,id'],
-            'fecha_limite'     => ['nullable', 'date', 'after_or_equal:today'],
-        ]);
+        $modo = $request->input('modo', 'usuarios');
+
+        $rules = [
+            'modo'         => ['required', 'in:usuarios,departamento,cargo,rol,todos'],
+            'fecha_limite' => ['nullable', 'date', 'after_or_equal:today'],
+        ];
+
+        if ($modo === 'usuarios') {
+            $rules['user_ids']   = ['required', 'array', 'min:1'];
+            $rules['user_ids.*'] = ['exists:users,id'];
+        } elseif ($modo === 'departamento') {
+            $rules['departamento_id'] = ['required', 'exists:departamentos,id'];
+        } elseif ($modo === 'cargo') {
+            $rules['cargo_id'] = ['required', 'exists:cargos,id'];
+        } elseif ($modo === 'rol') {
+            $rules['rol_id'] = ['required', 'exists:roles,id'];
+        }
+
+        $request->validate($rules);
 
         $userIds = [];
 
-        switch ($request->modo) {
+        switch ($modo) {
             case 'usuarios':
                 $userIds = $request->user_ids;
                 break;
@@ -243,18 +253,25 @@ class FormularioController extends Controller
                 break;
         }
 
+        if (empty($userIds)) {
+            return back()->with('error', 'No se encontraron usuarios activos para el criterio seleccionado.');
+        }
+
         $fecha = $request->fecha_limite;
         $added = 0;
 
         foreach ($userIds as $uid) {
-            // Evitar duplicados para la misma fecha_limite
-            $exists = \DB::table('formulario_usuario')
+            $query = \DB::table('formulario_usuario')
                 ->where('formulario_id', $formulario->id)
-                ->where('user_id', $uid)
-                ->where('fecha_limite', $fecha)
-                ->exists();
+                ->where('user_id', $uid);
 
-            if (!$exists) {
+            if ($fecha) {
+                $query->where('fecha_limite', $fecha);
+            } else {
+                $query->whereNull('fecha_limite');
+            }
+
+            if (!$query->exists()) {
                 $formulario->asignaciones()->attach($uid, [
                     'estado'       => 'Pendiente',
                     'fecha_limite' => $fecha,

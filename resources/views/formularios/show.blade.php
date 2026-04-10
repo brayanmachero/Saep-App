@@ -445,7 +445,10 @@
 @push('scripts')
 <script>
 document.getElementById('assign-modo')?.addEventListener('change', function() {
-    document.querySelectorAll('.assign-panel').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('.assign-panel').forEach(p => {
+        p.style.display = 'none';
+        p.querySelectorAll('select, input').forEach(el => el.disabled = true);
+    });
     const map = {
         usuarios: 'assign-usuarios',
         departamento: 'assign-depto',
@@ -454,7 +457,16 @@ document.getElementById('assign-modo')?.addEventListener('change', function() {
         todos: 'assign-todos'
     };
     const target = document.getElementById(map[this.value]);
-    if (target) target.style.display = '';
+    if (target) {
+        target.style.display = '';
+        target.querySelectorAll('select, input').forEach(el => el.disabled = false);
+    }
+});
+// Initialize: disable hidden panels on load
+document.querySelectorAll('.assign-panel').forEach(p => {
+    if (p.style.display === 'none') {
+        p.querySelectorAll('select, input').forEach(el => el.disabled = true);
+    }
 });
 
 window.toggleVersionDetail = function(id) {
