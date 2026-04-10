@@ -221,7 +221,7 @@ Route::middleware('auth')->group(function () {
         Route::post('charla-tracking/sync', [CharlaTrackingController::class, 'sync'])->name('charla-tracking.sync');
     });
 
-    // --- TARJETA STO CCU (Google Drive) ---
+    // --- TARJETA STOP CCU (Google Drive) ---
     Route::middleware('modulo:kizeo_analytics')->group(function () {
         Route::get('stop-dashboard', [StopDashboardController::class, 'index'])->name('stop-dashboard');
         Route::post('stop-dashboard/sync', [StopDashboardController::class, 'sync'])->name('stop-dashboard.sync');

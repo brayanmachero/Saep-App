@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Cargo;
 use App\Models\CategoriaFormulario;
 use App\Models\Departamento;
 use App\Models\Formulario;
@@ -103,7 +104,10 @@ class FormularioController extends Controller
 
     public function show(Formulario $formulario)
     {
-        $formulario->load('departamento', 'creador', 'aprobadorRol', 'categoria', 'asignaciones', 'versiones.modificador');
+        $formulario->load('departamento', 'creador', 'aprobadorRol', 'categoria', 'versiones.modificador');
+        $formulario->load(['asignaciones' => function ($q) {
+            $q->with('departamento', 'cargo');
+        }]);
 
         $schema = json_decode($formulario->schema_json ?? '[]', true);
 
@@ -121,8 +125,10 @@ class FormularioController extends Controller
                             ->orderBy('name')
                             ->get();
         $departamentos = Departamento::where('activo', true)->get();
+        $cargos        = Cargo::where('activo', true)->orderBy('nombre')->get();
+        $roles         = Rol::orderBy('nombre')->get();
 
-        return view('formularios.show', compact('formulario', 'schema', 'stats', 'asignados', 'usuariosDisp', 'departamentos'));
+        return view('formularios.show', compact('formulario', 'schema', 'stats', 'asignados', 'usuariosDisp', 'departamentos', 'cargos', 'roles'));
     }
 
     public function edit(Formulario $formulario)
@@ -205,22 +211,36 @@ class FormularioController extends Controller
     public function asignar(Request $request, Formulario $formulario)
     {
         $request->validate([
-            'modo'             => ['required', 'in:usuarios,departamento'],
+            'modo'             => ['required', 'in:usuarios,departamento,cargo,rol,todos'],
             'user_ids'         => ['required_if:modo,usuarios', 'array'],
             'user_ids.*'       => ['exists:users,id'],
             'departamento_id'  => ['required_if:modo,departamento', 'exists:departamentos,id'],
+            'cargo_id'         => ['required_if:modo,cargo', 'exists:cargos,id'],
+            'rol_id'           => ['required_if:modo,rol', 'exists:roles,id'],
             'fecha_limite'     => ['nullable', 'date', 'after_or_equal:today'],
         ]);
 
         $userIds = [];
 
-        if ($request->modo === 'usuarios') {
-            $userIds = $request->user_ids;
-        } else {
-            $userIds = User::where('departamento_id', $request->departamento_id)
-                           ->where('activo', true)
-                           ->pluck('id')
-                           ->toArray();
+        switch ($request->modo) {
+            case 'usuarios':
+                $userIds = $request->user_ids;
+                break;
+            case 'departamento':
+                $userIds = User::where('departamento_id', $request->departamento_id)
+                               ->where('activo', true)->pluck('id')->toArray();
+                break;
+            case 'cargo':
+                $userIds = User::where('cargo_id', $request->cargo_id)
+                               ->where('activo', true)->pluck('id')->toArray();
+                break;
+            case 'rol':
+                $userIds = User::where('rol_id', $request->rol_id)
+                               ->where('activo', true)->pluck('id')->toArray();
+                break;
+            case 'todos':
+                $userIds = User::where('activo', true)->pluck('id')->toArray();
+                break;
         }
 
         $fecha = $request->fecha_limite;

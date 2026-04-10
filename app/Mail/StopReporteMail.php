@@ -49,7 +49,7 @@ class StopReporteMail extends Mailable
         }
 
         return new Envelope(
-            subject: "Reporte {$this->frecuencia} Tarjeta STO CCU{$weekTag} — {$total} obs. ({$neg} neg.) — {$label}",
+            subject: "Reporte {$this->frecuencia} Tarjeta STOP CCU{$weekTag} — {$total} obs. ({$neg} neg.) — {$label}",
         );
     }
 

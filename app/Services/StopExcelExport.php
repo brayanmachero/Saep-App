@@ -33,7 +33,7 @@ class StopExcelExport
         $this->spreadsheet = new Spreadsheet();
         $this->spreadsheet->getProperties()
             ->setCreator('SAEP')
-            ->setTitle("Reporte {$frecuencia} Tarjeta STO CCU — {$periodo}")
+            ->setTitle("Reporte {$frecuencia} Tarjeta STOP CCU — {$periodo}")
             ->setSubject('Auditorías STO CCU');
 
         $this->buildResumen($analytics);

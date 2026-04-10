@@ -19,14 +19,14 @@ class StopWeeklyReport extends Command
                             {--empresa= : Filtrar por empresa observador}
                             {--frecuencia=semanal : semanal o mensual}';
 
-    protected $description = 'Genera y envía el reporte semanal/mensual de Tarjeta STO CCU';
+    protected $description = 'Genera y envía el reporte semanal/mensual de Tarjeta STOP CCU';
 
     public function handle(): int
     {
         $frecuencia = strtolower($this->option('frecuencia') ?? 'semanal');
         $esMensual  = $frecuencia === 'mensual';
 
-        $this->info("Generando reporte Tarjeta STO CCU ({$frecuencia})...");
+        $this->info("Generando reporte Tarjeta STOP CCU ({$frecuencia})...");
 
         $drive = new GoogleDriveService();
 

@@ -42,10 +42,10 @@
         'kizeo_vehiculos_destinatarios'=> 'Emails separados por coma (,)',
         'charla_report_activo'        => 'Activar reporte semanal de charlas',
         'charla_report_destinatarios' => 'Emails separados por coma (,)',
-        'stop_report_activo'          => 'Activar reporte semanal de Tarjeta STO CCU',
+        'stop_report_activo'          => 'Activar reporte semanal de Tarjeta STOP CCU',
         'stop_report_destinatarios'   => 'Emails separados por coma (,)',
         'stop_report_empresa'         => 'Empresa para filtrar reportes STOP (observador)',
-        'stop_report_mensual_activo'  => 'Activar reporte mensual de Tarjeta STO CCU',
+        'stop_report_mensual_activo'  => 'Activar reporte mensual de Tarjeta STOP CCU',
         'stop_report_mensual_destinatarios' => 'Emails separados por coma (,)',
     ];
 
@@ -544,7 +544,7 @@
                     @endif
 
                     @if(Route::has('stop-dashboard.reporte.preview'))
-                    <div class="setting-subsection" style="margin-top:1.5rem">Reporte Semanal — Tarjeta STO CCU</div>
+                    <div class="setting-subsection" style="margin-top:1.5rem">Reporte Semanal — Tarjeta STOP CCU</div>
                     <div class="preview-grid">
                         <a href="{{ route('stop-dashboard.reporte.preview') }}" target="_blank"
                            class="preview-card"

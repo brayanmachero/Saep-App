@@ -337,10 +337,13 @@
                         <select name="modo" id="assign-modo" class="form-input" style="font-size:.82rem">
                             <option value="usuarios">Por usuario(s)</option>
                             <option value="departamento">Por departamento</option>
+                            <option value="cargo">Por cargo</option>
+                            <option value="rol">Por rol</option>
+                            <option value="todos">Todos los usuarios</option>
                         </select>
                     </div>
 
-                    <div id="assign-usuarios">
+                    <div id="assign-usuarios" class="assign-panel">
                         <div class="form-group" style="margin-bottom:.75rem">
                             <select name="user_ids[]" multiple class="form-input" style="font-size:.82rem;min-height:90px">
                                 @foreach($usuariosDisp as $u)
@@ -351,15 +354,43 @@
                         </div>
                     </div>
 
-                    <div id="assign-depto" style="display:none">
+                    <div id="assign-depto" class="assign-panel" style="display:none">
                         <div class="form-group" style="margin-bottom:.75rem">
                             <select name="departamento_id" class="form-input" style="font-size:.82rem">
-                                <option value="">Seleccionar depto.</option>
+                                <option value="">Seleccionar departamento</option>
                                 @foreach($departamentos as $dep)
                                     <option value="{{ $dep->id }}">{{ $dep->nombre }}</option>
                                 @endforeach
                             </select>
                         </div>
+                    </div>
+
+                    <div id="assign-cargo" class="assign-panel" style="display:none">
+                        <div class="form-group" style="margin-bottom:.75rem">
+                            <select name="cargo_id" class="form-input" style="font-size:.82rem">
+                                <option value="">Seleccionar cargo</option>
+                                @foreach($cargos as $c)
+                                    <option value="{{ $c->id }}">{{ $c->nombre }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="assign-rol" class="assign-panel" style="display:none">
+                        <div class="form-group" style="margin-bottom:.75rem">
+                            <select name="rol_id" class="form-input" style="font-size:.82rem">
+                                <option value="">Seleccionar rol</option>
+                                @foreach($roles as $r)
+                                    <option value="{{ $r->id }}">{{ $r->nombre }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="assign-todos" class="assign-panel" style="display:none">
+                        <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.75rem;padding:.5rem;background:rgba(249,115,22,.06);border-radius:6px;">
+                            <i class="bi bi-info-circle"></i> Se asignará a todos los usuarios activos del sistema
+                        </p>
                     </div>
 
                     <div class="form-group" style="margin-bottom:.75rem">
@@ -381,6 +412,10 @@
                                     <span class="badge {{ $a->pivot->estado === 'Completado' ? 'success' : ($a->pivot->estado === 'Vencido' ? 'danger' : 'warning') }}"
                                           style="font-size:.65rem;margin-left:.3rem">
                                         {{ $a->pivot->estado }}
+                                    </span>
+                                    <span style="font-size:.68rem;color:var(--text-muted);display:block">
+                                        {{ optional($a->departamento)->nombre ?? '' }}
+                                        {{ optional($a->cargo)->nombre ? '· ' . $a->cargo->nombre : '' }}
                                     </span>
                                     @if($a->pivot->fecha_limite)
                                         <span style="font-size:.7rem;color:var(--text-muted);display:block">
@@ -410,8 +445,16 @@
 @push('scripts')
 <script>
 document.getElementById('assign-modo')?.addEventListener('change', function() {
-    document.getElementById('assign-usuarios').style.display = this.value === 'usuarios' ? '' : 'none';
-    document.getElementById('assign-depto').style.display = this.value === 'departamento' ? '' : 'none';
+    document.querySelectorAll('.assign-panel').forEach(p => p.style.display = 'none');
+    const map = {
+        usuarios: 'assign-usuarios',
+        departamento: 'assign-depto',
+        cargo: 'assign-cargo',
+        rol: 'assign-rol',
+        todos: 'assign-todos'
+    };
+    const target = document.getElementById(map[this.value]);
+    if (target) target.style.display = '';
 });
 
 window.toggleVersionDetail = function(id) {

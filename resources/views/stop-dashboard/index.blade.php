@@ -1,12 +1,12 @@
 @extends('layouts.app')
-@section('title', 'Dashboard Tarjeta STO CCU')
+@section('title', 'Dashboard Tarjeta STOP CCU')
 @section('content')
 <div class="page-container">
 
     {{-- Header --}}
     <div class="page-header">
         <div>
-            <h2 class="page-heading"><i class="bi bi-hand-index-fill" style="color:var(--accent-color)"></i> Dashboard Tarjeta STO CCU</h2>
+            <h2 class="page-heading"><i class="bi bi-hand-index-fill" style="color:var(--accent-color)"></i> Dashboard Tarjeta STOP CCU</h2>
             <p class="page-subheading">
                 Observaciones de seguridad
                 @if(isset($syncInfo) && $syncInfo)

@@ -83,7 +83,7 @@
             </a>
             <a href="{{ route('stop-dashboard') }}" class="nav-item {{ request()->routeIs('stop-dashboard*') ? 'active' : '' }}">
                 <i class="bi bi-hand-index-fill"></i>
-                <span>Tarjeta STO CCU</span>
+                <span>Tarjeta STOP CCU</span>
             </a>
             @endif
             @if(auth()->user()->tieneAcceso('charlas'))
