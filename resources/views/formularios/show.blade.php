@@ -586,9 +586,18 @@
 </div>
 
 {{-- JSON de datos para el drawer --}}
-<script>
-    window.__respuestas = @json($respuestas->map(function($r) use ($schema) {
+@php
+    $respuestasJson = $respuestas->map(function($r) {
         $datos = json_decode($r->datos_json ?? '{}', true);
+        $aprobacionesArr = $r->aprobaciones->map(function($a) {
+            return [
+                'aprobador' => $a->aprobador->name ?? '—',
+                'accion' => $a->accion,
+                'comentario' => $a->comentario,
+                'fecha' => $a->created_at->format('d/m/Y H:i'),
+            ];
+        })->values()->all();
+
         return [
             'id' => $r->id,
             'req' => '#REQ-' . str_pad($r->id, 4, '0', STR_PAD_LEFT),
@@ -599,17 +608,19 @@
             'fecha' => $r->created_at->format('d/m/Y H:i'),
             'fecha_resolucion' => $r->fecha_resolucion ? \Carbon\Carbon::parse($r->fecha_resolucion)->format('d/m/Y H:i') : null,
             'datos' => $datos,
-            'aprobaciones' => $r->aprobaciones->map(fn($a) => [
-                'aprobador' => $a->aprobador->name ?? '—',
-                'accion' => $a->accion,
-                'comentario' => $a->comentario,
-                'fecha' => $a->created_at->format('d/m/Y H:i'),
-            ]),
+            'aprobaciones' => $aprobacionesArr,
             'show_url' => route('respuestas.show', $r),
             'pdf_url' => route('pdf.respuesta', $r),
         ];
-    }));
-    window.__schema = @json(collect($schema)->filter(fn($f) => $f['type'] !== 'divider')->values());
+    })->values()->all();
+
+    $schemaJson = collect($schema)->filter(function($f) {
+        return $f['type'] !== 'divider';
+    })->values()->all();
+@endphp
+<script>
+    window.__respuestas = @json($respuestasJson);
+    window.__schema = @json($schemaJson);
 </script>
 @endsection
 
