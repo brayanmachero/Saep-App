@@ -178,16 +178,17 @@
                         @elseif($field['type'] === 'select_dynamic')
                             <div class="dynamic-select-wrap" data-field-id="{{ $field['id'] }}"
                                  data-url="{{ route('campo-opciones.index', [$formulario->id, $field['id']]) }}"
-                                 data-store-url="{{ route('campo-opciones.store', [$formulario->id, $field['id']]) }}">
-                                <div style="position:relative">
+                                 data-store-url="{{ route('campo-opciones.store', [$formulario->id, $field['id']]) }}"
+                                 style="position:relative;">
+                                <div>
                                     <input type="text" class="form-input ds-search" autocomplete="off"
                                         placeholder="{{ $field['placeholder'] ?? 'Buscar o agregar...' }}"
                                         style="padding-right:2.5rem">
                                     <i class="bi bi-chevron-down" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none"></i>
                                 </div>
-                                <div class="ds-dropdown" style="display:none;position:absolute;z-index:50;width:100%;
-                                    max-height:200px;overflow-y:auto;background:var(--surface-card);border:1px solid var(--surface-border);
-                                    border-radius:8px;margin-top:2px;box-shadow:0 8px 24px rgba(0,0,0,.15)">
+                                <div class="ds-dropdown" style="display:none;position:absolute;left:0;right:0;z-index:999;
+                                    max-height:200px;overflow-y:auto;background:#fff;border:1px solid #d1d5db;
+                                    border-radius:8px;margin-top:2px;box-shadow:0 8px 24px rgba(0,0,0,.18)">
                                 </div>
                                 <input type="hidden" id="field_{{ $field['id'] }}" class="field-input"
                                     data-id="{{ $field['id'] }}" {{ !empty($field['required']) ? 'required' : '' }}>
@@ -394,16 +395,16 @@ document.querySelectorAll('.dynamic-select-wrap').forEach(wrap => {
         } else {
             items.forEach(val => {
                 html += `<div class="ds-option" data-val="${val.replace(/"/g, '&quot;')}"
-                    style="padding:.5rem .75rem;font-size:.85rem;cursor:pointer;transition:background .1s"
-                    onmouseover="this.style.background='rgba(79,70,229,.08)'"
-                    onmouseout="this.style.background=''">${val}</div>`;
+                    style="padding:.5rem .75rem;font-size:.85rem;cursor:pointer;color:#1f2937;background:#fff;transition:background .1s"
+                    onmouseover="this.style.background='#eef2ff'"
+                    onmouseout="this.style.background='#fff'">${val}</div>`;
             });
             if (query.length > 0 && !items.map(i => i.toLowerCase()).includes(query.toLowerCase())) {
                 html += `<div class="ds-option ds-create" data-val="${query.replace(/"/g, '&quot;')}"
-                    style="padding:.5rem .75rem;font-size:.85rem;cursor:pointer;color:var(--primary-color);
-                    border-top:1px solid var(--surface-border);display:flex;align-items:center;gap:.4rem"
-                    onmouseover="this.style.background='rgba(79,70,229,.08)'"
-                    onmouseout="this.style.background=''">
+                    style="padding:.5rem .75rem;font-size:.85rem;cursor:pointer;color:#4338ca;background:#fff;
+                    border-top:1px solid #e5e7eb;display:flex;align-items:center;gap:.4rem"
+                    onmouseover="this.style.background='#eef2ff'"
+                    onmouseout="this.style.background='#fff'">>
                     <i class="bi bi-plus-circle"></i> Crear "<strong>${query}</strong>"
                 </div>`;
             }
