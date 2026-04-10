@@ -30,9 +30,9 @@
     <div style="display:grid;grid-template-columns:1fr 320px;gap:1.5rem;align-items:flex-start;">
 
         <!-- Columna principal -->
-        <div>
+        <div style="display:flex;flex-direction:column;gap:1rem;">
             <!-- Información general -->
-            <div class="glass-card" style="margin-bottom:1.25rem;">
+            <div class="glass-card">
                 <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:1rem;">
                     <i class="bi bi-info-circle"></i> Información General
                 </h3>
@@ -259,72 +259,45 @@
             @endif
         </div>
 
-        <!-- Columna lateral: estadísticas -->
-        <div>
-            <div class="glass-card" style="margin-bottom:1rem;">
-                <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:1rem;">
-                    <i class="bi bi-bar-chart-fill"></i> Estadísticas
-                </h3>
-                <div style="display:flex;flex-direction:column;gap:0.75rem;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;
-                        padding:0.6rem 0.75rem;background:rgba(79,70,229,0.07);border-radius:8px;">
-                        <span style="font-size:0.85rem;color:var(--text-muted);">Total solicitudes</span>
-                        <strong style="font-size:1.25rem;color:var(--primary-color);">{{ $stats['total'] }}</strong>
-                    </div>
-                    <div style="display:flex;justify-content:space-between;align-items:center;
-                        padding:0.6rem 0.75rem;background:rgba(234,179,8,0.08);border-radius:8px;">
-                        <span style="font-size:0.85rem;color:var(--text-muted);">Pendientes</span>
-                        <strong style="font-size:1.1rem;color:#d97706;">{{ $stats['pendientes'] }}</strong>
-                    </div>
-                    <div style="display:flex;justify-content:space-between;align-items:center;
-                        padding:0.6rem 0.75rem;background:rgba(34,197,94,0.08);border-radius:8px;">
-                        <span style="font-size:0.85rem;color:var(--text-muted);">Aprobadas</span>
-                        <strong style="font-size:1.1rem;color:#16a34a;">{{ $stats['aprobadas'] }}</strong>
-                    </div>
-                    <div style="display:flex;justify-content:space-between;align-items:center;
-                        padding:0.6rem 0.75rem;background:rgba(239,68,68,0.08);border-radius:8px;">
-                        <span style="font-size:0.85rem;color:var(--text-muted);">Rechazadas</span>
-                        <strong style="font-size:1.1rem;color:#dc2626;">{{ $stats['rechazadas'] }}</strong>
-                    </div>
-                    <div style="display:flex;justify-content:space-between;align-items:center;
-                        padding:0.6rem 0.75rem;background:rgba(107,114,128,0.08);border-radius:8px;">
-                        <span style="font-size:0.85rem;color:var(--text-muted);">Borradores</span>
-                        <strong style="font-size:1.1rem;color:var(--text-muted);">{{ $stats['borradores'] }}</strong>
-                    </div>
-                </div>
-            </div>
+        <!-- Columna lateral -->
+        <div style="display:flex;flex-direction:column;gap:1rem;">
 
-            <!-- Acciones -->
-            <div class="glass-card">
-                <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:1rem;">
-                    <i class="bi bi-gear-fill"></i> Acciones
+            <!-- Acciones rápidas -->
+            <div class="glass-card" style="padding:.85rem 1rem;">
+                <h3 style="font-size:0.8rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:.75rem;">
+                    <i class="bi bi-lightning-charge-fill"></i> Acciones rápidas
                 </h3>
-                <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                <div style="display:flex;flex-direction:column;gap:0.4rem;">
                     <a href="{{ route('respuestas.create', ['formulario_id' => $formulario->id]) }}"
-                       class="btn-premium" style="justify-content:center;">
+                       class="btn-premium" style="justify-content:center;font-size:.82rem;padding:.5rem .75rem;">
                         <i class="bi bi-plus-circle-fill"></i> Nueva Solicitud
                     </a>
                     @if(auth()->user()->tieneAcceso('formularios', 'puede_editar'))
                     <a href="{{ route('formularios.edit', $formulario) }}"
-                       class="btn-secondary" style="justify-content:center;">
+                       class="btn-secondary" style="justify-content:center;font-size:.82rem;padding:.45rem .75rem;">
                         <i class="bi bi-pencil-fill"></i> Editar Formulario
                     </a>
                     @endif
                     <a href="{{ route('respuestas.index', ['formulario_id' => $formulario->id]) }}"
-                       class="btn-ghost" style="justify-content:center;">
+                       class="btn-ghost" style="justify-content:center;font-size:.82rem;padding:.45rem .75rem;">
                         <i class="bi bi-list-ul"></i> Ver Solicitudes
+                    </a>
+                    <a href="#seccion-respuestas"
+                       class="btn-ghost" style="justify-content:center;font-size:.82rem;padding:.45rem .75rem;">
+                        <i class="bi bi-table"></i> Ver Respuestas
                     </a>
 
                     @if(auth()->user()->tieneAcceso('formularios', 'puede_editar'))
+                    <div style="border-top:1px solid var(--surface-border);margin:.25rem 0;"></div>
                     <form method="POST" action="{{ route('formularios.toggleActivo', $formulario) }}">
                         @csrf
                         @method('PATCH')
                         @if($formulario->activo)
-                        <button type="submit" class="btn-ghost" style="width:100%;justify-content:center;" onclick="return confirm('¿Desactivar este formulario?')">
+                        <button type="submit" class="btn-ghost" style="width:100%;justify-content:center;font-size:.82rem;padding:.4rem .75rem;" onclick="return confirm('¿Desactivar este formulario?')">
                             <i class="bi bi-pause-circle"></i> Desactivar
                         </button>
                         @else
-                        <button type="submit" class="btn-premium" style="width:100%;justify-content:center;">
+                        <button type="submit" class="btn-premium" style="width:100%;justify-content:center;font-size:.82rem;padding:.4rem .75rem;">
                             <i class="bi bi-play-circle-fill"></i> Reactivar
                         </button>
                         @endif
@@ -336,7 +309,7 @@
                           onsubmit="return confirm('¿Eliminar este formulario?')">
                         @csrf
                         @method('DELETE')
-                        <button type="submit" class="btn-ghost danger" style="width:100%;justify-content:center;">
+                        <button type="submit" class="btn-ghost danger" style="width:100%;justify-content:center;font-size:.82rem;padding:.4rem .75rem;">
                             <i class="bi bi-trash-fill"></i> Eliminar
                         </button>
                     </form>
@@ -344,9 +317,40 @@
                 </div>
             </div>
 
+            <!-- Indicadores compactos -->
+            <div class="glass-card" style="padding:.85rem 1rem;">
+                <h3 style="font-size:0.8rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:.6rem;">
+                    <i class="bi bi-bar-chart-fill"></i> Resumen
+                </h3>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem .6rem;background:rgba(79,70,229,0.06);border-radius:6px;">
+                        <span style="font-size:.72rem;color:var(--text-muted);">Total</span>
+                        <strong style="font-size:.95rem;color:var(--primary-color);">{{ $stats['total'] }}</strong>
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem .6rem;background:rgba(234,179,8,0.06);border-radius:6px;">
+                        <span style="font-size:.72rem;color:var(--text-muted);">Pend.</span>
+                        <strong style="font-size:.95rem;color:#d97706;">{{ $stats['pendientes'] }}</strong>
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem .6rem;background:rgba(34,197,94,0.06);border-radius:6px;">
+                        <span style="font-size:.72rem;color:var(--text-muted);">Aprob.</span>
+                        <strong style="font-size:.95rem;color:#16a34a;">{{ $stats['aprobadas'] }}</strong>
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem .6rem;background:rgba(239,68,68,0.06);border-radius:6px;">
+                        <span style="font-size:.72rem;color:var(--text-muted);">Rech.</span>
+                        <strong style="font-size:.95rem;color:#dc2626;">{{ $stats['rechazadas'] }}</strong>
+                    </div>
+                </div>
+                @if($stats['borradores'] > 0)
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:.35rem .6rem;background:rgba(107,114,128,0.05);border-radius:6px;margin-top:.4rem;">
+                    <span style="font-size:.72rem;color:var(--text-muted);">Borradores</span>
+                    <strong style="font-size:.85rem;color:var(--text-muted);">{{ $stats['borradores'] }}</strong>
+                </div>
+                @endif
+            </div>
+
             {{-- Panel de asignación --}}
             @if(auth()->user()->tieneAcceso('formularios', 'puede_editar'))
-            <div class="glass-card">
+            <div class="glass-card" style="padding:.85rem 1rem;">
                 <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:1rem;">
                     <i class="bi bi-people-fill"></i> Asignaciones
                     <span class="badge" style="margin-left:.3rem">{{ $asignados->count() }}</span>
@@ -463,7 +467,7 @@
     </div>
 
     {{-- ===== TABLA DE RESPUESTAS ===== --}}
-    <div class="glass-card" style="margin-top:1.5rem;">
+    <div id="seccion-respuestas" class="glass-card" style="margin-top:1.5rem;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.75rem;">
             <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin:0;">
                 <i class="bi bi-table"></i> Respuestas
