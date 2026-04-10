@@ -74,15 +74,37 @@
                     <tr>
                         <td><code>{{ $form->codigo }}</code></td>
                         <td>
-                            <a href="{{ route('formularios.show', $form) }}" style="color:var(--primary-color);text-decoration:none;">
-                                {{ $form->nombre }}
-                            </a>
-                            @if($form->requiere_aprobacion)
-                                <i class="bi bi-shield-check" style="color:var(--accent-color);font-size:.7rem" title="Requiere aprobación"></i>
-                            @endif
-                            @if($form->frecuencia)
-                                <span class="badge" style="font-size:.65rem;margin-left:.25rem">{{ ucfirst($form->frecuencia) }}</span>
-                            @endif
+                            <div>
+                                <a href="{{ route('formularios.show', $form) }}" style="color:var(--primary-color);text-decoration:none;font-weight:500;">
+                                    {{ $form->nombre }}
+                                </a>
+                                @if($form->requiere_aprobacion)
+                                    <i class="bi bi-shield-check" style="color:var(--accent-color);font-size:.7rem" title="Requiere aprobación"></i>
+                                @endif
+                                @if($form->frecuencia)
+                                    <span class="badge" style="font-size:.65rem;margin-left:.25rem">{{ ucfirst($form->frecuencia) }}</span>
+                                @endif
+                            </div>
+                            <div style="display:flex;gap:.5rem;margin-top:.3rem;flex-wrap:wrap;">
+                                <span style="display:inline-flex;align-items:center;gap:.2rem;font-size:.7rem;color:var(--text-muted);" title="Respuestas totales">
+                                    <i class="bi bi-chat-square-text"></i> {{ $form->respuestas_count }}
+                                </span>
+                                @if($form->respuestas_pendientes_count > 0)
+                                <span style="display:inline-flex;align-items:center;gap:.2rem;font-size:.7rem;color:#f59e0b;" title="Pendientes de aprobación">
+                                    <i class="bi bi-hourglass-split"></i> {{ $form->respuestas_pendientes_count }}
+                                </span>
+                                @endif
+                                @if($form->respuestas_aprobadas_count > 0)
+                                <span style="display:inline-flex;align-items:center;gap:.2rem;font-size:.7rem;color:#10b981;" title="Aprobadas">
+                                    <i class="bi bi-check-circle"></i> {{ $form->respuestas_aprobadas_count }}
+                                </span>
+                                @endif
+                                @if($form->asignaciones_count > 0)
+                                <span style="display:inline-flex;align-items:center;gap:.2rem;font-size:.7rem;color:var(--text-muted);" title="{{ $form->asignaciones_pendientes_count }} pendientes de {{ $form->asignaciones_count }} asignados">
+                                    <i class="bi bi-people"></i> {{ $form->asignaciones_pendientes_count }}/{{ $form->asignaciones_count }}
+                                </span>
+                                @endif
+                            </div>
                         </td>
                         <td>
                             @if($form->categoria)

@@ -15,7 +15,14 @@ class FormularioController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Formulario::with(['departamento', 'creador', 'categoria']);
+        $query = Formulario::with(['departamento', 'creador', 'categoria'])
+            ->withCount([
+                'respuestas',
+                'respuestas as respuestas_pendientes_count' => fn($q) => $q->where('estado', 'Pendiente'),
+                'respuestas as respuestas_aprobadas_count' => fn($q) => $q->where('estado', 'Aprobado'),
+                'asignaciones',
+                'asignaciones as asignaciones_pendientes_count' => fn($q) => $q->wherePivot('estado', 'Pendiente'),
+            ]);
 
         if ($request->filled('buscar')) {
             $q = str_replace(['%', '_'], ['\%', '\_'], $request->buscar);
