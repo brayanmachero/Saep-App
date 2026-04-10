@@ -315,6 +315,22 @@
                         <i class="bi bi-list-ul"></i> Ver Solicitudes
                     </a>
 
+                    @if(auth()->user()->tieneAcceso('formularios', 'puede_editar'))
+                    <form method="POST" action="{{ route('formularios.toggleActivo', $formulario) }}">
+                        @csrf
+                        @method('PATCH')
+                        @if($formulario->activo)
+                        <button type="submit" class="btn-ghost" style="width:100%;justify-content:center;" onclick="return confirm('¿Desactivar este formulario?')">
+                            <i class="bi bi-pause-circle"></i> Desactivar
+                        </button>
+                        @else
+                        <button type="submit" class="btn-premium" style="width:100%;justify-content:center;">
+                            <i class="bi bi-play-circle-fill"></i> Reactivar
+                        </button>
+                        @endif
+                    </form>
+                    @endif
+
                     @if(auth()->user()->tieneAcceso('formularios', 'puede_eliminar') && $stats['total'] === 0)
                     <form method="POST" action="{{ route('formularios.destroy', $formulario) }}"
                           onsubmit="return confirm('¿Eliminar este formulario?')">

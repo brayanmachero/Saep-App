@@ -156,7 +156,6 @@ class FormularioController extends Controller
             'requiere_aprobacion' => ['boolean'],
             'aprobador_rol_id'    => ['nullable', 'exists:roles,id'],
             'genera_pdf'          => ['boolean'],
-            'activo'              => ['boolean'],
             'fecha_inicio'        => ['nullable', 'date'],
             'fecha_fin'           => ['nullable', 'date', 'after_or_equal:fecha_inicio'],
             'frecuencia'          => ['nullable', 'in:unica,diaria,semanal,quincenal,mensual'],
@@ -185,7 +184,6 @@ class FormularioController extends Controller
             'categoria_id'        => $request->categoria_id,
             'schema_json'         => $request->schema_json,
             'version'             => $nueva_version,
-            'activo'              => $request->boolean('activo'),
             'fecha_inicio'        => $request->fecha_inicio,
             'fecha_fin'           => $request->fecha_fin,
             'frecuencia'          => $request->frecuencia,
@@ -196,6 +194,14 @@ class FormularioController extends Controller
 
         return redirect()->route('formularios.show', $formulario)
             ->with('success', "Formulario actualizado a versión {$nueva_version}.");
+    }
+
+    public function toggleActivo(Formulario $formulario)
+    {
+        $formulario->update(['activo' => !$formulario->activo]);
+        $estado = $formulario->activo ? 'activado' : 'desactivado';
+        return redirect()->route('formularios.show', $formulario)
+            ->with('success', "Formulario {$estado} correctamente.");
     }
 
     public function destroy(Formulario $formulario)

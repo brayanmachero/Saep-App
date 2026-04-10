@@ -137,6 +137,8 @@ Route::middleware('auth')->group(function () {
         Route::resource('formularios', FormularioController::class);
         Route::post('formularios/{formulario}/asignar', [FormularioController::class, 'asignar'])
             ->name('formularios.asignar');
+        Route::patch('formularios/{formulario}/toggle-activo', [FormularioController::class, 'toggleActivo'])
+            ->name('formularios.toggleActivo');
         Route::delete('formularios/{formulario}/desasignar/{user}', [FormularioController::class, 'desasignar'])
             ->name('formularios.desasignar');
         Route::get('formularios/{formulario}/campo-opciones/{campoId}', [CampoOpcionController::class, 'index'])
