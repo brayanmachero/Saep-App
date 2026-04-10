@@ -31,9 +31,11 @@
             <a href="{{ route('ley-karin-publico.inicio') }}" target="_blank" class="btn-ghost" title="Abrir formulario público de denuncia">
                 <i class="bi bi-box-arrow-up-right"></i> Formulario Público
             </a>
+            @if(auth()->user()->tieneAcceso('ley_karin', 'puede_crear'))
             <a href="{{ route('ley-karin.create') }}" class="btn-premium">
                 <i class="bi bi-plus-circle-fill"></i> Nueva Denuncia
             </a>
+            @endif
         </div>
     </div>
 
@@ -148,9 +150,11 @@
                                 <a href="{{ route('ley-karin.show', $caso) }}" class="icon-btn" title="Ver expediente">
                                     <i class="bi bi-folder2-open"></i>
                                 </a>
+                                @if(auth()->user()->tieneAcceso('ley_karin', 'puede_editar'))
                                 <a href="{{ route('ley-karin.edit', $caso) }}" class="icon-btn" title="Editar">
                                     <i class="bi bi-pencil-fill"></i>
                                 </a>
+                                @endif
                             </div>
                         </td>
                     </tr>

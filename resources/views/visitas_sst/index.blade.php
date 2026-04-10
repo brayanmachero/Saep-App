@@ -7,9 +7,11 @@
             <h2 class="page-heading">Visitas e Inspecciones SST</h2>
             <p class="page-subheading">Registro de visitas de campo y observaciones preventivas</p>
         </div>
+        @if(auth()->user()->tieneAcceso('visitas_sst', 'puede_crear'))
         <a href="{{ route('visitas-sst.create') }}" class="btn-premium">
             <i class="bi bi-plus-lg"></i> Nueva Visita
         </a>
+        @endif
     </div>
     @include('partials._alerts')
     <div class="glass-card">
@@ -33,14 +35,18 @@
                     <a href="{{ route('visitas-sst.show', $v) }}" class="icon-btn" title="Ver detalle">
                         <i class="bi bi-eye-fill"></i>
                     </a>
+                    @if(auth()->user()->tieneAcceso('visitas_sst', 'puede_editar'))
                     <a href="{{ route('visitas-sst.edit', $v) }}" class="icon-btn" title="Editar">
                         <i class="bi bi-pencil-fill"></i>
                     </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('visitas_sst', 'puede_eliminar'))
                     <form method="POST" action="{{ route('visitas-sst.destroy', $v) }}" style="display:inline"
                           onsubmit="return confirm('¿Eliminar esta visita?')">
                         @csrf @method('DELETE')
                         <button class="icon-btn danger"><i class="bi bi-trash-fill"></i></button>
                     </form>
+                    @endif
                 </td>
             </tr>
             @empty

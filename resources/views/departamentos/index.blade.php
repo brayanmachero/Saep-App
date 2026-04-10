@@ -12,9 +12,11 @@
             <h2 class="page-heading">Departamentos</h2>
             <p class="page-subheading">Organización de la empresa</p>
         </div>
+        @if(auth()->user()->tieneAcceso('departamentos', 'puede_crear'))
         <a href="{{ route('departamentos.create') }}" class="btn-premium">
             <i class="bi bi-building-add"></i> Nuevo Departamento
         </a>
+        @endif
     </div>
 
     <div class="glass-card">
@@ -46,11 +48,13 @@
                         </td>
                         <td>
                             <div style="display:flex;gap:0.25rem;">
+                                @if(auth()->user()->tieneAcceso('departamentos', 'puede_editar'))
                                 <a href="{{ route('departamentos.edit', $dep) }}" class="icon-btn" title="Editar"
                                     style="width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">
                                     <i class="bi bi-pencil-fill"></i>
                                 </a>
-                                @if($dep->users_count === 0)
+                                @endif
+                                @if(auth()->user()->tieneAcceso('departamentos', 'puede_eliminar') && $dep->users_count === 0)
                                 <form method="POST" action="{{ route('departamentos.destroy', $dep) }}"
                                     onsubmit="return confirm('¿Eliminar este departamento?')">
                                     @csrf @method('DELETE')

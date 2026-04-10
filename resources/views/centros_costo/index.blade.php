@@ -7,9 +7,11 @@
             <h2 class="page-heading">Centros de Costo</h2>
             <p class="page-subheading">Clientes donde SAEP presta servicios</p>
         </div>
+        @if(auth()->user()->tieneAcceso('centros_costo', 'puede_crear'))
         <a href="{{ route('centros-costo.create') }}" class="btn-premium">
             <i class="bi bi-plus-lg"></i> Nuevo Centro
         </a>
+        @endif
     </div>
     @include('partials._alerts')
     <div class="glass-card">
@@ -34,9 +36,12 @@
                     </span>
                 </td>
                 <td>
+                    @if(auth()->user()->tieneAcceso('centros_costo', 'puede_editar'))
                     <a href="{{ route('centros-costo.edit', $centro) }}" class="icon-btn" title="Editar">
                         <i class="bi bi-pencil-fill"></i>
                     </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('centros_costo', 'puede_eliminar'))
                     <form method="POST" action="{{ route('centros-costo.destroy', $centro) }}" style="display:inline"
                           onsubmit="return confirm('¿Desactivar este centro?')">
                         @csrf @method('DELETE')
@@ -44,6 +49,7 @@
                             <i class="bi bi-trash-fill"></i>
                         </button>
                     </form>
+                    @endif
                 </td>
             </tr>
             @empty

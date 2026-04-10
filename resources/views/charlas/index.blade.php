@@ -13,9 +13,11 @@
             <h2 class="page-heading"><i class="bi bi-megaphone-fill" style="color:#0056b3"></i> Charlas SST</h2>
             <p class="page-subheading">Gestión de charlas, capacitaciones e inducciones de seguridad</p>
         </div>
+        @if(auth()->user()->tieneAcceso('charlas', 'puede_crear'))
         <a href="{{ route('charlas.create') }}" class="btn-premium">
             <i class="bi bi-plus-circle-fill"></i> Nueva Charla
         </a>
+        @endif
     </div>
 
     <!-- Stats -->
@@ -150,9 +152,11 @@
                             <a href="{{ route('charlas.show', $charla) }}" class="icon-btn" title="Ver detalle">
                                 <i class="bi bi-eye-fill"></i>
                             </a>
+                            @if(auth()->user()->tieneAcceso('charlas', 'puede_editar'))
                             <a href="{{ route('charlas.edit', $charla) }}" class="icon-btn" title="Editar">
                                 <i class="bi bi-pencil-fill"></i>
                             </a>
+                            @endif
                             <a href="{{ route('pdf.charla', $charla) }}" class="icon-btn" target="_blank" title="Descargar PDF">
                                 <i class="bi bi-file-earmark-pdf-fill" style="color:#dc2626;"></i>
                             </a>

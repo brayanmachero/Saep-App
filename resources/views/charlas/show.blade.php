@@ -39,7 +39,7 @@
             <a href="{{ route('pdf.charla', $charla) }}" class="btn-secondary" target="_blank">
                 <i class="bi bi-file-earmark-pdf-fill" style="color:#dc2626;"></i> PDF
             </a>
-            @if($canEdit)
+            @if($canEdit && auth()->user()->tieneAcceso('charlas', 'puede_editar'))
             <a href="{{ route('charlas.edit', $charla) }}" class="btn-secondary">
                 <i class="bi bi-pencil-fill"></i> Editar
             </a>
@@ -80,7 +80,7 @@
     </div>
 
     <!-- Cambiar estado -->
-    @if($canEdit || $charla->estado === 'EN_CURSO')
+    @if(($canEdit || $charla->estado === 'EN_CURSO') && auth()->user()->tieneAcceso('charlas', 'puede_editar'))
     <div class="glass-card" style="margin-bottom:1.25rem;">
         <h3 style="font-size:0.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1rem;font-weight:700;">
             <i class="bi bi-arrow-repeat"></i> Cambiar Estado

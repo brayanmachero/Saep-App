@@ -7,9 +7,11 @@
             <h2 class="page-heading">Cargos</h2>
             <p class="page-subheading">Cargos y puestos de trabajo</p>
         </div>
+        @if(auth()->user()->tieneAcceso('cargos', 'puede_crear'))
         <a href="{{ route('cargos.create') }}" class="btn-premium">
             <i class="bi bi-plus-lg"></i> Nuevo Cargo
         </a>
+        @endif
     </div>
     @include('partials._alerts')
     <div class="glass-card">
@@ -29,9 +31,12 @@
                     </span>
                 </td>
                 <td>
+                    @if(auth()->user()->tieneAcceso('cargos', 'puede_editar'))
                     <a href="{{ route('cargos.edit', $cargo) }}" class="icon-btn" title="Editar">
                         <i class="bi bi-pencil-fill"></i>
                     </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('cargos', 'puede_eliminar'))
                     <form method="POST" action="{{ route('cargos.destroy', $cargo) }}" style="display:inline"
                           onsubmit="return confirm('¿Desactivar este cargo?')">
                         @csrf @method('DELETE')
@@ -39,6 +44,7 @@
                             <i class="bi bi-trash-fill"></i>
                         </button>
                     </form>
+                    @endif
                 </td>
             </tr>
             @empty

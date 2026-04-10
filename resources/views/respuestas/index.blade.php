@@ -16,9 +16,11 @@
             <a href="{{ route('respuestas.exportar', request()->query()) }}" class="btn-secondary">
                 <i class="bi bi-file-earmark-spreadsheet"></i> Exportar Excel
             </a>
+            @if(auth()->user()->tieneAcceso('respuestas', 'puede_crear'))
             <a href="{{ route('respuestas.create') }}" class="btn-premium">
                 <i class="bi bi-plus-circle-fill"></i> Nueva Solicitud
             </a>
+            @endif
         </div>
     </div>
 

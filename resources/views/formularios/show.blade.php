@@ -13,9 +13,11 @@
             <p class="page-subheading">Código: {{ $formulario->codigo }} &bull; v{{ $formulario->version }}</p>
         </div>
         <div style="display:flex;gap:0.75rem;">
+            @if(auth()->user()->tieneAcceso('formularios', 'puede_editar'))
             <a href="{{ route('formularios.edit', $formulario) }}" class="btn-secondary">
                 <i class="bi bi-pencil-fill"></i> Editar
             </a>
+            @endif
             <a href="{{ route('respuestas.create', ['formulario_id' => $formulario->id]) }}" class="btn-premium">
                 <i class="bi bi-plus-circle-fill"></i> Nueva Solicitud
             </a>
@@ -302,16 +304,18 @@
                        class="btn-premium" style="justify-content:center;">
                         <i class="bi bi-plus-circle-fill"></i> Nueva Solicitud
                     </a>
+                    @if(auth()->user()->tieneAcceso('formularios', 'puede_editar'))
                     <a href="{{ route('formularios.edit', $formulario) }}"
                        class="btn-secondary" style="justify-content:center;">
                         <i class="bi bi-pencil-fill"></i> Editar Formulario
                     </a>
+                    @endif
                     <a href="{{ route('respuestas.index', ['formulario_id' => $formulario->id]) }}"
                        class="btn-ghost" style="justify-content:center;">
                         <i class="bi bi-list-ul"></i> Ver Solicitudes
                     </a>
 
-                    @if($stats['total'] === 0)
+                    @if(auth()->user()->tieneAcceso('formularios', 'puede_eliminar') && $stats['total'] === 0)
                     <form method="POST" action="{{ route('formularios.destroy', $formulario) }}"
                           onsubmit="return confirm('¿Eliminar este formulario?')">
                         @csrf
@@ -325,6 +329,7 @@
             </div>
 
             {{-- Panel de asignación --}}
+            @if(auth()->user()->tieneAcceso('formularios', 'puede_editar'))
             <div class="glass-card">
                 <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:1rem;">
                     <i class="bi bi-people-fill"></i> Asignaciones
@@ -437,6 +442,7 @@
                     </div>
                 @endif
             </div>
+            @endif
         </div>
     </div>
 </div>

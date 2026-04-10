@@ -7,9 +7,11 @@
             <h2 class="page-heading">Categorías de Formularios</h2>
             <p style="color:var(--text-muted);margin:0">Agrupación de formularios Kizeo</p>
         </div>
+        @if(auth()->user()->tieneAcceso('categorias_formularios', 'puede_crear'))
         <a href="{{ route('categorias-formularios.create') }}" class="btn-premium">
             <i class="bi bi-plus-lg"></i> Nueva Categoría
         </a>
+        @endif
     </div>
     @include('partials._alerts')
     <div class="glass-card">
@@ -35,14 +37,18 @@
                     </span>
                 </td>
                 <td>
+                    @if(auth()->user()->tieneAcceso('categorias_formularios', 'puede_editar'))
                     <a href="{{ route('categorias-formularios.edit', $cat) }}" class="icon-btn" title="Editar">
                         <i class="bi bi-pencil-fill"></i>
                     </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('categorias_formularios', 'puede_eliminar'))
                     <form method="POST" action="{{ route('categorias-formularios.destroy', $cat) }}" style="display:inline"
                           onsubmit="return confirm('¿Eliminar esta categoría?')">
                         @csrf @method('DELETE')
                         <button class="icon-btn danger"><i class="bi bi-trash-fill"></i></button>
                     </form>
+                    @endif
                 </td>
             </tr>
             @empty

@@ -12,9 +12,11 @@
             <h2 class="page-heading">Gestión de Usuarios</h2>
             <p class="page-subheading">Administra los usuarios y sus permisos</p>
         </div>
+        @if(auth()->user()->tieneAcceso('usuarios', 'puede_crear'))
         <a href="{{ route('usuarios.create') }}" class="btn-premium">
             <i class="bi bi-person-plus-fill"></i> Nuevo Usuario
         </a>
+        @endif
     </div>
 
     <!-- Filtros -->
@@ -116,11 +118,13 @@
                         </td>
                         <td>
                             <div style="display:flex;gap:0.25rem;">
+                                @if(auth()->user()->tieneAcceso('usuarios', 'puede_editar'))
                                 <a href="{{ route('usuarios.edit', $usuario) }}" class="icon-btn" title="Editar"
                                     style="width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">
                                     <i class="bi bi-pencil-fill"></i>
                                 </a>
-                                @if($usuario->id !== auth()->id())
+                                @endif
+                                @if(auth()->user()->tieneAcceso('usuarios', 'puede_eliminar') && $usuario->id !== auth()->id())
                                 <form method="POST" action="{{ route('usuarios.destroy', $usuario) }}"
                                     onsubmit="return confirm('¿Desactivar este usuario?')">
                                     @csrf @method('DELETE')

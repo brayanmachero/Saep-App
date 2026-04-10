@@ -8,9 +8,11 @@
             <h2 class="page-heading"><i class="bi bi-calendar3" style="color:var(--primary-color)"></i> Carta Gantt SST</h2>
             <p class="page-subheading">Programas anuales de Seguridad y Salud en el Trabajo</p>
         </div>
+        @if(auth()->user()->tieneAcceso('carta_gantt', 'puede_crear'))
         <a href="{{ route('carta-gantt.create') }}" class="btn-premium">
             <i class="bi bi-plus-lg"></i> Nuevo Programa
         </a>
+        @endif
     </div>
 
     @include('partials._alerts')
@@ -101,11 +103,15 @@
                     <td>
                         <div style="display:flex;gap:.35rem;">
                             <a href="{{ route('carta-gantt.show', $prog) }}" class="icon-btn" title="Ver Gantt"><i class="bi bi-grid-3x3-gap-fill"></i></a>
+                            @if(auth()->user()->tieneAcceso('carta_gantt', 'puede_editar'))
                             <a href="{{ route('carta-gantt.edit', $prog) }}" class="icon-btn" title="Editar"><i class="bi bi-pencil-fill"></i></a>
+                            @endif
+                            @if(auth()->user()->tieneAcceso('carta_gantt', 'puede_eliminar'))
                             <form method="POST" action="{{ route('carta-gantt.destroy', $prog) }}" style="display:inline" onsubmit="return confirm('¿Cerrar este programa?')">
                                 @csrf @method('DELETE')
                                 <button class="icon-btn danger" title="Cerrar"><i class="bi bi-archive-fill"></i></button>
                             </form>
+                            @endif
                         </div>
                     </td>
                 </tr>

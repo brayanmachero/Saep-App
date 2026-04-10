@@ -12,9 +12,11 @@
             <h2 class="page-heading">Constructor de Formularios</h2>
             <p class="page-subheading">Diseña formularios dinámicos para tu organización</p>
         </div>
+        @if(auth()->user()->tieneAcceso('formularios', 'puede_crear'))
         <a href="{{ route('formularios.create') }}" class="btn-premium">
             <i class="bi bi-plus-circle-fill"></i> Nuevo Formulario
         </a>
+        @endif
     </div>
 
     <!-- Filtros -->
@@ -113,10 +115,13 @@
                                     style="width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">
                                     <i class="bi bi-eye-fill"></i>
                                 </a>
+                                @if(auth()->user()->tieneAcceso('formularios', 'puede_editar'))
                                 <a href="{{ route('formularios.edit', $form) }}" class="icon-btn" title="Editar"
                                     style="width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">
                                     <i class="bi bi-pencil-fill"></i>
                                 </a>
+                                @endif
+                                @if(auth()->user()->tieneAcceso('formularios', 'puede_eliminar'))
                                 <form method="POST" action="{{ route('formularios.destroy', $form) }}"
                                     onsubmit="return confirm('¿Eliminar/desactivar este formulario?')">
                                     @csrf @method('DELETE')
@@ -125,6 +130,7 @@
                                         <i class="bi bi-trash-fill"></i>
                                     </button>
                                 </form>
+                                @endif
                             </div>
                         </td>
                     </tr>

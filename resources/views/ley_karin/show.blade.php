@@ -15,9 +15,11 @@
             </p>
         </div>
         <div style="display:flex;gap:.5rem;">
+            @if(auth()->user()->tieneAcceso('ley_karin', 'puede_editar'))
             <a href="{{ route('ley-karin.edit', $leyKarin) }}" class="btn-premium">
                 <i class="bi bi-pencil-fill"></i> Editar
             </a>
+            @endif
             <a href="{{ route('ley-karin.index') }}" class="btn-ghost">
                 <i class="bi bi-arrow-left"></i> Volver
             </a>

@@ -7,9 +7,11 @@
             <h2 class="page-heading">Auditorías SST</h2>
             <p class="page-subheading">Auditorías internas y externas de Seguridad y Salud en el Trabajo</p>
         </div>
+        @if(auth()->user()->tieneAcceso('auditorias_sst', 'puede_crear'))
         <a href="{{ route('auditorias-sst.create') }}" class="btn-premium">
             <i class="bi bi-plus-lg"></i> Nueva Auditoría
         </a>
+        @endif
     </div>
     @include('partials._alerts')
     <div class="glass-card">
@@ -29,12 +31,16 @@
                 <td><span class="{{ $a->estadoBadge['class'] }}">{{ $a->estadoBadge['label'] }}</span></td>
                 <td>
                     <a href="{{ route('auditorias-sst.show', $a) }}" class="icon-btn"><i class="bi bi-eye-fill"></i></a>
+                    @if(auth()->user()->tieneAcceso('auditorias_sst', 'puede_editar'))
                     <a href="{{ route('auditorias-sst.edit', $a) }}" class="icon-btn"><i class="bi bi-pencil-fill"></i></a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('auditorias_sst', 'puede_eliminar'))
                     <form method="POST" action="{{ route('auditorias-sst.destroy', $a) }}" style="display:inline"
                           onsubmit="return confirm('¿Eliminar esta auditoría?')">
                         @csrf @method('DELETE')
                         <button class="icon-btn danger"><i class="bi bi-trash-fill"></i></button>
                     </form>
+                    @endif
                 </td>
             </tr>
             @empty
