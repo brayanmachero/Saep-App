@@ -128,7 +128,13 @@ class FormularioController extends Controller
         $cargos        = Cargo::where('activo', true)->orderBy('nombre')->get();
         $roles         = Rol::orderBy('nombre')->get();
 
-        return view('formularios.show', compact('formulario', 'schema', 'stats', 'asignados', 'usuariosDisp', 'departamentos', 'cargos', 'roles'));
+        // Cargar respuestas con relaciones para la tabla de detalle
+        $respuestas = $formulario->respuestas()
+            ->with(['usuario.departamento', 'aprobaciones.aprobador'])
+            ->latest()
+            ->get();
+
+        return view('formularios.show', compact('formulario', 'schema', 'stats', 'asignados', 'usuariosDisp', 'departamentos', 'cargos', 'roles', 'respuestas'));
     }
 
     public function edit(Formulario $formulario)

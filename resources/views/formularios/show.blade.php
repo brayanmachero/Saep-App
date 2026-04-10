@@ -445,7 +445,156 @@
             @endif
         </div>
     </div>
+
+    {{-- ===== TABLA DE RESPUESTAS ===== --}}
+    <div class="glass-card" style="margin-top:1.5rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.75rem;">
+            <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin:0;">
+                <i class="bi bi-table"></i> Respuestas
+                <span class="badge" style="margin-left:.3rem">{{ $respuestas->count() }}</span>
+            </h3>
+            <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+                <input type="text" id="resp-search" placeholder="Buscar..." class="form-input" style="font-size:.8rem;padding:.35rem .65rem;width:180px;">
+                <select id="resp-filter-estado" class="form-input" style="font-size:.8rem;padding:.35rem .65rem;width:140px;">
+                    <option value="">Todos los estados</option>
+                    <option value="Pendiente">Pendiente</option>
+                    <option value="Aprobado">Aprobado</option>
+                    <option value="Rechazado">Rechazado</option>
+                    <option value="Borrador">Borrador</option>
+                    <option value="Revisión">Revisión</option>
+                </select>
+                <a href="{{ route('respuestas.exportar', ['formulario_id' => $formulario->id]) }}" class="btn-secondary" style="font-size:.78rem;padding:.35rem .65rem;">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> Excel
+                </a>
+            </div>
+        </div>
+
+        @if($respuestas->isEmpty())
+            <div style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted);">
+                <i class="bi bi-inbox" style="font-size:2.5rem;display:block;margin-bottom:.5rem;opacity:.4"></i>
+                <p style="margin:0;font-size:.9rem;">No hay respuestas aún</p>
+                <a href="{{ route('respuestas.create', ['formulario_id' => $formulario->id]) }}" class="btn-premium" style="margin-top:1rem;display:inline-flex;">
+                    <i class="bi bi-plus-circle-fill"></i> Crear primera solicitud
+                </a>
+            </div>
+        @else
+            @php
+                $badgeMap = ['Pendiente'=>'warning','Aprobado'=>'success','Rechazado'=>'danger','Borrador'=>'','Revisión'=>'warning'];
+                // Get first 4 non-divider fields for compact table columns
+                $tableCols = collect($schema)->filter(fn($f) => $f['type'] !== 'divider' && $f['type'] !== 'signature')->take(4)->values();
+            @endphp
+            <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+                <table class="saep-table" style="width:100%;font-size:.82rem;border-collapse:collapse;">
+                    <thead>
+                        <tr>
+                            <th style="padding:.55rem .65rem;text-align:left;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);border-bottom:2px solid var(--surface-border);white-space:nowrap;">ID</th>
+                            <th style="padding:.55rem .65rem;text-align:left;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);border-bottom:2px solid var(--surface-border);white-space:nowrap;">Solicitante</th>
+                            @foreach($tableCols as $col)
+                            <th style="padding:.55rem .65rem;text-align:left;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);border-bottom:2px solid var(--surface-border);white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;">{{ $col['label'] }}</th>
+                            @endforeach
+                            <th style="padding:.55rem .65rem;text-align:left;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);border-bottom:2px solid var(--surface-border);white-space:nowrap;">Estado</th>
+                            <th style="padding:.55rem .65rem;text-align:left;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);border-bottom:2px solid var(--surface-border);white-space:nowrap;">Fecha</th>
+                            <th style="padding:.55rem .65rem;text-align:center;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);border-bottom:2px solid var(--surface-border);white-space:nowrap;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resp-tbody">
+                        @foreach($respuestas as $resp)
+                        @php $datos = json_decode($resp->datos_json ?? '{}', true); @endphp
+                        <tr class="resp-row" data-estado="{{ $resp->estado }}" data-search="{{ strtolower(($resp->usuario->name ?? '') . ' ' . ($resp->usuario->apellido_paterno ?? '') . ' REQ-' . str_pad($resp->id, 4, '0', STR_PAD_LEFT)) }}" style="cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface-bg,#f8fafc)'" onmouseleave="this.style.background='transparent'">
+                            <td style="padding:.55rem .65rem;border-bottom:1px solid var(--surface-border);white-space:nowrap;font-weight:600;color:var(--primary-color);">
+                                #REQ-{{ str_pad($resp->id, 4, '0', STR_PAD_LEFT) }}
+                            </td>
+                            <td style="padding:.55rem .65rem;border-bottom:1px solid var(--surface-border);white-space:nowrap;">
+                                <div style="display:flex;align-items:center;gap:.4rem;">
+                                    <div style="width:26px;height:26px;border-radius:50%;background:rgba(79,70,229,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                        <i class="bi bi-person-fill" style="font-size:.7rem;color:var(--primary-color)"></i>
+                                    </div>
+                                    <div>
+                                        <span style="font-size:.82rem;">{{ $resp->usuario->name ?? 'Sin usuario' }} {{ $resp->usuario->apellido_paterno ?? '' }}</span>
+                                        <span style="display:block;font-size:.68rem;color:var(--text-muted);">{{ $resp->usuario->departamento->nombre ?? '' }}</span>
+                                    </div>
+                                </div>
+                            </td>
+                            @foreach($tableCols as $col)
+                            <td style="padding:.55rem .65rem;border-bottom:1px solid var(--surface-border);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                                @php $v = $datos[$col['id']] ?? null; @endphp
+                                @if($col['type'] === 'file')
+                                    @if($v && is_array($v) && isset($v['name']))
+                                        <i class="bi bi-paperclip" style="color:var(--accent-color)"></i> {{ Str::limit($v['name'], 20) }}
+                                    @else — @endif
+                                @elseif(is_array($v))
+                                    {{ Str::limit(implode(', ', $v), 30) }}
+                                @else
+                                    {{ Str::limit((string)$v, 30) ?: '—' }}
+                                @endif
+                            </td>
+                            @endforeach
+                            <td style="padding:.55rem .65rem;border-bottom:1px solid var(--surface-border);white-space:nowrap;">
+                                <span class="badge {{ $badgeMap[$resp->estado] ?? '' }}" style="font-size:.7rem;">{{ $resp->estado }}</span>
+                            </td>
+                            <td style="padding:.55rem .65rem;border-bottom:1px solid var(--surface-border);white-space:nowrap;font-size:.78rem;color:var(--text-muted);">
+                                {{ $resp->created_at->format('d/m/Y H:i') }}
+                            </td>
+                            <td style="padding:.55rem .65rem;border-bottom:1px solid var(--surface-border);text-align:center;white-space:nowrap;">
+                                <button type="button" class="icon-btn" style="width:28px;height:28px;" title="Ver detalle" onclick="openDrawer({{ $resp->id }})">
+                                    <i class="bi bi-eye-fill" style="font-size:.75rem;"></i>
+                                </button>
+                                <a href="{{ route('respuestas.show', $resp) }}" class="icon-btn" style="width:28px;height:28px;text-decoration:none;" title="Abrir completo">
+                                    <i class="bi bi-box-arrow-up-right" style="font-size:.7rem;"></i>
+                                </a>
+                                <a href="{{ route('pdf.respuesta', $resp) }}" class="icon-btn" style="width:28px;height:28px;text-decoration:none;" target="_blank" title="Descargar PDF">
+                                    <i class="bi bi-file-earmark-pdf" style="font-size:.7rem;"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </div>
+
+    {{-- ===== DRAWER DE DETALLE ===== --}}
+    <div id="resp-drawer-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:999;transition:opacity .3s;" onclick="closeDrawer()"></div>
+    <div id="resp-drawer" style="display:none;position:fixed;top:0;right:-480px;width:480px;max-width:100vw;height:100vh;background:var(--card-bg,#fff);border-left:1px solid var(--border-color,#e2e8f0);box-shadow:-8px 0 30px rgba(0,0,0,.12);z-index:1000;overflow-y:auto;transition:right .3s ease;">
+        <div style="position:sticky;top:0;background:var(--card-bg,#fff);border-bottom:1px solid var(--border-color,#e2e8f0);padding:.85rem 1.25rem;display:flex;align-items:center;justify-content:space-between;z-index:1;">
+            <h3 id="drawer-title" style="font-size:.95rem;font-weight:600;margin:0;color:var(--text-color);">Detalle</h3>
+            <button type="button" class="icon-btn" onclick="closeDrawer()" style="width:30px;height:30px;">
+                <i class="bi bi-x-lg" style="font-size:.8rem;"></i>
+            </button>
+        </div>
+        <div id="drawer-content" style="padding:1.25rem;">
+            {{-- Se llena dinámicamente --}}
+        </div>
+    </div>
 </div>
+
+{{-- JSON de datos para el drawer --}}
+<script>
+    window.__respuestas = @json($respuestas->map(function($r) use ($schema) {
+        $datos = json_decode($r->datos_json ?? '{}', true);
+        return [
+            'id' => $r->id,
+            'req' => '#REQ-' . str_pad($r->id, 4, '0', STR_PAD_LEFT),
+            'estado' => $r->estado,
+            'usuario' => ($r->usuario->name ?? 'Sin usuario') . ' ' . ($r->usuario->apellido_paterno ?? ''),
+            'departamento' => $r->usuario->departamento->nombre ?? '',
+            'version' => $r->version_form,
+            'fecha' => $r->created_at->format('d/m/Y H:i'),
+            'fecha_resolucion' => $r->fecha_resolucion ? \Carbon\Carbon::parse($r->fecha_resolucion)->format('d/m/Y H:i') : null,
+            'datos' => $datos,
+            'aprobaciones' => $r->aprobaciones->map(fn($a) => [
+                'aprobador' => $a->aprobador->name ?? '—',
+                'accion' => $a->accion,
+                'comentario' => $a->comentario,
+                'fecha' => $a->created_at->format('d/m/Y H:i'),
+            ]),
+            'show_url' => route('respuestas.show', $r),
+            'pdf_url' => route('pdf.respuesta', $r),
+        ];
+    }));
+    window.__schema = @json(collect($schema)->filter(fn($f) => $f['type'] !== 'divider')->values());
+</script>
 @endsection
 
 @push('scripts')
@@ -486,5 +635,132 @@ window.toggleVersionDetail = function(id) {
         chevron.style.transform = '';
     }
 };
+
+// ===== Drawer =====
+const overlay = document.getElementById('resp-drawer-overlay');
+const drawer = document.getElementById('resp-drawer');
+const drawerTitle = document.getElementById('drawer-title');
+const drawerContent = document.getElementById('drawer-content');
+
+window.openDrawer = function(id) {
+    const r = (window.__respuestas || []).find(x => x.id === id);
+    if (!r) return;
+
+    const badgeColor = {Pendiente:'#d97706',Aprobado:'#16a34a',Rechazado:'#dc2626',Borrador:'#6b7280','Revisión':'#d97706'};
+    const badgeBg = {Pendiente:'rgba(234,179,8,.1)',Aprobado:'rgba(34,197,94,.1)',Rechazado:'rgba(239,68,68,.1)',Borrador:'rgba(107,114,128,.1)','Revisión':'rgba(234,179,8,.1)'};
+
+    let html = '';
+
+    // Header info
+    html += `<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border-color,#e2e8f0);">
+        <div style="flex:1;">
+            <span style="font-size:1.1rem;font-weight:700;color:var(--primary-color);">${r.req}</span>
+            <span style="display:inline-block;margin-left:.5rem;font-size:.72rem;padding:.2rem .5rem;border-radius:6px;background:${badgeBg[r.estado]||'#f1f5f9'};color:${badgeColor[r.estado]||'#6b7280'};font-weight:600;">${r.estado}</span>
+        </div>
+        <a href="${r.pdf_url}" target="_blank" style="text-decoration:none;display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;color:#ef4444;padding:.3rem .6rem;border-radius:8px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);">
+            <i class="bi bi-file-earmark-pdf-fill"></i> PDF
+        </a>
+    </div>`;
+
+    // Meta info
+    html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1.25rem;">
+        <div style="padding:.5rem .65rem;background:rgba(79,70,229,.04);border-radius:8px;">
+            <p style="font-size:.68rem;color:var(--text-muted);margin:0;">Solicitante</p>
+            <p style="font-size:.82rem;font-weight:500;margin:.1rem 0 0;">${r.usuario}</p>
+            <p style="font-size:.7rem;color:var(--text-muted);margin:0;">${r.departamento}</p>
+        </div>
+        <div style="padding:.5rem .65rem;background:rgba(79,70,229,.04);border-radius:8px;">
+            <p style="font-size:.68rem;color:var(--text-muted);margin:0;">Fecha envío</p>
+            <p style="font-size:.82rem;font-weight:500;margin:.1rem 0 0;">${r.fecha}</p>
+            ${r.fecha_resolucion ? `<p style="font-size:.7rem;color:var(--text-muted);margin:0;">Resuelto: ${r.fecha_resolucion}</p>` : ''}
+        </div>
+    </div>`;
+
+    // All fields
+    html += `<h4 style="font-size:.78rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:.04em;margin:0 0 .75rem;"><i class="bi bi-clipboard-data"></i> Datos ingresados</h4>`;
+    (window.__schema || []).forEach(f => {
+        const val = r.datos[f.id] ?? null;
+        let rendered = '';
+        if (f.type === 'signature') {
+            rendered = val ? `<img src="${val}" alt="Firma" style="max-width:180px;border:1px solid var(--surface-border);border-radius:6px;">` : '<span style="color:var(--text-muted);font-style:italic;">Sin firma</span>';
+        } else if (f.type === 'file') {
+            if (val && typeof val === 'object' && val.path) {
+                const size = val.size ? ` (${Math.round(val.size/1024)} KB)` : '';
+                rendered = `<a href="/storage/${val.path}" target="_blank" style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--accent-color);text-decoration:none;padding:.3rem .6rem;background:rgba(79,70,229,.05);border:1px solid rgba(79,70,229,.15);border-radius:6px;">
+                    <i class="bi bi-download"></i> ${val.name || 'Descargar'}${size}
+                </a>`;
+            } else {
+                rendered = '<span style="color:var(--text-muted);font-style:italic;">Sin archivo</span>';
+            }
+        } else if (Array.isArray(val)) {
+            rendered = `<span style="font-size:.85rem;">${val.join(', ') || '—'}</span>`;
+        } else {
+            rendered = `<span style="font-size:.85rem;">${val || '—'}</span>`;
+        }
+        html += `<div style="margin-bottom:.85rem;padding-bottom:.65rem;border-bottom:1px solid rgba(0,0,0,.04);">
+            <label style="display:block;font-size:.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;">${f.label}</label>
+            ${rendered}
+        </div>`;
+    });
+
+    // Approvals timeline
+    if (r.aprobaciones && r.aprobaciones.length > 0) {
+        html += `<h4 style="font-size:.78rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:.04em;margin:1.25rem 0 .75rem;padding-top:.75rem;border-top:1px solid var(--border-color,#e2e8f0);"><i class="bi bi-clock-history"></i> Historial de aprobación</h4>`;
+        r.aprobaciones.forEach(a => {
+            const aColor = {Aprobado:'#16a34a',Rechazado:'#dc2626','Revisión':'#d97706',Comentario:'#6b7280'}[a.accion] || '#6b7280';
+            const aIcon = {Aprobado:'bi-check-circle-fill',Rechazado:'bi-x-circle-fill','Revisión':'bi-arrow-repeat',Comentario:'bi-chat-dots-fill'}[a.accion] || 'bi-chat-dots';
+            html += `<div style="display:flex;gap:.6rem;margin-bottom:.65rem;padding:.5rem .65rem;background:rgba(${aColor === '#16a34a' ? '34,197,94' : aColor === '#dc2626' ? '239,68,68' : '234,179,8'},.04);border-radius:8px;border-left:3px solid ${aColor};">
+                <i class="bi ${aIcon}" style="color:${aColor};margin-top:.1rem;"></i>
+                <div style="flex:1;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-size:.82rem;font-weight:500;">${a.aprobador}</span>
+                        <span style="font-size:.68rem;color:var(--text-muted);">${a.fecha}</span>
+                    </div>
+                    <span style="font-size:.72rem;font-weight:600;color:${aColor};">${a.accion}</span>
+                    ${a.comentario ? `<p style="font-size:.78rem;color:var(--text-muted);margin:.2rem 0 0;">${a.comentario}</p>` : ''}
+                </div>
+            </div>`;
+        });
+    }
+
+    // Footer action
+    html += `<div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border-color,#e2e8f0);display:flex;gap:.5rem;">
+        <a href="${r.show_url}" class="btn-premium" style="flex:1;justify-content:center;font-size:.82rem;"><i class="bi bi-eye-fill"></i> Ver completo</a>
+        <a href="${r.pdf_url}" target="_blank" class="btn-secondary" style="font-size:.82rem;"><i class="bi bi-download"></i> PDF</a>
+    </div>`;
+
+    drawerTitle.textContent = r.req + ' — ' + r.usuario;
+    drawerContent.innerHTML = html;
+
+    overlay.style.display = 'block';
+    drawer.style.display = 'block';
+    requestAnimationFrame(() => { drawer.style.right = '0'; });
+};
+
+window.closeDrawer = function() {
+    drawer.style.right = '-480px';
+    setTimeout(() => {
+        overlay.style.display = 'none';
+        drawer.style.display = 'none';
+    }, 300);
+};
+
+// Close drawer on Escape
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+// ===== Table search & filter =====
+const searchInput = document.getElementById('resp-search');
+const filterEstado = document.getElementById('resp-filter-estado');
+function filterTable() {
+    const q = (searchInput?.value || '').toLowerCase();
+    const estado = filterEstado?.value || '';
+    document.querySelectorAll('.resp-row').forEach(row => {
+        const matchSearch = !q || (row.dataset.search || '').includes(q);
+        const matchEstado = !estado || row.dataset.estado === estado;
+        row.style.display = matchSearch && matchEstado ? '' : 'none';
+    });
+}
+searchInput?.addEventListener('input', filterTable);
+filterEstado?.addEventListener('change', filterTable);
 </script>
 @endpush
