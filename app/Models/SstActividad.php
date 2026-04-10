@@ -11,6 +11,7 @@ class SstActividad extends Model
     protected $fillable = [
         'categoria_id', 'nombre', 'descripcion', 'responsable', 'responsable_id',
         'orden', 'fecha_inicio', 'fecha_fin', 'prioridad', 'estado', 'periodicidad',
+        'cantidad_programada',
     ];
 
     protected $casts = [
@@ -145,12 +146,13 @@ class SstActividad extends Model
 
     public function getSeguimientoPorMesAttribute(): array
     {
-        $meses = array_fill(1, 12, ['programado' => false, 'realizado' => false, 'observacion' => null]);
+        $meses = array_fill(1, 12, ['programado' => false, 'realizado' => false, 'observacion' => null, 'cantidad_realizada' => 0]);
         foreach ($this->seguimiento as $s) {
             $meses[$s->mes] = [
-                'programado'  => (bool) $s->programado,
-                'realizado'   => (bool) $s->realizado,
-                'observacion' => $s->observacion,
+                'programado'          => (bool) $s->programado,
+                'realizado'           => (bool) $s->realizado,
+                'observacion'         => $s->observacion,
+                'cantidad_realizada'  => (int) $s->cantidad_realizada,
             ];
         }
         return $meses;

@@ -38,12 +38,20 @@ class ProgramaSst extends Model
     // === Stats ===
     public function getPorcentajeRealizadoAttribute(): int
     {
-        $seguimiento = SstSeguimiento::whereHas('actividad', fn($q) =>
+        $seguimientos = SstSeguimiento::whereHas('actividad', fn($q) =>
             $q->whereHas('categoria', fn($q2) => $q2->where('programa_id', $this->id))
-        );
-        $programados = (clone $seguimiento)->where('programado', true)->count();
-        $realizados  = (clone $seguimiento)->where('realizado', true)->count();
-        return $programados > 0 ? (int) round($realizados / $programados * 100) : 0;
+        )->where('programado', true)
+         ->with('actividad')
+         ->get();
+
+        $totalProg = 0;
+        $totalReal = 0;
+        foreach ($seguimientos as $s) {
+            $cant = max(1, (int) ($s->actividad->cantidad_programada ?? 1));
+            $totalProg += $cant;
+            $totalReal += (int) ($s->cantidad_realizada ?? ($s->realizado ? $cant : 0));
+        }
+        return $totalProg > 0 ? (int) round($totalReal / $totalProg * 100) : 0;
     }
 
     public function getEstadoBadgeAttribute(): string

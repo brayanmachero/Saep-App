@@ -48,7 +48,7 @@
 body.dark-mode .sst-mes-actual{background:rgba(99,102,241,.1)!important}
 
 /* Gantt cells */
-.gantt-cell{width:28px;height:28px;border-radius:6px;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;transition:all .2s}
+.gantt-cell{min-width:28px;height:28px;border-radius:6px;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;transition:all .2s;padding:0 3px}
 .gantt-plan{background:rgba(99,102,241,.1);color:#6366f1;border:1.5px solid rgba(99,102,241,.25)}
 .gantt-plan:hover{background:rgba(99,102,241,.2);transform:scale(1.1)}
 .gantt-done{background:rgba(16,185,129,.15);color:#10b981;border:1.5px solid rgba(16,185,129,.3)}
@@ -56,6 +56,8 @@ body.dark-mode .sst-mes-actual{background:rgba(99,102,241,.1)!important}
 .gantt-overdue{background:rgba(239,68,68,.12);color:#ef4444;border:1.5px solid rgba(239,68,68,.3);animation:pulse-overdue 2s ease-in-out infinite}
 .gantt-overdue:hover{background:rgba(239,68,68,.2);transform:scale(1.1)}
 @keyframes pulse-overdue{0%,100%{opacity:1}50%{opacity:.65}}
+.gantt-partial{background:rgba(245,158,11,.12);color:#f59e0b;border:1.5px solid rgba(245,158,11,.3);font-size:.55rem}
+.gantt-partial:hover{background:rgba(245,158,11,.2);transform:scale(1.1)}
 
 /* Activity row hover */
 .sst-act-row:hover td{background-color:rgba(99,102,241,.03)}
@@ -121,5 +123,6 @@ body.dark-mode .sst-btn-danger{background:rgba(220,38,38,.15);color:#f87171;bord
 body.dark-mode .gantt-plan{background:rgba(99,102,241,.15);border-color:rgba(99,102,241,.35)}
 body.dark-mode .gantt-done{background:rgba(16,185,129,.2);border-color:rgba(16,185,129,.4)}
 body.dark-mode .gantt-overdue{background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.4)}
+body.dark-mode .gantt-partial{background:rgba(245,158,11,.18);border-color:rgba(245,158,11,.4)}
 body.dark-mode .sst-planes-row td{background:var(--bg-color)}
 </style>

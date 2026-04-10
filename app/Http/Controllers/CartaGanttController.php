@@ -166,28 +166,30 @@ class CartaGanttController extends Controller
     public function storeActividad(Request $request, SstCategoria $categoria)
     {
         $request->validate([
-            'nombre'         => 'required|string|max:300',
-            'responsable_id' => 'nullable|exists:users,id',
-            'fecha_inicio'   => 'nullable|date',
-            'fecha_fin'      => 'nullable|date|after_or_equal:fecha_inicio',
-            'prioridad'      => 'nullable|string|in:ALTA,MEDIA,BAJA',
-            'periodicidad'   => 'nullable|string|in:' . implode(',', array_keys(SstActividad::periodicidadesMap())),
-            'meses_prog'     => 'nullable|array',
-            'meses_prog.*'   => 'integer|min:1|max:12',
+            'nombre'              => 'required|string|max:300',
+            'responsable_id'      => 'nullable|exists:users,id',
+            'fecha_inicio'        => 'nullable|date',
+            'fecha_fin'           => 'nullable|date|after_or_equal:fecha_inicio',
+            'prioridad'           => 'nullable|string|in:ALTA,MEDIA,BAJA',
+            'periodicidad'        => 'nullable|string|in:' . implode(',', array_keys(SstActividad::periodicidadesMap())),
+            'meses_prog'          => 'nullable|array',
+            'meses_prog.*'        => 'integer|min:1|max:12',
+            'cantidad_programada' => 'nullable|integer|min:1|max:999',
         ]);
 
         $actividad = $categoria->actividades()->create([
-            'nombre'         => $request->nombre,
-            'descripcion'    => $request->descripcion,
-            'responsable'    => $request->responsable_id
+            'nombre'              => $request->nombre,
+            'descripcion'         => $request->descripcion,
+            'responsable'         => $request->responsable_id
                 ? User::find($request->responsable_id)?->nombre_completo
                 : $request->responsable_nombre,
-            'responsable_id' => $request->responsable_id,
-            'fecha_inicio'   => $request->fecha_inicio,
-            'fecha_fin'      => $request->fecha_fin,
-            'prioridad'      => $request->prioridad ?? 'MEDIA',
-            'periodicidad'   => $request->periodicidad,
-            'orden'          => $categoria->actividades()->max('orden') + 1,
+            'responsable_id'      => $request->responsable_id,
+            'fecha_inicio'        => $request->fecha_inicio,
+            'fecha_fin'           => $request->fecha_fin,
+            'prioridad'           => $request->prioridad ?? 'MEDIA',
+            'periodicidad'        => $request->periodicidad,
+            'cantidad_programada' => $request->cantidad_programada ?? 1,
+            'orden'               => $categoria->actividades()->max('orden') + 1,
         ]);
 
         // Si hay periodicidad sin meses manuales: auto-calcular meses programados
@@ -231,29 +233,31 @@ class CartaGanttController extends Controller
     public function updateActividad(Request $request, SstActividad $actividad)
     {
         $request->validate([
-            'nombre'         => 'required|string|max:300',
-            'responsable_id' => 'nullable|exists:users,id',
-            'fecha_inicio'   => 'nullable|date',
-            'fecha_fin'      => 'nullable|date|after_or_equal:fecha_inicio',
-            'prioridad'      => 'nullable|string|in:ALTA,MEDIA,BAJA',
-            'estado'         => 'nullable|string|in:' . implode(',', array_keys(SstActividad::estadosMap())),
-            'periodicidad'   => 'nullable|string|in:' . implode(',', array_keys(SstActividad::periodicidadesMap())),
-            'meses_prog'     => 'nullable|array',
-            'meses_prog.*'   => 'integer|min:1|max:12',
+            'nombre'              => 'required|string|max:300',
+            'responsable_id'      => 'nullable|exists:users,id',
+            'fecha_inicio'        => 'nullable|date',
+            'fecha_fin'           => 'nullable|date|after_or_equal:fecha_inicio',
+            'prioridad'           => 'nullable|string|in:ALTA,MEDIA,BAJA',
+            'estado'              => 'nullable|string|in:' . implode(',', array_keys(SstActividad::estadosMap())),
+            'periodicidad'        => 'nullable|string|in:' . implode(',', array_keys(SstActividad::periodicidadesMap())),
+            'meses_prog'          => 'nullable|array',
+            'meses_prog.*'        => 'integer|min:1|max:12',
+            'cantidad_programada' => 'nullable|integer|min:1|max:999',
         ]);
 
         $actividad->update([
-            'nombre'         => $request->nombre,
-            'descripcion'    => $request->descripcion,
-            'responsable'    => $request->responsable_id
+            'nombre'              => $request->nombre,
+            'descripcion'         => $request->descripcion,
+            'responsable'         => $request->responsable_id
                 ? User::find($request->responsable_id)?->nombre_completo
                 : ($request->responsable_nombre ?? $actividad->responsable),
-            'responsable_id' => $request->responsable_id,
-            'fecha_inicio'   => $request->fecha_inicio,
-            'fecha_fin'      => $request->fecha_fin,
-            'prioridad'      => $request->prioridad ?? $actividad->prioridad,
-            'estado'         => $request->estado ?? $actividad->estado,
-            'periodicidad'   => $request->periodicidad,
+            'responsable_id'      => $request->responsable_id,
+            'fecha_inicio'        => $request->fecha_inicio,
+            'fecha_fin'           => $request->fecha_fin,
+            'prioridad'           => $request->prioridad ?? $actividad->prioridad,
+            'estado'              => $request->estado ?? $actividad->estado,
+            'periodicidad'        => $request->periodicidad,
+            'cantidad_programada' => $request->cantidad_programada ?? $actividad->cantidad_programada,
         ]);
 
         // Actualizar meses programados si se enviaron checkboxes
@@ -298,15 +302,26 @@ class CartaGanttController extends Controller
             'observacion' => 'nullable|string|max:1000',
         ]);
 
-        // Toggle: buscar estado actual y alternar
+        $cantProg = max(1, (int) $actividad->cantidad_programada);
         $seg = $actividad->seguimiento()->where('mes', $request->mes)->first();
-        $nuevoRealizado = $seg ? !$seg->realizado : true;
+
+        if ($cantProg <= 1) {
+            // Comportamiento original: toggle binario
+            $nuevoRealizado = $seg ? !$seg->realizado : true;
+            $nuevaCantReal  = $nuevoRealizado ? 1 : 0;
+        } else {
+            // Contador: incrementar, si llega al máximo → resetear a 0
+            $cantActual    = $seg ? (int) $seg->cantidad_realizada : 0;
+            $nuevaCantReal = $cantActual >= $cantProg ? 0 : $cantActual + 1;
+            $nuevoRealizado = $nuevaCantReal >= $cantProg;
+        }
 
         $actividad->seguimiento()->updateOrCreate(
             ['mes' => $request->mes],
             [
                 'programado'          => true,
                 'realizado'           => $nuevoRealizado,
+                'cantidad_realizada'  => $nuevaCantReal,
                 'observacion'         => $request->observacion,
                 'actualizado_por'     => auth()->id(),
                 'fecha_actualizacion' => now(),
@@ -316,9 +331,11 @@ class CartaGanttController extends Controller
         $this->recalcularEstadoActividad($actividad);
 
         return response()->json([
-            'success'   => true,
-            'realizado' => $nuevoRealizado,
-            'estado'    => $actividad->fresh()->estado,
+            'success'            => true,
+            'realizado'          => $nuevoRealizado,
+            'cantidad_realizada' => $nuevaCantReal,
+            'cantidad_programada'=> $cantProg,
+            'estado'             => $actividad->fresh()->estado,
         ]);
     }
 
@@ -475,9 +492,15 @@ class CartaGanttController extends Controller
         $programados = $actividad->seguimiento->where('programado', true)->count();
         $realizados  = $actividad->seguimiento->where('realizado', true)->count();
 
+        // También considerar progreso parcial (cantidad_realizada > 0 aunque no esté 100% realizado)
+        $conProgresoParcial = $actividad->seguimiento
+            ->where('programado', true)
+            ->filter(fn($s) => (int) $s->cantidad_realizada > 0)
+            ->count();
+
         if ($programados > 0 && $realizados >= $programados) {
             $actividad->update(['estado' => 'COMPLETADA']);
-        } elseif ($realizados > 0) {
+        } elseif ($realizados > 0 || $conProgresoParcial > 0) {
             $actividad->update(['estado' => 'EN_PROGRESO']);
         } elseif ($programados > 0) {
             $actividad->update(['estado' => 'PENDIENTE']);
@@ -490,8 +513,8 @@ class CartaGanttController extends Controller
 
     public function descargarPlantilla()
     {
-        $headers = ['categoria', 'nombre', 'responsable_email', 'prioridad', 'periodicidad', 'fecha_inicio', 'fecha_fin', 'meses_programados'];
-        $ejemplo = ['Capacitaciones', 'Inducción SST nuevos trabajadores', 'bmachero@saep.cl', 'ALTA', 'MENSUAL', '2026-01-15', '2026-12-31', '1,3,6,9,12'];
+        $headers = ['categoria', 'nombre', 'responsable_email', 'prioridad', 'periodicidad', 'cantidad', 'fecha_inicio', 'fecha_fin', 'meses_programados'];
+        $ejemplo = ['Capacitaciones', 'Inducción SST nuevos trabajadores', 'bmachero@saep.cl', 'ALTA', 'MENSUAL', '4', '2026-01-15', '2026-12-31', '1,3,6,9,12'];
 
         $callback = function () use ($headers, $ejemplo) {
             $f = fopen('php://output', 'w');
@@ -585,14 +608,15 @@ class CartaGanttController extends Controller
                 $fechaFin    = !empty($row['fecha_fin']) ? date('Y-m-d', strtotime($row['fecha_fin'])) : null;
 
                 $actividad = $categoria->actividades()->create([
-                    'nombre'         => $nombre,
-                    'responsable'    => $responsableNombre,
-                    'responsable_id' => $responsableId,
-                    'prioridad'      => $prioridad,
-                    'periodicidad'   => $periodicidad ?: null,
-                    'fecha_inicio'   => $fechaInicio,
-                    'fecha_fin'      => $fechaFin,
-                    'orden'          => $categoria->actividades()->max('orden') + 1,
+                    'nombre'              => $nombre,
+                    'responsable'         => $responsableNombre,
+                    'responsable_id'      => $responsableId,
+                    'prioridad'           => $prioridad,
+                    'periodicidad'        => $periodicidad ?: null,
+                    'cantidad_programada' => max(1, (int) ($row['cantidad'] ?? 1)),
+                    'fecha_inicio'        => $fechaInicio,
+                    'fecha_fin'           => $fechaFin,
+                    'orden'               => $categoria->actividades()->max('orden') + 1,
                 ]);
 
                 // Meses programados: "1,3,6,9,12" o auto-calcular desde periodicidad

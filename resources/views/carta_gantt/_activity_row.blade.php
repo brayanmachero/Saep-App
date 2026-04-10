@@ -15,6 +15,7 @@
         'prioridad' => $act->prioridad,
         'estado' => $act->estado,
         'periodicidad' => $act->periodicidad,
+        'cantidad_programada' => (int) ($act->cantidad_programada ?? 1),
         'fecha_inicio' => $act->fecha_inicio ? $act->fecha_inicio->format('Y-m-d') : '',
         'fecha_fin' => $act->fecha_fin ? $act->fecha_fin->format('Y-m-d') : '',
         'meses_prog' => collect($seg)->filter(fn($s) => $s['programado'])->keys()->values()->all(),
@@ -51,20 +52,31 @@
         </span>
     </td>
     {{-- 12 meses Gantt --}}
+    @php $cantProg = max(1, (int) ($act->cantidad_programada ?? 1)); @endphp
     @for($m = 1; $m <= 12; $m++)
     @php
         $s = $seg[$m] ?? null;
         $prog = $s ? $s['programado'] : false;
         $real = $s ? $s['realizado'] : false;
+        $cantReal = $s ? (int) ($s['cantidad_realizada'] ?? 0) : 0;
         $vencido = $prog && !$real && $m < $mesActual;
+        $parcial = $prog && !$real && $cantReal > 0;
     @endphp
     <td class="sst-td-mes {{ $m === $mesActual ? 'sst-mes-actual' : '' }}">
         @if($prog)
+        @if($cantProg > 1)
+        <button class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : ($parcial ? 'gantt-partial' : 'gantt-plan')) }}"
+                onclick="toggleSeguimiento({{ $act->id }}, {{ $m }}, this)"
+                title="{{ $cantReal }}/{{ $cantProg }} — clic para {{ $real ? 'resetear' : 'avanzar' }}">
+            {{ $real ? '✓' : ($cantReal > 0 ? $cantReal.'/'.$cantProg : '0/'.$cantProg) }}
+        </button>
+        @else
         <button class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : 'gantt-plan') }}"
                 onclick="toggleSeguimiento({{ $act->id }}, {{ $m }}, this)"
                 title="{{ $real ? 'Realizado' : ($vencido ? 'Vencido — clic para marcar' : 'Programado — clic para marcar') }}">
             {{ $real ? '✓' : ($vencido ? '!' : '○') }}
         </button>
+        @endif
         @endif
     </td>
     @endfor

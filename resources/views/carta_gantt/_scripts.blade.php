@@ -197,32 +197,43 @@ function rebuildTableRows(table, columns) {
             const seg = actData.seguimiento[col.mes];
             const prog = seg && seg.programado;
             const real = seg && seg.realizado;
+            const cantProg = actData.cantidad_programada || 1;
+            const cantReal = (seg && seg.cantidad_realizada) ? seg.cantidad_realizada : 0;
+            const parcial = prog && !real && cantReal > 0;
 
             if (col.type === 'month' && prog) {
-                // Month view: clickable toggle button
                 const vencido = !real && col.mes < MES_ACTUAL;
                 const btn = document.createElement('button');
-                btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : 'gantt-plan'));
-                btn.textContent = real ? '✓' : (vencido ? '!' : '○');
-                btn.title = real ? 'Realizado' : (vencido ? 'Vencido — clic para marcar' : 'Programado — clic para marcar');
+                if (cantProg > 1) {
+                    btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : (parcial ? 'gantt-partial' : 'gantt-plan')));
+                    btn.textContent = real ? '✓' : (cantReal > 0 ? cantReal+'/'+cantProg : '0/'+cantProg);
+                    btn.title = cantReal+'/'+cantProg + ' — clic para ' + (real ? 'resetear' : 'avanzar');
+                } else {
+                    btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : 'gantt-plan'));
+                    btn.textContent = real ? '✓' : (vencido ? '!' : '○');
+                    btn.title = real ? 'Realizado' : (vencido ? 'Vencido — clic para marcar' : 'Programado — clic para marcar');
+                }
                 btn.onclick = function() { toggleSeguimiento(actId, col.mes, btn); };
                 td.appendChild(btn);
             } else if (col.type === 'week' && prog) {
-                // Week view: show status dot for that month's seguimiento
                 const vencido = !real && col.mes < MES_ACTUAL;
                 const btn = document.createElement('button');
-                btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : 'gantt-plan'));
-                btn.textContent = real ? '✓' : (vencido ? '!' : '○');
+                if (cantProg > 1) {
+                    btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : (parcial ? 'gantt-partial' : 'gantt-plan')));
+                    btn.textContent = real ? '✓' : (cantReal > 0 ? cantReal+'/'+cantProg : '0/'+cantProg);
+                } else {
+                    btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : 'gantt-plan'));
+                    btn.textContent = real ? '✓' : (vencido ? '!' : '○');
+                }
                 btn.title = real ? 'Realizado' : (vencido ? 'Vencido — clic para marcar' : 'Programado — clic para marcar');
                 btn.onclick = function() { toggleSeguimiento(actId, col.mes, btn); };
                 td.appendChild(btn);
             } else if (col.type === 'day' && prog) {
-                // Day view: small colored indicator
                 const vencido = !real && col.mes < MES_ACTUAL;
                 const dot = document.createElement('span');
                 dot.style.cssText = 'display:inline-block;width:10px;height:10px;border-radius:50%;cursor:pointer;';
-                dot.style.background = real ? '#10b981' : (vencido ? '#ef4444' : '#6366f1');
-                dot.title = real ? 'Realizado' : (vencido ? 'Vencido' : 'Programado');
+                dot.style.background = real ? '#10b981' : (vencido ? '#ef4444' : (parcial ? '#f59e0b' : '#6366f1'));
+                dot.title = cantProg > 1 ? (cantReal+'/'+cantProg) : (real ? 'Realizado' : (vencido ? 'Vencido' : 'Programado'));
                 dot.onclick = function() { toggleSeguimiento(actId, col.mes, dot); };
                 td.appendChild(dot);
             }
@@ -248,6 +259,7 @@ function toggleSeguimiento(actId, mes, el) {
         if (actData) {
             if (actData.seguimiento[mes]) {
                 actData.seguimiento[mes].realizado = data.realizado;
+                actData.seguimiento[mes].cantidad_realizada = data.cantidad_realizada ?? (data.realizado ? 1 : 0);
             }
             if (data.estado) {
                 actData.estado = data.estado;
@@ -291,6 +303,7 @@ function openEditModal(row) {
     document.getElementById('edit-prioridad').value = data.prioridad || 'MEDIA';
     document.getElementById('edit-estado').value = data.estado || 'PENDIENTE';
     document.getElementById('edit-periodicidad').value = data.periodicidad || '';
+    document.getElementById('edit-cantidad').value = data.cantidad_programada || 1;
     document.getElementById('edit-fecha-inicio').value = data.fecha_inicio || '';
     document.getElementById('edit-fecha-fin').value = data.fecha_fin || '';
 
@@ -321,6 +334,8 @@ function openDetail(row) {
     body += detailItem('Prioridad', priLabels[act.prioridad] || '—');
     body += detailItem('Estado', estLabels[act.estado] || '—');
     body += detailItem('Periodicidad', perLabels[act.periodicidad] || '—');
+    const cantProg = act.cantidad_programada || 1;
+    body += detailItem('Cantidad/mes', cantProg > 1 ? cantProg + ' repeticiones' : '1 (estándar)');
     body += detailItem('Fecha Inicio', act.fecha_inicio || '—');
     body += detailItem('Fecha Fin', act.fecha_fin || '—');
     body += '</div>';
@@ -336,9 +351,10 @@ function openDetail(row) {
         let cls = 'sst-seg-none';
         let txt = MESES_CORTO[m];
         if (s && s.programado) {
-            if (s.realizado) { cls = 'sst-seg-done'; txt += ' ✓'; }
-            else if (m < MES_ACTUAL) { cls = 'sst-seg-late'; txt += ' !'; }
-            else { cls = 'sst-seg-prog'; txt += ' ○'; }
+            const cantReal = s.cantidad_realizada ?? (s.realizado ? cantProg : 0);
+            if (s.realizado) { cls = 'sst-seg-done'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' ✓'; }
+            else if (m < MES_ACTUAL) { cls = 'sst-seg-late'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' !'; }
+            else { cls = 'sst-seg-prog'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' ○'; }
         }
         body += '<div class="sst-seg-cell ' + cls + '">' + txt + '</div>';
     }
@@ -368,14 +384,16 @@ function updateStats() {
 
     actividadesData.forEach(a => {
         let actProg = 0, actReal = 0;
+        const cantProg = a.cantidad_programada || 1;
         for (let m = 1; m <= 12; m++) {
             const s = a.seguimiento[m];
             if (s && s.programado) {
-                progTotal++; actProg++;
-                if (s.realizado) { realTotal++; actReal++; }
-                else if (m < MES_ACTUAL) { vencidosMes++; }
+                progTotal += cantProg; actProg += cantProg;
+                const cantReal = s.cantidad_realizada ?? (s.realizado ? cantProg : 0);
+                realTotal += cantReal; actReal += cantReal;
+                if (!s.realizado && m < MES_ACTUAL) { vencidosMes++; }
                 // Current month
-                if (m === MES_ACTUAL) { mesProgTotal++; if (s.realizado) mesRealTotal++; }
+                if (m === MES_ACTUAL) { mesProgTotal += cantProg; mesRealTotal += cantReal; }
             }
         }
         // Recalculate effective estado from data
@@ -414,9 +432,13 @@ function updateStats() {
             const actId = parseInt(row.dataset.actividadId);
             const actData = actividadesData.find(a => a.id === actId);
             if (!actData) return;
+            const cantProg = actData.cantidad_programada || 1;
             for (let m = 1; m <= 12; m++) {
                 const s = actData.seguimiento[m];
-                if (s && s.programado) { catProg++; if (s.realizado) catReal++; }
+                if (s && s.programado) {
+                    catProg += cantProg;
+                    catReal += s.cantidad_realizada ?? (s.realizado ? cantProg : 0);
+                }
             }
         });
         const catPct = catProg > 0 ? Math.round(catReal / catProg * 100) : 0;

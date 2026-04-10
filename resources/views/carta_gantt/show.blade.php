@@ -35,6 +35,7 @@
             'prioridad' => $a->prioridad,
             'estado' => $a->estado,
             'periodicidad' => $a->periodicidad,
+            'cantidad_programada' => (int) ($a->cantidad_programada ?? 1),
             'fecha_inicio' => $a->fecha_inicio ? $a->fecha_inicio->format('Y-m-d') : null,
             'fecha_fin' => $a->fecha_fin ? $a->fecha_fin->format('Y-m-d') : null,
             'seguimiento' => $a->seguimiento_por_mes,
@@ -136,6 +137,7 @@
         <div class="sst-legend">
             <span><span class="gantt-cell gantt-plan" style="width:18px;height:18px;font-size:.55rem;cursor:default">○</span> Programado</span>
             <span><span class="gantt-cell gantt-done" style="width:18px;height:18px;font-size:.55rem;cursor:default">✓</span> Realizado</span>
+            <span><span class="gantt-cell gantt-partial" style="width:18px;height:18px;font-size:.5rem;cursor:default">2/4</span> Parcial</span>
             <span><span style="width:18px;height:18px;border-radius:4px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);display:inline-block"></span> Vencida</span>
         </div>
     </div>
@@ -147,7 +149,11 @@
         $catActs = $categoria->actividades;
         $catProg = 0; $catReal = 0;
         foreach ($catActs as $a) {
-            foreach ($a->seguimiento as $s) { if ($s->programado) $catProg++; if ($s->realizado) $catReal++; }
+            $cp = max(1, (int) ($a->cantidad_programada ?? 1));
+            foreach ($a->seguimiento as $s) {
+                if ($s->programado) $catProg += $cp;
+                $catReal += (int) ($s->cantidad_realizada ?? ($s->realizado ? $cp : 0));
+            }
         }
         $catPct = $catProg > 0 ? (int) round($catReal / $catProg * 100) : 0;
     @endphp
@@ -187,6 +193,7 @@
                         <select name="prioridad" class="form-input">@foreach(\App\Models\SstActividad::prioridadesMap() as $k => $v)<option value="{{ $k }}" {{ $k === 'MEDIA' ? 'selected' : '' }}>{{ $v }}</option>@endforeach</select></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Periodicidad</label>
                         <select name="periodicidad" class="form-input"><option value="">— Ninguna —</option>@foreach(\App\Models\SstActividad::periodicidadesMap() as $k => $v)<option value="{{ $k }}">{{ $v }}</option>@endforeach</select></div>
+                    <div class="form-group" style="margin:0"><label class="sst-label">Cantidad <small style="text-transform:none;font-weight:400">(repeticiones/mes)</small></label><input type="number" name="cantidad_programada" class="form-input" value="1" min="1" max="999" placeholder="1"></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha inicio</label><input type="date" name="fecha_inicio" class="form-input"></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha fin</label><input type="date" name="fecha_fin" class="form-input"></div>
                     <div class="form-group" style="margin:0;grid-column:1/-1"><label class="sst-label">Descripción</label><textarea name="descripcion" class="form-input" rows="2" placeholder="Descripción o instrucciones..."></textarea></div>
@@ -274,6 +281,7 @@
                         <select name="estado" id="edit-estado" class="form-input">@foreach(\App\Models\SstActividad::estadosMap() as $k => $v)<option value="{{ $k }}">{{ $v }}</option>@endforeach</select></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Periodicidad</label>
                         <select name="periodicidad" id="edit-periodicidad" class="form-input"><option value="">— Ninguna —</option>@foreach(\App\Models\SstActividad::periodicidadesMap() as $k => $v)<option value="{{ $k }}">{{ $v }}</option>@endforeach</select></div>
+                    <div class="form-group" style="margin:0"><label class="sst-label">Cantidad <small style="text-transform:none;font-weight:400">(repeticiones/mes)</small></label><input type="number" name="cantidad_programada" id="edit-cantidad" class="form-input" value="1" min="1" max="999"></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha inicio</label><input type="date" name="fecha_inicio" id="edit-fecha-inicio" class="form-input"></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha fin</label><input type="date" name="fecha_fin" id="edit-fecha-fin" class="form-input"></div>
                     <div class="form-group" style="margin:0;grid-column:1/-1"><label class="sst-label">Descripción</label><textarea name="descripcion" id="edit-descripcion" class="form-input" rows="2" placeholder="Descripción o instrucciones..."></textarea></div>
@@ -308,8 +316,8 @@
             <div style="background:var(--surface-color);border:1px solid var(--surface-border);border-radius:10px;padding:1rem;margin-bottom:1rem">
                 <p style="font-size:.78rem;font-weight:600;margin:0 0 .5rem;color:var(--text-main)"><i class="bi bi-info-circle"></i> Formato requerido (separador: punto y coma ;)</p>
                 <div style="font-family:monospace;font-size:.72rem;color:var(--text-muted);overflow-x:auto;white-space:nowrap">
-                    categoria;nombre;responsable_email;prioridad;periodicidad;fecha_inicio;fecha_fin;meses_programados<br>
-                    <span style="color:var(--accent-color)">Capacitaciones;Inducción SST;user@saep.cl;ALTA;MENSUAL;2026-01-15;2026-12-31;1,3,6,9,12</span>
+                    categoria;nombre;responsable_email;prioridad;periodicidad;cantidad;fecha_inicio;fecha_fin;meses_programados<br>
+                    <span style="color:var(--accent-color)">Capacitaciones;Inducción SST;user@saep.cl;ALTA;MENSUAL;4;2026-01-15;2026-12-31;1,3,6,9,12</span>
                 </div>
             </div>
             <a href="{{ route('carta-gantt.plantilla') }}" class="sst-btn sst-btn-outline sst-btn-sm" style="margin-bottom:1rem;display:inline-flex"><i class="bi bi-download"></i> Descargar Plantilla CSV</a>
