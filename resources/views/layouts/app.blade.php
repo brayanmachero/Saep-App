@@ -301,13 +301,9 @@
                 <i class="bi bi-grid-fill"></i>
                 <span>Inicio</span>
             </a>
-            <a href="{{ route('respuestas.index') }}" class="bottom-nav-item {{ request()->routeIs('respuestas.*') ? 'active' : '' }}">
-                <i class="bi bi-file-earmark-text-fill"></i>
-                <span>Solicitudes</span>
-            </a>
-            <a href="{{ route('charlas.index') }}" class="bottom-nav-item {{ request()->routeIs('charlas.*') ? 'active' : '' }}">
-                <i class="bi bi-mic-fill"></i>
-                <span>Charlas</span>
+            <a href="{{ route('mis-formularios.index') }}" class="bottom-nav-item {{ request()->routeIs('mis-formularios.*') ? 'active' : '' }}">
+                <i class="bi bi-clipboard-check-fill"></i>
+                <span>Mis Formularios</span>
             </a>
             <a href="{{ route('proteccion-datos.index') }}" class="bottom-nav-item {{ request()->routeIs('proteccion-datos.*') ? 'active' : '' }}">
                 <i class="bi bi-shield-lock-fill"></i>
