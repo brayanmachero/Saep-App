@@ -32,6 +32,7 @@ use App\Http\Controllers\VisitaSstController;
 use App\Http\Controllers\LeyKarinPublicoController;
 use App\Http\Controllers\StopDashboardController;
 use App\Http\Controllers\CampoOpcionController;
+use App\Http\Controllers\MisFormulariosController;
 use Illuminate\Support\Facades\Route;
 
 // --- WEBHOOK KIZEO (público, sin auth ni CSRF) ---
@@ -129,6 +130,9 @@ Route::middleware('auth')->group(function () {
     });
 
     // --- FORMULARIOS Y RESPUESTAS ---
+    Route::get('mis-formularios', [MisFormulariosController::class, 'index'])
+        ->name('mis-formularios.index');
+
     Route::middleware('modulo:formularios')->group(function () {
         Route::resource('formularios', FormularioController::class);
         Route::post('formularios/{formulario}/asignar', [FormularioController::class, 'asignar'])

@@ -45,6 +45,10 @@
             {{-- SOLICITUDES --}}
             @if(auth()->user()->tieneAcceso('respuestas') || auth()->user()->tieneAcceso('formularios') || auth()->user()->tieneAcceso('categorias_formularios'))
             <div class="nav-section-label">Solicitudes</div>
+            <a href="{{ route('mis-formularios.index') }}" class="nav-item {{ request()->routeIs('mis-formularios.*') ? 'active' : '' }}">
+                <i class="bi bi-clipboard-check-fill"></i>
+                <span>Mis Formularios</span>
+            </a>
             @if(auth()->user()->tieneAcceso('respuestas'))
             <a href="{{ route('respuestas.index') }}" class="nav-item {{ request()->routeIs('respuestas.*') ? 'active' : '' }}">
                 <i class="bi bi-file-earmark-text-fill"></i>

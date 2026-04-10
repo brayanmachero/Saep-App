@@ -45,6 +45,50 @@
         </div>
     </div>
 
+    <!-- Mis Formularios Pendientes -->
+    @if($mis_pendientes->count() > 0)
+    <div class="glass-card" style="margin-bottom:1.5rem;border-left:4px solid #f97316;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+            <h2 style="font-size:1.1rem;display:flex;align-items:center;gap:.5rem;">
+                <i class="bi bi-clipboard-check-fill" style="color:#f97316"></i>
+                Formularios pendientes por completar
+            </h2>
+            <a href="{{ route('mis-formularios.index') }}" class="btn-secondary" style="font-size:.8rem;padding:.4rem .75rem;">
+                Ver todos <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:.5rem;">
+            @foreach($mis_pendientes as $pf)
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:.65rem .85rem;
+                    background:rgba(249,115,22,.04);border:1px solid rgba(249,115,22,.12);border-radius:10px;">
+                    <div style="display:flex;align-items:center;gap:.75rem;">
+                        <span style="font-size:.72rem;background:rgba(249,115,22,.12);color:#f97316;
+                            padding:.2rem .5rem;border-radius:6px;font-weight:600;">{{ $pf->codigo }}</span>
+                        <span style="font-weight:500;font-size:.9rem;">{{ $pf->nombre }}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:.75rem;">
+                        @if($pf->fecha_limite)
+                            @php
+                                $dias = now()->startOfDay()->diffInDays(\Carbon\Carbon::parse($pf->fecha_limite)->startOfDay(), false);
+                            @endphp
+                            <small style="color:{{ $dias <= 2 ? '#ef4444' : 'var(--text-muted)' }};font-size:.78rem;">
+                                @if($dias < 0) Vencido
+                                @elseif($dias === 0) Vence hoy
+                                @else {{ $dias }} día(s)
+                                @endif
+                            </small>
+                        @endif
+                        <a href="{{ route('respuestas.create', ['formulario_id' => $pf->formulario_id]) }}"
+                            class="btn-premium" style="font-size:.76rem;padding:.3rem .7rem;">
+                            <i class="bi bi-pencil-square"></i> Completar
+                        </a>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
+
     <!-- Recent Activity Table -->
     <div class="glass-card">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.5rem;">
