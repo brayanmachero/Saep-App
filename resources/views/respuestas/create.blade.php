@@ -187,7 +187,7 @@
                                     <i class="bi bi-chevron-down" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none"></i>
                                 </div>
                                 <div class="ds-dropdown" style="display:none;position:absolute;left:0;right:0;z-index:999;
-                                    max-height:200px;overflow-y:auto;background:#fff;border:1px solid #d1d5db;
+                                    max-height:200px;overflow-y:auto;background:var(--surface-card-solid, #fff);border:1px solid var(--surface-border, #d1d5db);
                                     border-radius:8px;margin-top:2px;box-shadow:0 8px 24px rgba(0,0,0,.18)">
                                 </div>
                                 <input type="hidden" id="field_{{ $field['id'] }}" class="field-input"
@@ -395,16 +395,12 @@ document.querySelectorAll('.dynamic-select-wrap').forEach(wrap => {
         } else {
             items.forEach(val => {
                 html += `<div class="ds-option" data-val="${val.replace(/"/g, '&quot;')}"
-                    style="padding:.5rem .75rem;font-size:.85rem;cursor:pointer;color:#1f2937;background:#fff;transition:background .1s"
-                    onmouseover="this.style.background='#eef2ff'"
-                    onmouseout="this.style.background='#fff'">${val}</div>`;
+                    style="padding:.5rem .75rem;font-size:.85rem;cursor:pointer;transition:background .1s">${val}</div>`;
             });
             if (query.length > 0 && !items.map(i => i.toLowerCase()).includes(query.toLowerCase())) {
                 html += `<div class="ds-option ds-create" data-val="${query.replace(/"/g, '&quot;')}"
-                    style="padding:.5rem .75rem;font-size:.85rem;cursor:pointer;color:#4338ca;background:#fff;
-                    border-top:1px solid #e5e7eb;display:flex;align-items:center;gap:.4rem"
-                    onmouseover="this.style.background='#eef2ff'"
-                    onmouseout="this.style.background='#fff'">>
+                    style="padding:.5rem .75rem;font-size:.85rem;cursor:pointer;
+                    border-top:1px solid currentColor;opacity:.9;display:flex;align-items:center;gap:.4rem">
                     <i class="bi bi-plus-circle"></i> Crear "<strong>${query}</strong>"
                 </div>`;
             }

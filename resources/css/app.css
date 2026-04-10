@@ -23,9 +23,11 @@ body.dark-mode {
     --bg-color: #111827;
     --surface-color: rgba(31, 41, 55, 0.7);
     --surface-border: rgba(55, 65, 81, 0.4);
+    --surface-card-solid: #1f2937;
     --text-main: #f9fafb;
     --text-muted: #9ca3af;
     --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    color-scheme: dark;
 }
 
 * {
@@ -447,6 +449,39 @@ body.dark-mode .glass-table tbody tr:hover {
 body.dark-mode .badge.success { background: rgba(16, 185, 129, 0.2); color: #34d399; }
 body.dark-mode .badge.warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
 body.dark-mode .badge.danger { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+/* ── Dark mode: form inputs & selects ── */
+body.dark-mode .form-input,
+body.dark-mode .form-control {
+    background: rgba(31, 41, 55, 0.8);
+    border-color: rgba(75, 85, 99, 0.6);
+    color: #f9fafb;
+}
+body.dark-mode .form-input:focus,
+body.dark-mode .form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 108, 245, 0.2);
+}
+body.dark-mode select.form-input,
+body.dark-mode select.form-control {
+    background-color: #1f2937;
+}
+body.dark-mode select.form-input option,
+body.dark-mode select.form-control option {
+    background-color: #1f2937;
+    color: #f9fafb;
+}
+body.dark-mode .ds-dropdown {
+    background: #1f2937 !important;
+    border-color: #374151 !important;
+}
+body.dark-mode .ds-dropdown .ds-option {
+    background: #1f2937 !important;
+    color: #f9fafb !important;
+}
+body.dark-mode .ds-dropdown .ds-option:hover {
+    background: #374151 !important;
+}
 
 /* ── Page Layout ── */
 .page-container {
