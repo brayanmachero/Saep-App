@@ -8,6 +8,7 @@ use App\Models\ProgramaSst;
 use App\Models\SstActividad;
 use App\Models\SstNotificacionLog;
 use App\Models\User;
+use App\Notifications\AppNotification;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -159,6 +160,19 @@ class SstEnviarRecordatorios extends Command
                 $mail->cc($ccEmails->all());
             }
             $mail->send(new SstActividadAlertaMail($actividad, $tipo));
+
+            // Notificación in-app
+            $tipoMap = ['asignacion' => 'info', 'vencimiento' => 'warning', 'vencida' => 'danger', 'recordatorio' => 'warning', 'seguimiento_pendiente' => 'warning'];
+            $tituloMap = ['asignacion' => 'Actividad SST asignada', 'vencimiento' => 'Actividad SST por vencer', 'vencida' => 'Actividad SST vencida', 'recordatorio' => 'Recordatorio SST', 'seguimiento_pendiente' => 'Seguimiento SST pendiente'];
+            $programaId = $actividad->categoria->programa_id ?? 0;
+            foreach (collect([$toEmail])->merge($ccEmails)->unique() as $ue) {
+                User::where('email', $ue)->first()?->notify(new AppNotification(
+                    $tituloMap[$tipo] ?? 'Alerta SST',
+                    $actividad->nombre,
+                    $tipoMap[$tipo] ?? 'info',
+                    route('carta-gantt.show', $programaId)
+                ));
+            }
 
             // Registrar en log para cada destinatario
             $allRecipients = collect([$toEmail])->merge($ccEmails);

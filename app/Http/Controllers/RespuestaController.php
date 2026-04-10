@@ -7,6 +7,7 @@ use App\Mail\RespuestaCreadaMail;
 use App\Models\Formulario;
 use App\Models\Respuesta;
 use App\Models\User;
+use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -94,6 +95,12 @@ class RespuestaController extends Controller
             $aprobadores = User::where('rol_id', $formulario->aprobador_rol_id)->where('activo', true)->get();
             foreach ($aprobadores as $ap) {
                 Mail::to($ap->email)->send(new RespuestaCreadaMail($respuesta));
+                $ap->notify(new AppNotification(
+                    'Nueva solicitud pendiente',
+                    auth()->user()->name . ' envió ' . $formulario->nombre,
+                    'info',
+                    route('respuestas.show', $respuesta)
+                ));
             }
         }
 
@@ -170,6 +177,12 @@ class RespuestaController extends Controller
         // Notify requester when approved or rejected
         if (in_array($request->estado, ['Aprobado', 'Rechazado']) && $respuesta->usuario?->email) {
             Mail::to($respuesta->usuario->email)->send(new RespuestaAprobadaMail($respuesta->fresh(['formulario', 'aprobaciones.aprobador'])));
+            $respuesta->usuario->notify(new AppNotification(
+                'Solicitud ' . strtolower($request->estado),
+                $respuesta->formulario->nombre . ' fue ' . strtolower($request->estado),
+                $request->estado === 'Aprobado' ? 'success' : 'danger',
+                route('respuestas.show', $respuesta)
+            ));
         }
 
         return back()->with('success', "Solicitud marcada como {$request->estado}.");
@@ -208,6 +221,12 @@ class RespuestaController extends Controller
                 Mail::to($resp->usuario->email)->send(
                     new RespuestaAprobadaMail($resp->fresh(['formulario', 'aprobaciones.aprobador']))
                 );
+                $resp->usuario->notify(new AppNotification(
+                    'Solicitud ' . strtolower($request->estado),
+                    $resp->formulario->nombre . ' fue ' . strtolower($request->estado),
+                    $request->estado === 'Aprobado' ? 'success' : 'danger',
+                    route('respuestas.show', $resp)
+                ));
             }
             $count++;
         }

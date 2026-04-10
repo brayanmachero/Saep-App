@@ -112,10 +112,16 @@ body.dark-mode .sst-highlight-col{background:rgba(99,102,241,.1)!important}
     .sst-legend{order:3;justify-content:center}
     .sst-detail-grid{grid-template-columns:1fr}
     .sst-seg-grid{grid-template-columns:repeat(4,1fr)}
+    .sst-gantt-table{font-size:.75rem}
+    .sst-gantt-table th,.sst-gantt-table td{padding:4px 6px}
 }
 @media(max-width:480px){
     .sst-stats-grid{grid-template-columns:1fr}
     .sst-view-btn span{display:none}
+    .gantt-cell{min-width:22px;height:22px;font-size:.5rem;padding:0 2px}
+    .sst-seg-grid{grid-template-columns:repeat(3,1fr)}
+    .sst-import-tips{grid-template-columns:1fr !important}
+    .sst-form-grid{grid-template-columns:1fr !important}
 }
 
 /* ===== DARK MODE PATCHES ===== */

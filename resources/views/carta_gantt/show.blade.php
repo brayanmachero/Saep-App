@@ -269,7 +269,7 @@
         <div class="sst-modal-body">
             <form id="editForm" method="POST">
                 @csrf @method('PUT')
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.85rem">
+                <div class="sst-form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.85rem">
                     <div class="form-group" style="margin:0;grid-column:1/-1"><label class="sst-label">Nombre *</label><input type="text" name="nombre" id="edit-nombre" required class="form-input"></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Responsable</label>
                         <select name="responsable_id" id="edit-responsable" class="form-input"><option value="">— Sin asignar —</option>
@@ -407,7 +407,7 @@
             </div>
 
             {{-- Tips --}}
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1.15rem">
+            <div class="sst-import-tips" style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1.15rem">
                 <div style="padding:.5rem .65rem;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.15);border-radius:8px;font-size:.7rem">
                     <i class="bi bi-check-circle-fill" style="color:#10b981"></i>
                     <strong style="color:var(--text-main)">Auto-categorías:</strong>

@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 use App\Mail\StopReporteMail;
 use App\Models\Configuracion;
+use App\Models\User;
+use App\Notifications\AppNotification;
 use App\Services\GoogleDriveService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -132,6 +134,12 @@ class StopWeeklyReport extends Command
         foreach ($destinatarios as $dest) {
             try {
                 Mail::to($dest)->send($mailable);
+                User::where('email', $dest)->first()?->notify(new AppNotification(
+                    'Reporte STOP disponible',
+                    "Reporte {$frecLabel} generado",
+                    'info',
+                    route('stop-dashboard')
+                ));
                 $this->info("Reporte enviado a: {$dest}");
             } catch (\Exception $e) {
                 $this->error("Error enviando a {$dest}: {$e->getMessage()}");

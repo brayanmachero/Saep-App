@@ -5,6 +5,8 @@ namespace App\Console\Commands;
 use App\Mail\CharlaTrackingReporteMail;
 use App\Models\Configuracion;
 use App\Models\KizeoCharlaTracking;
+use App\Models\User;
+use App\Notifications\AppNotification;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -154,6 +156,11 @@ class KizeoCharlaWeeklyReport extends Command
         foreach ($destinatarios as $dest) {
             try {
                 Mail::to($dest)->send($mailable);
+                User::where('email', $dest)->first()?->notify(new AppNotification(
+                    'Reporte semanal charlas',
+                    "Cumplimiento {$tasa}%",
+                    'info'
+                ));
                 $this->info("Reporte enviado a: {$dest}");
             } catch (\Exception $e) {
                 $this->error("Error enviando a {$dest}: {$e->getMessage()}");

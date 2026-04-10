@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Mail\VehiculoDevolucionMail;
 use App\Mail\VehiculoEntregaMail;
 use App\Models\Configuracion;
+use App\Models\User;
 use App\Models\WebhookLog;
+use App\Notifications\AppNotification;
 use App\Services\KizeoService;
 use App\Services\OneDriveService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -336,6 +338,16 @@ class KizeoWebhookController extends Controller
                 Mail::to($destinatarios)->send($mailable);
                 $emailEnviado = true;
 
+                // Notificación in-app
+                $tipoActaLabel = $esDevolucion ? 'devolución' : 'entrega';
+                foreach ($destinatarios as $destEmail) {
+                    User::where('email', $destEmail)->first()?->notify(new AppNotification(
+                        "Acta vehículo {$tipoActaLabel}",
+                        "PPU: {$data['patente']}",
+                        'info'
+                    ));
+                }
+
                 Log::info("Acta de {$tipoActa} generada y enviada", [
                     'patente' => $data['patente'],
                     'destinatarios' => $destinatarios,
@@ -513,6 +525,13 @@ class KizeoWebhookController extends Controller
                             ->subject("Charla SST - {$titulo} ({$fecha})")
                             ->attachData($pdfContent, $filename, ['mime' => 'application/pdf']);
                     });
+                    foreach ($destinatarios as $destEmail) {
+                        User::where('email', $destEmail)->first()?->notify(new AppNotification(
+                            'Charla SST registrada',
+                            "{$titulo} ({$fecha})",
+                            'success'
+                        ));
+                    }
                     $emailEnviado = true;
                     Log::info("Email de Charla SST enviado", ['destinatarios' => $destinatarios]);
                 }

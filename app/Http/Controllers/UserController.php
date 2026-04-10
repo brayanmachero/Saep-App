@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\BienvenidaUsuarioMail;
 use App\Models\Cargo;
+use App\Notifications\AppNotification;
 use App\Models\CentroCosto;
 use App\Models\Departamento;
 use App\Models\Rol;
@@ -98,6 +99,7 @@ class UserController extends Controller
 
         // Enviar email de bienvenida con credenciales
         Mail::to($user->email)->send(new BienvenidaUsuarioMail($user, $tempPassword));
+        $user->notify(new AppNotification('Bienvenido a SAEP', 'Tu cuenta ha sido creada. Revisa tu correo para tus credenciales de acceso.', 'success', route('perfil.show')));
 
         return redirect()->route('usuarios.index')
             ->with('success', 'Usuario creado correctamente. Se envió un correo con las credenciales provisorias a ' . $user->email);

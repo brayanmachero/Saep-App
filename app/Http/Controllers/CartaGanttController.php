@@ -14,6 +14,7 @@ use App\Models\CentroCosto;
 use App\Models\User;
 use App\Http\Controllers\Controller;
 use App\Mail\SstActividadAlertaMail;
+use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -457,6 +458,19 @@ class CartaGanttController extends Controller
                 $mail->cc($ccEmails->all());
             }
             $mail->send(new SstActividadAlertaMail($actividad, $tipo));
+
+            // Notificación in-app para cada destinatario
+            $tipoMap = ['asignacion' => 'info', 'vencimiento' => 'warning', 'vencida' => 'danger', 'recordatorio' => 'warning', 'seguimiento_pendiente' => 'warning'];
+            $tituloMap = ['asignacion' => 'Actividad SST asignada', 'vencimiento' => 'Actividad SST por vencer', 'vencida' => 'Actividad SST vencida', 'recordatorio' => 'Recordatorio SST', 'seguimiento_pendiente' => 'Seguimiento SST pendiente'];
+            $allUsers = collect([$toEmail])->merge($ccEmails)->unique();
+            foreach ($allUsers as $ue) {
+                User::where('email', $ue)->first()?->notify(new AppNotification(
+                    $tituloMap[$tipo] ?? 'Alerta SST',
+                    $actividad->nombre,
+                    $tipoMap[$tipo] ?? 'info',
+                    route('carta-gantt.show', $actividad->categoria->programa_id ?? 0)
+                ));
+            }
 
             // Registrar en log
             $allRecipients = collect([$toEmail])->merge($ccEmails);

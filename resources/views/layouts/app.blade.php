@@ -309,6 +309,11 @@
                 <i class="bi bi-shield-lock-fill"></i>
                 <span>ARCO</span>
             </a>
+            <button class="bottom-nav-item" id="mobile-notif-toggle" style="position:relative;background:none;border:none;">
+                <i class="bi bi-bell-fill"></i>
+                <span id="mobile-notif-badge" style="display:none;position:absolute;top:2px;right:calc(50% - 16px);width:16px;height:16px;border-radius:50%;background:#ef4444;color:#fff;font-size:.6rem;font-weight:700;line-height:16px;text-align:center;">0</span>
+                <span>Alertas</span>
+            </button>
             <button class="bottom-nav-item menu-toggle-btn" id="mobile-nav-menu-btn">
                 <i class="bi bi-three-dots"></i>
                 <span>Más</span>
@@ -322,6 +327,8 @@
         const toggle = document.getElementById('notif-toggle');
         const dropdown = document.getElementById('notif-dropdown');
         const badge = document.getElementById('notif-badge');
+        const mobileBadge = document.getElementById('mobile-notif-badge');
+        const mobileToggle = document.getElementById('mobile-notif-toggle');
         const list = document.getElementById('notif-list');
         const empty = document.getElementById('notif-empty');
         const readAll = document.getElementById('notif-read-all');
@@ -333,12 +340,29 @@
             e.stopPropagation();
             const open = dropdown.style.display !== 'none';
             dropdown.style.display = open ? 'none' : 'block';
+            dropdown.classList.remove('mobile-sheet');
             if (!open) loadNotifications();
         });
 
+        if (mobileToggle) {
+            mobileToggle.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const open = dropdown.style.display !== 'none';
+                if (open) {
+                    dropdown.style.display = 'none';
+                    dropdown.classList.remove('mobile-sheet');
+                } else {
+                    dropdown.style.display = 'block';
+                    dropdown.classList.add('mobile-sheet');
+                    loadNotifications();
+                }
+            });
+        }
+
         document.addEventListener('click', function(e) {
-            if (!document.getElementById('notif-wrapper')?.contains(e.target)) {
+            if (!document.getElementById('notif-wrapper')?.contains(e.target) && e.target !== mobileToggle && !mobileToggle?.contains(e.target)) {
                 dropdown.style.display = 'none';
+                dropdown.classList.remove('mobile-sheet');
             }
         });
 
@@ -354,6 +378,10 @@
                 .then(data => {
                     badge.style.display = data.length > 0 ? 'block' : 'none';
                     badge.textContent = data.length;
+                    if (mobileBadge) {
+                        mobileBadge.style.display = data.length > 0 ? 'block' : 'none';
+                        mobileBadge.textContent = data.length;
+                    }
                     if (data.length === 0) {
                         empty.style.display = 'block';
                         list.querySelectorAll('.notif-item').forEach(el => el.remove());

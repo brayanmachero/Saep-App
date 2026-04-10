@@ -796,6 +796,19 @@ body.dark-mode .badge.secondary { background: rgba(107,114,128,0.2); color: #d1d
     color: var(--text-muted);
 }
 
+/* Notification dropdown as mobile bottom sheet */
+#notif-dropdown.mobile-sheet {
+    position: fixed !important;
+    bottom: 64px;
+    left: 0;
+    right: 0;
+    top: auto !important;
+    width: 100% !important;
+    max-height: 60vh;
+    border-radius: 18px 18px 0 0 !important;
+    box-shadow: 0 -8px 30px rgba(0,0,0,0.15);
+}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
     .sidebar {

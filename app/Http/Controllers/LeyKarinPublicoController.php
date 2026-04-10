@@ -9,6 +9,7 @@ use App\Models\CentroCosto;
 use App\Models\LeyKarin;
 use App\Models\LeyKarinLog;
 use App\Models\User;
+use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Session;
@@ -197,12 +198,18 @@ class LeyKarinPublicoController extends Controller
 
     private function notificarAdmins(LeyKarin $caso): void
     {
-        $destinatarios = User::whereHas('rol', fn ($q) => $q->whereIn('nombre', ['SUPER_ADMIN', 'PREVENCIONISTA']))
+        $admins = User::whereHas('rol', fn ($q) => $q->whereIn('nombre', ['SUPER_ADMIN', 'PREVENCIONISTA']))
             ->whereNotNull('email')
-            ->pluck('email');
+            ->get();
 
-        foreach ($destinatarios as $email) {
-            Mail::to($email)->send(new LeyKarinDenunciaMail($caso));
+        foreach ($admins as $admin) {
+            Mail::to($admin->email)->send(new LeyKarinDenunciaMail($caso));
+            $admin->notify(new AppNotification(
+                'Nueva denuncia Ley Karin',
+                'Folio ' . $caso->folio,
+                'danger',
+                route('ley-karin.show', $caso)
+            ));
         }
     }
 }
