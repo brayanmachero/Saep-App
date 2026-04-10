@@ -141,11 +141,13 @@ Route::middleware('auth')->group(function () {
             ->name('formularios.toggleActivo');
         Route::delete('formularios/{formulario}/desasignar/{user}', [FormularioController::class, 'desasignar'])
             ->name('formularios.desasignar');
-        Route::get('formularios/{formulario}/campo-opciones/{campoId}', [CampoOpcionController::class, 'index'])
-            ->name('campo-opciones.index');
-        Route::post('formularios/{formulario}/campo-opciones/{campoId}', [CampoOpcionController::class, 'store'])
-            ->name('campo-opciones.store');
     });
+
+    // --- Campo opciones: acceso para cualquier usuario autenticado (campos dinámicos en formularios) ---
+    Route::get('formularios/{formulario}/campo-opciones/{campoId}', [CampoOpcionController::class, 'index'])
+        ->name('campo-opciones.index');
+    Route::post('formularios/{formulario}/campo-opciones/{campoId}', [CampoOpcionController::class, 'store'])
+        ->name('campo-opciones.store');
 
     // --- Respuestas: acceso para cualquier usuario autenticado (completar formularios asignados) ---
     Route::get('respuestas/create', [RespuestaController::class, 'create'])->name('respuestas.create');
