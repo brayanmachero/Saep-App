@@ -84,11 +84,29 @@ class RespuestaController extends Controller
         ]);
 
         // Mark assignment as completed if user was assigned
-        \DB::table('formulario_usuario')
+        $pivot = \DB::table('formulario_usuario')
             ->where('formulario_id', $formulario->id)
             ->where('user_id', auth()->id())
             ->where('estado', 'Pendiente')
-            ->update(['estado' => 'Completado', 'completado_at' => now()]);
+            ->first();
+
+        if ($pivot) {
+            // For continuous forms (no end date & not single-use), keep assignment active
+            $esContinuo = !$formulario->fecha_fin && $formulario->frecuencia !== 'unica';
+
+            if ($esContinuo) {
+                // Update completion timestamp but keep Pendiente so user can submit again
+                \DB::table('formulario_usuario')
+                    ->where('formulario_id', $formulario->id)
+                    ->where('user_id', auth()->id())
+                    ->update(['completado_at' => now()]);
+            } else {
+                \DB::table('formulario_usuario')
+                    ->where('formulario_id', $formulario->id)
+                    ->where('user_id', auth()->id())
+                    ->update(['estado' => 'Completado', 'completado_at' => now()]);
+            }
+        }
 
         // Notify approvers when submitted (not draft)
         if ($respuesta->estado === 'Pendiente' && $formulario->requiere_aprobacion && $formulario->aprobador_rol_id) {

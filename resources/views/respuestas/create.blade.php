@@ -255,12 +255,12 @@
                 @endif
             @endforeach
 
-            <div style="display:flex;gap:1rem;justify-content:flex-end;margin-top:1.75rem;">
-                <a href="{{ route('respuestas.index') }}" class="btn-ghost">Cancelar</a>
-                <button type="submit" name="estado" value="Borrador" class="btn-secondary">
+            <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.75rem;flex-wrap:wrap;">
+                <a href="{{ url()->previous() }}" class="btn-ghost" style="font-size:.85rem;">Cancelar</a>
+                <button type="submit" name="estado" value="Borrador" class="btn-secondary" style="font-size:.85rem;">
                     <i class="bi bi-save"></i> Guardar Borrador
                 </button>
-                <button type="submit" name="estado" value="Pendiente" class="btn-premium">
+                <button type="submit" name="estado" value="Pendiente" class="btn-premium" style="flex:1;min-width:160px;justify-content:center;font-size:.85rem;">
                     <i class="bi bi-send-fill"></i> Enviar Solicitud
                 </button>
             </div>
