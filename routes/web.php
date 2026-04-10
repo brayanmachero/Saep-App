@@ -147,8 +147,17 @@ Route::middleware('auth')->group(function () {
             ->name('campo-opciones.store');
     });
 
+    // --- Respuestas: acceso para cualquier usuario autenticado (completar formularios asignados) ---
+    Route::get('respuestas/create', [RespuestaController::class, 'create'])->name('respuestas.create');
+    Route::post('respuestas', [RespuestaController::class, 'store'])->name('respuestas.store');
+    Route::get('respuestas/{respuesta}', [RespuestaController::class, 'show'])->name('respuestas.show');
+
+    // --- Respuestas: gestión administrativa (requiere módulo respuestas) ---
     Route::middleware('modulo:respuestas')->group(function () {
-        Route::resource('respuestas', RespuestaController::class);
+        Route::get('respuestas', [RespuestaController::class, 'index'])->name('respuestas.index');
+        Route::get('respuestas/{respuesta}/edit', [RespuestaController::class, 'edit'])->name('respuestas.edit');
+        Route::put('respuestas/{respuesta}', [RespuestaController::class, 'update'])->name('respuestas.update');
+        Route::delete('respuestas/{respuesta}', [RespuestaController::class, 'destroy'])->name('respuestas.destroy');
         Route::patch('respuestas/{respuesta}/estado', [RespuestaController::class, 'cambiarEstado'])
             ->name('respuestas.estado')
             ->middleware('permission:puede_aprobar');
