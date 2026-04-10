@@ -2,6 +2,22 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     updateStats();
+
+    // CSV file input: toggle placeholder/file info
+    const csvInput = document.getElementById('csvFileInput');
+    if (csvInput) {
+        csvInput.addEventListener('change', function() {
+            const placeholder = document.getElementById('csvPlaceholder');
+            const info = document.getElementById('csvFileInfo');
+            if (this.files && this.files[0]) {
+                if (placeholder) placeholder.style.display = 'none';
+                if (info) info.style.display = 'flex';
+            } else {
+                if (placeholder) placeholder.style.display = '';
+                if (info) info.style.display = 'none';
+            }
+        });
+    }
 });
 
 // ============ CONSTANTS ============

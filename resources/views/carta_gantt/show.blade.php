@@ -306,27 +306,165 @@
 
 {{-- ========== MODAL IMPORTACIÓN CSV ========== --}}
 <div id="importModal" class="sst-modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
-    <div class="sst-modal">
-        <div class="sst-modal-header">
-            <h3 style="margin:0;font-size:1rem;font-weight:700"><i class="bi bi-cloud-upload"></i> Importar Actividades desde CSV</h3>
-            <button onclick="document.getElementById('importModal').style.display='none'" class="sst-icon-btn"><i class="bi bi-x-lg"></i></button>
+    <div class="sst-modal" style="max-width:720px">
+        <div class="sst-modal-header" style="background:linear-gradient(135deg,var(--accent-color),#818cf8);border-bottom:none">
+            <h3 style="margin:0;font-size:1rem;font-weight:700;color:#fff"><i class="bi bi-cloud-upload"></i> Importar Actividades desde CSV</h3>
+            <button onclick="document.getElementById('importModal').style.display='none'" class="sst-icon-btn" style="color:#fff;border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.1)"><i class="bi bi-x-lg"></i></button>
         </div>
-        <div class="sst-modal-body">
-            <p style="font-size:.85rem;color:var(--text-muted);margin:0 0 1rem">Sube un archivo CSV con las actividades. Se crearán las categorías automáticamente si no existen.</p>
-            <div style="background:var(--surface-color);border:1px solid var(--surface-border);border-radius:10px;padding:1rem;margin-bottom:1rem">
-                <p style="font-size:.78rem;font-weight:600;margin:0 0 .5rem;color:var(--text-main)"><i class="bi bi-info-circle"></i> Formato requerido (separador: punto y coma ;)</p>
-                <div style="font-family:monospace;font-size:.72rem;color:var(--text-muted);overflow-x:auto;white-space:nowrap">
-                    categoria;nombre;responsable_email;prioridad;periodicidad;cantidad;fecha_inicio;fecha_fin;meses_programados<br>
-                    <span style="color:var(--accent-color)">Capacitaciones;Inducción SST;user@saep.cl;ALTA;MENSUAL;4;2026-01-15;2026-12-31;1,3,6,9,12</span>
+        <div class="sst-modal-body" style="padding:1.25rem">
+            {{-- Pasos --}}
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:1.25rem">
+                <div style="text-align:center;padding:.6rem .4rem;background:rgba(99,102,241,.06);border-radius:10px;border:1px solid rgba(99,102,241,.15)">
+                    <div style="width:28px;height:28px;border-radius:50%;background:var(--accent-color);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:.78rem;margin-bottom:.3rem">1</div>
+                    <div style="font-size:.72rem;font-weight:600;color:var(--text-main)">Descarga la plantilla</div>
+                    <div style="font-size:.65rem;color:var(--text-muted)">CSV con formato correcto</div>
+                </div>
+                <div style="text-align:center;padding:.6rem .4rem;background:rgba(245,158,11,.06);border-radius:10px;border:1px solid rgba(245,158,11,.15)">
+                    <div style="width:28px;height:28px;border-radius:50%;background:#f59e0b;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:.78rem;margin-bottom:.3rem">2</div>
+                    <div style="font-size:.72rem;font-weight:600;color:var(--text-main)">Completa los datos</div>
+                    <div style="font-size:.65rem;color:var(--text-muted)">Una actividad por fila</div>
+                </div>
+                <div style="text-align:center;padding:.6rem .4rem;background:rgba(16,185,129,.06);border-radius:10px;border:1px solid rgba(16,185,129,.15)">
+                    <div style="width:28px;height:28px;border-radius:50%;background:#10b981;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:.78rem;margin-bottom:.3rem">3</div>
+                    <div style="font-size:.72rem;font-weight:600;color:var(--text-main)">Sube e importa</div>
+                    <div style="font-size:.65rem;color:var(--text-muted)">Se crearán las actividades</div>
                 </div>
             </div>
-            <a href="{{ route('carta-gantt.plantilla') }}" class="sst-btn sst-btn-outline sst-btn-sm" style="margin-bottom:1rem;display:inline-flex"><i class="bi bi-download"></i> Descargar Plantilla CSV</a>
+
+            {{-- Tabla de campos --}}
+            <div style="background:var(--bg-color);border:1px solid var(--surface-border);border-radius:10px;overflow:hidden;margin-bottom:1rem">
+                <div style="padding:.6rem .8rem;background:var(--surface-color);border-bottom:1px solid var(--surface-border);display:flex;align-items:center;gap:.4rem">
+                    <i class="bi bi-table" style="color:var(--accent-color)"></i>
+                    <span style="font-size:.78rem;font-weight:700;color:var(--text-main)">Columnas del CSV</span>
+                    <span style="font-size:.65rem;color:var(--text-muted);margin-left:auto">Separador: punto y coma ( ; )</span>
+                </div>
+                <table style="width:100%;font-size:.73rem;border-collapse:collapse">
+                    <thead>
+                        <tr style="background:var(--surface-color)">
+                            <th style="padding:.4rem .6rem;text-align:left;font-weight:700;color:var(--text-muted);text-transform:uppercase;font-size:.62rem;letter-spacing:.03em;border-bottom:1px solid var(--surface-border)">Columna</th>
+                            <th style="padding:.4rem .6rem;text-align:center;font-weight:700;color:var(--text-muted);text-transform:uppercase;font-size:.62rem;letter-spacing:.03em;border-bottom:1px solid var(--surface-border);width:50px"></th>
+                            <th style="padding:.4rem .6rem;text-align:left;font-weight:700;color:var(--text-muted);text-transform:uppercase;font-size:.62rem;letter-spacing:.03em;border-bottom:1px solid var(--surface-border)">Descripción</th>
+                            <th style="padding:.4rem .6rem;text-align:left;font-weight:700;color:var(--text-muted);text-transform:uppercase;font-size:.62rem;letter-spacing:.03em;border-bottom:1px solid var(--surface-border)">Ejemplo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="border-bottom:1px solid var(--surface-border)">
+                            <td style="padding:.35rem .6rem;font-weight:600;color:var(--text-main)">categoria</td>
+                            <td style="padding:.35rem .6rem;text-align:center"><span style="background:#fee2e2;color:#dc2626;padding:.1rem .35rem;border-radius:4px;font-size:.6rem;font-weight:700">Req.</span></td>
+                            <td style="padding:.35rem .6rem;color:var(--text-muted)">Nombre de la categoría. Si no existe, se crea automáticamente.</td>
+                            <td style="padding:.35rem .6rem;font-family:monospace;color:var(--accent-color);font-size:.68rem">Capacitaciones</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid var(--surface-border)">
+                            <td style="padding:.35rem .6rem;font-weight:600;color:var(--text-main)">nombre</td>
+                            <td style="padding:.35rem .6rem;text-align:center"><span style="background:#fee2e2;color:#dc2626;padding:.1rem .35rem;border-radius:4px;font-size:.6rem;font-weight:700">Req.</span></td>
+                            <td style="padding:.35rem .6rem;color:var(--text-muted)">Nombre de la actividad o tarea SST.</td>
+                            <td style="padding:.35rem .6rem;font-family:monospace;color:var(--accent-color);font-size:.68rem">Inducción SST</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid var(--surface-border)">
+                            <td style="padding:.35rem .6rem;font-weight:600;color:var(--text-main)">responsable_email</td>
+                            <td style="padding:.35rem .6rem;text-align:center"><span style="background:rgba(99,102,241,.1);color:#6366f1;padding:.1rem .35rem;border-radius:4px;font-size:.6rem;font-weight:700">Opc.</span></td>
+                            <td style="padding:.35rem .6rem;color:var(--text-muted)">Email del usuario responsable. Si no se encuentra, se guarda como texto.</td>
+                            <td style="padding:.35rem .6rem;font-family:monospace;color:var(--accent-color);font-size:.68rem">user@saep.cl</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid var(--surface-border)">
+                            <td style="padding:.35rem .6rem;font-weight:600;color:var(--text-main)">prioridad</td>
+                            <td style="padding:.35rem .6rem;text-align:center"><span style="background:rgba(99,102,241,.1);color:#6366f1;padding:.1rem .35rem;border-radius:4px;font-size:.6rem;font-weight:700">Opc.</span></td>
+                            <td style="padding:.35rem .6rem;color:var(--text-muted)">ALTA, MEDIA o BAJA. Por defecto: MEDIA.</td>
+                            <td style="padding:.35rem .6rem;font-family:monospace;color:var(--accent-color);font-size:.68rem">ALTA</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid var(--surface-border)">
+                            <td style="padding:.35rem .6rem;font-weight:600;color:var(--text-main)">periodicidad</td>
+                            <td style="padding:.35rem .6rem;text-align:center"><span style="background:rgba(99,102,241,.1);color:#6366f1;padding:.1rem .35rem;border-radius:4px;font-size:.6rem;font-weight:700">Opc.</span></td>
+                            <td style="padding:.35rem .6rem;color:var(--text-muted)">UNICA, DIARIA, SEMANAL, QUINCENAL, MENSUAL, BIMENSUAL, TRIMESTRAL, SEMESTRAL o ANUAL.</td>
+                            <td style="padding:.35rem .6rem;font-family:monospace;color:var(--accent-color);font-size:.68rem">MENSUAL</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid var(--surface-border)">
+                            <td style="padding:.35rem .6rem;font-weight:600;color:var(--text-main)">cantidad</td>
+                            <td style="padding:.35rem .6rem;text-align:center"><span style="background:rgba(99,102,241,.1);color:#6366f1;padding:.1rem .35rem;border-radius:4px;font-size:.6rem;font-weight:700">Opc.</span></td>
+                            <td style="padding:.35rem .6rem;color:var(--text-muted)">Repeticiones por mes. Si la tarea se debe hacer 4 veces al mes, poner 4. Por defecto: 1.</td>
+                            <td style="padding:.35rem .6rem;font-family:monospace;color:var(--accent-color);font-size:.68rem">4</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid var(--surface-border)">
+                            <td style="padding:.35rem .6rem;font-weight:600;color:var(--text-main)">fecha_inicio</td>
+                            <td style="padding:.35rem .6rem;text-align:center"><span style="background:rgba(99,102,241,.1);color:#6366f1;padding:.1rem .35rem;border-radius:4px;font-size:.6rem;font-weight:700">Opc.</span></td>
+                            <td style="padding:.35rem .6rem;color:var(--text-muted)">Formato AAAA-MM-DD. Se auto-calcula desde los meses programados si se omite.</td>
+                            <td style="padding:.35rem .6rem;font-family:monospace;color:var(--accent-color);font-size:.68rem">{{ $cartaGantt->anio }}-01-15</td>
+                        </tr>
+                        <tr style="border-bottom:1px solid var(--surface-border)">
+                            <td style="padding:.35rem .6rem;font-weight:600;color:var(--text-main)">fecha_fin</td>
+                            <td style="padding:.35rem .6rem;text-align:center"><span style="background:rgba(99,102,241,.1);color:#6366f1;padding:.1rem .35rem;border-radius:4px;font-size:.6rem;font-weight:700">Opc.</span></td>
+                            <td style="padding:.35rem .6rem;color:var(--text-muted)">Formato AAAA-MM-DD. Se auto-calcula desde los meses programados si se omite.</td>
+                            <td style="padding:.35rem .6rem;font-family:monospace;color:var(--accent-color);font-size:.68rem">{{ $cartaGantt->anio }}-12-31</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:.35rem .6rem;font-weight:600;color:var(--text-main)">meses_programados</td>
+                            <td style="padding:.35rem .6rem;text-align:center"><span style="background:rgba(99,102,241,.1);color:#6366f1;padding:.1rem .35rem;border-radius:4px;font-size:.6rem;font-weight:700">Opc.</span></td>
+                            <td style="padding:.35rem .6rem;color:var(--text-muted)">Números del 1 al 12 separados por coma. Si se omite, se calculan desde la periodicidad.</td>
+                            <td style="padding:.35rem .6rem;font-family:monospace;color:var(--accent-color);font-size:.68rem">1,3,6,9,12</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            {{-- Tips --}}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1.15rem">
+                <div style="padding:.5rem .65rem;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.15);border-radius:8px;font-size:.7rem">
+                    <i class="bi bi-check-circle-fill" style="color:#10b981"></i>
+                    <strong style="color:var(--text-main)">Auto-categorías:</strong>
+                    <span style="color:var(--text-muted)">Si la categoría no existe, se crea automáticamente.</span>
+                </div>
+                <div style="padding:.5rem .65rem;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.15);border-radius:8px;font-size:.7rem">
+                    <i class="bi bi-check-circle-fill" style="color:#10b981"></i>
+                    <strong style="color:var(--text-main)">Auto-meses:</strong>
+                    <span style="color:var(--text-muted)">Sin meses_programados, se calculan desde la periodicidad.</span>
+                </div>
+                <div style="padding:.5rem .65rem;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:8px;font-size:.7rem">
+                    <i class="bi bi-exclamation-triangle-fill" style="color:#f59e0b"></i>
+                    <strong style="color:var(--text-main)">Separador:</strong>
+                    <span style="color:var(--text-muted)">El CSV debe usar punto y coma ( ; ) no coma.</span>
+                </div>
+                <div style="padding:.5rem .65rem;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:8px;font-size:.7rem">
+                    <i class="bi bi-exclamation-triangle-fill" style="color:#f59e0b"></i>
+                    <strong style="color:var(--text-main)">Codificación:</strong>
+                    <span style="color:var(--text-muted)">Guardar como UTF-8 para conservar tildes y ñ.</span>
+                </div>
+            </div>
+
+            {{-- Descargar + Upload --}}
+            <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.15rem;padding:.65rem .8rem;background:rgba(99,102,241,.04);border:1px dashed rgba(99,102,241,.25);border-radius:10px">
+                <i class="bi bi-file-earmark-spreadsheet" style="font-size:1.5rem;color:var(--accent-color)"></i>
+                <div style="flex:1">
+                    <div style="font-size:.78rem;font-weight:600;color:var(--text-main)">¿Primera vez? Descarga la plantilla</div>
+                    <div style="font-size:.68rem;color:var(--text-muted)">Incluye las cabeceras y un ejemplo de fila con todos los campos.</div>
+                </div>
+                <a href="{{ route('carta-gantt.plantilla') }}" class="sst-btn sst-btn-sm sst-btn-primary" style="white-space:nowrap"><i class="bi bi-download"></i> Descargar Plantilla</a>
+            </div>
+
             <form method="POST" action="{{ route('carta-gantt.importar', $cartaGantt) }}" enctype="multipart/form-data">
                 @csrf
-                <div class="form-group" style="margin-bottom:1rem"><label class="sst-label">Archivo CSV *</label><input type="file" name="archivo" required accept=".csv,.txt" class="form-input"></div>
+                <div style="margin-bottom:1rem">
+                    <label class="sst-label" style="margin-bottom:.4rem">Archivo CSV *</label>
+                    <div style="position:relative;border:2px dashed var(--surface-border);border-radius:10px;padding:1.25rem;text-align:center;transition:all .2s;cursor:pointer" id="dropZone"
+                         ondragover="event.preventDefault();this.style.borderColor='var(--accent-color)';this.style.background='rgba(99,102,241,.04)'"
+                         ondragleave="this.style.borderColor='var(--surface-border)';this.style.background='transparent'"
+                         ondrop="event.preventDefault();this.style.borderColor='var(--surface-border)';this.style.background='transparent';document.getElementById('csvFileInput').files=event.dataTransfer.files;document.getElementById('csvFileName').textContent=event.dataTransfer.files[0]?.name||'';document.getElementById('csvFileInfo').style.display='flex'"
+                         onclick="document.getElementById('csvFileInput').click()">
+                        <input type="file" name="archivo" id="csvFileInput" required accept=".csv,.txt" class="form-input" style="display:none"
+                               onchange="document.getElementById('csvFileName').textContent=this.files[0]?.name||'';document.getElementById('csvFileInfo').style.display=this.files[0]?'flex':'none'">
+                        <div id="csvFileInfo" style="display:none;align-items:center;justify-content:center;gap:.5rem">
+                            <i class="bi bi-file-earmark-check" style="font-size:1.3rem;color:#10b981"></i>
+                            <span id="csvFileName" style="font-size:.82rem;font-weight:600;color:var(--text-main)"></span>
+                        </div>
+                        <div id="csvPlaceholder">
+                            <i class="bi bi-cloud-arrow-up" style="font-size:1.8rem;color:var(--text-muted);display:block;margin-bottom:.3rem"></i>
+                            <div style="font-size:.82rem;font-weight:600;color:var(--text-main)">Arrastra tu archivo CSV aquí</div>
+                            <div style="font-size:.7rem;color:var(--text-muted);margin-top:.15rem">o haz clic para seleccionar · Máx. 5 MB · Formato .csv o .txt</div>
+                        </div>
+                    </div>
+                </div>
                 <div style="display:flex;gap:.5rem;justify-content:flex-end">
                     <button type="button" class="sst-btn sst-btn-outline" onclick="document.getElementById('importModal').style.display='none'">Cancelar</button>
-                    <button type="submit" class="sst-btn sst-btn-primary"><i class="bi bi-cloud-upload"></i> Importar</button>
+                    <button type="submit" class="sst-btn sst-btn-primary"><i class="bi bi-cloud-upload"></i> Importar Actividades</button>
                 </div>
             </form>
         </div>
