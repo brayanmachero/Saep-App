@@ -19,15 +19,32 @@ class DashboardController extends Controller
         ];
         $stats['total'] = $stats['pendientes'] + $stats['completados'] + $stats['vencidos'];
 
-        // Formularios pendientes del usuario actual (todos, no solo 5)
-        $mis_pendientes = DB::table('formulario_usuario')
+        // Formularios disponibles: pendientes + continuos (sin fecha_fin y frecuencia != unica)
+        $disponibles = DB::table('formulario_usuario')
             ->join('formularios', 'formularios.id', '=', 'formulario_usuario.formulario_id')
             ->where('formulario_usuario.user_id', $userId)
-            ->where('formulario_usuario.estado', 'Pendiente')
-            ->select('formulario_usuario.*', 'formularios.nombre', 'formularios.codigo', 'formularios.descripcion')
+            ->where('formularios.activo', true)
+            ->where(function ($q) {
+                $q->where('formulario_usuario.estado', 'Pendiente')
+                  ->orWhere(function ($sub) {
+                      // Formularios continuos: sin fecha_fin y frecuencia != unica
+                      $sub->whereNull('formularios.fecha_fin')
+                          ->where('formularios.frecuencia', '!=', 'unica');
+                  });
+            })
+            ->select(
+                'formulario_usuario.*',
+                'formularios.nombre',
+                'formularios.codigo',
+                'formularios.descripcion',
+                'formularios.fecha_fin',
+                'formularios.frecuencia'
+            )
+            ->orderByRaw("FIELD(formulario_usuario.estado, 'Pendiente', 'Completado')")
             ->orderBy('formulario_usuario.fecha_limite')
-            ->get();
+            ->get()
+            ->unique('formulario_id');
 
-        return view('dashboard', compact('stats', 'mis_pendientes'));
+        return view('dashboard', compact('stats', 'disponibles'));
     }
 }
