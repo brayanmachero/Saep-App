@@ -572,9 +572,9 @@
 
     {{-- ===== DRAWER DE DETALLE ===== --}}
     <div id="resp-drawer-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:999;transition:opacity .3s;" onclick="closeDrawer()"></div>
-    <div id="resp-drawer" style="display:none;position:fixed;top:0;right:-480px;width:480px;max-width:100vw;height:100vh;background:var(--card-bg,#fff);border-left:1px solid var(--border-color,#e2e8f0);box-shadow:-8px 0 30px rgba(0,0,0,.12);z-index:1000;overflow-y:auto;transition:right .3s ease;">
-        <div style="position:sticky;top:0;background:var(--card-bg,#fff);border-bottom:1px solid var(--border-color,#e2e8f0);padding:.85rem 1.25rem;display:flex;align-items:center;justify-content:space-between;z-index:1;">
-            <h3 id="drawer-title" style="font-size:.95rem;font-weight:600;margin:0;color:var(--text-color);">Detalle</h3>
+    <div id="resp-drawer" style="display:none;position:fixed;top:0;right:-480px;width:480px;max-width:100vw;height:100vh;background:var(--surface-card-solid,#fff);border-left:1px solid var(--surface-border);box-shadow:-8px 0 30px rgba(0,0,0,.12);z-index:1000;overflow-y:auto;transition:right .3s ease;color:var(--text-main);">
+        <div style="position:sticky;top:0;background:var(--surface-card-solid,#fff);border-bottom:1px solid var(--surface-border);padding:.85rem 1.25rem;display:flex;align-items:center;justify-content:space-between;z-index:1;">
+            <h3 id="drawer-title" style="font-size:.95rem;font-weight:600;margin:0;color:var(--text-main);">Detalle</h3>
             <button type="button" class="icon-btn" onclick="closeDrawer()" style="width:30px;height:30px;">
                 <i class="bi bi-x-lg" style="font-size:.8rem;"></i>
             </button>
@@ -679,7 +679,7 @@ window.openDrawer = function(id) {
     let html = '';
 
     // Header info
-    html += `<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border-color,#e2e8f0);">
+    html += `<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--surface-border);">
         <div style="flex:1;">
             <span style="font-size:1.1rem;font-weight:700;color:var(--primary-color);">${r.req}</span>
             <span style="display:inline-block;margin-left:.5rem;font-size:.72rem;padding:.2rem .5rem;border-radius:6px;background:${badgeBg[r.estado]||'#f1f5f9'};color:${badgeColor[r.estado]||'#6b7280'};font-weight:600;">${r.estado}</span>
@@ -691,14 +691,14 @@ window.openDrawer = function(id) {
 
     // Meta info
     html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1.25rem;">
-        <div style="padding:.5rem .65rem;background:rgba(79,70,229,.04);border-radius:8px;">
+        <div style="padding:.5rem .65rem;background:var(--surface-color);border:1px solid var(--surface-border);border-radius:8px;">
             <p style="font-size:.68rem;color:var(--text-muted);margin:0;">Solicitante</p>
-            <p style="font-size:.82rem;font-weight:500;margin:.1rem 0 0;">${r.usuario}</p>
+            <p style="font-size:.82rem;font-weight:500;margin:.1rem 0 0;color:var(--text-main);">${r.usuario}</p>
             <p style="font-size:.7rem;color:var(--text-muted);margin:0;">${r.departamento}</p>
         </div>
-        <div style="padding:.5rem .65rem;background:rgba(79,70,229,.04);border-radius:8px;">
+        <div style="padding:.5rem .65rem;background:var(--surface-color);border:1px solid var(--surface-border);border-radius:8px;">
             <p style="font-size:.68rem;color:var(--text-muted);margin:0;">Fecha envío</p>
-            <p style="font-size:.82rem;font-weight:500;margin:.1rem 0 0;">${r.fecha}</p>
+            <p style="font-size:.82rem;font-weight:500;margin:.1rem 0 0;color:var(--text-main);">${r.fecha}</p>
             ${r.fecha_resolucion ? `<p style="font-size:.7rem;color:var(--text-muted);margin:0;">Resuelto: ${r.fecha_resolucion}</p>` : ''}
         </div>
     </div>`;
@@ -713,18 +713,18 @@ window.openDrawer = function(id) {
         } else if (f.type === 'file') {
             if (val && typeof val === 'object' && val.path) {
                 const size = val.size ? ` (${Math.round(val.size/1024)} KB)` : '';
-                rendered = `<a href="/storage/${val.path}" target="_blank" style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--accent-color);text-decoration:none;padding:.3rem .6rem;background:rgba(79,70,229,.05);border:1px solid rgba(79,70,229,.15);border-radius:6px;">
+                rendered = `<a href="/storage/${val.path}" target="_blank" style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--accent-color);text-decoration:none;padding:.3rem .6rem;background:var(--surface-color);border:1px solid var(--surface-border);border-radius:6px;">
                     <i class="bi bi-download"></i> ${val.name || 'Descargar'}${size}
                 </a>`;
             } else {
                 rendered = '<span style="color:var(--text-muted);font-style:italic;">Sin archivo</span>';
             }
         } else if (Array.isArray(val)) {
-            rendered = `<span style="font-size:.85rem;">${val.join(', ') || '—'}</span>`;
+            rendered = `<span style="font-size:.85rem;color:var(--text-main);">${val.join(', ') || '—'}</span>`;
         } else {
-            rendered = `<span style="font-size:.85rem;">${val || '—'}</span>`;
+            rendered = `<span style="font-size:.85rem;color:var(--text-main);">${val || '—'}</span>`;
         }
-        html += `<div style="margin-bottom:.85rem;padding-bottom:.65rem;border-bottom:1px solid rgba(0,0,0,.04);">
+        html += `<div style="margin-bottom:.85rem;padding-bottom:.65rem;border-bottom:1px solid var(--surface-border);">
             <label style="display:block;font-size:.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;">${f.label}</label>
             ${rendered}
         </div>`;
@@ -732,7 +732,7 @@ window.openDrawer = function(id) {
 
     // Approvals timeline
     if (r.aprobaciones && r.aprobaciones.length > 0) {
-        html += `<h4 style="font-size:.78rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:.04em;margin:1.25rem 0 .75rem;padding-top:.75rem;border-top:1px solid var(--border-color,#e2e8f0);"><i class="bi bi-clock-history"></i> Historial de aprobación</h4>`;
+        html += `<h4 style="font-size:.78rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:.04em;margin:1.25rem 0 .75rem;padding-top:.75rem;border-top:1px solid var(--surface-border);"><i class="bi bi-clock-history"></i> Historial de aprobación</h4>`;
         r.aprobaciones.forEach(a => {
             const aColor = {Aprobado:'#16a34a',Rechazado:'#dc2626','Revisión':'#d97706',Comentario:'#6b7280'}[a.accion] || '#6b7280';
             const aIcon = {Aprobado:'bi-check-circle-fill',Rechazado:'bi-x-circle-fill','Revisión':'bi-arrow-repeat',Comentario:'bi-chat-dots-fill'}[a.accion] || 'bi-chat-dots';
@@ -751,7 +751,7 @@ window.openDrawer = function(id) {
     }
 
     // Footer action
-    html += `<div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border-color,#e2e8f0);display:flex;gap:.5rem;">
+    html += `<div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--surface-border);display:flex;gap:.5rem;">
         <a href="${r.show_url}" class="btn-premium" style="flex:1;justify-content:center;font-size:.82rem;"><i class="bi bi-eye-fill"></i> Ver completo</a>
         <a href="${r.pdf_url}" target="_blank" class="btn-secondary" style="font-size:.82rem;"><i class="bi bi-download"></i> PDF</a>
     </div>`;

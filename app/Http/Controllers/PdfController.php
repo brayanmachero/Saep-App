@@ -19,7 +19,7 @@ class PdfController extends Controller
         $schema = json_decode($respuesta->formulario->schema_json ?? '[]', true);
 
         $pdf = Pdf::loadView('pdf.respuesta', compact('respuesta', 'datos', 'schema'))
-            ->setPaper('a4', 'portrait');
+            ->setPaper('legal', 'portrait');
 
         $filename = 'solicitud-' . str_pad($respuesta->id, 5, '0', STR_PAD_LEFT) . '.pdf';
         return $pdf->download($filename);
