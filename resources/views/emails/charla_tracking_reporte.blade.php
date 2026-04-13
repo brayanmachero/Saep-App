@@ -157,6 +157,32 @@ body, table, td { font-family: Arial, Helvetica, sans-serif !important; }
         @endforeach
         </table>
     </td></tr>
+    {{-- Leyenda de columnas --}}
+    <tr><td style="padding:10px 10px 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8fafc; border:1px solid #e2e8f0;">
+        <tr><td style="padding:10px 14px;">
+            <p style="margin:0 0 6px; font-size:11px; font-weight:bold; color:#475569; font-family:Arial, Helvetica, sans-serif; text-transform:uppercase; letter-spacing:0.5px;">Glosario de columnas</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+                <td width="50%" valign="top" style="padding:2px 0;">
+                    <p style="margin:0; font-size:11px; color:#334155; font-family:Arial, Helvetica, sans-serif; line-height:16px;"><strong style="color:#dc2626;">Pend.</strong> &mdash; Formularios a&uacute;n no completados por el destinatario.</p>
+                </td>
+                <td width="50%" valign="top" style="padding:2px 0 2px 12px;">
+                    <p style="margin:0; font-size:11px; color:#334155; font-family:Arial, Helvetica, sans-serif; line-height:16px;"><strong style="color:#15803d;">OK</strong> &mdash; Formularios completados exitosamente.</p>
+                </td>
+            </tr>
+            <tr>
+                <td width="50%" valign="top" style="padding:2px 0;">
+                    <p style="margin:0; font-size:11px; color:#334155; font-family:Arial, Helvetica, sans-serif; line-height:16px;"><strong style="color:#0369a1;">Recup.</strong> &mdash; Descargados al dispositivo m&oacute;vil, pero no completados a&uacute;n.</p>
+                </td>
+                <td width="50%" valign="top" style="padding:2px 0 2px 12px;">
+                    <p style="margin:0; font-size:11px; color:#334155; font-family:Arial, Helvetica, sans-serif; line-height:16px;"><strong style="color:#b45309;">Sin desc.</strong> &mdash; Transferidos pero no descargados al dispositivo a&uacute;n.</p>
+                </td>
+            </tr>
+            </table>
+        </td></tr>
+        </table>
+    </td></tr>
     </table>
 </td>
 </tr>

@@ -231,6 +231,7 @@ Route::middleware('auth')->group(function () {
         Route::get('charla-tracking', [CharlaTrackingController::class, 'index'])->name('charla-tracking.index');
         Route::get('charla-tracking/email-preview', [CharlaTrackingController::class, 'emailPreview'])->name('charla-tracking.email-preview');
         Route::post('charla-tracking/sync', [CharlaTrackingController::class, 'sync'])->name('charla-tracking.sync');
+        Route::post('charla-tracking/send-report', [CharlaTrackingController::class, 'sendNow'])->name('charla-tracking.send-report');
     });
 
     // --- TARJETA STOP CCU (Google Drive) ---

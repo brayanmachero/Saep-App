@@ -906,6 +906,21 @@
     transition: border-color .2s;
 }
 .filter-select:focus { border-color: var(--accent-color); }
+
+/* Dark mode */
+body.dark-mode .filter-select {
+    background: #1f2937;
+    border-color: rgba(75, 85, 99, 0.6);
+    color: #f9fafb;
+}
+body.dark-mode .filter-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 108, 245, 0.2);
+}
+body.dark-mode .filter-select option {
+    background-color: #1f2937;
+    color: #f9fafb;
+}
 @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 #sync-icon { display:inline-block; }
 </style>

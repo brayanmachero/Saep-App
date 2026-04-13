@@ -20,6 +20,12 @@
             <a href="{{ route('charla-tracking.email-preview') }}" target="_blank" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;text-decoration:none">
                 <i class="bi bi-envelope-open"></i> Vista Previa Email
             </a>
+            <form method="POST" action="{{ route('charla-tracking.send-report') }}" id="send-report-form" style="display:inline" onsubmit="return confirm('¿Enviar el reporte semanal ahora a todos los destinatarios configurados?')">
+                @csrf
+                <button type="submit" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;background:#1e40af;color:#fff;border:none;cursor:pointer">
+                    <i class="bi bi-send-fill"></i> Enviar Reporte Ahora
+                </button>
+            </form>
             <form method="POST" action="{{ route('charla-tracking.sync') }}" id="sync-form">
                 @csrf
                 <button type="submit" class="btn-premium" id="sync-btn" style="padding:.5rem 1rem;font-size:.82rem">

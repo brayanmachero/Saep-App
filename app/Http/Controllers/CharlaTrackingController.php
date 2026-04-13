@@ -186,4 +186,12 @@ class CharlaTrackingController extends Controller
 
         return $mailable->render();
     }
+
+    public function sendNow()
+    {
+        Artisan::call('kizeo:charla-weekly-report', ['--sync' => true]);
+        $output = Artisan::output();
+
+        return back()->with('success', 'Reporte enviado exitosamente. ' . trim($output));
+    }
 }
