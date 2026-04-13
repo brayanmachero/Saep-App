@@ -62,14 +62,14 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .accent-line { height: 3px; background: linear-gradient(90deg, #f97316, #fb923c, #fdba74); }
 
 /* ── Info grid ── */
-.info-strip { display: table; width: 100%; margin: 10px 0 0; }
-.info-item { display: table-cell; padding: 7px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid #0f1b4c; }
+.info-strip { display: table; width: 100%; margin: 14px 0 0; }
+.info-item { display: table-cell; padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid #0f1b4c; }
 .info-item .label { font-size: 7px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
 .info-item .value { font-size: 9.5px; font-weight: 700; color: #0f172a; margin-top: 2px; }
 
 /* ── KPI cards ── */
-.kpi-row { display: table; width: 100%; margin: 12px 0 10px; }
-.kpi-card { display: table-cell; text-align: center; padding: 10px 5px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; vertical-align: middle; }
+.kpi-row { display: table; width: 100%; margin: 16px 0 14px; }
+.kpi-card { display: table-cell; text-align: center; padding: 12px 5px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; vertical-align: middle; }
 .kpi-card .kpi-num { font-size: 22px; font-weight: 900; line-height: 1; }
 .kpi-card .kpi-label { font-size: 7px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; color: #64748b; margin-top: 3px; }
 .kpi-blue .kpi-num   { color: #0f1b4c; }
@@ -81,13 +81,13 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .kpi-spacer { display: table-cell; width: 5px; }
 
 /* ── Section titles ── */
-.section { margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 2px solid #e2e8f0; }
+.section { margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #e2e8f0; }
 .section-inner { display: table; width: 100%; }
 .section-bar { display: table-cell; width: 4px; background: #0f1b4c; border-radius: 2px; }
 .section-text { display: table-cell; vertical-align: middle; padding-left: 8px; font-size: 11px; font-weight: 900; text-transform: uppercase; color: #1e293b; letter-spacing: 0.5px; }
 
 /* ── Two-column layout ── */
-.two-col { display: table; width: 100%; margin: 8px 0; }
+.two-col { display: table; width: 100%; margin: 14px 0; }
 .col-left { display: table-cell; width: 40%; vertical-align: top; padding-right: 18px; }
 .col-right { display: table-cell; width: 60%; vertical-align: top; }
 
@@ -98,10 +98,10 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .col-33:last-child { padding-right: 0; }
 
 /* ── Progress ring ── */
-.ring-wrap { text-align: center; margin-bottom: 12px; }
-.ring-circle { width: 110px; height: 110px; border-radius: 55px; border: 14px solid #e2e8f0; position: relative; margin: 0 auto; }
+.ring-wrap { text-align: center; margin-bottom: 14px; }
+.ring-circle { width: 120px; height: 120px; border-radius: 60px; border: 15px solid #e2e8f0; position: relative; margin: 0 auto; }
 .ring-inner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
-.ring-pct { font-size: 26px; font-weight: 900; color: #0f1b4c; }
+.ring-pct { font-size: 28px; font-weight: 900; color: #0f1b4c; }
 .ring-sub { font-size: 7.5px; color: #94a3b8; text-transform: uppercase; font-weight: 700; }
 
 /* ── Status dots ── */
@@ -115,7 +115,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 
 /* ── Bar chart ── */
 .bar-chart { width: 100%; }
-.bar-row { display: table; width: 100%; margin-bottom: 3px; }
+.bar-row { display: table; width: 100%; margin-bottom: 4px; }
 .bar-label { display: table-cell; width: 30px; font-size: 8px; font-weight: 700; color: #475569; vertical-align: middle; text-align: center; }
 .bar-track { display: table-cell; vertical-align: middle; padding: 0 4px; }
 .bar-bg { height: 14px; background: #f1f5f9; border-radius: 3px; position: relative; overflow: hidden; }
@@ -277,6 +277,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     </div>
 
     {{-- KPIs --}}
+    <div style="height:1px;background:linear-gradient(90deg,#e2e8f0,#f8fafc);margin:8px 0;"></div>
     <div class="kpi-row">
         <div class="kpi-card kpi-blue">
             <div class="kpi-num">{{ $pct }}%</div>
@@ -315,6 +316,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     </div>
 
     {{-- Two-column: Left = Ring + Status + Priority | Right = Monthly bars --}}
+    <div style="height:1px;background:linear-gradient(90deg,#e2e8f0,#f8fafc);margin:6px 0;"></div>
     <div class="two-col">
         <div class="col-left">
             <div class="ring-wrap">
@@ -382,7 +384,8 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
         </div>
     </div>
 
-    {{-- ── NEW: Category Progress Summary ── --}}
+    {{-- ── Category Progress Summary ── --}}
+    <div style="height:1px;background:linear-gradient(90deg,#e2e8f0,#f8fafc);margin:6px 0;"></div>
     <div class="section">
         <div class="section-inner">
             <div class="section-bar"></div>
