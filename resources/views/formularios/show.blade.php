@@ -282,9 +282,13 @@
 
             <!-- Acciones rápidas -->
             <div class="glass-card" style="padding:.85rem 1rem;">
-                <h3 style="font-size:0.8rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:.75rem;">
-                    <i class="bi bi-lightning-charge-fill"></i> Acciones rápidas
-                </h3>
+                <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleSection('sec-acciones')">
+                    <h3 style="font-size:0.8rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin:0;">
+                        <i class="bi bi-lightning-charge-fill"></i> Acciones rápidas
+                    </h3>
+                    <i class="bi bi-chevron-down section-chevron" id="chevron-sec-acciones" style="font-size:.75rem;color:var(--text-muted);transition:transform .25s;transform:rotate(-90deg);"></i>
+                </div>
+                <div id="sec-acciones" style="display:none;margin-top:.75rem;">
                 <div style="display:flex;flex-direction:column;gap:0.4rem;">
                     <a href="{{ route('respuestas.create', ['formulario_id' => $formulario->id]) }}"
                        class="btn-premium" style="justify-content:center;font-size:.82rem;padding:.5rem .75rem;">
@@ -333,13 +337,18 @@
                     </form>
                     @endif
                 </div>
+                </div>
             </div>
 
             <!-- Indicadores compactos -->
             <div class="glass-card" style="padding:.85rem 1rem;">
-                <h3 style="font-size:0.8rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:.6rem;">
-                    <i class="bi bi-bar-chart-fill"></i> Resumen
-                </h3>
+                <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleSection('sec-resumen')">
+                    <h3 style="font-size:0.8rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin:0;">
+                        <i class="bi bi-bar-chart-fill"></i> Resumen
+                    </h3>
+                    <i class="bi bi-chevron-down section-chevron" id="chevron-sec-resumen" style="font-size:.75rem;color:var(--text-muted);transition:transform .25s;"></i>
+                </div>
+                <div id="sec-resumen" style="margin-top:.6rem;">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;">
                     <div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem .6rem;background:rgba(79,70,229,0.06);border-radius:6px;">
                         <span style="font-size:.72rem;color:var(--text-muted);">Total</span>
@@ -364,15 +373,20 @@
                     <strong style="font-size:.85rem;color:var(--text-muted);">{{ $stats['borradores'] }}</strong>
                 </div>
                 @endif
+                </div>
             </div>
 
             {{-- Panel de asignación --}}
             @if(auth()->user()->tieneAcceso('formularios', 'puede_editar'))
             <div class="glass-card" style="padding:.85rem 1rem;">
-                <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:1rem;">
-                    <i class="bi bi-people-fill"></i> Asignaciones
-                    <span class="badge" style="margin-left:.3rem">{{ $asignados->count() }}</span>
-                </h3>
+                <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleSection('sec-asignaciones')">
+                    <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin:0;">
+                        <i class="bi bi-people-fill"></i> Asignaciones
+                        <span class="badge" style="margin-left:.3rem">{{ $asignados->count() }}</span>
+                    </h3>
+                    <i class="bi bi-chevron-down section-chevron" id="chevron-sec-asignaciones" style="font-size:.75rem;color:var(--text-muted);transition:transform .25s;transform:rotate(-90deg);"></i>
+                </div>
+                <div id="sec-asignaciones" style="display:none;margin-top:1rem;">
 
                 <form method="POST" action="{{ route('formularios.asignar', $formulario) }}">
                     @csrf
@@ -479,6 +493,7 @@
                         @endforeach
                     </div>
                 @endif
+                </div>
             </div>
             @endif
         </div>
