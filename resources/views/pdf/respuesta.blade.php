@@ -43,7 +43,7 @@
     .badge-Completado { background: #dbeafe; color: #1e40af; }
 
     /* Body */
-    .body { padding: 16px 24px; }
+    .body { padding: 16px 24px 40px 24px; }
 
     /* Section title */
     .st { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #0f1b4c; border-bottom: 2px solid #0f1b4c; padding-bottom: 4px; margin-bottom: 10px; }
@@ -81,8 +81,8 @@
     .vrf-l { color: #6b7280; width: 16%; }
     .vrf-v { font-family: 'DejaVu Sans Mono', monospace; color: #1e293b; font-weight: 600; width: 34%; }
 
-    /* Footer */
-    .ftr { width: 100%; border-collapse: collapse; background: #0f1b4c; }
+    /* Footer - fixed bottom */
+    .ftr { width: 100%; border-collapse: collapse; background: #0f1b4c; position: fixed; bottom: 0; left: 0; }
     .ftr td { padding: 10px 24px; color: rgba(255,255,255,0.55); font-size: 7px; vertical-align: middle; }
 
     /* Legal text */
