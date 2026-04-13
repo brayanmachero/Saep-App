@@ -260,29 +260,6 @@ body, table, td { font-family: Arial, Helvetica, sans-serif !important; }
 </tr>
 @endif
 
-{{-- ===== CTA BUTTON ===== --}}
-<tr>
-<td style="padding:20px 32px; text-align:center;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
-    <tr>
-        <td align="center" style="background-color:#1e40af; padding:0;">
-            <!--[if mso]>
-            <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{ url('/charla-tracking') }}" style="height:44px;v-text-anchor:middle;width:240px;" arcsize="14%" strokecolor="#1e40af" fillcolor="#1e40af">
-            <w:anchorlock/>
-            <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;">Ver Dashboard Completo</center>
-            </v:roundrect>
-            <![endif]-->
-            <!--[if !mso]><!-->
-            <a href="{{ url('/charla-tracking') }}" style="display:inline-block; background-color:#1e40af; color:#ffffff; padding:12px 32px; text-decoration:none; font-weight:bold; font-size:14px; font-family:Arial, Helvetica, sans-serif; border-radius:6px; line-height:20px;">
-                Ver Dashboard Completo
-            </a>
-            <!--<![endif]-->
-        </td>
-    </tr>
-    </table>
-</td>
-</tr>
-
 {{-- ===== FOOTER ===== --}}
 <tr>
 <td style="background-color:#f8fafc; padding:20px 32px; text-align:center; border-top:1px solid #e2e8f0;">
