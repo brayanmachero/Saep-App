@@ -156,6 +156,10 @@ class FormularioController extends Controller
     {
         $schema = json_decode($formulario->schema_json ?? '[]', true);
 
+        // Identify filterable (select-like) fields from schema
+        $filterableTypes = ['select', 'radio', 'select_dynamic', 'select_tabla'];
+        $filterFields = collect($schema)->filter(fn($f) => in_array($f['type'], $filterableTypes))->values();
+
         $query = $formulario->respuestas()->with('usuario.departamento');
 
         if ($request->filled('desde')) {
@@ -168,7 +172,45 @@ class FormularioController extends Controller
             $query->where('estado', $request->estado);
         }
 
+        // Apply dynamic field filters
+        $activeFieldFilters = [];
+        foreach ($filterFields as $field) {
+            $paramName = 'campo_' . $field['id'];
+            if ($request->filled($paramName)) {
+                $filterValue = $request->input($paramName);
+                $activeFieldFilters[$field['id']] = $filterValue;
+                $query->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(datos_json, ?)) = ?", ['$.' . $field['id'], $filterValue]);
+            }
+        }
+
         $respuestas = $query->latest('fecha_envio')->get();
+
+        // Build distinct options for each filterable field (from ALL responses, not filtered)
+        $allRespuestas = $formulario->respuestas()->get();
+        $filterOptions = [];
+        foreach ($filterFields as $field) {
+            $options = [];
+            foreach ($allRespuestas as $r) {
+                $datos = json_decode($r->datos_json ?? '{}', true);
+                $val = $datos[$field['id']] ?? null;
+                if ($val !== null && $val !== '') {
+                    if (is_array($val)) {
+                        foreach ($val as $v) {
+                            $v = trim($v);
+                            if ($v !== '') $options[$v] = true;
+                        }
+                    } else {
+                        $options[trim($val)] = true;
+                    }
+                }
+            }
+            ksort($options);
+            $filterOptions[$field['id']] = [
+                'label'   => $field['label'],
+                'type'    => $field['type'],
+                'options' => array_keys($options),
+            ];
+        }
 
         // KPIs
         $totalResp = $respuestas->count();
@@ -223,7 +265,7 @@ class FormularioController extends Controller
 
         return view('formularios.dashboard', compact(
             'formulario', 'schema', 'totalResp', 'byEstado', 'trend',
-            'byUser', 'byDepto', 'fieldCharts', 'request'
+            'byUser', 'byDepto', 'fieldCharts', 'filterOptions', 'activeFieldFilters', 'request'
         ));
     }
 

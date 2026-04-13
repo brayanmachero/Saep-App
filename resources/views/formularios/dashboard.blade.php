@@ -40,10 +40,23 @@
                     @endforeach
                 </select>
             </div>
+            @foreach($filterOptions as $fieldId => $fo)
+                @if(count($fo['options']) > 0)
+                <div>
+                    <label style="font-size:.72rem;text-transform:uppercase;color:var(--text-muted);display:block;margin-bottom:.25rem;">{{ $fo['label'] }}</label>
+                    <select name="campo_{{ $fieldId }}" class="form-input" style="font-size:.82rem;padding:.4rem .65rem;max-width:200px;">
+                        <option value="">Todos</option>
+                        @foreach($fo['options'] as $opt)
+                            <option value="{{ $opt }}" {{ ($activeFieldFilters[$fieldId] ?? '') == $opt ? 'selected' : '' }}>{{ $opt }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                @endif
+            @endforeach
             <button type="submit" class="btn-premium" style="font-size:.82rem;padding:.45rem 1rem;">
                 <i class="bi bi-funnel-fill"></i> Filtrar
             </button>
-            @if(request()->hasAny(['desde','hasta','estado']))
+            @if(request()->hasAny(['desde','hasta','estado']) || count($activeFieldFilters) > 0)
                 <a href="{{ route('formularios.dashboard', $formulario) }}" class="btn-ghost" style="font-size:.82rem;padding:.45rem .75rem;">
                     <i class="bi bi-x-circle"></i> Limpiar
                 </a>
