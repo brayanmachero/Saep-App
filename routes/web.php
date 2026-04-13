@@ -198,6 +198,8 @@ Route::middleware('auth')->group(function () {
 
     // --- SST: CARTA GANTT ---
     Route::middleware('modulo:carta_gantt')->group(function () {
+        Route::get('carta-gantt/{cartaGantt}/reporte-pdf', [CartaGanttController::class, 'exportPdf'])
+            ->name('carta-gantt.reporte-pdf');
         Route::resource('carta-gantt', CartaGanttController::class);
         // Categorías
         Route::post('carta-gantt/{cartaGantt}/categorias',   [CartaGanttController::class, 'storeCategoria'])

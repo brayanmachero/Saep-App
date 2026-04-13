@@ -59,6 +59,9 @@
             </div>
         </div>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <a href="{{ route('carta-gantt.reporte-pdf', $cartaGantt) }}" class="sst-btn sst-btn-outline" target="_blank">
+                <i class="bi bi-file-earmark-pdf"></i> Reporte PDF
+            </a>
             <button class="sst-btn sst-btn-outline" onclick="document.getElementById('importModal').style.display='flex'">
                 <i class="bi bi-cloud-upload"></i> Importar CSV
             </button>

@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class CartaGanttController extends Controller
 {
@@ -100,6 +101,78 @@ class CartaGanttController extends Controller
         ]);
         $usuarios = User::orderBy('name')->get();
         return view('carta_gantt.show', compact('cartaGantt', 'usuarios'));
+    }
+
+    public function exportPdf(ProgramaSst $cartaGantt)
+    {
+        $cartaGantt->load([
+            'categorias.actividades.seguimiento',
+            'categorias.actividades.responsableUser',
+            'categorias.actividades.planesAccion',
+            'categorias.actividades.reprogramaciones.usuario',
+            'centroCosto', 'responsable', 'creador',
+        ]);
+
+        $mesActual   = (int) date('n');
+        $mesesNombres = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+        // Collect all activities
+        $todasActividades = $cartaGantt->categorias->flatMap->actividades;
+        $totalAct = $todasActividades->count();
+
+        // States
+        $completadas = $todasActividades->where('estado', 'COMPLETADA')->count();
+        $enProgreso  = $todasActividades->where('estado', 'EN_PROGRESO')->count();
+        $canceladas  = $todasActividades->where('estado', 'CANCELADA')->count();
+        $pendientes  = $totalAct - $completadas - $enProgreso - $canceladas;
+
+        // Global advance
+        $pct = $cartaGantt->porcentajeRealizado;
+
+        // Monthly progress (programado vs realizado per month)
+        $mesesData = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $prog = 0; $real = 0;
+            foreach ($todasActividades as $act) {
+                foreach ($act->seguimiento as $seg) {
+                    if ($seg->mes === $m && $seg->programado) {
+                        $prog += $act->cantidad_programada;
+                        $real += $seg->cantidad_realizada;
+                    }
+                }
+            }
+            $mesesData[$m] = ['prog' => $prog, 'real' => $real, 'pct' => $prog > 0 ? round(($real / $prog) * 100) : 0];
+        }
+
+        // Activities with issues
+        $vencidas   = $todasActividades->filter(fn ($a) => $a->estaVencida)->values();
+        $porVencer  = $todasActividades->filter(fn ($a) => $a->estaPorVencer)->values();
+
+        // Reprogramaciones
+        $reprogramaciones = SstReprogramacion::whereIn('actividad_id', $todasActividades->pluck('id'))
+            ->with(['actividad', 'usuario'])
+            ->orderByDesc('created_at')
+            ->get();
+
+        // Priority distribution
+        $prioridades = [
+            'ALTA'  => $todasActividades->where('prioridad', 'ALTA')->count(),
+            'MEDIA' => $todasActividades->where('prioridad', 'MEDIA')->count(),
+            'BAJA'  => $todasActividades->where('prioridad', 'BAJA')->count(),
+        ];
+
+        $pdf = Pdf::loadView('pdf.carta_gantt_reporte', compact(
+            'cartaGantt', 'mesActual', 'mesesNombres', 'totalAct',
+            'completadas', 'enProgreso', 'pendientes', 'canceladas', 'pct',
+            'mesesData', 'vencidas', 'porVencer', 'reprogramaciones', 'prioridades'
+        ))->setPaper('a4', 'landscape')->setOptions([
+            'isHtml5ParserEnabled' => true,
+            'defaultFont'          => 'DejaVu Sans',
+            'dpi'                  => 130,
+        ]);
+
+        $filename = "Reporte_{$cartaGantt->codigo}_" . date('Ymd') . '.pdf';
+        return $pdf->download($filename);
     }
 
     public function edit(ProgramaSst $cartaGantt)
