@@ -483,8 +483,8 @@
 </div>
 
 {{-- Modal Reprogramar --}}
-<div id="reprogramarModal" class="sst-modal" style="display:none">
-    <div class="sst-modal-content" style="max-width:480px">
+<div id="reprogramarModal" class="sst-modal-overlay" style="display:none" onclick="if(event.target===this)closeReprogramar()">
+    <div class="sst-modal" style="max-width:480px">
         <div class="sst-modal-header" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;">
             <h3 style="margin:0;font-size:1rem;font-weight:700"><i class="bi bi-calendar2-range"></i> Reprogramar Actividad</h3>
             <button onclick="closeReprogramar()" class="sst-icon-btn" style="color:#fff"><i class="bi bi-x-lg"></i></button>
