@@ -158,17 +158,17 @@ Route::middleware('auth')->group(function () {
 
     // --- Respuestas: gestión administrativa (accedida desde detalle de formulario) ---
     Route::middleware('modulo:formularios')->group(function () {
+        Route::delete('respuestas/bulk-destroy', [RespuestaController::class, 'bulkDestroy'])
+            ->name('respuestas.bulkDestroy');
+        Route::post('respuestas/bulk-estado', [RespuestaController::class, 'bulkEstado'])
+            ->name('respuestas.bulkEstado')
+            ->middleware('permission:puede_aprobar');
         Route::get('respuestas/{respuesta}/edit', [RespuestaController::class, 'edit'])->name('respuestas.edit');
         Route::put('respuestas/{respuesta}', [RespuestaController::class, 'update'])->name('respuestas.update');
         Route::delete('respuestas/{respuesta}', [RespuestaController::class, 'destroy'])->name('respuestas.destroy');
         Route::patch('respuestas/{respuesta}/estado', [RespuestaController::class, 'cambiarEstado'])
             ->name('respuestas.estado')
             ->middleware('permission:puede_aprobar');
-        Route::post('respuestas/bulk-estado', [RespuestaController::class, 'bulkEstado'])
-            ->name('respuestas.bulkEstado')
-            ->middleware('permission:puede_aprobar');
-        Route::delete('respuestas/bulk-destroy', [RespuestaController::class, 'bulkDestroy'])
-            ->name('respuestas.bulkDestroy');
         Route::get('respuestas-exportar', [RespuestaController::class, 'exportar'])
             ->name('respuestas.exportar');
         Route::get('respuestas-plantilla/{formulario}', [RespuestaController::class, 'plantillaImport'])
