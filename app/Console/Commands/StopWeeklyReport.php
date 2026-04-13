@@ -122,17 +122,16 @@ class StopWeeklyReport extends Command
 
         $frecLabel = $esMensual ? 'Mensual' : 'Semanal';
 
-        $mailable = new StopReporteMail(
-            analytics: $analytics,
-            periodo: $periodo,
-            mesLabel: $mesLabel,
-            frecuencia: $frecLabel,
-            comparison: $comparison,
-            evalDetail: $evalDetail,
-        );
-
         foreach ($destinatarios as $dest) {
             try {
+                $mailable = new StopReporteMail(
+                    analytics: $analytics,
+                    periodo: $periodo,
+                    mesLabel: $mesLabel,
+                    frecuencia: $frecLabel,
+                    comparison: $comparison,
+                    evalDetail: $evalDetail,
+                );
                 Mail::to($dest)->send($mailable);
                 User::where('email', $dest)->first()?->notify(new AppNotification(
                     'Reporte STOP disponible',

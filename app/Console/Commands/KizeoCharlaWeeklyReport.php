@@ -147,14 +147,13 @@ class KizeoCharlaWeeklyReport extends Command
             return self::SUCCESS;
         }
 
-        // Enviar email
-        $mailable = new CharlaTrackingReporteMail(
-            $stats, $pendientesPorUsuario, $resumenSemanal,
-            $topDestinatarios, $periodo
-        );
-
+        // Enviar email (crear mailable nuevo por cada destinatario para evitar acumulación de recipients)
         foreach ($destinatarios as $dest) {
             try {
+                $mailable = new CharlaTrackingReporteMail(
+                    $stats, $pendientesPorUsuario, $resumenSemanal,
+                    $topDestinatarios, $periodo
+                );
                 Mail::to($dest)->send($mailable);
                 User::where('email', $dest)->first()?->notify(new AppNotification(
                     'Reporte semanal charlas',
