@@ -482,6 +482,12 @@
                 <a href="{{ route('respuestas.exportar', ['formulario_id' => $formulario->id]) }}" class="btn-secondary" style="font-size:.78rem;padding:.35rem .65rem;">
                     <i class="bi bi-file-earmark-spreadsheet"></i> Excel
                 </a>
+                <a href="{{ route('respuestas.plantillaImport', $formulario) }}" class="btn-secondary" style="font-size:.78rem;padding:.35rem .65rem;">
+                    <i class="bi bi-download"></i> Plantilla
+                </a>
+                <button type="button" onclick="document.getElementById('modal-importar').style.display='flex'" class="btn-secondary" style="font-size:.78rem;padding:.35rem .65rem;">
+                    <i class="bi bi-upload"></i> Importar
+                </button>
             </div>
         </div>
 
@@ -622,6 +628,46 @@
     window.__respuestas = @json($respuestasJson);
     window.__schema = @json($schemaJson);
 </script>
+
+{{-- ===== MODAL IMPORTAR ===== --}}
+<div id="modal-importar" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);backdrop-filter:blur(4px);align-items:center;justify-content:center;">
+    <div style="background:var(--card-bg,#fff);border-radius:16px;padding:1.5rem 1.75rem;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.25);border:1px solid var(--surface-border);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+            <h3 style="margin:0;font-size:1rem;font-weight:700;color:var(--text-primary);">
+                <i class="bi bi-upload" style="color:var(--primary-color);margin-right:.4rem;"></i> Importar Respuestas
+            </h3>
+            <button onclick="document.getElementById('modal-importar').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-muted);padding:.25rem;">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div style="background:var(--surface-color);border:1px solid var(--surface-border);border-radius:10px;padding:.85rem 1rem;margin-bottom:1rem;font-size:.82rem;color:var(--text-secondary);line-height:1.5;">
+            <strong style="color:var(--text-primary);">Instrucciones:</strong>
+            <ol style="margin:.5rem 0 0;padding-left:1.2rem;">
+                <li>Descargue la <a href="{{ route('respuestas.plantillaImport', $formulario) }}" style="color:var(--primary-color);font-weight:600;">plantilla Excel</a> del formulario.</li>
+                <li>Complete los datos a partir de la fila 5 (no modifique las filas 1-4).</li>
+                <li>Use el <strong>email</strong> del trabajador registrado en SAEP — los campos automáticos (nombre, cargo, depto, etc.) se llenan solos.</li>
+                <li>Los campos de <strong>desplegable dinámico</strong> aceptan valores nuevos que se agregan automáticamente al listado.</li>
+                <li>Suba el archivo completado aquí.</li>
+            </ol>
+        </div>
+        <form action="{{ route('respuestas.importar', $formulario) }}" method="POST" enctype="multipart/form-data">
+            @csrf
+            <div style="margin-bottom:1rem;">
+                <label for="archivo-importar" style="font-size:.82rem;font-weight:600;color:var(--text-primary);display:block;margin-bottom:.4rem;">Archivo Excel (.xlsx)</label>
+                <input type="file" name="archivo" id="archivo-importar" accept=".xlsx,.xls" required class="form-input" style="font-size:.82rem;padding:.4rem .65rem;width:100%;">
+            </div>
+            <div style="display:flex;gap:.5rem;justify-content:flex-end;">
+                <button type="button" onclick="document.getElementById('modal-importar').style.display='none'" class="btn-secondary" style="font-size:.82rem;padding:.4rem 1rem;">
+                    Cancelar
+                </button>
+                <button type="submit" class="btn-premium" style="font-size:.82rem;padding:.4rem 1rem;">
+                    <i class="bi bi-cloud-upload"></i> Importar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @endsection
 
 @push('scripts')

@@ -167,6 +167,10 @@ Route::middleware('auth')->group(function () {
             ->middleware('permission:puede_aprobar');
         Route::get('respuestas-exportar', [RespuestaController::class, 'exportar'])
             ->name('respuestas.exportar');
+        Route::get('respuestas-plantilla/{formulario}', [RespuestaController::class, 'plantillaImport'])
+            ->name('respuestas.plantillaImport');
+        Route::post('respuestas-importar/{formulario}', [RespuestaController::class, 'importar'])
+            ->name('respuestas.importar');
     });
 
     // --- SST: CHARLAS ---

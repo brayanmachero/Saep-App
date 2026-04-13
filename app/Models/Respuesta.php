@@ -22,6 +22,7 @@ class Respuesta extends Model
         'pdf_url',
         'kizeo_form_id',
         'kizeo_record_id',
+        'fecha_envio',
         'fecha_resolucion',
     ];
 
