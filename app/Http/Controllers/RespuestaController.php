@@ -91,7 +91,7 @@ class RespuestaController extends Controller
             foreach ($aprobadores as $ap) {
                 Mail::to($ap->email)->send(new RespuestaCreadaMail($respuesta));
                 $ap->notify(new AppNotification(
-                    'Nueva solicitud pendiente',
+                    'Nuevo formulario pendiente',
                     auth()->user()->name . ' envió ' . $formulario->nombre,
                     'info',
                     route('respuestas.show', $respuesta)
@@ -99,8 +99,12 @@ class RespuestaController extends Controller
             }
         }
 
+        $msg = $formulario->requiere_aprobacion && $respuesta->estado === 'Pendiente'
+            ? 'Formulario enviado para aprobación.'
+            : ($respuesta->estado === 'Borrador' ? 'Borrador guardado correctamente.' : 'Formulario completado exitosamente.');
+
         return redirect()->route('respuestas.show', $respuesta)
-            ->with('success', 'Solicitud enviada correctamente.');
+            ->with('success', $msg);
     }
 
     public function show(Respuesta $respuesta)

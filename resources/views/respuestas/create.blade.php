@@ -262,7 +262,11 @@
                     <i class="bi bi-save"></i> Guardar Borrador
                 </button>
                 <button type="submit" name="estado" value="Pendiente" class="btn-premium" style="flex:1;min-width:160px;justify-content:center;font-size:.85rem;">
-                    <i class="bi bi-send-fill"></i> Enviar Formulario
+                    @if($formulario->requiere_aprobacion)
+                        <i class="bi bi-send-fill"></i> Enviar para Aprobación
+                    @else
+                        <i class="bi bi-check-circle-fill"></i> Completar Formulario
+                    @endif
                 </button>
             </div>
         </form>
