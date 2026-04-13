@@ -86,6 +86,15 @@
                 if ($sMes && $sMes['programado']) { $mesProgTotal++; if ($sMes['realizado']) $mesRealTotal++; }
             }
             $mesPct = $mesProgTotal > 0 ? (int) round($mesRealTotal / $mesProgTotal * 100) : 0;
+            $totalReprogramaciones = 0;
+            $actConReprog = 0;
+            $actPorVencer = 0;
+            foreach ($allActividades as $a) {
+                $repCount = $a->reprogramaciones->count();
+                $totalReprogramaciones += $repCount;
+                if ($repCount > 0) $actConReprog++;
+                if ($a->estaPorVencer) $actPorVencer++;
+            }
         @endphp
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa)"><i class="bi bi-calendar-check"></i></div>
@@ -107,6 +116,20 @@
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#ef4444,#f87171)"><i class="bi bi-exclamation-triangle-fill"></i></div>
             <div><div class="sst-stat-label">Meses Vencidos</div><div class="sst-stat-value" id="statVencidas" style="color:#ef4444">{{ $vencidosMes }}</div></div>
         </div>
+        <div class="sst-stat-card">
+            <div class="sst-stat-icon" style="background:linear-gradient(135deg,#6366f1,#818cf8)"><i class="bi bi-calendar2-range"></i></div>
+            <div><div class="sst-stat-label">Reprogramaciones</div><div class="sst-stat-value" style="color:#6366f1">{{ $totalReprogramaciones }}</div></div>
+        </div>
+        <div class="sst-stat-card">
+            <div class="sst-stat-icon" style="background:linear-gradient(135deg,#94a3b8,#cbd5e1)"><i class="bi bi-hourglass-split"></i></div>
+            <div><div class="sst-stat-label">Pendientes</div><div class="sst-stat-value" style="color:#94a3b8">{{ $pendientes }}</div></div>
+        </div>
+        @if($actPorVencer > 0)
+        <div class="sst-stat-card">
+            <div class="sst-stat-icon" style="background:linear-gradient(135deg,#f97316,#fb923c)"><i class="bi bi-bell-fill"></i></div>
+            <div><div class="sst-stat-label">Por Vencer (7d)</div><div class="sst-stat-value" style="color:#f97316">{{ $actPorVencer }}</div></div>
+        </div>
+        @endif
     </div>
 
     {{-- ========== TOOLBAR: VISTA + LEYENDA ========== --}}
