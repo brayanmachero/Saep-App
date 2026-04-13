@@ -14,6 +14,9 @@
         </div>
         <div style="display:flex;gap:0.75rem;">
             @if(auth()->user()->tieneAcceso('formularios', 'puede_editar'))
+            <a href="{{ route('formularios.dashboard', $formulario) }}" class="btn-secondary">
+                <i class="bi bi-bar-chart-line-fill"></i> Dashboard
+            </a>
             <a href="{{ route('formularios.edit', $formulario) }}" class="btn-secondary">
                 <i class="bi bi-pencil-fill"></i> Editar
             </a>
@@ -33,9 +36,13 @@
         <div style="display:flex;flex-direction:column;gap:1rem;">
             <!-- Información general -->
             <div class="glass-card">
-                <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:1rem;">
-                    <i class="bi bi-info-circle"></i> Información General
-                </h3>
+                <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleSection('sec-info')">
+                    <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin:0;">
+                        <i class="bi bi-info-circle"></i> Información General
+                    </h3>
+                    <i class="bi bi-chevron-down section-chevron" id="chevron-sec-info" style="font-size:.75rem;color:var(--text-muted);transition:transform .25s;"></i>
+                </div>
+                <div id="sec-info" style="margin-top:1rem;">
                 <div class="form-grid-2">
                     <div>
                         <p style="font-size:0.75rem;color:var(--text-muted);margin:0 0 0.2rem;">Nombre</p>
@@ -99,16 +106,21 @@
                         </span>
                     @endif
                 </div>
+                </div>
             </div>
 
             <!-- Vista previa de campos -->
             <div class="glass-card">
-                <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:1.25rem;">
-                    <i class="bi bi-layout-wtf"></i> Campos del Formulario
-                    <span style="font-size:0.8rem;font-weight:400;normal;text-transform:none;letter-spacing:0;">
-                        — {{ count($schema) }} campo(s)
-                    </span>
-                </h3>
+                <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleSection('sec-campos')">
+                    <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin:0;">
+                        <i class="bi bi-layout-wtf"></i> Campos del Formulario
+                        <span style="font-size:0.8rem;font-weight:400;text-transform:none;letter-spacing:0;">
+                            — {{ count($schema) }} campo(s)
+                        </span>
+                    </h3>
+                    <i class="bi bi-chevron-down section-chevron" id="chevron-sec-campos" style="font-size:.75rem;color:var(--text-muted);transition:transform .25s;transform:rotate(-90deg);"></i>
+                </div>
+                <div id="sec-campos" style="display:none;margin-top:1.25rem;">
 
                 @if(count($schema) === 0)
                     <div style="text-align:center;color:var(--text-muted);padding:2rem;">
@@ -196,17 +208,22 @@
                         @endif
                     @endforeach
                 @endif
+                </div>
             </div>
 
             <!-- Historial de versiones -->
             @if($formulario->versiones->count() > 0)
             <div class="glass-card">
-                <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin-bottom:1rem;">
-                    <i class="bi bi-clock-history"></i> Historial de versiones
-                    <span style="font-size:0.8rem;font-weight:400;text-transform:none;letter-spacing:0;">
-                        — {{ $formulario->versiones->count() }} versión(es) anterior(es)
-                    </span>
-                </h3>
+                <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleSection('sec-versiones')">
+                    <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin:0;">
+                        <i class="bi bi-clock-history"></i> Historial de versiones
+                        <span style="font-size:0.8rem;font-weight:400;text-transform:none;letter-spacing:0;">
+                            — {{ $formulario->versiones->count() }} versión(es) anterior(es)
+                        </span>
+                    </h3>
+                    <i class="bi bi-chevron-down section-chevron" id="chevron-sec-versiones" style="font-size:.75rem;color:var(--text-muted);transition:transform .25s;transform:rotate(-90deg);"></i>
+                </div>
+                <div id="sec-versiones" style="display:none;margin-top:1rem;">
 
                 <div style="display:flex;flex-direction:column;gap:.5rem">
                     {{-- Current version --}}
@@ -255,6 +272,7 @@
                     </div>
                     @endforeach
                 </div>
+                </div>
             </div>
             @endif
         </div>
@@ -281,6 +299,10 @@
                     <a href="#seccion-respuestas"
                        class="btn-ghost" style="justify-content:center;font-size:.82rem;padding:.45rem .75rem;">
                         <i class="bi bi-table"></i> Ver Respuestas
+                    </a>
+                    <a href="{{ route('formularios.dashboard', $formulario) }}"
+                       class="btn-ghost" style="justify-content:center;font-size:.82rem;padding:.45rem .75rem;">
+                        <i class="bi bi-bar-chart-line-fill"></i> Dashboard
                     </a>
 
                     @if(auth()->user()->tieneAcceso('formularios', 'puede_editar'))
@@ -681,6 +703,20 @@
 
 @push('scripts')
 <script>
+// ===== Collapsible sections =====
+function toggleSection(id) {
+    const el = document.getElementById(id);
+    const chevron = document.getElementById('chevron-' + id);
+    if (!el) return;
+    if (el.style.display === 'none') {
+        el.style.display = '';
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    } else {
+        el.style.display = 'none';
+        if (chevron) chevron.style.transform = 'rotate(-90deg)';
+    }
+}
+
 document.getElementById('assign-modo')?.addEventListener('change', function() {
     document.querySelectorAll('.assign-panel').forEach(p => {
         p.style.display = 'none';

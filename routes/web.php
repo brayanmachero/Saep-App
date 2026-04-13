@@ -135,6 +135,8 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('modulo:formularios')->group(function () {
         Route::resource('formularios', FormularioController::class);
+        Route::get('formularios/{formulario}/dashboard', [FormularioController::class, 'dashboard'])
+            ->name('formularios.dashboard');
         Route::post('formularios/{formulario}/asignar', [FormularioController::class, 'asignar'])
             ->name('formularios.asignar');
         Route::patch('formularios/{formulario}/toggle-activo', [FormularioController::class, 'toggleActivo'])

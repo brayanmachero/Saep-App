@@ -152,6 +152,81 @@ class FormularioController extends Controller
         return view('formularios.edit', compact('formulario', 'departamentos', 'roles', 'categorias'));
     }
 
+    public function dashboard(Request $request, Formulario $formulario)
+    {
+        $schema = json_decode($formulario->schema_json ?? '[]', true);
+
+        $query = $formulario->respuestas()->with('usuario.departamento');
+
+        if ($request->filled('desde')) {
+            $query->whereDate('fecha_envio', '>=', $request->desde);
+        }
+        if ($request->filled('hasta')) {
+            $query->whereDate('fecha_envio', '<=', $request->hasta);
+        }
+        if ($request->filled('estado')) {
+            $query->where('estado', $request->estado);
+        }
+
+        $respuestas = $query->latest('fecha_envio')->get();
+
+        // KPIs
+        $totalResp = $respuestas->count();
+        $byEstado = $respuestas->countBy('estado')->all();
+
+        // Trend data: responses per month
+        $trend = $respuestas->groupBy(fn($r) => \Carbon\Carbon::parse($r->fecha_envio)->format('Y-m'))
+            ->map->count()
+            ->sortKeys();
+
+        // By user (top 10)
+        $byUser = $respuestas->groupBy(fn($r) => $r->usuario?->nombre_completo ?? 'Sin usuario')
+            ->map->count()
+            ->sortDesc()
+            ->take(10);
+
+        // By department
+        $byDepto = $respuestas->groupBy(fn($r) => $r->usuario?->departamento?->nombre ?? 'Sin depto.')
+            ->map->count()
+            ->sortDesc();
+
+        // Analyze chartable fields: select, radio, checkbox, select_dynamic, select_tabla
+        $chartableTypes = ['select', 'radio', 'checkbox', 'select_dynamic', 'select_tabla'];
+        $chartFields = collect($schema)->filter(fn($f) => in_array($f['type'], $chartableTypes))->values();
+
+        $fieldCharts = [];
+        foreach ($chartFields as $field) {
+            $dist = [];
+            foreach ($respuestas as $r) {
+                $datos = json_decode($r->datos_json ?? '{}', true);
+                $val = $datos[$field['id']] ?? null;
+                if ($val === null || $val === '') continue;
+                if (is_array($val)) {
+                    foreach ($val as $v) {
+                        $v = trim($v);
+                        if ($v !== '') $dist[$v] = ($dist[$v] ?? 0) + 1;
+                    }
+                } else {
+                    $dist[$val] = ($dist[$val] ?? 0) + 1;
+                }
+            }
+            arsort($dist);
+            if (!empty($dist)) {
+                $fieldCharts[] = [
+                    'id'    => $field['id'],
+                    'label' => $field['label'],
+                    'type'  => $field['type'],
+                    'data'  => $dist,
+                ];
+            }
+        }
+
+        return view('formularios.dashboard', compact(
+            'formulario', 'schema', 'totalResp', 'byEstado', 'trend',
+            'byUser', 'byDepto', 'fieldCharts', 'request'
+        ));
+    }
+
     public function update(Request $request, Formulario $formulario)
     {
         $request->validate([
