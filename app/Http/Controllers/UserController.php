@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\BienvenidaUsuarioMail;
 use App\Models\Cargo;
+use App\Models\Configuracion;
 use App\Notifications\AppNotification;
 use App\Models\CentroCosto;
 use App\Models\Departamento;
@@ -162,5 +163,68 @@ class UserController extends Controller
 
         return redirect()->route('usuarios.index')
             ->with('success', 'Usuario desactivado correctamente.');
+    }
+
+    public function resetPassword(User $usuario)
+    {
+        $tempPassword = Str::upper(Str::random(3)) . rand(100, 999) . Str::random(3);
+        $usuario->update([
+            'password'             => Hash::make($tempPassword),
+            'must_change_password' => true,
+        ]);
+
+        if (Configuracion::get('notificaciones_email') === 'true') {
+            Mail::to($usuario->email)->send(new BienvenidaUsuarioMail($usuario, $tempPassword));
+        }
+
+        $usuario->notify(new AppNotification(
+            'Contraseña restablecida',
+            'Tu contraseña ha sido restablecida por un administrador. Revisa tu correo.',
+            'warning',
+            route('perfil.show')
+        ));
+
+        $emailMsg = Configuracion::get('notificaciones_email') === 'true'
+            ? " Se envió correo a {$usuario->email}."
+            : ' (Envío de email desactivado en configuración).';
+
+        return back()->with('success', "Contraseña de {$usuario->nombre_completo} restablecida.{$emailMsg}");
+    }
+
+    public function bulkResetPassword(Request $request)
+    {
+        $request->validate([
+            'ids'   => 'required|array|min:1',
+            'ids.*' => 'exists:users,id',
+        ]);
+
+        $usuarios = User::whereIn('id', $request->ids)->get();
+        $emailActivo = Configuracion::get('notificaciones_email') === 'true';
+        $count = 0;
+
+        foreach ($usuarios as $usuario) {
+            $tempPassword = Str::upper(Str::random(3)) . rand(100, 999) . Str::random(3);
+            $usuario->update([
+                'password'             => Hash::make($tempPassword),
+                'must_change_password' => true,
+            ]);
+
+            if ($emailActivo) {
+                Mail::to($usuario->email)->send(new BienvenidaUsuarioMail($usuario, $tempPassword));
+            }
+
+            $usuario->notify(new AppNotification(
+                'Contraseña restablecida',
+                'Tu contraseña ha sido restablecida por un administrador. Revisa tu correo.',
+                'warning',
+                route('perfil.show')
+            ));
+
+            $count++;
+        }
+
+        $emailMsg = $emailActivo ? ' Se enviaron correos con las nuevas credenciales.' : ' (Envío de email desactivado).';
+
+        return back()->with('success', "Se restablecieron {$count} contraseña(s).{$emailMsg}");
     }
 }

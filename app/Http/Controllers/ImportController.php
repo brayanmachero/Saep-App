@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\BienvenidaUsuarioMail;
 use App\Models\Cargo;
 use App\Models\CentroCosto;
+use App\Models\Configuracion;
 use App\Models\Departamento;
 use App\Models\Rol;
 use App\Models\User;
@@ -11,6 +13,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class ImportController extends Controller
 {
@@ -206,10 +210,21 @@ class ImportController extends Controller
                     $actualizados++;
                 } else {
                     // Crear nuevo
+                    $tempPassword = Str::upper(Str::random(3)) . rand(100, 999) . Str::random(3);
                     $userData['rol_id'] = $rolTrabajador?->id ?? Rol::first()?->id;
-                    $userData['password'] = Hash::make($rut ?: 'Saep2026!');
+                    $userData['password'] = Hash::make($tempPassword);
+                    $userData['must_change_password'] = true;
                     $userData['activo'] = true;
-                    User::create($userData);
+                    $nuevoUsuario = User::create($userData);
+
+                    if (Configuracion::get('notificaciones_email') === 'true' && $nuevoUsuario->email && !str_ends_with($nuevoUsuario->email, '@importado.local')) {
+                        try {
+                            Mail::to($nuevoUsuario->email)->send(new BienvenidaUsuarioMail($nuevoUsuario, $tempPassword));
+                        } catch (\Exception $mailEx) {
+                            Log::warning("Import fila {$fila}: No se pudo enviar email a {$nuevoUsuario->email}", ['error' => $mailEx->getMessage()]);
+                        }
+                    }
+
                     $creados++;
                 }
             } catch (\Exception $e) {

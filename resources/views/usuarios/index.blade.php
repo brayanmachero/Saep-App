@@ -76,10 +76,24 @@
 
     <!-- Tabla -->
     <div class="glass-card">
+        {{-- Bulk actions bar --}}
+        <div id="bulkBar" style="display:none;padding:.6rem 1rem;background:linear-gradient(135deg,#6366f1,#818cf8);border-radius:10px 10px 0 0;display:none;align-items:center;gap:.75rem;">
+            <span style="color:#fff;font-weight:600;font-size:.85rem;">
+                <i class="bi bi-check2-square"></i> <span id="bulkCount">0</span> seleccionado(s)
+            </span>
+            <button type="button" onclick="confirmBulkReset()" class="btn-secondary" style="font-size:.78rem;padding:.35rem .75rem;background:#fff;color:#6366f1;border:none;font-weight:700;">
+                <i class="bi bi-key-fill"></i> Resetear Contraseñas
+            </button>
+        </div>
         <div class="glass-table-container">
             <table class="glass-table">
                 <thead>
                     <tr>
+                        @if(auth()->user()->tieneAcceso('usuarios', 'puede_editar'))
+                        <th style="width:40px;text-align:center;">
+                            <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" style="cursor:pointer;width:16px;height:16px;">
+                        </th>
+                        @endif
                         <th>Usuario</th>
                         <th>RUT</th>
                         <th>Cargo</th>
@@ -94,6 +108,11 @@
                 <tbody>
                     @forelse($usuarios as $usuario)
                     <tr>
+                        @if(auth()->user()->tieneAcceso('usuarios', 'puede_editar'))
+                        <td style="text-align:center;">
+                            <input type="checkbox" class="user-checkbox" value="{{ $usuario->id }}" onchange="updateBulkBar()" style="cursor:pointer;width:16px;height:16px;">
+                        </td>
+                        @endif
                         <td>
                             <div style="display:flex;align-items:center;gap:0.75rem;">
                                 <div class="avatar" style="width:34px;height:34px;font-size:0.8rem;flex-shrink:0;">
@@ -123,6 +142,16 @@
                                     style="width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">
                                     <i class="bi bi-pencil-fill"></i>
                                 </a>
+                                @if($usuario->id !== auth()->id())
+                                <form method="POST" action="{{ route('usuarios.resetPassword', $usuario) }}"
+                                    onsubmit="return confirm('¿Resetear la contraseña de {{ addslashes($usuario->nombre_completo) }}?')">
+                                    @csrf
+                                    <button type="submit" class="icon-btn warning" title="Resetear contraseña"
+                                        style="width:30px;height:30px;">
+                                        <i class="bi bi-key-fill"></i>
+                                    </button>
+                                </form>
+                                @endif
                                 @endif
                                 @if(auth()->user()->tieneAcceso('usuarios', 'puede_eliminar') && $usuario->id !== auth()->id())
                                 <form method="POST" action="{{ route('usuarios.destroy', $usuario) }}"
@@ -139,7 +168,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="9" style="text-align:center;color:var(--text-muted);padding:2rem;">
+                        <td colspan="10" style="text-align:center;color:var(--text-muted);padding:2rem;">
                             <i class="bi bi-people" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>
                             No hay usuarios
                         </td>
@@ -153,4 +182,43 @@
         </div>
     </div>
 </div>
+
+{{-- Hidden form for bulk reset --}}
+<form id="bulkResetForm" method="POST" action="{{ route('usuarios.bulkResetPassword') }}" style="display:none;">
+    @csrf
+</form>
+
 @endsection
+
+@push('scripts')
+<script>
+function toggleSelectAll(source) {
+    document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = source.checked);
+    updateBulkBar();
+}
+
+function updateBulkBar() {
+    const checked = document.querySelectorAll('.user-checkbox:checked');
+    const bar = document.getElementById('bulkBar');
+    document.getElementById('bulkCount').textContent = checked.length;
+    bar.style.display = checked.length > 0 ? 'flex' : 'none';
+}
+
+function confirmBulkReset() {
+    const ids = [...document.querySelectorAll('.user-checkbox:checked')].map(cb => cb.value);
+    if (!ids.length) return;
+    if (!confirm(`¿Resetear la contraseña de ${ids.length} usuario(s)?`)) return;
+
+    const form = document.getElementById('bulkResetForm');
+    form.querySelectorAll('input[name="ids[]"]').forEach(el => el.remove());
+    ids.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'ids[]';
+        input.value = id;
+        form.appendChild(input);
+    });
+    form.submit();
+}
+</script>
+@endpush

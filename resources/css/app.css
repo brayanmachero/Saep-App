@@ -629,6 +629,11 @@ select.form-input { cursor: pointer; }
     color: #ef4444;
     background: rgba(239,68,68,0.08);
 }
+.icon-btn.warning:hover {
+    border-color: #f59e0b;
+    color: #f59e0b;
+    background: rgba(245,158,11,0.08);
+}
 
 /* ── Alerts ── */
 .alert {

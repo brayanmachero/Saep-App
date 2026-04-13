@@ -114,6 +114,10 @@ Route::middleware('auth')->group(function () {
 
     // --- MAESTROS (Administración) ---
     Route::middleware('modulo:usuarios')->group(function () {
+        Route::post('usuarios/bulk-reset-password', [UserController::class, 'bulkResetPassword'])
+            ->name('usuarios.bulkResetPassword');
+        Route::post('usuarios/{usuario}/reset-password', [UserController::class, 'resetPassword'])
+            ->name('usuarios.resetPassword');
         Route::resource('usuarios', UserController::class)->except(['show']);
     });
     Route::middleware('modulo:departamentos')->group(function () {
