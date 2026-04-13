@@ -5,7 +5,7 @@
 <style>
 /* ── Reset & Page ── */
 * { margin:0; padding:0; box-sizing:border-box; }
-@page { margin: 0 0 52px 0; }
+@page { margin: 0 0 58px 0; }
 body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; background: #fff; }
 
 /* ── Content wrapper with lateral padding ── */
@@ -23,13 +23,13 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 /* ── Fixed footer (every page) ── */
 .fixed-footer {
     position: fixed;
-    bottom: 0;
+    bottom: -58px;
     left: 0;
     width: 100%;
-    height: 48px;
+    height: 52px;
     background: #0f1b4c;
     border-top: 3px solid #f97316;
-    padding: 6px 30px;
+    padding: 7px 30px;
     font-size: 7px;
     color: rgba(255,255,255,0.55);
 }
