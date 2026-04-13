@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Nueva Solicitud')
+@section('title', 'Nuevo Formulario')
 
 @section('content')
 <div class="page-container">
@@ -9,7 +9,7 @@
 
     <div class="page-header">
         <div>
-            <h2 class="page-heading">Nueva Solicitud</h2>
+            <h2 class="page-heading">Nuevo Formulario</h2>
             <p class="page-subheading">Completa el formulario dinámico</p>
         </div>
         <a href="{{ url()->previous() }}" class="btn-ghost">
@@ -65,7 +65,7 @@
             @endif
             @if($formulario->requiere_aprobacion)
                 <span class="badge warning" style="margin-top:0.5rem;display:inline-block;">
-                    <i class="bi bi-shield-check"></i> Esta solicitud requiere aprobación
+                    <i class="bi bi-shield-check"></i> Este formulario requiere aprobación
                 </span>
             @endif
         </div>
@@ -262,7 +262,7 @@
                     <i class="bi bi-save"></i> Guardar Borrador
                 </button>
                 <button type="submit" name="estado" value="Pendiente" class="btn-premium" style="flex:1;min-width:160px;justify-content:center;font-size:.85rem;">
-                    <i class="bi bi-send-fill"></i> Enviar Solicitud
+                    <i class="bi bi-send-fill"></i> Enviar Formulario
                 </button>
             </div>
         </form>

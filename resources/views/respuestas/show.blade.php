@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Solicitud #REQ-' . str_pad($respuesta->id, 4, '0', STR_PAD_LEFT))
+@section('title', 'Formulario #REQ-' . str_pad($respuesta->id, 4, '0', STR_PAD_LEFT))
 
 @section('content')
 <div class="page-container">
