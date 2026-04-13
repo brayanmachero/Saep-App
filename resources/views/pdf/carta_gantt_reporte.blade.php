@@ -5,7 +5,7 @@
 <style>
 /* ── Reset & Page ── */
 * { margin:0; padding:0; box-sizing:border-box; }
-@page { margin: 0 0 58px 0; }
+@page { margin: 0 0 72px 0; }
 body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; background: #fff; }
 
 /* ── Content wrapper with lateral padding ── */
@@ -23,15 +23,15 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 /* ── Fixed footer (every page) ── */
 .fixed-footer {
     position: fixed;
-    bottom: -58px;
+    bottom: -72px;
     left: 0;
     width: 100%;
-    height: 52px;
+    height: 64px;
     background: #0f1b4c;
     border-top: 3px solid #f97316;
-    padding: 7px 30px;
-    font-size: 7px;
-    color: rgba(255,255,255,0.55);
+    padding: 10px 30px;
+    font-size: 7.5px;
+    color: rgba(255,255,255,0.7);
 }
 .ff-row { display: table; width: 100%; }
 .ff-cell { display: table-cell; vertical-align: middle; }
@@ -39,8 +39,8 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .ff-brand { font-size: 10px; font-weight: 900; color: #fff; letter-spacing: 1px; }
 .ff-brand-sub { font-size: 7.5px; color: rgba(255,255,255,0.65); }
 .ff-orange { color: #f97316; }
-.ff-divider { display: block; height: 1px; background: rgba(255,255,255,0.1); margin: 4px 0; }
-.ff-legal { font-size: 6.5px; color: rgba(255,255,255,0.35); letter-spacing: 0.3px; }
+.ff-divider { display: block; height: 1px; background: rgba(255,255,255,0.15); margin: 5px 0; }
+.ff-legal { font-size: 7px; color: rgba(255,255,255,0.5); letter-spacing: 0.3px; }
 
 /* ── Header band ── */
 .header-band {
@@ -699,7 +699,7 @@ if (isset($pdf)) {
     $font = $fontMetrics->getFont("DejaVu Sans", "bold");
     $size = 6.5;
     $pageWidth = $pdf->get_width();
-    $y = $pdf->get_height() - 42;
+    $y = $pdf->get_height() - 52;
     $pdf->page_text($pageWidth - 100, $y, "Página {PAGE_NUM} de {PAGE_COUNT}", $font, $size, array(1,1,1));
 }
 </script>
