@@ -239,6 +239,22 @@ class RespuestaController extends Controller
     }
 
     /**
+     * Bulk delete multiple responses (soft delete).
+     */
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate([
+            'ids'   => ['required', 'array'],
+            'ids.*' => ['exists:respuestas,id'],
+        ]);
+
+        $count = Respuesta::whereIn('id', $request->ids)->count();
+        Respuesta::whereIn('id', $request->ids)->delete();
+
+        return back()->with('success', "{$count} registro(s) eliminado(s) exitosamente.");
+    }
+
+    /**
      * Export responses as Excel/CSV.
      */
     public function exportar(Request $request)

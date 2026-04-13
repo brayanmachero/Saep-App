@@ -488,6 +488,9 @@
                 <button type="button" onclick="document.getElementById('modal-importar').style.display='flex'" class="btn-secondary" style="font-size:.78rem;padding:.35rem .65rem;">
                     <i class="bi bi-upload"></i> Importar
                 </button>
+                <button type="button" id="btn-bulk-delete" onclick="confirmBulkDelete()" class="btn-secondary" style="font-size:.78rem;padding:.35rem .65rem;display:none;background:rgba(220,38,38,.08);color:#dc2626;border-color:rgba(220,38,38,.25);">
+                    <i class="bi bi-trash3"></i> Eliminar (<span id="bulk-delete-count">0</span>)
+                </button>
             </div>
         </div>
 
@@ -509,6 +512,9 @@
                 <table class="saep-table" style="width:100%;font-size:.82rem;border-collapse:collapse;">
                     <thead>
                         <tr>
+                            <th style="padding:.55rem .65rem;text-align:center;border-bottom:2px solid var(--surface-border);width:36px;">
+                                <input type="checkbox" id="resp-select-all" onchange="toggleSelectAll(this)" style="cursor:pointer;">
+                            </th>
                             <th style="padding:.55rem .65rem;text-align:left;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);border-bottom:2px solid var(--surface-border);white-space:nowrap;">ID</th>
                             <th style="padding:.55rem .65rem;text-align:left;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);border-bottom:2px solid var(--surface-border);white-space:nowrap;">Solicitante</th>
                             @foreach($tableCols as $col)
@@ -523,6 +529,9 @@
                         @foreach($respuestas as $resp)
                         @php $datos = json_decode($resp->datos_json ?? '{}', true); @endphp
                         <tr class="resp-row" data-estado="{{ $resp->estado }}" data-search="{{ strtolower(($resp->usuario->name ?? '') . ' ' . ($resp->usuario->apellido_paterno ?? '') . ' REQ-' . str_pad($resp->id, 4, '0', STR_PAD_LEFT)) }}" style="cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface-bg,#f8fafc)'" onmouseleave="this.style.background='transparent'">
+                            <td style="padding:.55rem .65rem;border-bottom:1px solid var(--surface-border);text-align:center;" onclick="event.stopPropagation()">
+                                <input type="checkbox" class="resp-checkbox" value="{{ $resp->id }}" onchange="updateBulkDelete()" style="cursor:pointer;">
+                            </td>
                             <td style="padding:.55rem .65rem;border-bottom:1px solid var(--surface-border);white-space:nowrap;font-weight:600;color:var(--primary-color);">
                                 #REQ-{{ str_pad($resp->id, 4, '0', STR_PAD_LEFT) }}
                             </td>
@@ -835,5 +844,42 @@ function filterTable() {
 }
 searchInput?.addEventListener('input', filterTable);
 filterEstado?.addEventListener('change', filterTable);
+
+// ===== Bulk delete =====
+function toggleSelectAll(master) {
+    document.querySelectorAll('.resp-checkbox').forEach(cb => {
+        const row = cb.closest('.resp-row');
+        if (row && row.style.display !== 'none') cb.checked = master.checked;
+    });
+    updateBulkDelete();
+}
+
+function updateBulkDelete() {
+    const checked = document.querySelectorAll('.resp-checkbox:checked');
+    const btn = document.getElementById('btn-bulk-delete');
+    const count = document.getElementById('bulk-delete-count');
+    if (btn) {
+        btn.style.display = checked.length > 0 ? 'inline-flex' : 'none';
+        count.textContent = checked.length;
+    }
+}
+
+function confirmBulkDelete() {
+    const ids = [...document.querySelectorAll('.resp-checkbox:checked')].map(cb => cb.value);
+    if (!ids.length) return;
+    if (!confirm(`¿Eliminar ${ids.length} registro(s)? Esta acción no se puede deshacer fácilmente.`)) return;
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ route("respuestas.bulkDestroy") }}';
+    form.innerHTML = `<input type="hidden" name="_token" value="{{ csrf_token() }}"><input type="hidden" name="_method" value="DELETE">`;
+    ids.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden'; input.name = 'ids[]'; input.value = id;
+        form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+}
 </script>
 @endpush

@@ -165,6 +165,8 @@ Route::middleware('auth')->group(function () {
         Route::post('respuestas/bulk-estado', [RespuestaController::class, 'bulkEstado'])
             ->name('respuestas.bulkEstado')
             ->middleware('permission:puede_aprobar');
+        Route::delete('respuestas/bulk-destroy', [RespuestaController::class, 'bulkDestroy'])
+            ->name('respuestas.bulkDestroy');
         Route::get('respuestas-exportar', [RespuestaController::class, 'exportar'])
             ->name('respuestas.exportar');
         Route::get('respuestas-plantilla/{formulario}', [RespuestaController::class, 'plantillaImport'])
