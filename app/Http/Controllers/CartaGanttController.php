@@ -168,6 +168,7 @@ class CartaGanttController extends Controller
         ))->setPaper('a4', 'landscape')->setOptions([
             'isRemoteEnabled'      => true,
             'isHtml5ParserEnabled' => true,
+            'isPhpEnabled'         => true,
             'defaultFont'          => 'DejaVu Sans',
             'dpi'                  => 130,
         ]);
