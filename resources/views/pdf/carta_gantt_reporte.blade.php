@@ -7,17 +7,41 @@
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; background: #fff; }
 
-/* ── Header ── */
-.top-bar { height: 6px; background: linear-gradient(90deg, #0f1b4c, #2563eb); }
-.header { padding: 14px 24px 10px; display: table; width: 100%; border-bottom: 2px solid #e2e8f0; }
-.hdr-logo { display: table-cell; vertical-align: middle; width: 110px; }
-.hdr-logo img { max-height: 38px; max-width: 110px; }
+/* ── Watermark ── */
+.watermark {
+    position: fixed;
+    top: 35%;
+    left: 15%;
+    width: 70%;
+    text-align: center;
+    font-size: 72px;
+    font-weight: 900;
+    color: rgba(15, 27, 76, 0.03);
+    text-transform: uppercase;
+    letter-spacing: 12px;
+    transform: rotate(-25deg);
+    z-index: 0;
+    pointer-events: none;
+}
+
+/* ── Header band ── */
+.header-band {
+    background: #0f1b4c;
+    padding: 12px 24px;
+    display: table;
+    width: 100%;
+}
+.hdr-logo { display: table-cell; vertical-align: middle; width: 120px; }
+.hdr-logo img { max-height: 32px; max-width: 110px; }
 .hdr-center { display: table-cell; vertical-align: middle; text-align: center; }
-.hdr-center h1 { font-size: 13px; font-weight: 900; color: #0f1b4c; text-transform: uppercase; letter-spacing: 0.5px; }
-.hdr-center p { font-size: 8px; color: #64748b; margin-top: 2px; }
-.hdr-right { display: table-cell; vertical-align: middle; text-align: right; width: 140px; }
-.hdr-right .code { font-size: 10px; font-weight: 800; color: #0f1b4c; }
-.hdr-right .date { font-size: 7.5px; color: #94a3b8; margin-top: 2px; }
+.hdr-center h1 { font-size: 13px; font-weight: 900; color: #ffffff; text-transform: uppercase; letter-spacing: 1px; }
+.hdr-center p { font-size: 7.5px; color: rgba(255,255,255,0.6); margin-top: 2px; letter-spacing: 0.5px; }
+.hdr-right { display: table-cell; vertical-align: middle; text-align: right; width: 150px; }
+.hdr-right .code { font-size: 10px; font-weight: 800; color: #f97316; }
+.hdr-right .date { font-size: 7px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+
+/* ── Orange accent line below header ── */
+.accent-line { height: 3px; background: linear-gradient(90deg, #f97316, #fb923c, #fdba74); }
 
 /* ── Info grid ── */
 .info-strip { display: table; width: 100%; margin: 10px 0 0; }
@@ -25,7 +49,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
 .info-item .label { font-size: 6.5px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
 .info-item .value { font-size: 9px; font-weight: 700; color: #0f172a; margin-top: 1px; }
 
-/* ── KPI cards (inline) ── */
+/* ── KPI cards ── */
 .kpi-row { display: table; width: 100%; margin: 12px 0; }
 .kpi-card { display: table-cell; text-align: center; padding: 10px 6px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; vertical-align: middle; }
 .kpi-card .kpi-num { font-size: 22px; font-weight: 900; line-height: 1; }
@@ -44,17 +68,16 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
 .section-bar { display: table-cell; width: 4px; background: #0f1b4c; border-radius: 2px; }
 .section-text { display: table-cell; vertical-align: middle; padding-left: 8px; font-size: 10px; font-weight: 900; text-transform: uppercase; color: #1e293b; letter-spacing: 0.5px; }
 
-/* ── Progress ring (CSS circle) ── */
+/* ── Progress ring ── */
 .ring-container { display: table; width: 100%; margin: 8px 0; }
 .ring-left { display: table-cell; width: 160px; vertical-align: middle; text-align: center; }
 .ring-right { display: table-cell; vertical-align: middle; padding-left: 16px; }
-
 .ring-circle { width: 110px; height: 110px; border-radius: 55px; border: 14px solid #e2e8f0; position: relative; margin: 0 auto; }
 .ring-inner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
 .ring-pct { font-size: 26px; font-weight: 900; color: #0f1b4c; }
 .ring-sub { font-size: 7px; color: #94a3b8; text-transform: uppercase; font-weight: 700; }
 
-/* ── Bar chart (CSS horizontal bars) ── */
+/* ── Bar chart ── */
 .bar-chart { width: 100%; }
 .bar-row { display: table; width: 100%; margin-bottom: 4px; }
 .bar-label { display: table-cell; width: 36px; font-size: 8px; font-weight: 700; color: #475569; vertical-align: middle; text-align: center; }
@@ -64,7 +87,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
 .bar-fill-real { height: 14px; background: #0f1b4c; border-radius: 3px 0 0 3px; position: absolute; top: 0; left: 0; }
 .bar-val { display: table-cell; width: 34px; font-size: 7.5px; font-weight: 700; color: #0f1b4c; vertical-align: middle; text-align: right; }
 
-/* ── Priority mini bars ── */
+/* ── Priority bars ── */
 .pri-row { display: table; width: 100%; margin-bottom: 5px; }
 .pri-label { display: table-cell; width: 50px; font-size: 8px; font-weight: 700; vertical-align: middle; }
 .pri-bar-wrap { display: table-cell; vertical-align: middle; padding: 0 6px; }
@@ -74,25 +97,21 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
 .pri-media { background: #f59e0b; }
 .pri-baja  { background: #10b981; }
 
-/* ── Status distribution ── */
-.status-row { display: table; width: 100%; margin: 6px 0; }
-.status-pill { display: table-cell; text-align: center; padding: 6px 2px; }
+/* ── Status dots ── */
 .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 5px; margin-right: 3px; vertical-align: middle; }
 .status-label { font-size: 7.5px; font-weight: 700; color: #475569; }
-.status-num { font-size: 13px; font-weight: 900; display: block; margin-top: 1px; }
 .dot-completada  { background: #059669; }
 .dot-progreso    { background: #2563eb; }
 .dot-pendiente   { background: #94a3b8; }
 .dot-cancelada   { background: #dc2626; }
 
-/* ── Generic table ── */
+/* ── Data table ── */
 .data-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
 .data-table th { background: #0f1b4c; color: #fff; font-size: 7px; font-weight: 700; padding: 5px 6px; text-align: left; text-transform: uppercase; letter-spacing: 0.3px; }
 .data-table td { padding: 4px 6px; font-size: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
 .data-table tr:nth-child(even) td { background: #f8fafc; }
-.data-table .cat-row td { background: #eef2ff; font-weight: 800; font-size: 8.5px; color: #0f1b4c; border-bottom: 2px solid #c7d2fe; }
 
-/* Progress bar inside table */
+/* Mini progress bar */
 .mini-bar { height: 8px; background: #e2e8f0; border-radius: 3px; overflow: hidden; width: 60px; display: inline-block; vertical-align: middle; }
 .mini-fill { height: 8px; border-radius: 3px; }
 .fill-green  { background: #059669; }
@@ -101,7 +120,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
 .fill-red    { background: #dc2626; }
 .fill-gray   { background: #94a3b8; }
 
-/* Chips/badges */
+/* Chips */
 .chip { padding: 2px 6px; border-radius: 3px; font-size: 6.5px; font-weight: 700; text-transform: uppercase; }
 .chip-green  { background: #dcfce7; color: #15803d; }
 .chip-blue   { background: #dbeafe; color: #1d4ed8; }
@@ -110,7 +129,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
 .chip-gray   { background: #f1f5f9; color: #475569; }
 .chip-purple { background: #ede9fe; color: #6d28d9; }
 
-/* Gantt mini-grid */
+/* ── Gantt grid ── */
 .gantt-mini { width: 100%; border-collapse: collapse; margin-top: 4px; }
 .gantt-mini th { background: #f1f5f9; color: #475569; font-size: 6.5px; font-weight: 700; padding: 3px 2px; text-align: center; border: 1px solid #e2e8f0; width: 7%; }
 .gantt-mini th:first-child { width: 16%; text-align: left; padding-left: 6px; }
@@ -123,11 +142,23 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
 .g-future { background: #f0fdf4; }
 .g-reprog { background: #ede9fe; color: #6d28d9; font-weight: 700; font-size: 6.5px; }
 
-/* Footer */
-.footer { margin-top: 12px; background: #0f172a; color: #94a3b8; padding: 10px 18px; font-size: 7px; }
+/* ── Institutional footer ── */
+.footer {
+    margin-top: 12px;
+    border-top: 3px solid #f97316;
+    background: #0f1b4c;
+    padding: 10px 20px;
+    font-size: 7px;
+    color: rgba(255,255,255,0.55);
+}
 .footer-row { display: table; width: 100%; }
 .footer-cell { display: table-cell; vertical-align: middle; }
 .footer-right { text-align: right; }
+.footer-brand { font-size: 9px; font-weight: 900; color: #fff; letter-spacing: 1px; }
+.footer-brand-sub { font-size: 7px; color: rgba(255,255,255,0.65); }
+.footer-orange { color: #f97316; }
+.footer-divider { display: block; height: 1px; background: rgba(255,255,255,0.1); margin: 5px 0; }
+.footer-legal { font-size: 6px; color: rgba(255,255,255,0.35); letter-spacing: 0.3px; }
 
 .page-break { page-break-after: always; }
 .avoid-break { page-break-inside: avoid; }
@@ -135,27 +166,30 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
 </head>
 <body>
 
+{{-- Watermark on every page --}}
+<div class="watermark">SAEP</div>
+
 @php
     $mesesCortos = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
     $maxProg = max(1, collect($mesesData)->max('prog'));
+    $logoUrl = 'https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg';
 @endphp
 
-{{-- =========================== PAGE 1: EXECUTIVE SUMMARY =========================== --}}
-<div class="top-bar"></div>
-
-<div class="header">
+{{-- ═══════════════ PAGE 1: EXECUTIVE SUMMARY ═══════════════ --}}
+<div class="header-band">
     <div class="hdr-logo">
-        <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg" alt="SAEP">
+        <img src="{{ $logoUrl }}" alt="SAEP">
     </div>
     <div class="hdr-center">
         <h1>Reporte Gerencial SST</h1>
-        <p>Programa de Seguridad y Salud en el Trabajo &bull; Informe de Avance</p>
+        <p>Programa de Seguridad y Salud en el Trabajo &bull; Informe de Avance {{ $cartaGantt->anio }}</p>
     </div>
     <div class="hdr-right">
         <div class="code">{{ $cartaGantt->codigo }}</div>
         <div class="date">Generado: {{ date('d/m/Y H:i') }}</div>
     </div>
 </div>
+<div class="accent-line"></div>
 
 <div class="info-strip">
     <div class="info-item">
@@ -177,6 +211,10 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
     <div class="info-item">
         <div class="label">Estado</div>
         <div class="value">{{ $cartaGantt->estado }}</div>
+    </div>
+    <div class="info-item">
+        <div class="label">Mes de Corte</div>
+        <div class="value">{{ $mesesCortos[$mesActual] }} {{ date('Y') }}</div>
     </div>
 </div>
 
@@ -218,9 +256,8 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
     </div>
 </div>
 
-{{-- Charts area --}}
+{{-- Charts --}}
 <div class="ring-container">
-    {{-- Left: Progress circle + Status distribution --}}
     <div class="ring-left">
         <div class="ring-circle" style="border-color: {{ $pct >= 75 ? '#059669' : ($pct >= 50 ? '#2563eb' : ($pct >= 25 ? '#f59e0b' : '#dc2626')) }};">
             <div class="ring-inner">
@@ -236,7 +273,6 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
         </div>
     </div>
 
-    {{-- Right: Monthly progress bars --}}
     <div class="ring-right">
         <div style="font-size:8px;font-weight:800;color:#0f1b4c;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">
             Cumplimiento Mensual (Programado vs Realizado)
@@ -289,27 +325,37 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
 
 <div class="footer">
     <div class="footer-row">
-        <div class="footer-cell">SAEP &bull; Sistema de Administración Empresarial de Prevención &bull; Reporte Gerencial SST</div>
-        <div class="footer-cell footer-right">Página 1 &bull; {{ $cartaGantt->codigo }} &bull; {{ date('d/m/Y') }}</div>
+        <div class="footer-cell">
+            <span class="footer-brand">SAEP</span> <span class="footer-orange">&bull;</span>
+            <span class="footer-brand-sub">Sistema de Administración Empresarial de Prevención</span>
+        </div>
+        <div class="footer-cell footer-right">
+            <span style="color:rgba(255,255,255,0.7);">Página 1</span> &bull; {{ $cartaGantt->codigo }} &bull; {{ date('d/m/Y') }}
+        </div>
+    </div>
+    <div class="footer-divider"></div>
+    <div class="footer-legal">
+        Documento generado automáticamente por SAEP Platform &bull; saep.bmachero.com &bull; Información confidencial de uso interno &bull; &copy; {{ date('Y') }} SAEP — Todos los derechos reservados
     </div>
 </div>
 
 <div class="page-break"></div>
 
-{{-- =========================== PAGE 2: GANTT DETAIL =========================== --}}
-<div class="top-bar"></div>
-<div class="header">
+{{-- ═══════════════ PAGE 2: GANTT DETAIL ═══════════════ --}}
+<div class="header-band">
     <div class="hdr-logo">
-        <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg" alt="SAEP">
+        <img src="{{ $logoUrl }}" alt="SAEP">
     </div>
     <div class="hdr-center">
         <h1>Detalle de Actividades por Categoría</h1>
         <p>{{ $cartaGantt->titulo }} &bull; {{ $cartaGantt->codigo }}</p>
     </div>
     <div class="hdr-right">
+        <div class="code">{{ $cartaGantt->codigo }}</div>
         <div class="date">Generado: {{ date('d/m/Y H:i') }}</div>
     </div>
 </div>
+<div class="accent-line"></div>
 
 @foreach($cartaGantt->categorias->sortBy('orden') as $categoria)
 <div class="avoid-break" style="margin-top:10px;">
@@ -382,31 +428,44 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
     <div class="footer-row">
         <div class="footer-cell">
             <span style="display:inline-block;width:10px;height:8px;background:#059669;border-radius:2px;margin-right:3px;"></span>Completado&nbsp;&nbsp;
-            <span style="display:inline-block;width:10px;height:8px;background:#fef3c7;border-radius:2px;margin-right:3px;border:1px solid #e2e8f0;"></span>Parcial&nbsp;&nbsp;
-            <span style="display:inline-block;width:10px;height:8px;background:#fee2e2;border-radius:2px;margin-right:3px;border:1px solid #e2e8f0;"></span>No cumplido&nbsp;&nbsp;
-            <span style="display:inline-block;width:10px;height:8px;background:#f0fdf4;border-radius:2px;margin-right:3px;border:1px solid #e2e8f0;"></span>Futuro&nbsp;&nbsp;
-            <span style="display:inline-block;width:10px;height:8px;background:#ede9fe;border-radius:2px;margin-right:3px;border:1px solid #e2e8f0;"></span>Reprogramado
+            <span style="display:inline-block;width:10px;height:8px;background:#fef3c7;border-radius:2px;margin-right:3px;border:1px solid rgba(255,255,255,0.15);"></span>Parcial&nbsp;&nbsp;
+            <span style="display:inline-block;width:10px;height:8px;background:#fee2e2;border-radius:2px;margin-right:3px;border:1px solid rgba(255,255,255,0.15);"></span>No cumplido&nbsp;&nbsp;
+            <span style="display:inline-block;width:10px;height:8px;background:#f0fdf4;border-radius:2px;margin-right:3px;border:1px solid rgba(255,255,255,0.15);"></span>Futuro&nbsp;&nbsp;
+            <span style="display:inline-block;width:10px;height:8px;background:#ede9fe;border-radius:2px;margin-right:3px;border:1px solid rgba(255,255,255,0.15);"></span>Reprogramado
         </div>
-        <div class="footer-cell footer-right">Página 2 &bull; {{ $cartaGantt->codigo }} &bull; {{ date('d/m/Y') }}</div>
+        <div class="footer-cell footer-right">
+            <span style="color:rgba(255,255,255,0.7);">Página 2</span> &bull; {{ $cartaGantt->codigo }}
+        </div>
+    </div>
+    <div class="footer-divider"></div>
+    <div class="footer-row">
+        <div class="footer-cell">
+            <span class="footer-brand">SAEP</span> <span class="footer-orange">&bull;</span>
+            <span class="footer-brand-sub">Sistema de Administración Empresarial de Prevención</span>
+        </div>
+        <div class="footer-cell footer-right">
+            <span class="footer-legal">&copy; {{ date('Y') }} SAEP &bull; Información confidencial de uso interno</span>
+        </div>
     </div>
 </div>
 
 <div class="page-break"></div>
 
-{{-- =========================== PAGE 3: ALERTAS & REPROGRAMACIONES =========================== --}}
-<div class="top-bar"></div>
-<div class="header">
+{{-- ═══════════════ PAGE 3: ALERTAS & REPROGRAMACIONES ═══════════════ --}}
+<div class="header-band">
     <div class="hdr-logo">
-        <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg" alt="SAEP">
+        <img src="{{ $logoUrl }}" alt="SAEP">
     </div>
     <div class="hdr-center">
         <h1>Alertas, Reprogramaciones y Detalle</h1>
         <p>{{ $cartaGantt->titulo }} &bull; {{ $cartaGantt->codigo }}</p>
     </div>
     <div class="hdr-right">
+        <div class="code">{{ $cartaGantt->codigo }}</div>
         <div class="date">Generado: {{ date('d/m/Y H:i') }}</div>
     </div>
 </div>
+<div class="accent-line"></div>
 
 {{-- Vencidas --}}
 @if($vencidas->count())
@@ -532,7 +591,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
 </table>
 @endif
 
-{{-- Full activity detail table --}}
+{{-- Full activity detail --}}
 <div class="section" style="margin-top:14px;">
     <div class="section-inner">
         <div class="section-bar"></div>
@@ -603,8 +662,24 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9px; color: #1e293b; bac
 
 <div class="footer">
     <div class="footer-row">
-        <div class="footer-cell">SAEP &bull; Sistema de Administración Empresarial de Prevención &bull; Reporte Gerencial SST</div>
-        <div class="footer-cell footer-right">Página 3 &bull; {{ $cartaGantt->codigo }} &bull; {{ date('d/m/Y') }}</div>
+        <div class="footer-cell">
+            <span class="footer-brand">SAEP</span> <span class="footer-orange">&bull;</span>
+            <span class="footer-brand-sub">Sistema de Administración Empresarial de Prevención</span>
+        </div>
+        <div class="footer-cell footer-right">
+            <span style="color:rgba(255,255,255,0.7);">Página 3</span> &bull; {{ $cartaGantt->codigo }} &bull; {{ date('d/m/Y') }}
+        </div>
+    </div>
+    <div class="footer-divider"></div>
+    <div class="footer-row">
+        <div class="footer-cell">
+            <span class="footer-legal">
+                Documento generado automáticamente por SAEP Platform &bull; saep.bmachero.com &bull; Información confidencial de uso interno &bull; &copy; {{ date('Y') }} SAEP — Todos los derechos reservados
+            </span>
+        </div>
+        <div class="footer-cell footer-right">
+            <span class="footer-legal">Generado por: {{ auth()->user()->nombre_completo ?? 'Sistema' }}</span>
+        </div>
     </div>
 </div>
 

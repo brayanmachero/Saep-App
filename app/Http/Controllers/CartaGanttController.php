@@ -166,6 +166,7 @@ class CartaGanttController extends Controller
             'completadas', 'enProgreso', 'pendientes', 'canceladas', 'pct',
             'mesesData', 'vencidas', 'porVencer', 'reprogramaciones', 'prioridades'
         ))->setPaper('a4', 'landscape')->setOptions([
+            'isRemoteEnabled'      => true,
             'isHtml5ParserEnabled' => true,
             'defaultFont'          => 'DejaVu Sans',
             'dpi'                  => 130,
