@@ -154,9 +154,8 @@ Route::middleware('auth')->group(function () {
     Route::post('respuestas', [RespuestaController::class, 'store'])->name('respuestas.store');
     Route::get('respuestas/{respuesta}', [RespuestaController::class, 'show'])->name('respuestas.show');
 
-    // --- Respuestas: gestión administrativa (requiere módulo respuestas) ---
-    Route::middleware('modulo:respuestas')->group(function () {
-        Route::get('respuestas', [RespuestaController::class, 'index'])->name('respuestas.index');
+    // --- Respuestas: gestión administrativa (accedida desde detalle de formulario) ---
+    Route::middleware('modulo:formularios')->group(function () {
         Route::get('respuestas/{respuesta}/edit', [RespuestaController::class, 'edit'])->name('respuestas.edit');
         Route::put('respuestas/{respuesta}', [RespuestaController::class, 'update'])->name('respuestas.update');
         Route::delete('respuestas/{respuesta}', [RespuestaController::class, 'destroy'])->name('respuestas.destroy');

@@ -24,7 +24,7 @@
             <a href="{{ route('pdf.respuesta', $respuesta) }}" class="btn-secondary" target="_blank">
                 <i class="bi bi-file-earmark-pdf-fill"></i> Descargar PDF
             </a>
-            <a href="{{ route('respuestas.index') }}" class="btn-ghost">
+            <a href="{{ url()->previous() }}" class="btn-ghost">
                 <i class="bi bi-arrow-left"></i> Volver
             </a>
         </div>

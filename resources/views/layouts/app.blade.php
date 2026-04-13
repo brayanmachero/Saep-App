@@ -42,19 +42,12 @@
                 <span>Mi Perfil</span>
             </a>
 
-            {{-- SOLICITUDES --}}
-            @if(auth()->user()->tieneAcceso('respuestas') || auth()->user()->tieneAcceso('formularios') || auth()->user()->tieneAcceso('categorias_formularios'))
-            <div class="nav-section-label">Solicitudes</div>
+            {{-- FORMULARIOS --}}
+            <div class="nav-section-label">Formularios</div>
             <a href="{{ route('mis-formularios.index') }}" class="nav-item {{ request()->routeIs('mis-formularios.*') ? 'active' : '' }}">
                 <i class="bi bi-clipboard-check-fill"></i>
                 <span>Mis Formularios</span>
             </a>
-            @if(auth()->user()->tieneAcceso('respuestas'))
-            <a href="{{ route('respuestas.index') }}" class="nav-item {{ request()->routeIs('respuestas.*') ? 'active' : '' }}">
-                <i class="bi bi-file-earmark-text-fill"></i>
-                <span>Mis Solicitudes</span>
-            </a>
-            @endif
             @if(auth()->user()->tieneAcceso('formularios'))
             <a href="{{ route('formularios.index') }}" class="nav-item {{ request()->routeIs('formularios.*') ? 'active' : '' }}">
                 <i class="bi bi-ui-checks"></i>
@@ -66,7 +59,6 @@
                 <i class="bi bi-tag-fill"></i>
                 <span>Categorías</span>
             </a>
-            @endif
             @endif
 
             {{-- SST --}}

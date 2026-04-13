@@ -14,7 +14,7 @@ class PdfController extends Controller
      */
     public function respuesta(Respuesta $respuesta)
     {
-        $respuesta->load('formulario', 'usuario', 'aprobaciones.aprobador');
+        $respuesta->load('formulario', 'usuario.departamento', 'usuario.cargo', 'aprobaciones.aprobador');
         $datos  = json_decode($respuesta->datos_json ?? '{}', true);
         $schema = json_decode($respuesta->formulario->schema_json ?? '[]', true);
 

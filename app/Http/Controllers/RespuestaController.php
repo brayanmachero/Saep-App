@@ -14,29 +14,6 @@ use Illuminate\Support\Facades\Storage;
 
 class RespuestaController extends Controller
 {
-    public function index(Request $request)
-    {
-        $query = Respuesta::with(['formulario', 'usuario.departamento']);
-
-        if ($request->filled('estado')) {
-            $query->where('estado', $request->estado);
-        }
-
-        if ($request->filled('formulario_id')) {
-            $query->where('formulario_id', $request->formulario_id);
-        }
-
-        if ($request->filled('buscar')) {
-            $q = str_replace(['%', '_'], ['\%', '\_'], $request->buscar);
-            $query->whereHas('usuario', fn($u) => $u->where('name', 'like', "%$q%"));
-        }
-
-        $respuestas = $query->latest()->paginate(15)->withQueryString();
-        $formularios = Formulario::where('activo', true)->get();
-
-        return view('respuestas.index', compact('respuestas', 'formularios'));
-    }
-
     public function create(Request $request)
     {
         $formularios = Formulario::where('activo', true)->get();
@@ -166,8 +143,9 @@ class RespuestaController extends Controller
     public function destroy(Respuesta $respuesta)
     {
         abort_if($respuesta->estado !== 'Borrador', 403, 'Solo puedes eliminar borradores.');
+        $formularioId = $respuesta->formulario_id;
         $respuesta->delete();
-        return redirect()->route('respuestas.index')
+        return redirect()->route('formularios.show', $formularioId)
             ->with('success', 'Solicitud eliminada.');
     }
 

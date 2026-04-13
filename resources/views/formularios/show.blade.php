@@ -278,10 +278,6 @@
                         <i class="bi bi-pencil-fill"></i> Editar Formulario
                     </a>
                     @endif
-                    <a href="{{ route('respuestas.index', ['formulario_id' => $formulario->id]) }}"
-                       class="btn-ghost" style="justify-content:center;font-size:.82rem;padding:.45rem .75rem;">
-                        <i class="bi bi-list-ul"></i> Ver Solicitudes
-                    </a>
                     <a href="#seccion-respuestas"
                        class="btn-ghost" style="justify-content:center;font-size:.82rem;padding:.45rem .75rem;">
                         <i class="bi bi-table"></i> Ver Respuestas

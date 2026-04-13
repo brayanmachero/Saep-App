@@ -12,7 +12,7 @@
             <h2 class="page-heading">Nueva Solicitud</h2>
             <p class="page-subheading">Completa el formulario dinámico</p>
         </div>
-        <a href="{{ route('respuestas.index') }}" class="btn-ghost">
+        <a href="{{ url()->previous() }}" class="btn-ghost">
             <i class="bi bi-arrow-left"></i> Volver
         </a>
     </div>
