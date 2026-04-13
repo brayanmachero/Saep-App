@@ -81,14 +81,37 @@
     </td>
     @endfor
     {{-- Acciones --}}
+    @php
+        $user = auth()->user();
+        $esSuperAdmin = $user->rol && $user->rol->codigo === 'SUPER_ADMIN';
+        $esCreador = $user->id === $cartaGantt->creado_por;
+        $esResponsable = $user->id === $act->responsable_id;
+        $puedeEditar = $esSuperAdmin || $esCreador;
+        // Meses vencidos (programado, no realizado, mes pasado)
+        $mesesVencidos = collect($seg)->filter(fn($s, $m) => $s['programado'] && !$s['realizado'] && $m < $mesActual)->keys()->all();
+    @endphp
     <td style="text-align:right;white-space:nowrap">
         <div style="display:flex;gap:.2rem;justify-content:flex-end">
+            @if($puedeEditar)
             <button class="sst-icon-btn sst-icon-btn-xs" onclick="openEditModal(this.closest('tr'))" title="Editar">
                 <i class="bi bi-pencil"></i>
             </button>
+            @endif
             <button class="sst-icon-btn sst-icon-btn-xs" onclick="togglePlanes({{ $act->id }})" title="Planes de acción">
                 <i class="bi bi-clipboard-check"></i>
             </button>
+            @if(count($mesesVencidos) > 0 && ($esResponsable || $puedeEditar))
+            <button class="sst-icon-btn sst-icon-btn-xs" style="color:#6366f1" onclick="openReprogramar({{ $act->id }}, {{ json_encode($mesesVencidos) }})" title="Reprogramar">
+                <i class="bi bi-calendar2-range"></i>
+            </button>
+            @endif
+            @if($act->reprogramaciones->count() > 0)
+            <button class="sst-icon-btn sst-icon-btn-xs" style="color:#8b5cf6" onclick="toggleReprogramaciones({{ $act->id }})" title="Historial reprogramaciones ({{ $act->reprogramaciones->count() }})">
+                <i class="bi bi-clock-history"></i>
+                <span style="font-size:.6rem;position:absolute;top:-2px;right:-4px;background:#8b5cf6;color:#fff;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;font-weight:700;">{{ $act->reprogramaciones->count() }}</span>
+            </button>
+            @endif
+            @if($puedeEditar)
             <form method="POST" action="{{ route('carta-gantt.actividades.destroy', $act) }}"
                   onsubmit="return confirm('¿Eliminar esta actividad?')" style="display:inline">
                 @csrf @method('DELETE')
@@ -96,6 +119,7 @@
                     <i class="bi bi-trash3"></i>
                 </button>
             </form>
+            @endif
         </div>
     </td>
 </tr>
@@ -147,3 +171,45 @@
         </form>
     </td>
 </tr>
+
+{{-- Fila expandible: Historial de Reprogramaciones --}}
+@if($act->reprogramaciones->count() > 0)
+<tr id="reprog-{{ $act->id }}" style="display:none" class="sst-planes-row">
+    <td colspan="17" style="padding:.5rem 1rem;background:var(--surface-color)">
+        <h4 style="margin:0 0 .5rem;font-size:.82rem;font-weight:700;color:#8b5cf6">
+            <i class="bi bi-clock-history"></i> Historial de Reprogramaciones — {{ $act->nombre }}
+        </h4>
+        @php $mesesNom = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']; @endphp
+        <table style="width:100%;font-size:.78rem;border-collapse:collapse;">
+            <thead><tr style="background:var(--bg-color)">
+                <th style="padding:.3rem .5rem;text-align:left;font-weight:600">Fecha</th>
+                <th style="padding:.3rem .5rem;width:100px">Mes Original</th>
+                <th style="padding:.3rem .5rem;width:30px;text-align:center;">→</th>
+                <th style="padding:.3rem .5rem;width:100px">Mes Nuevo</th>
+                <th style="padding:.3rem .5rem;text-align:left;font-weight:600">Motivo</th>
+                <th style="padding:.3rem .5rem;width:130px">Reprogramado por</th>
+            </tr></thead>
+            <tbody>
+            @foreach($act->reprogramaciones->sortByDesc('created_at') as $reprog)
+            <tr style="border-bottom:1px solid var(--surface-border)">
+                <td style="padding:.3rem .5rem;color:var(--text-muted)">{{ $reprog->created_at->format('d/m/Y H:i') }}</td>
+                <td style="padding:.3rem .5rem">
+                    <span style="background:#ef444420;color:#ef4444;padding:.1rem .4rem;border-radius:4px;font-weight:600;font-size:.72rem">
+                        {{ $mesesNom[$reprog->mes_original] ?? '?' }}
+                    </span>
+                </td>
+                <td style="text-align:center;color:var(--text-muted);font-weight:700;">→</td>
+                <td style="padding:.3rem .5rem">
+                    <span style="background:#22c55e20;color:#22c55e;padding:.1rem .4rem;border-radius:4px;font-weight:600;font-size:.72rem">
+                        {{ $mesesNom[$reprog->mes_nuevo] ?? '?' }}
+                    </span>
+                </td>
+                <td style="padding:.3rem .5rem">{{ $reprog->motivo }}</td>
+                <td style="padding:.3rem .5rem;color:var(--text-muted)">{{ $reprog->usuario?->nombre_completo ?? '—' }}</td>
+            </tr>
+            @endforeach
+            </tbody>
+        </table>
+    </td>
+</tr>
+@endif

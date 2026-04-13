@@ -482,6 +482,39 @@
     </div>
 </div>
 
+{{-- Modal Reprogramar --}}
+<div id="reprogramarModal" class="sst-modal" style="display:none">
+    <div class="sst-modal-content" style="max-width:480px">
+        <div class="sst-modal-header" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;">
+            <h3 style="margin:0;font-size:1rem;font-weight:700"><i class="bi bi-calendar2-range"></i> Reprogramar Actividad</h3>
+            <button onclick="closeReprogramar()" class="sst-icon-btn" style="color:#fff"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="sst-modal-body">
+            <form method="POST" id="reprogramarForm">
+                @csrf
+                <div style="margin-bottom:.85rem">
+                    <label class="sst-label">Mes vencido a reprogramar *</label>
+                    <select name="mes_original" id="reprog_mes_original" required class="form-input" style="font-size:.85rem"></select>
+                </div>
+                <div style="margin-bottom:.85rem">
+                    <label class="sst-label">Nuevo mes (actual o futuro) *</label>
+                    <select name="mes_nuevo" id="reprog_mes_nuevo" required class="form-input" style="font-size:.85rem"></select>
+                </div>
+                <div style="margin-bottom:.85rem">
+                    <label class="sst-label">Motivo de reprogramación *</label>
+                    <textarea name="motivo" id="reprog_motivo" required class="form-input" rows="3" maxlength="500" placeholder="Explique por qué se reprograma esta actividad..." style="font-size:.85rem;resize:vertical"></textarea>
+                </div>
+                <div style="display:flex;gap:.5rem;justify-content:flex-end">
+                    <button type="button" class="sst-btn sst-btn-outline" onclick="closeReprogramar()">Cancelar</button>
+                    <button type="submit" class="sst-btn sst-btn-primary" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
+                        <i class="bi bi-calendar2-range"></i> Reprogramar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 @include('carta_gantt._styles')
 @include('carta_gantt._scripts', ['actividadesJson' => $actividadesJson, 'anioPrograma' => $anioPrograma, 'mesActual' => $mesActual, 'mesesNombres' => $mesesNombres])
 @endsection

@@ -10,6 +10,7 @@ use App\Models\SstActividad;
 use App\Models\SstNotificacionLog;
 use App\Models\SstSeguimiento;
 use App\Models\SstPlanAccion;
+use App\Models\SstReprogramacion;
 use App\Models\CentroCosto;
 use App\Models\User;
 use App\Http\Controllers\Controller;
@@ -94,6 +95,7 @@ class CartaGanttController extends Controller
             'categorias.actividades.seguimiento',
             'categorias.actividades.responsableUser',
             'categorias.actividades.planesAccion',
+            'categorias.actividades.reprogramaciones.usuario',
             'centroCosto', 'responsable', 'creador',
         ]);
         $usuarios = User::orderBy('name')->get();
@@ -383,6 +385,59 @@ class CartaGanttController extends Controller
     {
         $plan->delete();
         return back()->with('success', 'Plan de acción eliminado.');
+    }
+
+    // =====================================================
+    // REPROGRAMACIÓN
+    // =====================================================
+
+    public function reprogramarActividad(Request $request, SstActividad $actividad)
+    {
+        $mesActual = (int) date('n');
+
+        $request->validate([
+            'mes_original' => 'required|integer|min:1|max:12',
+            'mes_nuevo'    => 'required|integer|min:' . $mesActual . '|max:12|different:mes_original',
+            'motivo'       => 'required|string|max:500',
+        ]);
+
+        $mesOrig = (int) $request->mes_original;
+        $mesNuevo = (int) $request->mes_nuevo;
+
+        DB::transaction(function () use ($actividad, $mesOrig, $mesNuevo, $request) {
+            // Log the reprogramming
+            SstReprogramacion::create([
+                'actividad_id'     => $actividad->id,
+                'mes_original'     => $mesOrig,
+                'mes_nuevo'        => $mesNuevo,
+                'motivo'           => $request->motivo,
+                'reprogramado_por' => auth()->id(),
+            ]);
+
+            // Remove seguimiento from original month (mark as not programmed)
+            $actividad->seguimiento()->where('mes', $mesOrig)->update([
+                'programado'          => false,
+                'realizado'           => false,
+                'cantidad_realizada'  => 0,
+                'actualizado_por'     => auth()->id(),
+                'fecha_actualizacion' => now(),
+            ]);
+
+            // Create/update seguimiento for new month as programmed
+            $actividad->seguimiento()->updateOrCreate(
+                ['mes' => $mesNuevo],
+                [
+                    'programado'          => true,
+                    'actualizado_por'     => auth()->id(),
+                    'fecha_actualizacion' => now(),
+                ]
+            );
+        });
+
+        $this->recalcularEstadoActividad($actividad);
+
+        $meses = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+        return back()->with('success', "Actividad reprogramada de {$meses[$mesOrig]} a {$meses[$mesNuevo]}.");
     }
 
     // =====================================================

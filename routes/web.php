@@ -217,6 +217,9 @@ Route::middleware('auth')->group(function () {
             ->name('carta-gantt.plan-accion.update');
         Route::delete('carta-gantt/plan-accion/{plan}',      [CartaGanttController::class, 'destroyPlanAccion'])
             ->name('carta-gantt.plan-accion.destroy');
+        // Reprogramación de actividades
+        Route::post('carta-gantt/actividades/{actividad}/reprogramar', [CartaGanttController::class, 'reprogramarActividad'])
+            ->name('carta-gantt.actividades.reprogramar');
         // Importación masiva CSV
         Route::get('carta-gantt/importar/plantilla', [CartaGanttController::class, 'descargarPlantilla'])
             ->name('carta-gantt.plantilla');

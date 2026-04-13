@@ -295,6 +295,41 @@ function togglePlanes(actId) {
     if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
 }
 
+function toggleReprogramaciones(actId) {
+    const row = document.getElementById('reprog-' + actId);
+    if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+function openReprogramar(actId, mesesVencidos) {
+    const modal = document.getElementById('reprogramarModal');
+    const form = document.getElementById('reprogramarForm');
+    const selectOrig = document.getElementById('reprog_mes_original');
+    const selectNuevo = document.getElementById('reprog_mes_nuevo');
+    const meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const mesActual = {{ (int) date('n') }};
+
+    form.action = '/carta-gantt/actividades/' + actId + '/reprogramar';
+
+    // Populate mes_original with overdue months
+    selectOrig.innerHTML = '<option value="">Seleccione...</option>';
+    mesesVencidos.forEach(m => {
+        selectOrig.innerHTML += `<option value="${m}">${meses[m]}</option>`;
+    });
+
+    // Populate mes_nuevo with current + future months
+    selectNuevo.innerHTML = '<option value="">Seleccione...</option>';
+    for (let m = mesActual; m <= 12; m++) {
+        selectNuevo.innerHTML += `<option value="${m}">${meses[m]}</option>`;
+    }
+
+    document.getElementById('reprog_motivo').value = '';
+    modal.style.display = 'flex';
+}
+
+function closeReprogramar() {
+    document.getElementById('reprogramarModal').style.display = 'none';
+}
+
 // ============ ADD ACTIVIDAD ============
 function toggleAddActividad(catId) {
     const el = document.getElementById('addAct-' + catId);
