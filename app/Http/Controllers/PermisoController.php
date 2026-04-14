@@ -6,6 +6,7 @@ use App\Models\Modulo;
 use App\Models\Rol;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class PermisoController extends Controller
 {
@@ -57,5 +58,89 @@ class PermisoController extends Controller
         DB::commit();
 
         return redirect()->route('permisos.index')->with('success', 'Permisos actualizados correctamente.');
+    }
+
+    /**
+     * Crear un nuevo rol y auto-alimentar la tabla rol_modulo.
+     */
+    public function storeRol(Request $request)
+    {
+        $request->validate([
+            'nombre' => 'required|string|max:100',
+            'codigo' => 'nullable|string|max:50|unique:roles,codigo',
+        ]);
+
+        $codigo = $request->codigo
+            ? Str::upper(Str::slug($request->codigo, '_'))
+            : Str::upper(Str::slug($request->nombre, '_'));
+
+        // Verificar unicidad del código generado
+        if (Rol::where('codigo', $codigo)->exists()) {
+            return back()->with('error', "Ya existe un rol con el código «{$codigo}».")->withInput();
+        }
+
+        DB::beginTransaction();
+
+        $rol = Rol::create([
+            'nombre' => $request->nombre,
+            'codigo' => $codigo,
+        ]);
+
+        // Auto-alimentar rol_modulo con todos los módulos activos (sin permisos)
+        $modulos = Modulo::where('activo', true)->get();
+        $rows = $modulos->map(fn ($m) => [
+            'rol_id'          => $rol->id,
+            'modulo_id'       => $m->id,
+            'puede_ver'       => false,
+            'puede_crear'     => false,
+            'puede_editar'    => false,
+            'puede_eliminar'  => false,
+            'created_at'      => now(),
+            'updated_at'      => now(),
+        ])->toArray();
+
+        DB::table('rol_modulo')->insert($rows);
+
+        DB::commit();
+
+        return redirect()->route('permisos.index')
+            ->with('success', "Rol «{$rol->nombre}» creado. Configure sus permisos en la tabla inferior.");
+    }
+
+    /**
+     * Actualizar nombre/código de un rol existente.
+     */
+    public function updateRol(Request $request, Rol $rol)
+    {
+        $request->validate([
+            'nombre' => 'required|string|max:100',
+            'codigo' => 'required|string|max:50|unique:roles,codigo,' . $rol->id,
+        ]);
+
+        $rol->update([
+            'nombre' => $request->nombre,
+            'codigo' => Str::upper(Str::slug($request->codigo, '_')),
+        ]);
+
+        return redirect()->route('permisos.index')->with('success', "Rol «{$rol->nombre}» actualizado.");
+    }
+
+    /**
+     * Eliminar un rol (solo si no tiene usuarios asignados).
+     */
+    public function destroyRol(Rol $rol)
+    {
+        if ($rol->codigo === 'SUPER_ADMIN') {
+            return back()->with('error', 'No se puede eliminar el rol Super Admin.');
+        }
+
+        if ($rol->users()->count() > 0) {
+            return back()->with('error', "El rol «{$rol->nombre}» tiene {$rol->users()->count()} usuario(s) asignado(s). Reasígnelos antes de eliminar.");
+        }
+
+        DB::table('rol_modulo')->where('rol_id', $rol->id)->delete();
+        $rol->delete();
+
+        return redirect()->route('permisos.index')->with('success', "Rol «{$rol->nombre}» eliminado.");
     }
 }

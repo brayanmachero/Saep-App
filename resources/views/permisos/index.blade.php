@@ -6,12 +6,48 @@
     <div class="page-header">
         <div>
             <h2 class="page-heading"><i class="bi bi-key-fill" style="color:var(--accent-color)"></i> Permisos por Rol</h2>
-            <p class="page-subheading">Configure qué módulos puede ver y gestionar cada rol del sistema</p>
+            <p class="page-subheading">Gestione los roles del sistema y configure qué módulos puede ver y gestionar cada uno</p>
         </div>
+        <button onclick="document.getElementById('modal-crear-rol').style.display='flex'" class="btn-premium" style="padding:.5rem 1rem;font-size:.82rem;">
+            <i class="bi bi-plus-lg"></i> Nuevo Rol
+        </button>
     </div>
 
     @include('partials._alerts')
 
+    {{-- ===== ROLES EXISTENTES ===== --}}
+    <div class="glass-card" style="margin-bottom:1.5rem;padding:1rem 1.25rem;">
+        <h3 style="font-size:.88rem;font-weight:700;color:var(--text-primary);margin-bottom:.75rem;">
+            <i class="bi bi-people-fill" style="color:var(--primary-color);"></i> Roles del Sistema
+            <span style="font-size:.72rem;color:var(--text-muted);font-weight:400;margin-left:.3rem;">({{ $roles->count() }})</span>
+        </h3>
+        <div style="display:flex;flex-wrap:wrap;gap:.6rem;">
+            @foreach($roles as $rol)
+            <div style="display:flex;align-items:center;gap:.5rem;padding:.5rem .85rem;border-radius:8px;border:1px solid var(--border-color);background:var(--card-bg);font-size:.8rem;" id="rol-card-{{ $rol->id }}">
+                <div>
+                    <span style="font-weight:700;color:var(--text-primary);">{{ $rol->nombre }}</span>
+                    <span style="font-size:.68rem;color:var(--text-muted);margin-left:.3rem;">({{ $rol->codigo }})</span>
+                    <span style="font-size:.65rem;color:var(--text-muted);display:block;">{{ $rol->users()->count() }} usuario{{ $rol->users()->count() !== 1 ? 's' : '' }}</span>
+                </div>
+                <div style="display:flex;gap:.25rem;margin-left:.5rem;">
+                    <button onclick="abrirEditarRol({{ $rol->id }}, '{{ addslashes($rol->nombre) }}', '{{ $rol->codigo }}')" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:.78rem;padding:.15rem;" title="Editar rol">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    @if($rol->codigo !== 'SUPER_ADMIN')
+                    <form method="POST" action="{{ route('roles.destroy', $rol) }}" style="display:inline;" onsubmit="return confirm('¿Eliminar el rol «{{ $rol->nombre }}»? Esta acción no se puede deshacer.')">
+                        @csrf @method('DELETE')
+                        <button type="submit" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:.78rem;padding:.15rem;opacity:.6;" title="Eliminar rol" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                    @endif
+                </div>
+            </div>
+            @endforeach
+        </div>
+    </div>
+
+    {{-- ===== MATRIZ DE PERMISOS ===== --}}
     <form method="POST" action="{{ route('permisos.update') }}">
         @csrf @method('PUT')
 
@@ -147,5 +183,65 @@ function toggleColumn(rolId) {
         c.closest('.perm-check').classList.toggle('active', c.checked);
     });
 }
+
+function abrirEditarRol(id, nombre, codigo) {
+    document.getElementById('editar-rol-nombre').value = nombre;
+    document.getElementById('editar-rol-codigo').value = codigo;
+    document.getElementById('form-editar-rol').action = '/roles/' + id;
+    document.getElementById('modal-editar-rol').style.display = 'flex';
+}
+
+function cerrarModal(id) {
+    document.getElementById(id).style.display = 'none';
+}
 </script>
+
+{{-- Modal Crear Rol --}}
+<div id="modal-crear-rol" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;justify-content:center;align-items:center;backdrop-filter:blur(2px);" onclick="if(event.target===this)cerrarModal('modal-crear-rol')">
+    <div class="glass-card" style="width:90%;max-width:420px;padding:1.5rem;" onclick="event.stopPropagation()">
+        <h3 style="margin:0 0 1rem;font-size:1rem;font-weight:700;color:var(--text-primary);">
+            <i class="bi bi-plus-circle" style="color:var(--primary-color);"></i> Crear Nuevo Rol
+        </h3>
+        <form method="POST" action="{{ route('roles.store') }}">
+            @csrf
+            <div style="margin-bottom:.75rem;">
+                <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.25rem;">Nombre del Rol *</label>
+                <input type="text" name="nombre" class="form-input" required placeholder="Ej: Analista de Datos" style="font-size:.85rem;">
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.25rem;">Código (opcional)</label>
+                <input type="text" name="codigo" class="form-input" placeholder="Se genera automáticamente si se deja vacío" style="font-size:.85rem;text-transform:uppercase;">
+                <span style="font-size:.68rem;color:var(--text-muted);">Identificador único, ej: ANALISTA_DATOS</span>
+            </div>
+            <div style="display:flex;gap:.5rem;justify-content:flex-end;">
+                <button type="button" onclick="cerrarModal('modal-crear-rol')" class="btn-secondary" style="padding:.4rem .85rem;font-size:.8rem;">Cancelar</button>
+                <button type="submit" class="btn-premium" style="padding:.4rem .85rem;font-size:.8rem;"><i class="bi bi-check-lg"></i> Crear Rol</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Modal Editar Rol --}}
+<div id="modal-editar-rol" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;justify-content:center;align-items:center;backdrop-filter:blur(2px);" onclick="if(event.target===this)cerrarModal('modal-editar-rol')">
+    <div class="glass-card" style="width:90%;max-width:420px;padding:1.5rem;" onclick="event.stopPropagation()">
+        <h3 style="margin:0 0 1rem;font-size:1rem;font-weight:700;color:var(--text-primary);">
+            <i class="bi bi-pencil" style="color:var(--primary-color);"></i> Editar Rol
+        </h3>
+        <form method="POST" id="form-editar-rol" action="">
+            @csrf @method('PUT')
+            <div style="margin-bottom:.75rem;">
+                <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.25rem;">Nombre del Rol *</label>
+                <input type="text" name="nombre" id="editar-rol-nombre" class="form-input" required style="font-size:.85rem;">
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.25rem;">Código *</label>
+                <input type="text" name="codigo" id="editar-rol-codigo" class="form-input" required style="font-size:.85rem;text-transform:uppercase;">
+            </div>
+            <div style="display:flex;gap:.5rem;justify-content:flex-end;">
+                <button type="button" onclick="cerrarModal('modal-editar-rol')" class="btn-secondary" style="padding:.4rem .85rem;font-size:.8rem;">Cancelar</button>
+                <button type="submit" class="btn-premium" style="padding:.4rem .85rem;font-size:.8rem;"><i class="bi bi-check-lg"></i> Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
 @endsection
