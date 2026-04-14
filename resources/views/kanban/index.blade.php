@@ -60,19 +60,37 @@
     @else
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1.25rem;">
             @foreach($tableros as $tablero)
-            <a href="{{ route('kanban.show', $tablero) }}" class="glass-card" style="padding:1.25rem;text-decoration:none;color:inherit;transition:transform .15s,box-shadow .15s;cursor:pointer;position:relative;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,.1)';" onmouseout="this.style.transform='';this.style.boxShadow='';">
-                {{-- Duplicate button --}}
-                <form method="POST" action="{{ route('kanban.duplicar', $tablero) }}" style="position:absolute;top:.6rem;right:.6rem;" onclick="event.stopPropagation();event.preventDefault();">
-                    @csrf
-                    <button type="submit" onclick="this.closest('form').submit()" style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:.2rem .4rem;cursor:pointer;font-size:.72rem;color:var(--text-muted);transition:color .12s;" title="Duplicar tablero" onmouseover="this.style.color='var(--primary-color)'" onmouseout="this.style.color='var(--text-muted)'">
-                        <i class="bi bi-copy"></i>
+            <a href="{{ route('kanban.show', $tablero) }}" class="glass-card tablero-card" style="padding:1.25rem;text-decoration:none;color:inherit;transition:transform .15s,box-shadow .15s;cursor:pointer;position:relative;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,.1)';" onmouseout="this.style.transform='';this.style.boxShadow='';">
+
+                {{-- Menú de acciones (tres puntos) --}}
+                <div class="tablero-menu-wrap" style="position:absolute;top:.6rem;right:.6rem;z-index:10;" onclick="event.stopPropagation();event.preventDefault();">
+                    <button type="button" onclick="toggleTableroMenu({{ $tablero->id }})" class="tablero-menu-btn" style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:.25rem .45rem;cursor:pointer;font-size:.78rem;color:var(--text-muted);transition:all .12s;line-height:1;" title="Opciones">
+                        <i class="bi bi-three-dots-vertical"></i>
                     </button>
-                </form>                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
-                    <h3 style="font-size:1.05rem;font-weight:700;margin:0;color:var(--text-primary);">
+                    <div id="tablero-menu-{{ $tablero->id }}" class="tablero-dropdown" style="display:none;position:absolute;top:100%;right:0;margin-top:.3rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;box-shadow:0 8px 25px rgba(0,0,0,.15);min-width:160px;overflow:hidden;z-index:20;">
+                        {{-- Duplicar --}}
+                        <form method="POST" action="{{ route('kanban.duplicar', $tablero) }}">
+                            @csrf
+                            <button type="submit" style="width:100%;text-align:left;background:none;border:none;padding:.55rem .85rem;cursor:pointer;font-size:.78rem;color:var(--text-primary);display:flex;align-items:center;gap:.5rem;transition:background .1s;" onmouseover="this.style.background='var(--bg-color)'" onmouseout="this.style.background='none'">
+                                <i class="bi bi-copy" style="color:var(--primary-color);font-size:.82rem;"></i> Duplicar tablero
+                            </button>
+                        </form>
+                        {{-- Eliminar (archivar) --}}
+                        <form method="POST" action="{{ route('kanban.destroy', $tablero) }}" onsubmit="return confirm('¿Archivar el tablero «{{ addslashes($tablero->nombre) }}»?')">
+                            @csrf @method('DELETE')
+                            <button type="submit" style="width:100%;text-align:left;background:none;border:none;padding:.55rem .85rem;cursor:pointer;font-size:.78rem;color:#dc2626;display:flex;align-items:center;gap:.5rem;transition:background .1s;border-top:1px solid var(--border-color);" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='none'">
+                                <i class="bi bi-archive" style="font-size:.82rem;"></i> Archivar tablero
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;padding-right:2rem;">
+                    <h3 style="font-size:1.05rem;font-weight:700;margin:0;color:var(--text-primary);min-width:0;">
                         <i class="bi bi-kanban" style="color:var(--primary-color);margin-right:.4rem;"></i>
                         {{ $tablero->nombre }}
                     </h3>
-                    <span style="font-size:.7rem;background:var(--primary-color);color:#fff;padding:.15rem .5rem;border-radius:10px;font-weight:600;">
+                    <span style="font-size:.7rem;background:var(--primary-color);color:#fff;padding:.15rem .5rem;border-radius:10px;font-weight:600;white-space:nowrap;flex-shrink:0;">
                         {{ $tablero->tareas_count }} tareas
                     </span>
                 </div>
@@ -159,4 +177,21 @@
         </form>
     </div>
 </div>
+
+<script>
+function toggleTableroMenu(id) {
+    // Close all other menus first
+    document.querySelectorAll('.tablero-dropdown').forEach(d => {
+        if (d.id !== 'tablero-menu-' + id) d.style.display = 'none';
+    });
+    const menu = document.getElementById('tablero-menu-' + id);
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+// Close menus on click outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.tablero-menu-wrap')) {
+        document.querySelectorAll('.tablero-dropdown').forEach(d => d.style.display = 'none');
+    }
+});
+</script>
 @endsection
