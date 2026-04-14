@@ -208,12 +208,20 @@
             @endif
 
             {{-- NOTAS PERSONALES --}}
-            @if(auth()->user()->tieneAcceso('notas_personales'))
+            @if(auth()->user()->tieneAcceso('notas_personales') || auth()->user()->tieneAcceso('kanban'))
             <div class="nav-section-label">Mis Herramientas</div>
+            @if(auth()->user()->tieneAcceso('notas_personales'))
             <a href="{{ route('notas.index') }}" class="nav-item {{ request()->routeIs('notas.*') ? 'active' : '' }}">
                 <i class="bi bi-journal-text"></i>
                 <span>Notas por Voz</span>
             </a>
+            @endif
+            @if(auth()->user()->tieneAcceso('kanban'))
+            <a href="{{ route('kanban.index') }}" class="nav-item {{ request()->routeIs('kanban.*') ? 'active' : '' }}">
+                <i class="bi bi-kanban"></i>
+                <span>Tablero Kanban</span>
+            </a>
+            @endif
             @endif
         </nav>
 

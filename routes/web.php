@@ -352,5 +352,24 @@ Route::middleware('auth')->group(function () {
         Route::delete('notas/{nota}', [NotaPersonalController::class, 'destroy'])->name('notas.destroy');
     });
 
+    // --- TABLERO KANBAN ---
+    Route::middleware('modulo:kanban')->group(function () {
+        Route::resource('kanban', \App\Http\Controllers\KanbanController::class);
+        // Columnas
+        Route::post('kanban/{kanban}/columnas', [\App\Http\Controllers\KanbanController::class, 'storeColumna'])->name('kanban.columnas.store');
+        Route::put('kanban/columnas/{columna}', [\App\Http\Controllers\KanbanController::class, 'updateColumna'])->name('kanban.columnas.update');
+        Route::delete('kanban/columnas/{columna}', [\App\Http\Controllers\KanbanController::class, 'destroyColumna'])->name('kanban.columnas.destroy');
+        // Tareas
+        Route::post('kanban/{kanban}/tareas', [\App\Http\Controllers\KanbanController::class, 'storeTarea'])->name('kanban.tareas.store');
+        Route::put('kanban/tareas/{tarea}', [\App\Http\Controllers\KanbanController::class, 'updateTarea'])->name('kanban.tareas.update');
+        Route::delete('kanban/tareas/{tarea}', [\App\Http\Controllers\KanbanController::class, 'destroyTarea'])->name('kanban.tareas.destroy');
+        Route::patch('kanban/tareas/{tarea}/mover', [\App\Http\Controllers\KanbanController::class, 'moverTarea'])->name('kanban.tareas.mover');
+        // Etiquetas
+        Route::post('kanban/{kanban}/etiquetas', [\App\Http\Controllers\KanbanController::class, 'storeEtiqueta'])->name('kanban.etiquetas.store');
+        Route::delete('kanban/etiquetas/{etiqueta}', [\App\Http\Controllers\KanbanController::class, 'destroyEtiqueta'])->name('kanban.etiquetas.destroy');
+        // Calendario API
+        Route::get('kanban/{kanban}/calendar-data', [\App\Http\Controllers\KanbanController::class, 'calendarData'])->name('kanban.calendar-data');
+    });
+
     }); // fin middleware consentimiento
 });
