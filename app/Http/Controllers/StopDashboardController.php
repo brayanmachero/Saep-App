@@ -222,6 +222,19 @@ class StopDashboardController extends Controller
     }
 
     /**
+     * Enviar reporte semanal ahora a todos los destinatarios configurados.
+     */
+    public function sendReportNow(Request $request)
+    {
+        $frecuencia = $request->input('frecuencia', 'semanal');
+
+        Artisan::call('stop:weekly-report', ['--frecuencia' => $frecuencia]);
+        $output = Artisan::output();
+
+        return back()->with('success', "Reporte {$frecuencia} enviado exitosamente. " . trim($output));
+    }
+
+    /**
      * Build year-over-year comparison using SQL data.
      */
     private function buildComparisonFromSql(StopAnalyticsService $sql, array $baseFilters, ?string $empresa): array

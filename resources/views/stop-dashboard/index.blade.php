@@ -25,6 +25,15 @@
             </p>
         </div>
         <div style="display:flex;gap:.5rem;align-items:center">
+            <a href="{{ route('stop-dashboard.reporte.preview') }}" target="_blank" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;text-decoration:none">
+                <i class="bi bi-envelope-open"></i> Vista Previa Email
+            </a>
+            <form method="POST" action="{{ route('stop-dashboard.reporte.send-now') }}" style="display:inline" onsubmit="return confirm('¿Enviar el reporte semanal STOP ahora a todos los destinatarios configurados?')">
+                @csrf
+                <button type="submit" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;background:#1e40af;color:#fff;border:none;cursor:pointer">
+                    <i class="bi bi-send-fill"></i> Enviar Reporte Ahora
+                </button>
+            </form>
             <form method="POST" action="{{ route('stop-dashboard.sync') }}" id="sync-form">
                 @csrf
                 <button type="submit" class="btn-premium" id="sync-btn" style="padding:.5rem 1rem;font-size:.82rem">
@@ -47,6 +56,11 @@
     @if(session('success'))
     <div class="glass-card" style="padding:.75rem 1.25rem;margin-bottom:1rem;border-left:4px solid #22c55e;font-size:.85rem;color:#15803d;background:rgba(34,197,94,.06)">
         <i class="bi bi-check-circle-fill"></i> {{ session('success') }}
+    </div>
+    @endif
+    @if(session('error'))
+    <div class="glass-card" style="padding:.75rem 1.25rem;margin-bottom:1rem;border-left:4px solid #dc2626;font-size:.85rem;color:#991b1b;background:rgba(220,38,38,.06)">
+        <i class="bi bi-exclamation-triangle-fill"></i> {{ session('error') }}
     </div>
     @endif
 
