@@ -27,7 +27,7 @@
                 <button onclick="archivarTareaDetalle()" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:.82rem;padding:.2rem;" title="Archivar">
                     <i class="bi bi-archive"></i>
                 </button>
-                <button onclick="eliminarTareaDetalle()" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:.82rem;padding:.2rem;" title="Eliminar">
+                <button id="detalle-btn-eliminar" onclick="eliminarTareaDetalle()" style="display:none;background:none;border:none;cursor:pointer;color:#dc2626;font-size:.82rem;padding:.2rem;" title="Eliminar">
                     <i class="bi bi-trash"></i>
                 </button>
                 <button onclick="cerrarDetalle()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-muted);padding:.2rem;">&times;</button>
@@ -234,6 +234,9 @@ function abrirDetalle(tareaId) {
             // Column header
             document.getElementById('detalle-col-dot').style.background = data.columna_color || '#6b7280';
             document.getElementById('detalle-col-nombre').textContent = data.columna_nombre || '';
+
+            // Show/hide delete button based on permissions
+            document.getElementById('detalle-btn-eliminar').style.display = data.puede_eliminar ? '' : 'none';
 
             // Cover image — show first image attachment
             const coverEl = document.getElementById('detalle-cover');

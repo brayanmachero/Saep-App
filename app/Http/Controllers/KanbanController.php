@@ -293,6 +293,14 @@ class KanbanController extends Controller
 
     public function destroyTarea(KanbanTarea $tarea)
     {
+        $user = auth()->user();
+        if (!$user->esSuperAdmin() && $tarea->creado_por !== $user->id) {
+            if (request()->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Solo el creador o SuperAdmin puede eliminar esta tarea.'], 403);
+            }
+            return back()->with('error', 'No tienes permiso para eliminar esta tarea.');
+        }
+
         $tableroId = $tarea->tablero_id;
         $titulo = $tarea->titulo;
         $tarea->delete();
@@ -516,6 +524,8 @@ class KanbanController extends Controller
                 'url_descargar'   => route('kanban.adjuntos.descargar', $a->id),
             ]),
             'checklist_progreso' => $tarea->checklistProgreso,
+            'creado_por'         => $tarea->creado_por,
+            'puede_eliminar'     => auth()->user()->esSuperAdmin() || $tarea->creado_por === auth()->id(),
         ]);
     }
 
