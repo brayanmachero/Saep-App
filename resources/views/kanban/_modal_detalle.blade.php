@@ -1,188 +1,208 @@
-{{-- Modal Detalle de Tarea --}}
+{{-- Modal Detalle de Tarea (Trello-style) --}}
+<style>
+@media (max-width: 640px) {
+    #modal-detalle .modal-body-flex { flex-direction: column !important; }
+    #modal-detalle .modal-sidebar { width: 100% !important; border-right: none !important; border-top: 1px solid var(--border-color); }
+    #modal-detalle .modal-main { border-right: none !important; }
+}
+</style>
 <div id="modal-detalle" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;justify-content:center;align-items:flex-start;padding-top:3vh;backdrop-filter:blur(2px);" onclick="if(event.target===this)cerrarDetalle()">
-    <div class="glass-card" style="padding:0;width:94%;max-width:720px;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;" onclick="event.stopPropagation()">
+    <div class="glass-card" style="padding:0;width:94%;max-width:820px;max-height:92vh;overflow:hidden;display:flex;flex-direction:column;" onclick="event.stopPropagation()">
+
+        {{-- Cover image (shown if task has image attachment) --}}
+        <div id="detalle-cover" style="display:none;width:100%;height:140px;overflow:hidden;position:relative;background:#f1f5f9;">
+            <img id="detalle-cover-img" src="" alt="" style="width:100%;height:100%;object-fit:cover;">
+        </div>
 
         {{-- Header --}}
-        <div id="detalle-header" style="padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-color);flex-shrink:0;">
-            <div style="display:flex;align-items:center;gap:.5rem;">
-                <span id="detalle-col-dot" style="width:12px;height:12px;border-radius:50%;"></span>
-                <span id="detalle-col-nombre" style="font-size:.78rem;font-weight:600;color:var(--text-muted);"></span>
+        <div id="detalle-header" style="padding:.85rem 1.25rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-color);flex-shrink:0;">
+            <div style="display:flex;align-items:center;gap:.5rem;flex:1;min-width:0;">
+                <i class="bi bi-card-heading" style="color:var(--primary-color);font-size:1rem;"></i>
+                <input type="text" id="detalle-titulo" class="form-input" style="font-size:1.05rem;font-weight:700;border:none;padding:.2rem .35rem;background:transparent;flex:1;" placeholder="Título de la tarea">
             </div>
-            <div style="display:flex;align-items:center;gap:.5rem;">
-                <button onclick="archivarTareaDetalle()" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:.85rem;" title="Archivar tarea">
+            <div style="display:flex;align-items:center;gap:.4rem;flex-shrink:0;margin-left:.5rem;">
+                <span id="detalle-col-dot" style="width:10px;height:10px;border-radius:50%;"></span>
+                <span id="detalle-col-nombre" style="font-size:.72rem;font-weight:600;color:var(--text-muted);"></span>
+                <div style="width:1px;height:16px;background:var(--border-color);margin:0 .2rem;"></div>
+                <button onclick="archivarTareaDetalle()" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:.82rem;padding:.2rem;" title="Archivar">
                     <i class="bi bi-archive"></i>
                 </button>
-                <button onclick="eliminarTareaDetalle()" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:.85rem;" title="Eliminar tarea">
+                <button onclick="eliminarTareaDetalle()" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:.82rem;padding:.2rem;" title="Eliminar">
                     <i class="bi bi-trash"></i>
                 </button>
-                <button onclick="cerrarDetalle()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);">&times;</button>
+                <button onclick="cerrarDetalle()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-muted);padding:.2rem;">&times;</button>
             </div>
         </div>
 
-        {{-- Body scrollable --}}
-        <div style="overflow-y:auto;flex:1;padding:1.25rem;">
+        {{-- Body: two-column Trello layout --}}
+        <div class="modal-body-flex" style="overflow-y:auto;flex:1;display:flex;gap:0;">
             <input type="hidden" id="detalle-tarea-id">
             <input type="hidden" id="detalle-tablero-id">
 
-            {{-- Título editable --}}
-            <div style="margin-bottom:.75rem;">
-                <input type="text" id="detalle-titulo" class="form-input" style="font-size:1.1rem;font-weight:700;border:none;padding:.25rem 0;background:transparent;" placeholder="Título de la tarea">
-            </div>
+            {{-- LEFT: Main content (descripción, checklist, adjuntos, comentarios) --}}
+            <div class="modal-main" style="flex:1;padding:1.25rem;min-width:0;border-right:1px solid var(--border-color);">
 
-            {{-- Descripción editable --}}
-            <div style="margin-bottom:1rem;">
-                <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.25rem;">
-                    <i class="bi bi-text-left"></i> Descripción
-                </label>
-                <textarea id="detalle-descripcion" class="form-input" rows="2" placeholder="Agrega una descripción..." style="font-size:.85rem;"></textarea>
-            </div>
-
-            {{-- Campos en grid --}}
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem;">
-                <div>
-                    <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Prioridad</label>
-                    <select id="detalle-prioridad" class="form-input" style="font-size:.82rem;">
-                        <option value="BAJA">🟢 Baja</option>
-                        <option value="MEDIA">🟡 Media</option>
-                        <option value="ALTA">🔴 Alta</option>
-                    </select>
+                {{-- Descripción --}}
+                <div style="margin-bottom:1.25rem;">
+                    <label style="font-size:.78rem;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:.3rem;margin-bottom:.4rem;">
+                        <i class="bi bi-text-left" style="color:var(--primary-color);"></i> Descripción
+                    </label>
+                    <textarea id="detalle-descripcion" class="form-input" rows="3" placeholder="Agrega una descripción más detallada..." style="font-size:.84rem;line-height:1.5;resize:vertical;"></textarea>
                 </div>
+
+                {{-- Checklist --}}
+                <div style="margin-bottom:1.25rem;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
+                        <label style="font-size:.78rem;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:.3rem;">
+                            <i class="bi bi-check2-square" style="color:var(--primary-color);"></i> Checklist
+                            <span id="checklist-progreso-badge" style="font-size:.68rem;color:var(--text-muted);font-weight:400;"></span>
+                        </label>
+                    </div>
+                    <div id="checklist-progress-bar" style="display:none;margin-bottom:.5rem;">
+                        <div style="height:4px;background:var(--border-color);border-radius:3px;overflow:hidden;">
+                            <div id="checklist-progress-fill" style="height:100%;background:#10b981;border-radius:3px;transition:width .3s;width:0%;"></div>
+                        </div>
+                    </div>
+                    <div id="checklist-items"></div>
+                    <div style="display:flex;gap:.35rem;margin-top:.4rem;">
+                        <input type="text" id="checklist-nuevo-texto" class="form-input" placeholder="Agregar ítem..." style="font-size:.8rem;flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();agregarChecklistItem();}">
+                        <button onclick="agregarChecklistItem()" style="background:var(--primary-color);color:#fff;border:none;border-radius:6px;padding:.3rem .6rem;cursor:pointer;font-size:.78rem;">
+                            <i class="bi bi-plus"></i>
+                        </button>
+                    </div>
+                </div>
+
+                {{-- Adjuntos --}}
+                <div style="margin-bottom:1.25rem;">
+                    <label style="font-size:.78rem;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:.3rem;margin-bottom:.5rem;">
+                        <i class="bi bi-paperclip" style="color:var(--primary-color);"></i> Adjuntos
+                        <span id="adjuntos-count" style="font-size:.68rem;color:var(--text-muted);font-weight:400;"></span>
+                    </label>
+                    <div id="adjuntos-lista"></div>
+                    <div style="margin-top:.4rem;">
+                        <label style="display:inline-flex;align-items:center;gap:.3rem;padding:.4rem .75rem;border-radius:6px;border:1px dashed var(--border-color);font-size:.78rem;color:var(--text-muted);cursor:pointer;transition:all .15s;" onmouseover="this.style.borderColor='var(--primary-color)';this.style.color='var(--primary-color)';" onmouseout="this.style.borderColor='var(--border-color)';this.style.color='var(--text-muted)';">
+                            <i class="bi bi-cloud-upload"></i> Subir archivo (máx 10 MB)
+                            <input type="file" id="adjunto-file-input" style="display:none;" onchange="subirAdjunto(this)">
+                        </label>
+                    </div>
+                </div>
+
+                {{-- Comentarios --}}
                 <div>
-                    <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Asignado a</label>
-                    <select id="detalle-asignado" class="form-input" style="font-size:.82rem;">
+                    <label style="font-size:.78rem;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:.3rem;margin-bottom:.5rem;">
+                        <i class="bi bi-chat-dots" style="color:var(--primary-color);"></i> Comentarios
+                        <span id="comentarios-count" style="font-size:.68rem;color:var(--text-muted);font-weight:400;"></span>
+                    </label>
+                    <div style="display:flex;gap:.4rem;margin-bottom:.75rem;">
+                        <div style="background:var(--primary-color);color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;flex-shrink:0;">
+                            {{ strtoupper(substr(auth()->user()->name, 0, 2)) }}
+                        </div>
+                        <div style="flex:1;">
+                            <textarea id="comentario-nuevo" class="form-input" rows="2" placeholder="Escribe un comentario..." style="font-size:.82rem;"></textarea>
+                            <button onclick="enviarComentario()" class="btn-premium" style="margin-top:.3rem;padding:.3rem .6rem;font-size:.75rem;">
+                                <i class="bi bi-send"></i> Comentar
+                            </button>
+                        </div>
+                    </div>
+                    <div id="comentarios-lista"></div>
+                </div>
+            </div>
+
+            {{-- RIGHT: Sidebar (metadata, etiquetas, actividad) --}}
+            <div class="modal-sidebar" style="width:240px;flex-shrink:0;padding:1.25rem .85rem;background:var(--card-bg);overflow-y:auto;">
+
+                {{-- Miembros / Asignado --}}
+                <div style="margin-bottom:1rem;">
+                    <label style="font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:.35rem;">
+                        <i class="bi bi-person"></i> Asignado
+                    </label>
+                    <select id="detalle-asignado" class="form-input" style="font-size:.8rem;padding:.35rem .5rem;">
                         <option value="">— Sin asignar —</option>
                         @foreach($usuarios as $u)
                             <option value="{{ $u->id }}">{{ $u->name }}</option>
                         @endforeach
                     </select>
                 </div>
-                <div>
-                    <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Fecha inicio</label>
-                    <input type="date" id="detalle-fecha-inicio" class="form-input" style="font-size:.82rem;">
+
+                {{-- Prioridad --}}
+                <div style="margin-bottom:1rem;">
+                    <label style="font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:.35rem;">
+                        <i class="bi bi-flag"></i> Prioridad
+                    </label>
+                    <select id="detalle-prioridad" class="form-input" style="font-size:.8rem;padding:.35rem .5rem;">
+                        <option value="BAJA">🟢 Baja</option>
+                        <option value="MEDIA">🟡 Media</option>
+                        <option value="ALTA">🔴 Alta</option>
+                    </select>
                 </div>
-                <div>
-                    <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Fecha vencimiento</label>
-                    <input type="date" id="detalle-fecha-vencimiento" class="form-input" style="font-size:.82rem;">
+
+                {{-- Fechas --}}
+                <div style="margin-bottom:1rem;">
+                    <label style="font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:.35rem;">
+                        <i class="bi bi-calendar3"></i> Fechas
+                    </label>
+                    <div style="display:flex;flex-direction:column;gap:.35rem;">
+                        <div>
+                            <span style="font-size:.65rem;color:var(--text-muted);">Inicio</span>
+                            <input type="date" id="detalle-fecha-inicio" class="form-input" style="font-size:.78rem;padding:.3rem .4rem;">
+                        </div>
+                        <div>
+                            <span style="font-size:.65rem;color:var(--text-muted);">Vencimiento</span>
+                            <input type="date" id="detalle-fecha-vencimiento" class="form-input" style="font-size:.78rem;padding:.3rem .4rem;">
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Centro de Costo</label>
-                    <select id="detalle-centro-costo" class="form-input" style="font-size:.82rem;">
+
+                {{-- Centro de Costo --}}
+                <div style="margin-bottom:1rem;">
+                    <label style="font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:.35rem;">
+                        <i class="bi bi-building"></i> Centro de Costo
+                    </label>
+                    <select id="detalle-centro-costo" class="form-input" style="font-size:.8rem;padding:.35rem .5rem;">
                         <option value="">— Sin asignar —</option>
                         @foreach($centros as $c)
                             <option value="{{ $c->id }}">{{ $c->nombre }}</option>
                         @endforeach
                     </select>
                 </div>
-                <div style="display:flex;align-items:end;">
-                    <button onclick="guardarDetalle()" class="btn-premium" style="width:100%;justify-content:center;padding:.45rem;font-size:.8rem;">
-                        <i class="bi bi-check-lg"></i> Guardar cambios
-                    </button>
-                </div>
-            </div>
 
-            {{-- Etiquetas actuales --}}
-            @if($kanban->etiquetas->isNotEmpty())
-            <div style="margin-bottom:1rem;">
-                <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.3rem;">
-                    <i class="bi bi-tags"></i> Etiquetas
-                </label>
-                <div style="display:flex;flex-wrap:wrap;gap:.35rem;" id="detalle-etiquetas-container">
-                    @foreach($kanban->etiquetas as $et)
-                    <label style="display:inline-flex;align-items:center;gap:.2rem;padding:.2rem .45rem;border-radius:6px;font-size:.72rem;cursor:pointer;border:1px solid {{ $et->color }}30;background:{{ $et->color }}10;">
-                        <input type="checkbox" class="detalle-etiqueta-cb" value="{{ $et->id }}" style="width:13px;height:13px;">
-                        <span style="color:{{ $et->color }};font-weight:600;">{{ $et->nombre }}</span>
+                {{-- Etiquetas --}}
+                @if($kanban->etiquetas->isNotEmpty())
+                <div style="margin-bottom:1rem;">
+                    <label style="font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:.35rem;">
+                        <i class="bi bi-tags"></i> Etiquetas
                     </label>
-                    @endforeach
-                </div>
-            </div>
-            @endif
-
-            <hr style="border:none;border-top:1px solid var(--border-color);margin:1rem 0;">
-
-            {{-- ======= CHECKLIST ======= --}}
-            <div style="margin-bottom:1rem;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
-                    <label style="font-size:.82rem;font-weight:700;color:var(--text-primary);">
-                        <i class="bi bi-check2-square" style="color:var(--primary-color);"></i> Checklist
-                        <span id="checklist-progreso-badge" style="font-size:.7rem;color:var(--text-muted);font-weight:400;margin-left:.3rem;"></span>
-                    </label>
-                </div>
-                {{-- Progress bar --}}
-                <div id="checklist-progress-bar" style="display:none;margin-bottom:.5rem;">
-                    <div style="height:4px;background:var(--border-color);border-radius:3px;overflow:hidden;">
-                        <div id="checklist-progress-fill" style="height:100%;background:#10b981;border-radius:3px;transition:width .3s;width:0%;"></div>
+                    <div style="display:flex;flex-wrap:wrap;gap:.3rem;" id="detalle-etiquetas-container">
+                        @foreach($kanban->etiquetas as $et)
+                        <label style="display:inline-flex;align-items:center;gap:.2rem;padding:.15rem .35rem;border-radius:5px;font-size:.7rem;cursor:pointer;border:1px solid {{ $et->color }}30;background:{{ $et->color }}10;transition:background .12s;">
+                            <input type="checkbox" class="detalle-etiqueta-cb" value="{{ $et->id }}" style="width:12px;height:12px;">
+                            <span style="color:{{ $et->color }};font-weight:600;">{{ $et->nombre }}</span>
+                        </label>
+                        @endforeach
                     </div>
                 </div>
-                {{-- Items list --}}
-                <div id="checklist-items"></div>
-                {{-- Add new --}}
-                <div style="display:flex;gap:.35rem;margin-top:.4rem;">
-                    <input type="text" id="checklist-nuevo-texto" class="form-input" placeholder="Agregar ítem..." style="font-size:.8rem;flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();agregarChecklistItem();}">
-                    <button onclick="agregarChecklistItem()" style="background:var(--primary-color);color:#fff;border:none;border-radius:6px;padding:.3rem .6rem;cursor:pointer;font-size:.78rem;">
-                        <i class="bi bi-plus"></i>
-                    </button>
-                </div>
-            </div>
+                @endif
 
-            <hr style="border:none;border-top:1px solid var(--border-color);margin:1rem 0;">
+                {{-- Guardar --}}
+                <button onclick="guardarDetalle()" class="btn-premium" style="width:100%;justify-content:center;padding:.45rem;font-size:.8rem;margin-bottom:1rem;">
+                    <i class="bi bi-check-lg"></i> Guardar cambios
+                </button>
 
-            {{-- ======= ADJUNTOS ======= --}}
-            <div style="margin-bottom:1rem;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
-                    <label style="font-size:.82rem;font-weight:700;color:var(--text-primary);">
-                        <i class="bi bi-paperclip" style="color:var(--primary-color);"></i> Adjuntos
-                        <span id="adjuntos-count" style="font-size:.7rem;color:var(--text-muted);font-weight:400;"></span>
+                <hr style="border:none;border-top:1px solid var(--border-color);margin:.75rem 0;">
+
+                {{-- Actividad --}}
+                <div>
+                    <label style="font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:.35rem;cursor:pointer;" onclick="toggleDetalleActividad()">
+                        <i class="bi bi-clock-history"></i> Actividad
+                        <i id="actividad-toggle-icon" class="bi bi-chevron-down" style="font-size:.6rem;margin-left:.2rem;"></i>
                     </label>
+                    <div id="detalle-actividad" style="display:none;max-height:200px;overflow-y:auto;"></div>
                 </div>
-                {{-- Files list --}}
-                <div id="adjuntos-lista"></div>
-                {{-- Upload --}}
-                <div style="margin-top:.4rem;">
-                    <label style="display:inline-flex;align-items:center;gap:.3rem;padding:.4rem .75rem;border-radius:6px;border:1px dashed var(--border-color);font-size:.78rem;color:var(--text-muted);cursor:pointer;transition:all .15s;" onmouseover="this.style.borderColor='var(--primary-color)';this.style.color='var(--primary-color)';" onmouseout="this.style.borderColor='var(--border-color)';this.style.color='var(--text-muted)';">
-                        <i class="bi bi-cloud-upload"></i> Subir archivo (máx 10 MB)
-                        <input type="file" id="adjunto-file-input" style="display:none;" onchange="subirAdjunto(this)">
-                    </label>
+
+                {{-- Meta --}}
+                <div style="margin-top:.75rem;font-size:.68rem;color:var(--text-muted);">
+                    Creada por <strong id="detalle-creador"></strong>
                 </div>
-            </div>
-
-            <hr style="border:none;border-top:1px solid var(--border-color);margin:1rem 0;">
-
-            {{-- ======= COMENTARIOS ======= --}}
-            <div>
-                <label style="font-size:.82rem;font-weight:700;color:var(--text-primary);display:block;margin-bottom:.5rem;">
-                    <i class="bi bi-chat-dots" style="color:var(--primary-color);"></i> Comentarios
-                    <span id="comentarios-count" style="font-size:.7rem;color:var(--text-muted);font-weight:400;"></span>
-                </label>
-                {{-- Nuevo comentario --}}
-                <div style="display:flex;gap:.4rem;margin-bottom:.75rem;">
-                    <div style="background:var(--primary-color);color:#fff;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;flex-shrink:0;">
-                        {{ strtoupper(substr(auth()->user()->name, 0, 2)) }}
-                    </div>
-                    <div style="flex:1;">
-                        <textarea id="comentario-nuevo" class="form-input" rows="2" placeholder="Escribe un comentario..." style="font-size:.82rem;"></textarea>
-                        <button onclick="enviarComentario()" class="btn-premium" style="margin-top:.3rem;padding:.3rem .6rem;font-size:.75rem;">
-                            <i class="bi bi-send"></i> Comentar
-                        </button>
-                    </div>
-                </div>
-                {{-- Lista de comentarios --}}
-                <div id="comentarios-lista"></div>
-            </div>
-
-            <hr style="border:none;border-top:1px solid var(--border-color);margin:1rem 0;">
-
-            {{-- ======= ACTIVIDAD DE LA TAREA ======= --}}
-            <div>
-                <label style="font-size:.82rem;font-weight:700;color:var(--text-primary);display:block;margin-bottom:.5rem;cursor:pointer;" onclick="toggleDetalleActividad()">
-                    <i class="bi bi-clock-history" style="color:var(--primary-color);"></i> Historial de Actividad
-                    <i id="actividad-toggle-icon" class="bi bi-chevron-down" style="font-size:.7rem;margin-left:.3rem;"></i>
-                </label>
-                <div id="detalle-actividad" style="display:none;max-height:200px;overflow-y:auto;"></div>
-            </div>
-
-            {{-- Meta info --}}
-            <div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--border-color);font-size:.72rem;color:var(--text-muted);">
-                <span>Creada por <strong id="detalle-creador"></strong></span>
             </div>
         </div>
     </div>
@@ -214,6 +234,18 @@ function abrirDetalle(tareaId) {
             // Column header
             document.getElementById('detalle-col-dot').style.background = data.columna_color || '#6b7280';
             document.getElementById('detalle-col-nombre').textContent = data.columna_nombre || '';
+
+            // Cover image — show first image attachment
+            const coverEl = document.getElementById('detalle-cover');
+            const coverImg = document.getElementById('detalle-cover-img');
+            const firstImg = data.adjuntos.find(a => a.es_imagen && a.url_imagen);
+            if (firstImg) {
+                coverImg.src = firstImg.url_imagen;
+                coverEl.style.display = 'block';
+            } else {
+                coverEl.style.display = 'none';
+                coverImg.src = '';
+            }
 
             // Etiquetas checkboxes
             const etIds = data.etiquetas.map(e => e.id);
@@ -428,8 +460,13 @@ function crearAdjuntoEl(a) {
     const div = document.createElement('div');
     div.id = 'adjunto-' + a.id;
     div.style.cssText = 'display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;border-radius:6px;border:1px solid var(--border-color);margin-bottom:.35rem;font-size:.8rem;';
+
+    const thumbHtml = a.es_imagen && a.url_imagen
+        ? `<img src="${a.url_imagen}" alt="" style="width:40px;height:40px;border-radius:4px;object-fit:cover;flex-shrink:0;">`
+        : `<i class="bi bi-file-earmark" style="font-size:1.1rem;color:var(--primary-color);flex-shrink:0;"></i>`;
+
     div.innerHTML = `
-        <i class="bi ${a.es_imagen ? 'bi-file-image' : 'bi-file-earmark'}" style="font-size:1.1rem;color:var(--primary-color);"></i>
+        ${thumbHtml}
         <div style="flex:1;min-width:0;">
             <a href="${a.url_descargar}" style="font-weight:600;color:var(--text-primary);text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(a.nombre_original)}">
                 ${escapeHtml(a.nombre_original)}
@@ -463,6 +500,12 @@ function subirAdjunto(fileInput) {
             const countEl = document.getElementById('adjuntos-count');
             const current = document.querySelectorAll('#adjuntos-lista > div').length;
             countEl.textContent = `(${current})`;
+            // Update cover if first image
+            const coverEl = document.getElementById('detalle-cover');
+            if (data.adjunto.es_imagen && data.adjunto.url_imagen && coverEl.style.display === 'none') {
+                document.getElementById('detalle-cover-img').src = data.adjunto.url_imagen;
+                coverEl.style.display = 'block';
+            }
         } else {
             alert(data.message || 'Error al subir archivo');
         }

@@ -54,20 +54,23 @@ class KanbanTablero extends Model
     }
 
     /**
-     * Verificar si un usuario tiene acceso al tablero (creador o miembro).
+     * Verificar si un usuario tiene acceso al tablero (creador, miembro o SuperAdmin).
      */
     public function tieneAcceso(?int $userId = null): bool
     {
         $userId = $userId ?? auth()->id();
+        if (auth()->user()?->esSuperAdmin()) return true;
         if ($this->creado_por === $userId) return true;
         return $this->miembros()->where('user_id', $userId)->exists();
     }
 
     /**
-     * Scope: tableros visibles para el usuario (creador + miembro).
+     * Scope: tableros visibles para el usuario (creador + miembro, o todos si SuperAdmin).
      */
     public function scopeVisiblesParaUsuario($query, ?int $userId = null)
     {
+        if (auth()->user()?->esSuperAdmin()) return $query;
+
         $userId = $userId ?? auth()->id();
         return $query->where(function ($q) use ($userId) {
             $q->where('creado_por', $userId)

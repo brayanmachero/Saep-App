@@ -80,6 +80,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Verificar si el usuario es SuperAdmin.
+     */
+    public function esSuperAdmin(): bool
+    {
+        return $this->rol?->codigo === 'SUPER_ADMIN';
+    }
+
+    /**
      * The attributes that should be hidden for serialization.
      *
      * @var list<string>
