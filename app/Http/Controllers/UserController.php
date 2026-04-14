@@ -11,7 +11,7 @@ use App\Models\Departamento;
 use App\Models\Rol;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -92,18 +92,35 @@ class UserController extends Controller
 
         // Generar contraseña provisoria automática
         $tempPassword = Str::upper(Str::random(3)) . rand(100, 999) . Str::random(3);
-        $data['password'] = Hash::make($tempPassword);
+        $data['password'] = $tempPassword;
         $data['must_change_password'] = true;
         $data['activo'] = $request->boolean('activo', true);
 
         $user = User::create($data);
 
         // Enviar email de bienvenida con credenciales
-        Mail::to($user->email)->send(new BienvenidaUsuarioMail($user, $tempPassword));
+        $emailOk = false;
+        if (Configuracion::get('notificaciones_email') === 'true') {
+            try {
+                Mail::to($user->email)->send(new BienvenidaUsuarioMail($user, $tempPassword));
+                $emailOk = true;
+            } catch (\Throwable $e) {
+                Log::error('Error enviando email de bienvenida', [
+                    'user_id' => $user->id,
+                    'email'   => $user->email,
+                    'error'   => $e->getMessage(),
+                ]);
+            }
+        }
+
         $user->notify(new AppNotification('Bienvenido a SAEP', 'Tu cuenta ha sido creada. Revisa tu correo para tus credenciales de acceso.', 'success', route('perfil.show')));
 
+        $emailMsg = $emailOk
+            ? ' Se envió correo con credenciales a ' . $user->email . '.'
+            : ' (No se pudo enviar el correo. Contraseña provisoria: ' . $tempPassword . ')';
+
         return redirect()->route('usuarios.index')
-            ->with('success', 'Usuario creado correctamente. Se envió un correo con las credenciales provisorias a ' . $user->email);
+            ->with('success', 'Usuario creado correctamente.' . $emailMsg);
     }
 
     public function edit(User $usuario)
@@ -142,7 +159,7 @@ class UserController extends Controller
             $request->validate([
                 'password' => ['confirmed', Password::min(8)->letters()->mixedCase()->numbers()],
             ]);
-            $data['password'] = Hash::make($request->password);
+            $data['password'] = $request->password;
         }
 
         $data['activo'] = $request->boolean('activo');
@@ -169,12 +186,22 @@ class UserController extends Controller
     {
         $tempPassword = Str::upper(Str::random(3)) . rand(100, 999) . Str::random(3);
         $usuario->update([
-            'password'             => Hash::make($tempPassword),
+            'password'             => $tempPassword,
             'must_change_password' => true,
         ]);
 
+        $emailOk = false;
         if (Configuracion::get('notificaciones_email') === 'true') {
-            Mail::to($usuario->email)->send(new BienvenidaUsuarioMail($usuario, $tempPassword));
+            try {
+                Mail::to($usuario->email)->send(new BienvenidaUsuarioMail($usuario, $tempPassword));
+                $emailOk = true;
+            } catch (\Throwable $e) {
+                Log::error('Error enviando email de reset password', [
+                    'user_id' => $usuario->id,
+                    'email'   => $usuario->email,
+                    'error'   => $e->getMessage(),
+                ]);
+            }
         }
 
         $usuario->notify(new AppNotification(
@@ -184,9 +211,13 @@ class UserController extends Controller
             route('perfil.show')
         ));
 
-        $emailMsg = Configuracion::get('notificaciones_email') === 'true'
-            ? " Se envió correo a {$usuario->email}."
-            : ' (Envío de email desactivado en configuración).';
+        if ($emailOk) {
+            $emailMsg = " Se envió correo a {$usuario->email}.";
+        } elseif (Configuracion::get('notificaciones_email') !== 'true') {
+            $emailMsg = ' (Envío de email desactivado en configuración).';
+        } else {
+            $emailMsg = " No se pudo enviar el correo. Contraseña provisoria: {$tempPassword}";
+        }
 
         return back()->with('success', "Contraseña de {$usuario->nombre_completo} restablecida.{$emailMsg}");
     }
@@ -201,16 +232,26 @@ class UserController extends Controller
         $usuarios = User::whereIn('id', $request->ids)->get();
         $emailActivo = Configuracion::get('notificaciones_email') === 'true';
         $count = 0;
+        $emailFails = 0;
 
         foreach ($usuarios as $usuario) {
             $tempPassword = Str::upper(Str::random(3)) . rand(100, 999) . Str::random(3);
             $usuario->update([
-                'password'             => Hash::make($tempPassword),
+                'password'             => $tempPassword,
                 'must_change_password' => true,
             ]);
 
             if ($emailActivo) {
-                Mail::to($usuario->email)->send(new BienvenidaUsuarioMail($usuario, $tempPassword));
+                try {
+                    Mail::to($usuario->email)->send(new BienvenidaUsuarioMail($usuario, $tempPassword));
+                } catch (\Throwable $e) {
+                    $emailFails++;
+                    Log::error('Error enviando email de reset password (bulk)', [
+                        'user_id' => $usuario->id,
+                        'email'   => $usuario->email,
+                        'error'   => $e->getMessage(),
+                    ]);
+                }
             }
 
             $usuario->notify(new AppNotification(
@@ -223,7 +264,11 @@ class UserController extends Controller
             $count++;
         }
 
-        $emailMsg = $emailActivo ? ' Se enviaron correos con las nuevas credenciales.' : ' (Envío de email desactivado).';
+        $emailMsg = !$emailActivo
+            ? ' (Envío de email desactivado).'
+            : ($emailFails > 0
+                ? " Se enviaron correos, pero {$emailFails} fallaron. Revise los logs."
+                : ' Se enviaron correos con las nuevas credenciales.');
 
         return back()->with('success', "Se restablecieron {$count} contraseña(s).{$emailMsg}");
     }
