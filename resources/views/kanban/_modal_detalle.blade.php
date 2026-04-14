@@ -9,6 +9,9 @@
                 <span id="detalle-col-nombre" style="font-size:.78rem;font-weight:600;color:var(--text-muted);"></span>
             </div>
             <div style="display:flex;align-items:center;gap:.5rem;">
+                <button onclick="archivarTareaDetalle()" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:.85rem;" title="Archivar tarea">
+                    <i class="bi bi-archive"></i>
+                </button>
                 <button onclick="eliminarTareaDetalle()" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:.85rem;" title="Eliminar tarea">
                     <i class="bi bi-trash"></i>
                 </button>
@@ -276,6 +279,18 @@ function eliminarTareaDetalle() {
     .then(r => r.json())
     .then(() => location.reload())
     .catch(() => alert('Error al eliminar'));
+}
+
+function archivarTareaDetalle() {
+    if (!confirm('¿Archivar esta tarea? Podrás recuperarla desde el archivo.')) return;
+    const id = document.getElementById('detalle-tarea-id').value;
+    fetch(`/kanban/tareas/${id}/archivar`, {
+        method: 'PATCH',
+        headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+    })
+    .then(r => r.json())
+    .then(data => { if (data.success) location.reload(); else alert('Error al archivar'); })
+    .catch(() => alert('Error de conexión'));
 }
 
 // =============================================

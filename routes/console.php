@@ -28,3 +28,9 @@ Schedule::command('stop:weekly-report --frecuencia=semanal')->weeklyOn(1, '08:30
 
 // Reporte mensual de Tarjeta STOP CCU (día 1 de cada mes a las 09:00 AM — mes anterior, filtrado por empresa)
 Schedule::command('stop:weekly-report --frecuencia=mensual')->monthlyOn(1, '09:00')->withoutOverlapping();
+
+// Kanban: alertas de vencimiento de tareas (cada día a las 08:15 AM)
+Schedule::command('kanban:alertas-vencimiento')->dailyAt('08:15')->withoutOverlapping();
+
+// Kanban: crear instancias de tareas recurrentes (cada día a las 07:00 AM)
+Schedule::command('kanban:tareas-recurrentes')->dailyAt('07:00')->withoutOverlapping();

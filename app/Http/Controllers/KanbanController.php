@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Barryvdh\DomPdf\Facade\Pdf;
 
 class KanbanController extends Controller
 {
@@ -78,6 +79,7 @@ class KanbanController extends Controller
     {
         $kanban->load([
             'columnas.tareas' => function ($q) {
+                $q->where('archivada', false);
                 // Aplicar filtros a las tareas eager-loaded
                 if (request('filtro_asignado'))    $q->where('asignado_a', request('filtro_asignado'));
                 if (request('filtro_prioridad'))   $q->where('prioridad', request('filtro_prioridad'));
@@ -358,6 +360,7 @@ class KanbanController extends Controller
     {
         $tareas = KanbanTarea::with(['tablero', 'columna', 'etiquetas', 'asignado', 'checklistItems'])
             ->where('asignado_a', auth()->id())
+            ->where('archivada', false)
             ->whereHas('tablero', fn ($q) => $q->where('activo', true)->visiblesParaUsuario())
             ->orderByRaw("FIELD(prioridad, 'ALTA', 'MEDIA', 'BAJA')")
             ->orderBy('fecha_vencimiento')
@@ -659,5 +662,304 @@ class KanbanController extends Controller
         ]);
 
         return response()->json($events);
+    }
+
+    // =====================================================
+    // DUPLICAR TABLERO
+    // =====================================================
+
+    public function duplicar(KanbanTablero $kanban)
+    {
+        $nuevo = $kanban->replicate(['activo']);
+        $nuevo->nombre = $kanban->nombre . ' (copia)';
+        $nuevo->creado_por = auth()->id();
+        $nuevo->save();
+
+        // Copiar columnas
+        $colMap = [];
+        foreach ($kanban->columnas as $col) {
+            $newCol = $nuevo->columnas()->create($col->only('nombre', 'color', 'orden'));
+            $colMap[$col->id] = $newCol->id;
+        }
+
+        // Copiar etiquetas
+        foreach ($kanban->etiquetas as $etq) {
+            $nuevo->etiquetas()->create($etq->only('nombre', 'color'));
+        }
+
+        // Agregar creador como admin
+        $nuevo->miembros()->attach(auth()->id(), ['rol' => 'admin']);
+
+        KanbanActividadLog::registrar($nuevo->id, null, 'created',
+            "Tablero duplicado desde «{$kanban->nombre}»");
+
+        return redirect()->route('kanban.show', $nuevo)
+            ->with('success', "Tablero «{$nuevo->nombre}» creado como copia.");
+    }
+
+    // =====================================================
+    // PLANTILLAS DE TABLERO
+    // =====================================================
+
+    public function crearDesdePlantilla(Request $request)
+    {
+        $request->validate([
+            'plantilla'       => 'required|string|in:proyecto,sprint,rrhh,sst,basico',
+            'nombre'          => 'required|string|max:200',
+            'centro_costo_id' => 'nullable|exists:centros_costo,id',
+        ]);
+
+        $plantillas = [
+            'proyecto' => [
+                'columnas' => [
+                    ['nombre' => 'Idea', 'color' => '#6b7280'],
+                    ['nombre' => 'Planificación', 'color' => '#3b82f6'],
+                    ['nombre' => 'En Desarrollo', 'color' => '#f59e0b'],
+                    ['nombre' => 'Testing', 'color' => '#8b5cf6'],
+                    ['nombre' => 'Deploy', 'color' => '#10b981'],
+                ],
+                'etiquetas' => [
+                    ['nombre' => 'Bug', 'color' => '#ef4444'],
+                    ['nombre' => 'Feature', 'color' => '#3b82f6'],
+                    ['nombre' => 'Mejora', 'color' => '#10b981'],
+                    ['nombre' => 'Urgente', 'color' => '#f97316'],
+                ],
+            ],
+            'sprint' => [
+                'columnas' => [
+                    ['nombre' => 'Product Backlog', 'color' => '#6b7280'],
+                    ['nombre' => 'Sprint Backlog', 'color' => '#3b82f6'],
+                    ['nombre' => 'En Curso', 'color' => '#f59e0b'],
+                    ['nombre' => 'Code Review', 'color' => '#8b5cf6'],
+                    ['nombre' => 'Done', 'color' => '#10b981'],
+                ],
+                'etiquetas' => [
+                    ['nombre' => 'Historia', 'color' => '#3b82f6'],
+                    ['nombre' => 'Tarea', 'color' => '#6b7280'],
+                    ['nombre' => 'Blocker', 'color' => '#ef4444'],
+                    ['nombre' => 'Tech Debt', 'color' => '#f97316'],
+                ],
+            ],
+            'rrhh' => [
+                'columnas' => [
+                    ['nombre' => 'Solicitudes', 'color' => '#6b7280'],
+                    ['nombre' => 'En Revisión', 'color' => '#3b82f6'],
+                    ['nombre' => 'Aprobado', 'color' => '#10b981'],
+                    ['nombre' => 'Rechazado', 'color' => '#ef4444'],
+                    ['nombre' => 'Completado', 'color' => '#8b5cf6'],
+                ],
+                'etiquetas' => [
+                    ['nombre' => 'Vacaciones', 'color' => '#3b82f6'],
+                    ['nombre' => 'Permiso', 'color' => '#f59e0b'],
+                    ['nombre' => 'Capacitación', 'color' => '#10b981'],
+                    ['nombre' => 'Contratación', 'color' => '#8b5cf6'],
+                ],
+            ],
+            'sst' => [
+                'columnas' => [
+                    ['nombre' => 'Identificado', 'color' => '#ef4444'],
+                    ['nombre' => 'Evaluando', 'color' => '#f59e0b'],
+                    ['nombre' => 'Medidas Aplicadas', 'color' => '#3b82f6'],
+                    ['nombre' => 'Seguimiento', 'color' => '#8b5cf6'],
+                    ['nombre' => 'Cerrado', 'color' => '#10b981'],
+                ],
+                'etiquetas' => [
+                    ['nombre' => 'Riesgo Alto', 'color' => '#ef4444'],
+                    ['nombre' => 'Riesgo Medio', 'color' => '#f59e0b'],
+                    ['nombre' => 'Riesgo Bajo', 'color' => '#10b981'],
+                    ['nombre' => 'Incidente', 'color' => '#8b5cf6'],
+                ],
+            ],
+            'basico' => [
+                'columnas' => [
+                    ['nombre' => 'Por Hacer', 'color' => '#6b7280'],
+                    ['nombre' => 'En Progreso', 'color' => '#f59e0b'],
+                    ['nombre' => 'Completado', 'color' => '#10b981'],
+                ],
+                'etiquetas' => [],
+            ],
+        ];
+
+        $tpl = $plantillas[$request->plantilla];
+
+        $tablero = KanbanTablero::create([
+            'nombre'          => $request->nombre,
+            'descripcion'     => $request->descripcion,
+            'centro_costo_id' => $request->centro_costo_id,
+            'creado_por'      => auth()->id(),
+        ]);
+
+        foreach ($tpl['columnas'] as $i => $col) {
+            $tablero->columnas()->create(array_merge($col, ['orden' => $i + 1]));
+        }
+        foreach ($tpl['etiquetas'] as $etq) {
+            $tablero->etiquetas()->create($etq);
+        }
+
+        $tablero->miembros()->attach(auth()->id(), ['rol' => 'admin']);
+
+        KanbanActividadLog::registrar($tablero->id, null, 'created',
+            "Tablero creado desde plantilla «{$request->plantilla}»");
+
+        return redirect()->route('kanban.show', $tablero)
+            ->with('success', "Tablero «{$tablero->nombre}» creado desde plantilla.");
+    }
+
+    // =====================================================
+    // BÚSQUEDA GLOBAL
+    // =====================================================
+
+    public function buscar(Request $request)
+    {
+        $q = $request->input('q', '');
+
+        if (strlen($q) < 2) {
+            return view('kanban.buscar', ['tareas' => collect(), 'q' => $q]);
+        }
+
+        $tareas = KanbanTarea::with(['tablero', 'columna', 'asignado', 'etiquetas'])
+            ->where('archivada', false)
+            ->whereHas('tablero', fn ($tb) => $tb->where('activo', true)->visiblesParaUsuario())
+            ->where(function ($w) use ($q) {
+                $w->where('titulo', 'like', "%{$q}%")
+                  ->orWhere('descripcion', 'like', "%{$q}%");
+            })
+            ->orderByDesc('updated_at')
+            ->limit(50)
+            ->get();
+
+        return view('kanban.buscar', compact('tareas', 'q'));
+    }
+
+    // =====================================================
+    // ARCHIVAR / DESARCHIVAR TAREAS
+    // =====================================================
+
+    public function archivarTarea(KanbanTarea $tarea)
+    {
+        $tarea->update(['archivada' => true]);
+
+        KanbanActividadLog::registrar($tarea->tablero_id, $tarea->id, 'updated',
+            "Tarea «{$tarea->titulo}» archivada");
+
+        return response()->json(['success' => true]);
+    }
+
+    public function desarchivarTarea(KanbanTarea $tarea)
+    {
+        $tarea->update(['archivada' => false]);
+
+        KanbanActividadLog::registrar($tarea->tablero_id, $tarea->id, 'updated',
+            "Tarea «{$tarea->titulo}» desarchivada");
+
+        return response()->json(['success' => true]);
+    }
+
+    public function tareasArchivadas(KanbanTablero $kanban)
+    {
+        $tareas = $kanban->tareas()
+            ->where('archivada', true)
+            ->with(['columna', 'asignado', 'etiquetas'])
+            ->orderByDesc('updated_at')
+            ->get();
+
+        return view('kanban.archivadas', compact('kanban', 'tareas'));
+    }
+
+    // =====================================================
+    // EXPORTAR PDF
+    // =====================================================
+
+    public function exportarPdf(KanbanTablero $kanban)
+    {
+        $kanban->load([
+            'columnas.tareas' => fn ($q) => $q->where('archivada', false)->with(['asignado', 'etiquetas']),
+            'creador', 'centroCosto',
+        ]);
+
+        $totalTareas  = $kanban->columnas->flatMap->tareas->count();
+        $tareasAlta   = $kanban->columnas->flatMap->tareas->where('prioridad', 'ALTA')->count();
+        $tareasVenc   = $kanban->columnas->flatMap->tareas->filter(fn ($t) => $t->estaVencida)->count();
+
+        $pdf = Pdf::loadView('kanban.pdf_reporte', compact('kanban', 'totalTareas', 'tareasAlta', 'tareasVenc'))
+            ->setPaper('a4', 'landscape');
+
+        return $pdf->download("kanban-{$kanban->id}-" . now()->format('Y-m-d') . '.pdf');
+    }
+
+    // =====================================================
+    // DASHBOARD / ANALYTICS
+    // =====================================================
+
+    public function dashboard()
+    {
+        $userId   = auth()->id();
+        $tableros = KanbanTablero::where('activo', true)->visiblesParaUsuario()->pluck('id');
+
+        // Stats generales
+        $totalTareas   = KanbanTarea::whereIn('tablero_id', $tableros)->where('archivada', false)->count();
+        $tareasAlta    = KanbanTarea::whereIn('tablero_id', $tableros)->where('archivada', false)->where('prioridad', 'ALTA')->count();
+        $tareasVencidas= KanbanTarea::whereIn('tablero_id', $tableros)->where('archivada', false)
+            ->whereNotNull('fecha_vencimiento')->where('fecha_vencimiento', '<', now())->count();
+        $misTareas     = KanbanTarea::whereIn('tablero_id', $tableros)->where('archivada', false)->where('asignado_a', $userId)->count();
+
+        // Tareas por columna (agrupado)
+        $porColumna = DB::table('kanban_tareas')
+            ->join('kanban_columnas', 'kanban_tareas.columna_id', '=', 'kanban_columnas.id')
+            ->whereIn('kanban_tareas.tablero_id', $tableros)
+            ->where('kanban_tareas.archivada', false)
+            ->select('kanban_columnas.nombre', 'kanban_columnas.color', DB::raw('COUNT(*) as total'))
+            ->groupBy('kanban_columnas.nombre', 'kanban_columnas.color')
+            ->orderByDesc('total')
+            ->get();
+
+        // Tareas por prioridad
+        $porPrioridad = KanbanTarea::whereIn('tablero_id', $tableros)
+            ->where('archivada', false)
+            ->selectRaw("prioridad, COUNT(*) as total")
+            ->groupBy('prioridad')
+            ->pluck('total', 'prioridad');
+
+        // Carga por usuario (top 10)
+        $cargaUsuarios = DB::table('kanban_tareas')
+            ->join('users', 'kanban_tareas.asignado_a', '=', 'users.id')
+            ->whereIn('kanban_tareas.tablero_id', $tableros)
+            ->where('kanban_tareas.archivada', false)
+            ->select('users.name', DB::raw('COUNT(*) as total'))
+            ->groupBy('users.name')
+            ->orderByDesc('total')
+            ->limit(10)
+            ->get();
+
+        // Tareas completadas últimos 30 días (las que están en la última columna)
+        $completadasMes = KanbanTarea::whereIn('kanban_tareas.tablero_id', $tableros)
+            ->where('archivada', false)
+            ->whereHas('columna', function ($q) {
+                $q->whereRaw('kanban_columnas.orden = (SELECT MAX(c2.orden) FROM kanban_columnas c2 WHERE c2.tablero_id = kanban_columnas.tablero_id)');
+            })
+            ->where('kanban_tareas.updated_at', '>=', now()->subDays(30))
+            ->count();
+
+        // Próximas a vencer (7 días)
+        $proximasVencer = KanbanTarea::whereIn('tablero_id', $tableros)
+            ->where('archivada', false)
+            ->whereBetween('fecha_vencimiento', [now(), now()->addDays(7)])
+            ->with(['tablero', 'asignado', 'columna'])
+            ->orderBy('fecha_vencimiento')
+            ->limit(10)
+            ->get();
+
+        // Actividad reciente (últimos 20)
+        $actividadReciente = KanbanActividadLog::whereIn('tablero_id', $tableros)
+            ->with(['usuario', 'tarea'])
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get();
+
+        return view('kanban.dashboard', compact(
+            'totalTareas', 'tareasAlta', 'tareasVencidas', 'misTareas',
+            'porColumna', 'porPrioridad', 'cargaUsuarios', 'completadasMes',
+            'proximasVencer', 'actividadReciente'
+        ));
     }
 }

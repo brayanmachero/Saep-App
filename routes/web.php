@@ -356,7 +356,20 @@ Route::middleware('auth')->group(function () {
     Route::middleware('modulo:kanban')->group(function () {
         // Mis Tareas (antes del resource para evitar conflicto con {kanban})
         Route::get('kanban-mis-tareas', [\App\Http\Controllers\KanbanController::class, 'misTareas'])->name('kanban.mis-tareas');
+        // Dashboard / Analytics
+        Route::get('kanban-dashboard', [\App\Http\Controllers\KanbanController::class, 'dashboard'])->name('kanban.dashboard');
+        // Búsqueda global
+        Route::get('kanban-buscar', [\App\Http\Controllers\KanbanController::class, 'buscar'])->name('kanban.buscar');
+        // Plantilla
+        Route::post('kanban-plantilla', [\App\Http\Controllers\KanbanController::class, 'crearDesdePlantilla'])->name('kanban.plantilla');
+
         Route::resource('kanban', \App\Http\Controllers\KanbanController::class);
+        // Duplicar tablero
+        Route::post('kanban/{kanban}/duplicar', [\App\Http\Controllers\KanbanController::class, 'duplicar'])->name('kanban.duplicar');
+        // Exportar PDF
+        Route::get('kanban/{kanban}/exportar-pdf', [\App\Http\Controllers\KanbanController::class, 'exportarPdf'])->name('kanban.exportar-pdf');
+        // Tareas archivadas
+        Route::get('kanban/{kanban}/archivadas', [\App\Http\Controllers\KanbanController::class, 'tareasArchivadas'])->name('kanban.archivadas');
         // Columnas
         Route::post('kanban/{kanban}/columnas', [\App\Http\Controllers\KanbanController::class, 'storeColumna'])->name('kanban.columnas.store');
         Route::put('kanban/columnas/{columna}', [\App\Http\Controllers\KanbanController::class, 'updateColumna'])->name('kanban.columnas.update');
@@ -367,6 +380,8 @@ Route::middleware('auth')->group(function () {
         Route::put('kanban/tareas/{tarea}', [\App\Http\Controllers\KanbanController::class, 'updateTarea'])->name('kanban.tareas.update');
         Route::delete('kanban/tareas/{tarea}', [\App\Http\Controllers\KanbanController::class, 'destroyTarea'])->name('kanban.tareas.destroy');
         Route::patch('kanban/tareas/{tarea}/mover', [\App\Http\Controllers\KanbanController::class, 'moverTarea'])->name('kanban.tareas.mover');
+        Route::patch('kanban/tareas/{tarea}/archivar', [\App\Http\Controllers\KanbanController::class, 'archivarTarea'])->name('kanban.tareas.archivar');
+        Route::patch('kanban/tareas/{tarea}/desarchivar', [\App\Http\Controllers\KanbanController::class, 'desarchivarTarea'])->name('kanban.tareas.desarchivar');
         // Comentarios
         Route::post('kanban/tareas/{tarea}/comentarios', [\App\Http\Controllers\KanbanController::class, 'storeComentario'])->name('kanban.comentarios.store');
         // Checklist

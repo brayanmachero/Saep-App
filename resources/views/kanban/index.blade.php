@@ -8,7 +8,13 @@
             <h2 class="page-heading"><i class="bi bi-kanban" style="color:var(--primary-color)"></i> Tableros Kanban</h2>
             <p class="page-subheading">Gestión visual de tareas con arrastrar y soltar</p>
         </div>
-        <div style="display:flex;gap:.5rem;align-items:center;">
+        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+            <a href="{{ route('kanban.dashboard') }}" class="btn-secondary" style="padding:.45rem .85rem;font-size:.82rem;">
+                <i class="bi bi-graph-up-arrow"></i> Dashboard
+            </a>
+            <a href="{{ route('kanban.buscar') }}" class="btn-secondary" style="padding:.45rem .85rem;font-size:.82rem;">
+                <i class="bi bi-search"></i> Buscar
+            </a>
             <a href="{{ route('kanban.mis-tareas') }}" class="btn-secondary" style="padding:.45rem .85rem;font-size:.82rem;">
                 <i class="bi bi-person-check"></i> Mis Tareas
                 @if($misTareasCount > 0)
@@ -16,6 +22,9 @@
                 @endif
             </a>
             @if(auth()->user()->tieneAcceso('kanban', 'puede_crear'))
+            <button onclick="document.getElementById('modal-plantilla').style.display='flex'" class="btn-secondary" style="padding:.45rem .85rem;font-size:.82rem;">
+                <i class="bi bi-clipboard2-plus"></i> Desde Plantilla
+            </button>
             <a href="{{ route('kanban.create') }}" class="btn-premium">
                 <i class="bi bi-plus-lg"></i> Nuevo Tablero
             </a>
@@ -51,8 +60,14 @@
     @else
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1.25rem;">
             @foreach($tableros as $tablero)
-            <a href="{{ route('kanban.show', $tablero) }}" class="glass-card" style="padding:1.25rem;text-decoration:none;color:inherit;transition:transform .15s,box-shadow .15s;cursor:pointer;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,.1)';" onmouseout="this.style.transform='';this.style.boxShadow='';">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
+            <a href="{{ route('kanban.show', $tablero) }}" class="glass-card" style="padding:1.25rem;text-decoration:none;color:inherit;transition:transform .15s,box-shadow .15s;cursor:pointer;position:relative;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,.1)';" onmouseout="this.style.transform='';this.style.boxShadow='';">
+                {{-- Duplicate button --}}
+                <form method="POST" action="{{ route('kanban.duplicar', $tablero) }}" style="position:absolute;top:.6rem;right:.6rem;" onclick="event.stopPropagation();event.preventDefault();">
+                    @csrf
+                    <button type="submit" onclick="this.closest('form').submit()" style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:.2rem .4rem;cursor:pointer;font-size:.72rem;color:var(--text-muted);transition:color .12s;" title="Duplicar tablero" onmouseover="this.style.color='var(--primary-color)'" onmouseout="this.style.color='var(--text-muted)'">
+                        <i class="bi bi-copy"></i>
+                    </button>
+                </form>                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
                     <h3 style="font-size:1.05rem;font-weight:700;margin:0;color:var(--text-primary);">
                         <i class="bi bi-kanban" style="color:var(--primary-color);margin-right:.4rem;"></i>
                         {{ $tablero->nombre }}
@@ -86,5 +101,62 @@
             @endforeach
         </div>
     @endif
+</div>
+
+{{-- Modal: Crear desde Plantilla --}}
+<div id="modal-plantilla" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;justify-content:center;align-items:center;backdrop-filter:blur(2px);" onclick="if(event.target===this)this.style.display='none'">
+    <div class="glass-card" style="padding:1.5rem;width:90%;max-width:520px;max-height:90vh;overflow-y:auto;" onclick="event.stopPropagation()">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h3 style="margin:0;font-size:1rem;font-weight:700;"><i class="bi bi-clipboard2-plus" style="color:var(--primary-color);"></i> Crear desde Plantilla</h3>
+            <button onclick="document.getElementById('modal-plantilla').style.display='none'" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-muted);">&times;</button>
+        </div>
+        <form method="POST" action="{{ route('kanban.plantilla') }}">
+            @csrf
+            <div style="margin-bottom:1rem;">
+                <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:.3rem;">Nombre del tablero *</label>
+                <input type="text" name="nombre" class="form-input" required maxlength="200" placeholder="Ej: Sprint Q1 2025">
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:.3rem;">Descripción</label>
+                <textarea name="descripcion" class="form-input" rows="2" placeholder="Descripción opcional"></textarea>
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:.3rem;">Centro de Costo</label>
+                <select name="centro_costo_id" class="form-input">
+                    <option value="">— Sin asignar —</option>
+                    @foreach(\App\Models\CentroCosto::orderBy('nombre')->get() as $c)
+                        <option value="{{ $c->id }}">{{ $c->nombre }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div style="margin-bottom:1.25rem;">
+                <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:.5rem;">Plantilla *</label>
+                <div style="display:flex;flex-direction:column;gap:.5rem;">
+                    @php
+                    $plantillas = [
+                        ['id' => 'proyecto', 'icon' => 'bi-folder2-open', 'name' => 'Proyecto', 'desc' => 'Backlog → Diseño → Desarrollo → Testing → Deploy'],
+                        ['id' => 'sprint',   'icon' => 'bi-lightning-charge', 'name' => 'Sprint Ágil', 'desc' => 'Backlog → Sprint → En Progreso → Review → Done'],
+                        ['id' => 'rrhh',     'icon' => 'bi-person-badge', 'name' => 'Gestión RRHH', 'desc' => 'Solicitudes → En Revisión → Aprobado → Implementado'],
+                        ['id' => 'sst',      'icon' => 'bi-shield-check', 'name' => 'SST / Seguridad', 'desc' => 'Identificados → Evaluación → Mitigación → Cerrado'],
+                        ['id' => 'basico',   'icon' => 'bi-kanban', 'name' => 'Básico', 'desc' => 'Por Hacer → En Progreso → Completado'],
+                    ];
+                    @endphp
+                    @foreach($plantillas as $pl)
+                    <label style="display:flex;align-items:center;gap:.75rem;padding:.65rem .85rem;border-radius:8px;border:2px solid var(--border-color);cursor:pointer;transition:border-color .12s;" onmouseover="this.style.borderColor='var(--primary-color)'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='var(--border-color)'" onclick="this.parentElement.querySelectorAll('label').forEach(l => l.style.borderColor='var(--border-color)');this.style.borderColor='var(--primary-color)';">
+                        <input type="radio" name="plantilla" value="{{ $pl['id'] }}" required style="width:16px;height:16px;">
+                        <i class="bi {{ $pl['icon'] }}" style="font-size:1.1rem;color:var(--primary-color);"></i>
+                        <div>
+                            <div style="font-size:.85rem;font-weight:700;">{{ $pl['name'] }}</div>
+                            <div style="font-size:.72rem;color:var(--text-muted);">{{ $pl['desc'] }}</div>
+                        </div>
+                    </label>
+                    @endforeach
+                </div>
+            </div>
+            <button type="submit" class="btn-premium" style="width:100%;justify-content:center;">
+                <i class="bi bi-check-lg"></i> Crear Tablero
+            </button>
+        </form>
+    </div>
 </div>
 @endsection

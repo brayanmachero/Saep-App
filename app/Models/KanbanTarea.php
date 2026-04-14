@@ -11,12 +11,15 @@ class KanbanTarea extends Model
     protected $fillable = [
         'tablero_id', 'columna_id', 'titulo', 'descripcion', 'prioridad',
         'asignado_a', 'creado_por', 'centro_costo_id', 'fecha_inicio',
-        'fecha_vencimiento', 'orden',
+        'fecha_vencimiento', 'orden', 'archivada',
+        'recurrencia', 'recurrencia_hasta', 'tarea_origen_id',
     ];
 
     protected $casts = [
-        'fecha_inicio'      => 'date',
-        'fecha_vencimiento' => 'date',
+        'fecha_inicio'       => 'date',
+        'fecha_vencimiento'  => 'date',
+        'recurrencia_hasta'  => 'date',
+        'archivada'          => 'boolean',
     ];
 
     public function tablero()

@@ -35,6 +35,12 @@
             <a href="{{ route('kanban.index') }}" class="btn-secondary" style="padding:.4rem .75rem;font-size:.78rem;">
                 <i class="bi bi-arrow-left"></i> Tableros
             </a>
+            <a href="{{ route('kanban.exportar-pdf', $kanban) }}" class="btn-secondary" style="padding:.4rem .75rem;font-size:.78rem;" title="Exportar PDF">
+                <i class="bi bi-file-earmark-pdf"></i> PDF
+            </a>
+            <a href="{{ route('kanban.archivadas', $kanban) }}" class="btn-secondary" style="padding:.4rem .75rem;font-size:.78rem;" title="Ver archivadas">
+                <i class="bi bi-archive"></i> Archivo
+            </a>
         </div>
     </div>
 
@@ -191,6 +197,22 @@
                     <div>
                         <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.25rem;">Fecha vencimiento</label>
                         <input type="date" name="fecha_vencimiento" class="form-input">
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem;">
+                    <div>
+                        <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.25rem;">Recurrencia</label>
+                        <select name="recurrencia" class="form-input">
+                            <option value="">— Sin recurrencia —</option>
+                            <option value="diaria">Diaria</option>
+                            <option value="semanal">Semanal</option>
+                            <option value="quincenal">Quincenal</option>
+                            <option value="mensual">Mensual</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.25rem;">Recurrencia hasta</label>
+                        <input type="date" name="recurrencia_hasta" class="form-input">
                     </div>
                 </div>
                 <div style="margin-bottom:1rem;">
