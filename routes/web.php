@@ -360,10 +360,21 @@ Route::middleware('auth')->group(function () {
         Route::put('kanban/columnas/{columna}', [\App\Http\Controllers\KanbanController::class, 'updateColumna'])->name('kanban.columnas.update');
         Route::delete('kanban/columnas/{columna}', [\App\Http\Controllers\KanbanController::class, 'destroyColumna'])->name('kanban.columnas.destroy');
         // Tareas
+        Route::get('kanban/tareas/{tarea}', [\App\Http\Controllers\KanbanController::class, 'showTarea'])->name('kanban.tareas.show');
         Route::post('kanban/{kanban}/tareas', [\App\Http\Controllers\KanbanController::class, 'storeTarea'])->name('kanban.tareas.store');
         Route::put('kanban/tareas/{tarea}', [\App\Http\Controllers\KanbanController::class, 'updateTarea'])->name('kanban.tareas.update');
         Route::delete('kanban/tareas/{tarea}', [\App\Http\Controllers\KanbanController::class, 'destroyTarea'])->name('kanban.tareas.destroy');
         Route::patch('kanban/tareas/{tarea}/mover', [\App\Http\Controllers\KanbanController::class, 'moverTarea'])->name('kanban.tareas.mover');
+        // Comentarios
+        Route::post('kanban/tareas/{tarea}/comentarios', [\App\Http\Controllers\KanbanController::class, 'storeComentario'])->name('kanban.comentarios.store');
+        // Checklist
+        Route::post('kanban/tareas/{tarea}/checklist', [\App\Http\Controllers\KanbanController::class, 'storeChecklistItem'])->name('kanban.checklist.store');
+        Route::patch('kanban/checklist/{item}/toggle', [\App\Http\Controllers\KanbanController::class, 'toggleChecklistItem'])->name('kanban.checklist.toggle');
+        Route::delete('kanban/checklist/{item}', [\App\Http\Controllers\KanbanController::class, 'destroyChecklistItem'])->name('kanban.checklist.destroy');
+        // Adjuntos
+        Route::post('kanban/tareas/{tarea}/adjuntos', [\App\Http\Controllers\KanbanController::class, 'storeAdjunto'])->name('kanban.adjuntos.store');
+        Route::delete('kanban/adjuntos/{adjunto}', [\App\Http\Controllers\KanbanController::class, 'destroyAdjunto'])->name('kanban.adjuntos.destroy');
+        Route::get('kanban/adjuntos/{adjunto}/descargar', [\App\Http\Controllers\KanbanController::class, 'descargarAdjunto'])->name('kanban.adjuntos.descargar');
         // Etiquetas
         Route::post('kanban/{kanban}/etiquetas', [\App\Http\Controllers\KanbanController::class, 'storeEtiqueta'])->name('kanban.etiquetas.store');
         Route::delete('kanban/etiquetas/{etiqueta}', [\App\Http\Controllers\KanbanController::class, 'destroyEtiqueta'])->name('kanban.etiquetas.destroy');

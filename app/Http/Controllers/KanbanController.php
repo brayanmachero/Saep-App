@@ -6,10 +6,16 @@ use App\Models\KanbanTablero;
 use App\Models\KanbanColumna;
 use App\Models\KanbanTarea;
 use App\Models\KanbanEtiqueta;
+use App\Models\KanbanAdjunto;
+use App\Models\KanbanChecklistItem;
+use App\Models\KanbanComentario;
 use App\Models\CentroCosto;
 use App\Models\User;
+use App\Mail\KanbanTareaAsignadaMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 
 class KanbanController extends Controller
 {
@@ -61,6 +67,9 @@ class KanbanController extends Controller
         $kanban->load([
             'columnas.tareas.asignado',
             'columnas.tareas.etiquetas',
+            'columnas.tareas.comentarios',
+            'columnas.tareas.adjuntos',
+            'columnas.tareas.checklistItems',
             'etiquetas',
             'centroCosto',
             'creador',
@@ -191,6 +200,16 @@ class KanbanController extends Controller
             $tarea->etiquetas()->sync($request->etiquetas);
         }
 
+        // Notificar al asignado
+        if ($tarea->asignado_a && $tarea->asignado && $tarea->asignado->email) {
+            try {
+                Mail::to($tarea->asignado->email)
+                    ->send(new KanbanTareaAsignadaMail($tarea->load(['tablero', 'columna']), auth()->user()));
+            } catch (\Throwable $e) {
+                \Log::warning('Kanban: no se pudo notificar asignación', ['error' => $e->getMessage()]);
+            }
+        }
+
         if ($request->wantsJson()) {
             $tarea->load(['asignado', 'etiquetas']);
             return response()->json(['success' => true, 'tarea' => $tarea]);
@@ -212,6 +231,8 @@ class KanbanController extends Controller
             'etiquetas.*'       => 'exists:kanban_etiquetas,id',
         ]);
 
+        $oldAsignado = $tarea->asignado_a;
+
         $tarea->update($request->only(
             'titulo', 'descripcion', 'prioridad', 'asignado_a',
             'centro_costo_id', 'fecha_inicio', 'fecha_vencimiento'
@@ -219,6 +240,17 @@ class KanbanController extends Controller
 
         if ($request->has('etiquetas')) {
             $tarea->etiquetas()->sync($request->etiquetas ?? []);
+        }
+
+        // Notificar si cambió el asignado
+        $newAsignado = $tarea->asignado_a;
+        if ($newAsignado && $newAsignado != $oldAsignado && $tarea->asignado?->email) {
+            try {
+                Mail::to($tarea->asignado->email)
+                    ->send(new KanbanTareaAsignadaMail($tarea->load(['tablero', 'columna']), auth()->user()));
+            } catch (\Throwable $e) {
+                \Log::warning('Kanban: no se pudo notificar reasignación', ['error' => $e->getMessage()]);
+            }
         }
 
         if ($request->wantsJson()) {
@@ -307,6 +339,174 @@ class KanbanController extends Controller
             return response()->json(['success' => true]);
         }
         return back()->with('success', 'Etiqueta eliminada.');
+    }
+
+    // =====================================================
+    // DETALLE TAREA (AJAX — JSON)
+    // =====================================================
+
+    public function showTarea(KanbanTarea $tarea)
+    {
+        $tarea->load([
+            'columna', 'asignado', 'creador', 'centroCosto', 'etiquetas',
+            'comentarios.usuario', 'adjuntos.subidoPor', 'checklistItems',
+        ]);
+
+        return response()->json([
+            'id'               => $tarea->id,
+            'titulo'           => $tarea->titulo,
+            'descripcion'      => $tarea->descripcion,
+            'prioridad'        => $tarea->prioridad,
+            'asignado_a'       => $tarea->asignado_a,
+            'asignado_nombre'  => $tarea->asignado?->name,
+            'creador_nombre'   => $tarea->creador?->name,
+            'centro_costo_id'  => $tarea->centro_costo_id,
+            'columna_id'       => $tarea->columna_id,
+            'columna_nombre'   => $tarea->columna?->nombre,
+            'columna_color'    => $tarea->columna?->color,
+            'fecha_inicio'     => $tarea->fecha_inicio?->toDateString(),
+            'fecha_vencimiento'=> $tarea->fecha_vencimiento?->toDateString(),
+            'esta_vencida'     => $tarea->estaVencida,
+            'tablero_id'       => $tarea->tablero_id,
+            'etiquetas'        => $tarea->etiquetas->map(fn ($e) => [
+                'id' => $e->id, 'nombre' => $e->nombre, 'color' => $e->color,
+            ]),
+            'comentarios'      => $tarea->comentarios->map(fn ($c) => [
+                'id'        => $c->id,
+                'contenido' => $c->contenido,
+                'usuario'   => $c->usuario?->name ?? 'Sistema',
+                'iniciales' => strtoupper(substr($c->usuario?->name ?? 'S', 0, 2)),
+                'fecha'     => $c->created_at->diffForHumans(),
+            ]),
+            'checklist'        => $tarea->checklistItems->map(fn ($i) => [
+                'id'         => $i->id,
+                'texto'      => $i->texto,
+                'completado' => $i->completado,
+            ]),
+            'adjuntos'         => $tarea->adjuntos->map(fn ($a) => [
+                'id'              => $a->id,
+                'nombre_original' => $a->nombre_original,
+                'tamanio'         => $a->tamanioFormateado,
+                'es_imagen'       => $a->esImagen(),
+                'subido_por'      => $a->subidoPor?->name ?? 'Sistema',
+                'fecha'           => $a->created_at->diffForHumans(),
+                'url_descargar'   => route('kanban.adjuntos.descargar', $a->id),
+            ]),
+            'checklist_progreso' => $tarea->checklistProgreso,
+        ]);
+    }
+
+    // =====================================================
+    // COMENTARIOS
+    // =====================================================
+
+    public function storeComentario(Request $request, KanbanTarea $tarea)
+    {
+        $request->validate(['contenido' => 'required|string|max:2000']);
+
+        $comentario = $tarea->comentarios()->create([
+            'user_id'   => auth()->id(),
+            'contenido' => $request->contenido,
+        ]);
+        $comentario->load('usuario');
+
+        return response()->json([
+            'success'  => true,
+            'comentario' => [
+                'id'        => $comentario->id,
+                'contenido' => $comentario->contenido,
+                'usuario'   => $comentario->usuario?->name,
+                'iniciales' => strtoupper(substr($comentario->usuario?->name ?? 'S', 0, 2)),
+                'fecha'     => $comentario->created_at->diffForHumans(),
+            ],
+        ]);
+    }
+
+    // =====================================================
+    // CHECKLIST
+    // =====================================================
+
+    public function storeChecklistItem(Request $request, KanbanTarea $tarea)
+    {
+        $request->validate(['texto' => 'required|string|max:500']);
+
+        $item = $tarea->checklistItems()->create([
+            'texto' => $request->texto,
+            'orden' => $tarea->checklistItems()->max('orden') + 1,
+        ]);
+
+        return response()->json(['success' => true, 'item' => [
+            'id' => $item->id, 'texto' => $item->texto, 'completado' => false,
+        ]]);
+    }
+
+    public function toggleChecklistItem(KanbanChecklistItem $item)
+    {
+        $item->update(['completado' => !$item->completado]);
+
+        $progreso = $item->tarea->checklistProgreso;
+
+        return response()->json([
+            'success'    => true,
+            'completado' => $item->completado,
+            'progreso'   => $progreso,
+        ]);
+    }
+
+    public function destroyChecklistItem(KanbanChecklistItem $item)
+    {
+        $item->delete();
+        return response()->json(['success' => true]);
+    }
+
+    // =====================================================
+    // ADJUNTOS
+    // =====================================================
+
+    public function storeAdjunto(Request $request, KanbanTarea $tarea)
+    {
+        $request->validate([
+            'archivo' => 'required|file|max:10240', // 10 MB máx
+        ]);
+
+        $file = $request->file('archivo');
+        $ruta = $file->store('kanban/adjuntos/' . $tarea->id, 'public');
+
+        $adjunto = $tarea->adjuntos()->create([
+            'nombre_original' => $file->getClientOriginalName(),
+            'ruta'            => $ruta,
+            'mime_type'       => $file->getClientMimeType(),
+            'tamanio'         => $file->getSize(),
+            'subido_por'      => auth()->id(),
+        ]);
+
+        return response()->json(['success' => true, 'adjunto' => [
+            'id'              => $adjunto->id,
+            'nombre_original' => $adjunto->nombre_original,
+            'tamanio'         => $adjunto->tamanioFormateado,
+            'es_imagen'       => $adjunto->esImagen(),
+            'subido_por'      => auth()->user()->name,
+            'fecha'           => 'Justo ahora',
+            'url_descargar'   => route('kanban.adjuntos.descargar', $adjunto->id),
+        ]]);
+    }
+
+    public function destroyAdjunto(KanbanAdjunto $adjunto)
+    {
+        Storage::disk('public')->delete($adjunto->ruta);
+        $adjunto->delete();
+        return response()->json(['success' => true]);
+    }
+
+    public function descargarAdjunto(KanbanAdjunto $adjunto)
+    {
+        $path = Storage::disk('public')->path($adjunto->ruta);
+
+        if (!file_exists($path)) {
+            abort(404, 'Archivo no encontrado');
+        }
+
+        return response()->download($path, $adjunto->nombre_original);
     }
 
     // =====================================================

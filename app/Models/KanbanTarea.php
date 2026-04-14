@@ -49,8 +49,30 @@ class KanbanTarea extends Model
         return $this->belongsToMany(KanbanEtiqueta::class, 'kanban_tarea_etiqueta', 'tarea_id', 'etiqueta_id');
     }
 
+    public function comentarios()
+    {
+        return $this->hasMany(KanbanComentario::class, 'tarea_id')->orderByDesc('created_at');
+    }
+
+    public function adjuntos()
+    {
+        return $this->hasMany(KanbanAdjunto::class, 'tarea_id')->orderByDesc('created_at');
+    }
+
+    public function checklistItems()
+    {
+        return $this->hasMany(KanbanChecklistItem::class, 'tarea_id')->orderBy('orden');
+    }
+
     public function getEstaVencidaAttribute(): bool
     {
         return $this->fecha_vencimiento && $this->fecha_vencimiento->isPast();
+    }
+
+    public function getChecklistProgresoAttribute(): array
+    {
+        $total = $this->checklistItems->count();
+        $completados = $this->checklistItems->where('completado', true)->count();
+        return ['total' => $total, 'completados' => $completados];
     }
 }

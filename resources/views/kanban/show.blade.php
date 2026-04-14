@@ -40,6 +40,9 @@
 
     @include('partials._alerts')
 
+    {{-- Modal: Detalle de Tarea (editar, comentarios, checklist, adjuntos) --}}
+    @include('kanban._modal_detalle')
+
     {{-- MODAL: Nueva Tarea --}}
     <div id="modal-nueva-tarea" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;justify-content:center;align-items:center;backdrop-filter:blur(2px);" onclick="if(event.target===this)cerrarModal()">
         <div class="glass-card" style="padding:1.5rem;width:90%;max-width:520px;max-height:90vh;overflow-y:auto;" onclick="event.stopPropagation()">
@@ -178,7 +181,7 @@
                 </thead>
                 <tbody>
                     @foreach($columna->tareas as $tarea)
-                    <tr>
+                    <tr style="cursor:pointer;" onclick="abrirDetalle({{ $tarea->id }})">
                         <td>
                             <div style="font-weight:600;font-size:.85rem;">{{ $tarea->titulo }}</div>
                             @if($tarea->descripcion)
@@ -321,7 +324,7 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         events: '{{ route("kanban.calendar-data", $kanban) }}',
         eventClick: function(info) {
-            alert(info.event.title + '\n' + (info.event.extendedProps.columna || ''));
+            abrirDetalle(info.event.id);
         },
         height: 'auto',
     });
