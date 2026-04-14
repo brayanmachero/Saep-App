@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Mail\BienvenidaUsuarioMail;
 use App\Models\Cargo;
-use App\Models\Configuracion;
 use App\Notifications\AppNotification;
 use App\Models\CentroCosto;
 use App\Models\Departamento;
@@ -100,17 +99,15 @@ class UserController extends Controller
 
         // Enviar email de bienvenida con credenciales
         $emailOk = false;
-        if (Configuracion::get('notificaciones_email') === 'true') {
-            try {
-                Mail::to($user->email)->send(new BienvenidaUsuarioMail($user, $tempPassword));
-                $emailOk = true;
-            } catch (\Throwable $e) {
-                Log::error('Error enviando email de bienvenida', [
-                    'user_id' => $user->id,
-                    'email'   => $user->email,
-                    'error'   => $e->getMessage(),
-                ]);
-            }
+        try {
+            Mail::to($user->email)->send(new BienvenidaUsuarioMail($user, $tempPassword));
+            $emailOk = true;
+        } catch (\Throwable $e) {
+            Log::error('Error enviando email de bienvenida', [
+                'user_id' => $user->id,
+                'email'   => $user->email,
+                'error'   => $e->getMessage(),
+            ]);
         }
 
         $user->notify(new AppNotification('Bienvenido a SAEP', 'Tu cuenta ha sido creada. Revisa tu correo para tus credenciales de acceso.', 'success', route('perfil.show')));
@@ -191,17 +188,15 @@ class UserController extends Controller
         ]);
 
         $emailOk = false;
-        if (Configuracion::get('notificaciones_email') === 'true') {
-            try {
-                Mail::to($usuario->email)->send(new BienvenidaUsuarioMail($usuario, $tempPassword));
-                $emailOk = true;
-            } catch (\Throwable $e) {
-                Log::error('Error enviando email de reset password', [
-                    'user_id' => $usuario->id,
-                    'email'   => $usuario->email,
-                    'error'   => $e->getMessage(),
-                ]);
-            }
+        try {
+            Mail::to($usuario->email)->send(new BienvenidaUsuarioMail($usuario, $tempPassword));
+            $emailOk = true;
+        } catch (\Throwable $e) {
+            Log::error('Error enviando email de reset password', [
+                'user_id' => $usuario->id,
+                'email'   => $usuario->email,
+                'error'   => $e->getMessage(),
+            ]);
         }
 
         $usuario->notify(new AppNotification(
@@ -211,13 +206,9 @@ class UserController extends Controller
             route('perfil.show')
         ));
 
-        if ($emailOk) {
-            $emailMsg = " Se envió correo a {$usuario->email}.";
-        } elseif (Configuracion::get('notificaciones_email') !== 'true') {
-            $emailMsg = ' (Envío de email desactivado en configuración).';
-        } else {
-            $emailMsg = " No se pudo enviar el correo. Contraseña provisoria: {$tempPassword}";
-        }
+        $emailMsg = $emailOk
+            ? " Se envió correo a {$usuario->email}."
+            : " No se pudo enviar el correo. Contraseña provisoria: {$tempPassword}";
 
         return back()->with('success', "Contraseña de {$usuario->nombre_completo} restablecida.{$emailMsg}");
     }
@@ -230,7 +221,6 @@ class UserController extends Controller
         ]);
 
         $usuarios = User::whereIn('id', $request->ids)->get();
-        $emailActivo = Configuracion::get('notificaciones_email') === 'true';
         $count = 0;
         $emailFails = 0;
 
@@ -241,17 +231,15 @@ class UserController extends Controller
                 'must_change_password' => true,
             ]);
 
-            if ($emailActivo) {
-                try {
-                    Mail::to($usuario->email)->send(new BienvenidaUsuarioMail($usuario, $tempPassword));
-                } catch (\Throwable $e) {
-                    $emailFails++;
-                    Log::error('Error enviando email de reset password (bulk)', [
-                        'user_id' => $usuario->id,
-                        'email'   => $usuario->email,
-                        'error'   => $e->getMessage(),
-                    ]);
-                }
+            try {
+                Mail::to($usuario->email)->send(new BienvenidaUsuarioMail($usuario, $tempPassword));
+            } catch (\Throwable $e) {
+                $emailFails++;
+                Log::error('Error enviando email de reset password (bulk)', [
+                    'user_id' => $usuario->id,
+                    'email'   => $usuario->email,
+                    'error'   => $e->getMessage(),
+                ]);
             }
 
             $usuario->notify(new AppNotification(
@@ -264,11 +252,9 @@ class UserController extends Controller
             $count++;
         }
 
-        $emailMsg = !$emailActivo
-            ? ' (Envío de email desactivado).'
-            : ($emailFails > 0
-                ? " Se enviaron correos, pero {$emailFails} fallaron. Revise los logs."
-                : ' Se enviaron correos con las nuevas credenciales.');
+        $emailMsg = $emailFails > 0
+            ? " Se enviaron correos, pero {$emailFails} fallaron. Revise los logs."
+            : ' Se enviaron correos con las nuevas credenciales.';
 
         return back()->with('success', "Se restablecieron {$count} contraseña(s).{$emailMsg}");
     }
