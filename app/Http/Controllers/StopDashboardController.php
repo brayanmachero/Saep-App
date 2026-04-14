@@ -222,16 +222,107 @@ class StopDashboardController extends Controller
     }
 
     /**
-     * Enviar reporte semanal ahora a todos los destinatarios configurados.
+     * Enviar reporte ahora a todos los destinatarios configurados,
+     * usando los filtros activos del dashboard.
      */
     public function sendReportNow(Request $request)
     {
-        $frecuencia = $request->input('frecuencia', 'semanal');
+        $frecuencia = ucfirst($request->input('frecuencia', 'semanal'));
+        $esMensual  = strtolower($frecuencia) === 'mensual';
 
-        Artisan::call('stop:weekly-report', ['--frecuencia' => $frecuencia]);
-        $output = Artisan::output();
+        // Leer destinatarios desde configuración
+        $configKey = $esMensual ? 'stop_report_mensual_destinatarios' : 'stop_report_destinatarios';
+        $rawDestinatarios = \App\Models\Configuracion::get($configKey, '');
+        $destinatarios = collect(preg_split('/[;,]+/', $rawDestinatarios))
+            ->map(fn($e) => trim($e))
+            ->filter(fn($e) => filter_var($e, FILTER_VALIDATE_EMAIL))
+            ->unique()
+            ->values();
 
-        return back()->with('success', "Reporte {$frecuencia} enviado exitosamente. " . trim($output));
+        if ($destinatarios->isEmpty()) {
+            return back()->with('error', "No hay destinatarios configurados en «{$configKey}». Configure los emails en Ajustes.");
+        }
+
+        // Construir filtros desde el request (los mismos del dashboard)
+        $filters = array_filter([
+            'empresa_observador' => $request->input('empresa_observador'),
+            'empresa_observado'  => $request->input('empresa_observado'),
+            'tipo_observacion'   => $request->input('tipo_observacion'),
+            'centro'             => $request->input('centro'),
+            'clasificacion'      => $request->input('clasificacion'),
+            'fecha_desde'        => $request->input('fecha_desde'),
+            'fecha_hasta'        => $request->input('fecha_hasta'),
+            'mes'                => $request->input('mes'),
+            'anio'               => $request->input('anio'),
+        ]);
+
+        // Obtener analíticas con los filtros activos
+        $sql = new StopAnalyticsService();
+        $useSql = $sql->hasSyncedData();
+
+        if ($useSql) {
+            $analytics = $sql->getFilteredAnalytics($filters);
+        } else {
+            $drive = new GoogleDriveService();
+            $analytics = $drive->getFilteredAnalytics($filters);
+        }
+
+        if (!$analytics || ($analytics['totalRows'] ?? 0) === 0) {
+            return back()->with('error', 'No hay datos con los filtros seleccionados para generar el reporte.');
+        }
+
+        // Comparativa
+        $empresa = $filters['empresa_observador'] ?? null;
+        $comparison = $useSql
+            ? $this->buildComparisonFromSql($sql, $filters, $empresa)
+            : StopWeeklyReport::buildComparison(new GoogleDriveService(), $filters, $empresa);
+
+        // Detalle evaluación
+        $evalDetail = $useSql
+            ? ($sql->getEvaluationDetail($filters) ?? [])
+            : ((new GoogleDriveService())->getEvaluationDetail($filters) ?? []);
+
+        // Construir etiqueta de período
+        $periodo = $this->buildPeriodoLabel($filters);
+
+        $mailable = new StopReporteMail(
+            analytics: $analytics,
+            periodo: $periodo,
+            mesLabel: $filters['mes'] ?? null,
+            frecuencia: $frecuencia,
+            comparison: $comparison,
+            evalDetail: $evalDetail,
+        );
+
+        try {
+            Mail::to($destinatarios->first())
+                ->cc($destinatarios->slice(1)->values()->all())
+                ->send($mailable);
+
+            $count = $destinatarios->count();
+            return back()->with('success', "Reporte {$frecuencia} enviado a {$count} destinatario(s) con los filtros activos del dashboard.");
+        } catch (\Exception $e) {
+            return back()->with('error', "Error al enviar reporte: {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * Construir etiqueta de período legible a partir de los filtros.
+     */
+    private function buildPeriodoLabel(array $filters): string
+    {
+        if (!empty($filters['fecha_desde']) && !empty($filters['fecha_hasta'])) {
+            return date('d/m/Y', strtotime($filters['fecha_desde'])) . ' — ' . date('d/m/Y', strtotime($filters['fecha_hasta']));
+        }
+        if (!empty($filters['mes'])) {
+            $meses = ['01'=>'Enero','02'=>'Febrero','03'=>'Marzo','04'=>'Abril','05'=>'Mayo','06'=>'Junio','07'=>'Julio','08'=>'Agosto','09'=>'Septiembre','10'=>'Octubre','11'=>'Noviembre','12'=>'Diciembre'];
+            $parts = explode('-', $filters['mes']);
+            return ($meses[$parts[1] ?? ''] ?? '') . ' ' . ($parts[0] ?? '');
+        }
+        if (!empty($filters['anio'])) {
+            return 'Año ' . $filters['anio'];
+        }
+        return now()->format('d/m/Y');
     }
 
     /**

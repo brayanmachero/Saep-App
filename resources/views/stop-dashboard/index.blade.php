@@ -28,8 +28,11 @@
             <a href="{{ route('stop-dashboard.reporte.preview') }}" target="_blank" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;text-decoration:none">
                 <i class="bi bi-envelope-open"></i> Vista Previa Email
             </a>
-            <form method="POST" action="{{ route('stop-dashboard.reporte.send-now') }}" style="display:inline" onsubmit="return confirm('¿Enviar el reporte semanal STOP ahora a todos los destinatarios configurados?')">
+            <form method="POST" action="{{ route('stop-dashboard.reporte.send-now') }}" style="display:inline" onsubmit="return confirm('¿Enviar el reporte STOP con los filtros actuales a todos los destinatarios configurados?')">
                 @csrf
+                @foreach(($filters ?? []) as $fk => $fv)
+                    @if($fv)<input type="hidden" name="{{ $fk }}" value="{{ $fv }}">@endif
+                @endforeach
                 <button type="submit" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;background:#1e40af;color:#fff;border:none;cursor:pointer">
                     <i class="bi bi-send-fill"></i> Enviar Reporte Ahora
                 </button>
