@@ -59,7 +59,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .hdr-right .date { font-size: 7.5px; color: rgba(255,255,255,0.5); margin-top: 2px; }
 
 /* ── Orange accent line ── */
-.accent-line { height: 3px; background: linear-gradient(90deg, #f97316, #fb923c, #fdba74); }
+.accent-line { height: 3px; background: #f97316; }
 
 /* ── Info grid ── */
 .info-strip { display: table; width: 100%; margin: 14px 0 0; }
@@ -210,7 +210,6 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 </div>
 
 @php
-    $mesesCortos = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
     $maxProg = max(1, collect($mesesData)->max('prog'));
     $logoUrl = 'https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg';
 
@@ -272,12 +271,12 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
         </div>
         <div class="info-item">
             <div class="label">Mes de Corte</div>
-            <div class="value">{{ $mesesCortos[$mesActual] }} {{ date('Y') }}</div>
+            <div class="value">{{ $mesesNombres[$mesActual] }} {{ date('Y') }}</div>
         </div>
     </div>
 
     {{-- KPIs --}}
-    <div style="height:1px;background:linear-gradient(90deg,#e2e8f0,#f8fafc);margin:8px 0;"></div>
+    <div style="height:1px;background:#e2e8f0;margin:8px 0;"></div>
     <div class="kpi-row">
         <div class="kpi-card kpi-blue">
             <div class="kpi-num">{{ $pct }}%</div>
@@ -316,7 +315,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     </div>
 
     {{-- Two-column: Left = Ring + Status + Priority | Right = Monthly bars --}}
-    <div style="height:1px;background:linear-gradient(90deg,#e2e8f0,#f8fafc);margin:6px 0;"></div>
+    <div style="height:1px;background:#e2e8f0;margin:6px 0;"></div>
     <div class="two-col">
         <div class="col-left">
             <div class="ring-wrap">
@@ -362,12 +361,12 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                         $isFuture = $m > $mesActual;
                     @endphp
                     <div class="bar-row">
-                        <div class="bar-label" style="{{ $m === $mesActual ? 'color:#0f1b4c;font-weight:900;' : '' }}">{{ $mesesCortos[$m] }}</div>
+                        <div class="bar-label" style="{{ $m === $mesActual ? 'color:#0f1b4c;font-weight:900;' : '' }}">{{ $mesesNombres[$m] }}</div>
                         <div class="bar-track">
                             <div class="bar-bg" style="position:relative;">
                                 @if($d['prog'] > 0)
                                 <div class="bar-fill-prog" style="width:{{ $wProg }}%;"></div>
-                                <div class="bar-fill-real" style="width:{{ $wReal }}%;opacity:{{ $isFuture ? '0.3' : '1' }};"></div>
+                                <div class="bar-fill-real" style="width:{{ $wReal }}%;{{ $isFuture ? 'background:#94a3b8;' : '' }}"></div>
                                 @endif
                             </div>
                         </div>
@@ -385,7 +384,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     </div>
 
     {{-- ── Category Progress Summary ── --}}
-    <div style="height:1px;background:linear-gradient(90deg,#e2e8f0,#f8fafc);margin:6px 0;"></div>
+    <div style="height:1px;background:#e2e8f0;margin:6px 0;"></div>
     <div class="section">
         <div class="section-inner">
             <div class="section-bar"></div>
@@ -458,7 +457,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                 <tr>
                     <th>Actividad</th>
                     @for($m = 1; $m <= 12; $m++)
-                    <th style="{{ $m === $mesActual ? 'background:#0f1b4c;color:#fff;' : '' }}">{{ $mesesCortos[$m] }}</th>
+                    <th style="{{ $m === $mesActual ? 'background:#0f1b4c;color:#fff;' : '' }}">{{ $mesesNombres[$m] }}</th>
                     @endfor
                 </tr>
             </thead>
@@ -612,8 +611,8 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
             @foreach($reprogramaciones as $rep)
             <tr>
                 <td style="font-weight:600;">{{ $rep->actividad->nombre ?? '—' }}</td>
-                <td><span class="chip chip-gray">{{ $mesesCortos[$rep->mes_original] ?? $rep->mes_original }}</span></td>
-                <td><span class="chip chip-purple">{{ $mesesCortos[$rep->mes_nuevo] ?? $rep->mes_nuevo }}</span></td>
+                <td><span class="chip chip-gray">{{ $mesesNombres[$rep->mes_original] ?? $rep->mes_original }}</span></td>
+                <td><span class="chip chip-purple">{{ $mesesNombres[$rep->mes_nuevo] ?? $rep->mes_nuevo }}</span></td>
                 <td>{{ Str::limit($rep->motivo, 60) }}</td>
                 <td>{{ $rep->usuario->nombre_completo ?? '—' }}</td>
                 <td>{{ $rep->created_at->format('d/m/Y') }}</td>

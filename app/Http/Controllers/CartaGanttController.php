@@ -146,7 +146,6 @@ class CartaGanttController extends Controller
 
         // Activities with issues
         $vencidas   = $todasActividades->filter(fn ($a) => $a->estaVencida)->values();
-        $porVencer  = $todasActividades->filter(fn ($a) => $a->estaPorVencer)->values();
 
         // Reprogramaciones
         $reprogramaciones = SstReprogramacion::whereIn('actividad_id', $todasActividades->pluck('id'))
@@ -164,7 +163,7 @@ class CartaGanttController extends Controller
         $pdf = Pdf::loadView('pdf.carta_gantt_reporte', compact(
             'cartaGantt', 'mesActual', 'mesesNombres', 'totalAct',
             'completadas', 'enProgreso', 'pendientes', 'canceladas', 'pct',
-            'mesesData', 'vencidas', 'porVencer', 'reprogramaciones', 'prioridades'
+            'mesesData', 'vencidas', 'reprogramaciones', 'prioridades'
         ))->setPaper('a4', 'landscape')->setOptions([
             'isRemoteEnabled'      => true,
             'isHtml5ParserEnabled' => true,
