@@ -8,11 +8,19 @@
             <h2 class="page-heading"><i class="bi bi-kanban" style="color:var(--primary-color)"></i> Tableros Kanban</h2>
             <p class="page-subheading">Gestión visual de tareas con arrastrar y soltar</p>
         </div>
-        @if(auth()->user()->tieneAcceso('kanban', 'puede_crear'))
-        <a href="{{ route('kanban.create') }}" class="btn-premium">
-            <i class="bi bi-plus-lg"></i> Nuevo Tablero
-        </a>
-        @endif
+        <div style="display:flex;gap:.5rem;align-items:center;">
+            <a href="{{ route('kanban.mis-tareas') }}" class="btn-secondary" style="padding:.45rem .85rem;font-size:.82rem;">
+                <i class="bi bi-person-check"></i> Mis Tareas
+                @if($misTareasCount > 0)
+                <span style="background:#ef4444;color:#fff;padding:.1rem .4rem;border-radius:10px;font-size:.7rem;margin-left:.3rem;font-weight:700;">{{ $misTareasCount }}</span>
+                @endif
+            </a>
+            @if(auth()->user()->tieneAcceso('kanban', 'puede_crear'))
+            <a href="{{ route('kanban.create') }}" class="btn-premium">
+                <i class="bi bi-plus-lg"></i> Nuevo Tablero
+            </a>
+            @endif
+        </div>
     </div>
 
     @include('partials._alerts')
@@ -62,6 +70,11 @@
                     <span>
                         <i class="bi bi-person"></i> {{ $tablero->creador?->name ?? 'Sistema' }}
                     </span>
+                    @if($tablero->miembros->count() > 1)
+                    <span title="{{ $tablero->miembros->pluck('name')->join(', ') }}">
+                        <i class="bi bi-people"></i> {{ $tablero->miembros->count() }}
+                    </span>
+                    @endif
                     @if($tablero->centroCosto)
                     <span>
                         <i class="bi bi-building"></i> {{ $tablero->centroCosto->nombre }}

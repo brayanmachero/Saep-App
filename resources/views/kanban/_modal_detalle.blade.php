@@ -166,6 +166,17 @@
                 <div id="comentarios-lista"></div>
             </div>
 
+            <hr style="border:none;border-top:1px solid var(--border-color);margin:1rem 0;">
+
+            {{-- ======= ACTIVIDAD DE LA TAREA ======= --}}
+            <div>
+                <label style="font-size:.82rem;font-weight:700;color:var(--text-primary);display:block;margin-bottom:.5rem;cursor:pointer;" onclick="toggleDetalleActividad()">
+                    <i class="bi bi-clock-history" style="color:var(--primary-color);"></i> Historial de Actividad
+                    <i id="actividad-toggle-icon" class="bi bi-chevron-down" style="font-size:.7rem;margin-left:.3rem;"></i>
+                </label>
+                <div id="detalle-actividad" style="display:none;max-height:200px;overflow-y:auto;"></div>
+            </div>
+
             {{-- Meta info --}}
             <div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--border-color);font-size:.72rem;color:var(--text-muted);">
                 <span>Creada por <strong id="detalle-creador"></strong></span>
@@ -527,4 +538,54 @@ function escapeHtml(text) {
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && detalleTareaId) cerrarDetalle();
 });
+
+// ACTIVIDAD EN DETALLE
+function toggleDetalleActividad() {
+    const el = document.getElementById('detalle-actividad');
+    const icon = document.getElementById('actividad-toggle-icon');
+    if (el.style.display === 'none') {
+        el.style.display = 'block';
+        icon.className = 'bi bi-chevron-up';
+        cargarActividadTarea();
+    } else {
+        el.style.display = 'none';
+        icon.className = 'bi bi-chevron-down';
+    }
+}
+
+function cargarActividadTarea() {
+    const tareaId = document.getElementById('detalle-tarea-id').value;
+    const tableroId = document.getElementById('detalle-tablero-id').value;
+    const cont = document.getElementById('detalle-actividad');
+    cont.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:.78rem;padding:.5rem;">Cargando...</div>';
+
+    fetch(`/kanban/${tableroId}/actividad`, { headers: { 'Accept': 'application/json' } })
+    .then(r => r.json())
+    .then(data => {
+        // Filtrar solo actividades de esta tarea
+        const acts = (data.actividades || []).filter(a => a.tarea_id == tareaId);
+        if (acts.length === 0) {
+            cont.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:.78rem;padding:.5rem;">Sin actividad.</div>';
+            return;
+        }
+        const iconos = {
+            created: 'bi-plus-circle', updated: 'bi-pencil', moved: 'bi-arrows-move',
+            commented: 'bi-chat-dots', attachment: 'bi-paperclip', assigned: 'bi-person-plus',
+            deleted: 'bi-trash', checklist: 'bi-check2-square',
+        };
+        cont.innerHTML = acts.map(a => {
+            const icono = iconos[a.accion] || 'bi-circle';
+            const fecha = new Date(a.created_at).toLocaleString('es-CL', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+            return `<div style="display:flex;gap:.4rem;align-items:flex-start;padding:.3rem 0;border-bottom:1px solid var(--border-color);font-size:.75rem;">
+                <i class="bi ${icono}" style="margin-top:.1rem;color:var(--primary-color);"></i>
+                <div style="flex:1;">
+                    <strong>${escapeHtml(a.usuario?.name || 'Sistema')}</strong>
+                    <span style="color:var(--text-muted);"> — ${escapeHtml(a.detalle || a.accion)}</span>
+                    <div style="font-size:.65rem;color:var(--text-muted);">${fecha}</div>
+                </div>
+            </div>`;
+        }).join('');
+    })
+    .catch(() => { cont.innerHTML = '<div style="color:#ef4444;font-size:.78rem;">Error</div>'; });
+}
 </script>

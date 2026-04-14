@@ -64,6 +64,11 @@ class KanbanTarea extends Model
         return $this->hasMany(KanbanChecklistItem::class, 'tarea_id')->orderBy('orden');
     }
 
+    public function actividadLog()
+    {
+        return $this->hasMany(KanbanActividadLog::class, 'tarea_id')->orderByDesc('created_at');
+    }
+
     public function getEstaVencidaAttribute(): bool
     {
         return $this->fecha_vencimiento && $this->fecha_vencimiento->isPast();

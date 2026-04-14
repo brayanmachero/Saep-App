@@ -354,6 +354,8 @@ Route::middleware('auth')->group(function () {
 
     // --- TABLERO KANBAN ---
     Route::middleware('modulo:kanban')->group(function () {
+        // Mis Tareas (antes del resource para evitar conflicto con {kanban})
+        Route::get('kanban-mis-tareas', [\App\Http\Controllers\KanbanController::class, 'misTareas'])->name('kanban.mis-tareas');
         Route::resource('kanban', \App\Http\Controllers\KanbanController::class);
         // Columnas
         Route::post('kanban/{kanban}/columnas', [\App\Http\Controllers\KanbanController::class, 'storeColumna'])->name('kanban.columnas.store');
@@ -378,6 +380,11 @@ Route::middleware('auth')->group(function () {
         // Etiquetas
         Route::post('kanban/{kanban}/etiquetas', [\App\Http\Controllers\KanbanController::class, 'storeEtiqueta'])->name('kanban.etiquetas.store');
         Route::delete('kanban/etiquetas/{etiqueta}', [\App\Http\Controllers\KanbanController::class, 'destroyEtiqueta'])->name('kanban.etiquetas.destroy');
+        // Miembros
+        Route::post('kanban/{kanban}/miembros', [\App\Http\Controllers\KanbanController::class, 'storeMiembro'])->name('kanban.miembros.store');
+        Route::delete('kanban/{kanban}/miembros/{user}', [\App\Http\Controllers\KanbanController::class, 'destroyMiembro'])->name('kanban.miembros.destroy');
+        // Actividad
+        Route::get('kanban/{kanban}/actividad', [\App\Http\Controllers\KanbanController::class, 'actividad'])->name('kanban.actividad');
         // Calendario API
         Route::get('kanban/{kanban}/calendar-data', [\App\Http\Controllers\KanbanController::class, 'calendarData'])->name('kanban.calendar-data');
     });

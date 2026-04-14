@@ -9,6 +9,7 @@ use App\Models\KanbanEtiqueta;
 use App\Models\KanbanAdjunto;
 use App\Models\KanbanChecklistItem;
 use App\Models\KanbanComentario;
+use App\Models\KanbanActividadLog;
 use App\Models\CentroCosto;
 use App\Models\User;
 use App\Mail\KanbanTareaAsignadaMail;
@@ -25,13 +26,19 @@ class KanbanController extends Controller
 
     public function index()
     {
-        $tableros = KanbanTablero::with(['creador', 'centroCosto'])
+        $tableros = KanbanTablero::with(['creador', 'centroCosto', 'miembros'])
             ->withCount('tareas')
             ->where('activo', true)
+            ->visiblesParaUsuario()
             ->orderByDesc('updated_at')
             ->get();
 
-        return view('kanban.index', compact('tableros'));
+        // Mis tareas (de todos los tableros visibles)
+        $misTareasCount = KanbanTarea::where('asignado_a', auth()->id())
+            ->whereHas('tablero', fn ($q) => $q->where('activo', true)->visiblesParaUsuario())
+            ->count();
+
+        return view('kanban.index', compact('tableros', 'misTareasCount'));
     }
 
     public function create()
@@ -58,6 +65,11 @@ class KanbanController extends Controller
 
         $tablero->crearColumnasDefault();
 
+        // Agregar creador como admin del tablero
+        $tablero->miembros()->attach(auth()->id(), ['rol' => 'admin']);
+
+        KanbanActividadLog::registrar($tablero->id, null, 'created', "Tablero «{$tablero->nombre}» creado");
+
         return redirect()->route('kanban.show', $tablero)
             ->with('success', "Tablero «{$tablero->nombre}» creado con columnas por defecto.");
     }
@@ -65,21 +77,25 @@ class KanbanController extends Controller
     public function show(KanbanTablero $kanban)
     {
         $kanban->load([
-            'columnas.tareas.asignado',
-            'columnas.tareas.etiquetas',
-            'columnas.tareas.comentarios',
-            'columnas.tareas.adjuntos',
-            'columnas.tareas.checklistItems',
+            'columnas.tareas' => function ($q) {
+                // Aplicar filtros a las tareas eager-loaded
+                if (request('filtro_asignado'))    $q->where('asignado_a', request('filtro_asignado'));
+                if (request('filtro_prioridad'))   $q->where('prioridad', request('filtro_prioridad'));
+                if (request('filtro_etiqueta'))     $q->whereHas('etiquetas', fn ($e) => $e->where('kanban_etiquetas.id', request('filtro_etiqueta')));
+                $q->with(['asignado', 'etiquetas', 'comentarios', 'adjuntos', 'checklistItems']);
+            },
             'etiquetas',
             'centroCosto',
             'creador',
+            'miembros',
         ]);
 
         $usuarios = User::orderBy('name')->get();
         $centros  = CentroCosto::where('activo', true)->orderBy('nombre')->get();
-        $vista    = request('vista', 'kanban'); // kanban | lista | calendario
+        $vista    = request('vista', 'kanban');
+        $filtrosActivos = request()->only('filtro_asignado', 'filtro_prioridad', 'filtro_etiqueta');
 
-        return view('kanban.show', compact('kanban', 'usuarios', 'centros', 'vista'));
+        return view('kanban.show', compact('kanban', 'usuarios', 'centros', 'vista', 'filtrosActivos'));
     }
 
     public function edit(KanbanTablero $kanban)
@@ -200,6 +216,13 @@ class KanbanController extends Controller
             $tarea->etiquetas()->sync($request->etiquetas);
         }
 
+        KanbanActividadLog::registrar($kanban->id, $tarea->id, 'created', "Tarea «{$tarea->titulo}» creada");
+
+        if ($tarea->asignado_a) {
+            KanbanActividadLog::registrar($kanban->id, $tarea->id, 'assigned',
+                "Tarea asignada a " . ($tarea->asignado?->name ?? 'usuario'));
+        }
+
         // Notificar al asignado
         if ($tarea->asignado_a && $tarea->asignado && $tarea->asignado->email) {
             try {
@@ -242,14 +265,21 @@ class KanbanController extends Controller
             $tarea->etiquetas()->sync($request->etiquetas ?? []);
         }
 
+        KanbanActividadLog::registrar($tarea->tablero_id, $tarea->id, 'updated', "Tarea «{$tarea->titulo}» actualizada");
+
         // Notificar si cambió el asignado
         $newAsignado = $tarea->asignado_a;
-        if ($newAsignado && $newAsignado != $oldAsignado && $tarea->asignado?->email) {
-            try {
-                Mail::to($tarea->asignado->email)
-                    ->send(new KanbanTareaAsignadaMail($tarea->load(['tablero', 'columna']), auth()->user()));
-            } catch (\Throwable $e) {
-                \Log::warning('Kanban: no se pudo notificar reasignación', ['error' => $e->getMessage()]);
+        if ($newAsignado && $newAsignado != $oldAsignado) {
+            KanbanActividadLog::registrar($tarea->tablero_id, $tarea->id, 'assigned',
+                "Tarea asignada a " . ($tarea->asignado?->name ?? 'usuario'));
+
+            if ($tarea->asignado?->email) {
+                try {
+                    Mail::to($tarea->asignado->email)
+                        ->send(new KanbanTareaAsignadaMail($tarea->load(['tablero', 'columna']), auth()->user()));
+                } catch (\Throwable $e) {
+                    \Log::warning('Kanban: no se pudo notificar reasignación', ['error' => $e->getMessage()]);
+                }
             }
         }
 
@@ -261,7 +291,11 @@ class KanbanController extends Controller
 
     public function destroyTarea(KanbanTarea $tarea)
     {
+        $tableroId = $tarea->tablero_id;
+        $titulo = $tarea->titulo;
         $tarea->delete();
+
+        KanbanActividadLog::registrar($tableroId, null, 'deleted', "Tarea «{$titulo}» eliminada");
 
         if (request()->wantsJson()) {
             return response()->json(['success' => true]);
@@ -286,10 +320,11 @@ class KanbanController extends Controller
         DB::transaction(function () use ($request, $tarea) {
             $newColumnaId = (int) $request->columna_id;
             $newOrden     = (int) $request->orden;
+            $oldColumnaId = $tarea->columna_id;
 
             // Si cambió de columna, reordenar la columna anterior
-            if ($tarea->columna_id !== $newColumnaId) {
-                KanbanTarea::where('columna_id', $tarea->columna_id)
+            if ($oldColumnaId !== $newColumnaId) {
+                KanbanTarea::where('columna_id', $oldColumnaId)
                     ->where('orden', '>', $tarea->orden)
                     ->decrement('orden');
             }
@@ -304,9 +339,93 @@ class KanbanController extends Controller
                 'columna_id' => $newColumnaId,
                 'orden'      => $newOrden,
             ]);
+
+            if ($oldColumnaId !== $newColumnaId) {
+                $colNueva = $tarea->fresh()->columna->nombre ?? '';
+                KanbanActividadLog::registrar($tarea->tablero_id, $tarea->id, 'moved',
+                    "Tarea «{$tarea->titulo}» movida a «{$colNueva}»");
+            }
         });
 
         return response()->json(['success' => true, 'columna' => $tarea->fresh()->columna->nombre]);
+    }
+
+    // =====================================================
+    // MIS TAREAS (cross-board)
+    // =====================================================
+
+    public function misTareas()
+    {
+        $tareas = KanbanTarea::with(['tablero', 'columna', 'etiquetas', 'asignado', 'checklistItems'])
+            ->where('asignado_a', auth()->id())
+            ->whereHas('tablero', fn ($q) => $q->where('activo', true)->visiblesParaUsuario())
+            ->orderByRaw("FIELD(prioridad, 'ALTA', 'MEDIA', 'BAJA')")
+            ->orderBy('fecha_vencimiento')
+            ->get();
+
+        return view('kanban.mis_tareas', compact('tareas'));
+    }
+
+    // =====================================================
+    // MIEMBROS DEL TABLERO
+    // =====================================================
+
+    public function storeMiembro(Request $request, KanbanTablero $kanban)
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'rol'     => 'nullable|string|in:admin,editor,viewer',
+        ]);
+
+        if ($kanban->miembros()->where('user_id', $request->user_id)->exists()) {
+            return response()->json(['success' => false, 'message' => 'El usuario ya es miembro.'], 422);
+        }
+
+        $kanban->miembros()->attach($request->user_id, [
+            'rol' => $request->rol ?? 'editor',
+        ]);
+
+        $usuario = User::find($request->user_id);
+        KanbanActividadLog::registrar($kanban->id, null, 'member_added',
+            "{$usuario->name} agregado como " . ($request->rol ?? 'editor'));
+
+        return response()->json([
+            'success' => true,
+            'miembro' => [
+                'id'   => $usuario->id,
+                'name' => $usuario->name,
+                'rol'  => $request->rol ?? 'editor',
+            ],
+        ]);
+    }
+
+    public function destroyMiembro(KanbanTablero $kanban, User $user)
+    {
+        // No permitir remover al creador
+        if ($kanban->creado_por === $user->id) {
+            return response()->json(['success' => false, 'message' => 'No se puede remover al creador.'], 422);
+        }
+
+        $kanban->miembros()->detach($user->id);
+
+        KanbanActividadLog::registrar($kanban->id, null, 'member_removed',
+            "{$user->name} removido del tablero");
+
+        return response()->json(['success' => true]);
+    }
+
+    // =====================================================
+    // ACTIVIDAD LOG
+    // =====================================================
+
+    public function actividad(KanbanTablero $kanban)
+    {
+        $actividades = $kanban->actividadLog()
+            ->with(['usuario', 'tarea'])
+            ->take(50)
+            ->get();
+
+        return response()->json(['actividades' => $actividades]);
     }
 
     // =====================================================
@@ -410,6 +529,9 @@ class KanbanController extends Controller
         ]);
         $comentario->load('usuario');
 
+        KanbanActividadLog::registrar($tarea->tablero_id, $tarea->id, 'commented',
+            "Comentario en «{$tarea->titulo}»");
+
         return response()->json([
             'success'  => true,
             'comentario' => [
@@ -479,6 +601,9 @@ class KanbanController extends Controller
             'tamanio'         => $file->getSize(),
             'subido_por'      => auth()->id(),
         ]);
+
+        KanbanActividadLog::registrar($tarea->tablero_id, $tarea->id, 'attachment',
+            "Adjunto «{$file->getClientOriginalName()}» subido a «{$tarea->titulo}»");
 
         return response()->json(['success' => true, 'adjunto' => [
             'id'              => $adjunto->id,

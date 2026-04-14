@@ -41,6 +41,40 @@ class KanbanTablero extends Model
         return $this->belongsTo(CentroCosto::class);
     }
 
+    public function miembros()
+    {
+        return $this->belongsToMany(User::class, 'kanban_tablero_miembros', 'tablero_id', 'user_id')
+            ->withPivot('rol')
+            ->withTimestamps();
+    }
+
+    public function actividadLog()
+    {
+        return $this->hasMany(KanbanActividadLog::class, 'tablero_id')->orderByDesc('created_at');
+    }
+
+    /**
+     * Verificar si un usuario tiene acceso al tablero (creador o miembro).
+     */
+    public function tieneAcceso(?int $userId = null): bool
+    {
+        $userId = $userId ?? auth()->id();
+        if ($this->creado_por === $userId) return true;
+        return $this->miembros()->where('user_id', $userId)->exists();
+    }
+
+    /**
+     * Scope: tableros visibles para el usuario (creador + miembro).
+     */
+    public function scopeVisiblesParaUsuario($query, ?int $userId = null)
+    {
+        $userId = $userId ?? auth()->id();
+        return $query->where(function ($q) use ($userId) {
+            $q->where('creado_por', $userId)
+              ->orWhereHas('miembros', fn ($m) => $m->where('user_id', $userId));
+        });
+    }
+
     /**
      * Crear columnas por defecto al crear un tablero.
      */
