@@ -495,4 +495,80 @@ class StopAnalyticsService
             ->pluck('cnt', 'ym')
             ->toArray();
     }
+
+    /**
+     * Build year-over-year comparison from SQL data.
+     * Carries forward all non-date filters (empresa_observado, centro, etc.).
+     */
+    public function buildComparison(array $baseFilters): array
+    {
+        $currentYear  = (int) ($baseFilters['anio'] ?? now()->format('Y'));
+        $prevYear     = $currentYear - 1;
+        $currentMonth = $baseFilters['mes'] ?? now()->format('Y-m');
+        $monthNum     = (int) substr($currentMonth, 5, 2);
+
+        // Carry over non-date filters
+        $carryFilters = array_filter([
+            'empresa_observador' => $baseFilters['empresa_observador'] ?? null,
+            'empresa_observado'  => $baseFilters['empresa_observado'] ?? null,
+            'centro'             => $baseFilters['centro'] ?? null,
+            'tipo_observacion'   => $baseFilters['tipo_observacion'] ?? null,
+            'clasificacion'      => $baseFilters['clasificacion'] ?? null,
+        ]);
+
+        try {
+            $ytdData  = $this->getFilteredAnalytics(array_merge(['anio' => (string) $currentYear], $carryFilters));
+            $prevData = $this->getFilteredAnalytics(array_merge(['anio' => (string) $prevYear], $carryFilters));
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        $ytdClasif  = $ytdData['clasificacion'] ?? [];
+        $prevClasif = $prevData['clasificacion'] ?? [];
+
+        $prevByMonth    = $prevData['byMonth'] ?? [];
+        $prevByMonthNeg = $prevData['byMonthNeg'] ?? [];
+        $prevByMonthPos = $prevData['byMonthPos'] ?? [];
+
+        $prevYearMonth = $prevYear . '-' . str_pad($monthNum, 2, '0', STR_PAD_LEFT);
+
+        // Previous year YTD (Jan to same month)
+        $prevYtdTotal = 0;
+        $prevYtdPos = 0;
+        $prevYtdNeg = 0;
+        for ($m = 1; $m <= $monthNum; $m++) {
+            $key = $prevYear . '-' . str_pad($m, 2, '0', STR_PAD_LEFT);
+            $prevYtdTotal += ($prevByMonth[$key] ?? 0);
+            $prevYtdPos   += ($prevByMonthPos[$key] ?? 0);
+            $prevYtdNeg   += ($prevByMonthNeg[$key] ?? 0);
+        }
+
+        return [
+            'ytd' => [
+                'total'      => $ytdData['totalRows'] ?? 0,
+                'pos'        => $ytdClasif['Positiva'] ?? $ytdClasif['positiva'] ?? 0,
+                'neg'        => $ytdClasif['Negativa'] ?? $ytdClasif['negativa'] ?? 0,
+                'topNeg'     => $ytdData['topNegTrabajadores'] ?? [],
+                'negPorTipo' => $ytdData['negPorTipo'] ?? [],
+                'byMonth'    => $ytdData['byMonth'] ?? [],
+                'byMonthNeg' => $ytdData['byMonthNeg'] ?? [],
+                'byMonthPos' => $ytdData['byMonthPos'] ?? [],
+            ],
+            'prevYear' => [
+                'year'           => $prevYear,
+                'total'          => $prevData['totalRows'] ?? 0,
+                'pos'            => $prevClasif['Positiva'] ?? $prevClasif['positiva'] ?? 0,
+                'neg'            => $prevClasif['Negativa'] ?? $prevClasif['negativa'] ?? 0,
+                'sameMonthTotal' => $prevByMonth[$prevYearMonth] ?? 0,
+                'sameMonthPos'   => $prevByMonthPos[$prevYearMonth] ?? 0,
+                'sameMonthNeg'   => $prevByMonthNeg[$prevYearMonth] ?? 0,
+                'ytdTotal'       => $prevYtdTotal,
+                'ytdPos'         => $prevYtdPos,
+                'ytdNeg'         => $prevYtdNeg,
+                'byMonth'        => $prevByMonth,
+                'byMonthNeg'     => $prevByMonthNeg,
+                'byMonthPos'     => $prevByMonthPos,
+            ],
+        ];
+    }
 }

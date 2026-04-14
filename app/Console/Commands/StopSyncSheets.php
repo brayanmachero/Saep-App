@@ -132,9 +132,17 @@ class StopSyncSheets extends Command
                 foreach ($values as $idx => $row) {
                     $rowNum = $startRow + $idx;
                     $centro = trim($row[4] ?? '');
+                    $empresaObservado = trim($row[14] ?? '');
 
                     // Saltar fila de prueba
                     if (strtolower($centro) === 'prueba') {
+                        $skipped++;
+                        continue;
+                    }
+
+                    // Solo importar registros de la empresa configurada (SAEP por defecto)
+                    $empresaFiltro = \App\Models\Configuracion::get('stop_report_empresa', 'SAEP');
+                    if ($empresaFiltro && mb_strtoupper(trim($empresaObservado)) !== mb_strtoupper(trim($empresaFiltro))) {
                         $skipped++;
                         continue;
                     }

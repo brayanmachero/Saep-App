@@ -35,11 +35,12 @@ class StopDashboardController extends Controller
             ]);
         }
 
-        // Filtros activos — por defecto mes en curso
+        // Filtros activos — por defecto mes en curso + empresa SAEP
         $isClean = !$request->hasAny(['empresa_observador','empresa_observado','tipo_observacion','centro','clasificacion','fecha_desde','fecha_hasta','mes','anio','all']);
+        $defaultEmpresa = \App\Models\Configuracion::get('stop_report_empresa', 'SAEP');
         $filters = array_filter([
             'empresa_observador' => $request->input('empresa_observador'),
-            'empresa_observado'  => $request->input('empresa_observado'),
+            'empresa_observado'  => $request->input('empresa_observado', $isClean ? $defaultEmpresa : null),
             'tipo_observacion'   => $request->input('tipo_observacion'),
             'centro'             => $request->input('centro'),
             'clasificacion'      => $request->input('clasificacion'),
@@ -74,11 +75,10 @@ class StopDashboardController extends Controller
         $checklist = $useSql ? $sql->getChecklistAnalytics() : $drive->getChecklistAnalytics();
 
         // Comparativa año anterior + acumulado YTD
-        $empresa = $filters['empresa_observador'] ?? null;
         if ($useSql) {
-            $comparison = $this->buildComparisonFromSql($sql, $filters, $empresa);
+            $comparison = $sql->buildComparison($filters);
         } else {
-            $comparison = StopWeeklyReport::buildComparison($drive, $filters, $empresa);
+            $comparison = StopWeeklyReport::buildComparison($drive, $filters);
         }
 
         // Detalle de evaluación negativas
@@ -272,10 +272,9 @@ class StopDashboardController extends Controller
         }
 
         // Comparativa
-        $empresa = $filters['empresa_observador'] ?? null;
         $comparison = $useSql
-            ? $this->buildComparisonFromSql($sql, $filters, $empresa)
-            : StopWeeklyReport::buildComparison(new GoogleDriveService(), $filters, $empresa);
+            ? $sql->buildComparison($filters)
+            : StopWeeklyReport::buildComparison(new GoogleDriveService(), $filters);
 
         // Detalle evaluación
         $evalDetail = $useSql
@@ -328,57 +327,4 @@ class StopDashboardController extends Controller
     /**
      * Build year-over-year comparison using SQL data.
      */
-    private function buildComparisonFromSql(StopAnalyticsService $sql, array $baseFilters, ?string $empresa): array
-    {
-        $currentYear  = (int) ($baseFilters['anio'] ?? now()->format('Y'));
-        $prevYear     = $currentYear - 1;
-        $currentMonth = $baseFilters['mes'] ?? now()->format('Y-m');
-        $monthNum     = (int) substr($currentMonth, 5, 2);
-
-        $empFilter = $empresa ? ['empresa_observador' => $empresa] : [];
-
-        try {
-            $ytdData  = $sql->getFilteredAnalytics(array_merge(['anio' => (string) $currentYear], $empFilter));
-            $prevData = $sql->getFilteredAnalytics(array_merge(['anio' => (string) $prevYear], $empFilter));
-        } catch (\Throwable $e) {
-            return [];
-        }
-
-        $ytdClasif  = $ytdData['clasificacion'] ?? [];
-        $prevClasif = $prevData['clasificacion'] ?? [];
-
-        $prevByMonth    = $prevData['byMonth'] ?? [];
-        $prevByMonthNeg = $prevData['byMonthNeg'] ?? [];
-        $prevByMonthPos = $prevData['byMonthPos'] ?? [];
-
-        $prevYearMonth = $prevYear . '-' . str_pad($monthNum, 2, '0', STR_PAD_LEFT);
-
-        return [
-            'ytd' => [
-                'total'      => $ytdData['totalRows'] ?? 0,
-                'pos'        => $ytdClasif['Positiva'] ?? $ytdClasif['positiva'] ?? 0,
-                'neg'        => $ytdClasif['Negativa'] ?? $ytdClasif['negativa'] ?? 0,
-                'topNeg'     => $ytdData['topNegTrabajadores'] ?? [],
-                'negPorTipo' => $ytdData['negPorTipo'] ?? [],
-                'byMonth'    => $ytdData['byMonth'] ?? [],
-                'byMonthNeg' => $ytdData['byMonthNeg'] ?? [],
-                'byMonthPos' => $ytdData['byMonthPos'] ?? [],
-            ],
-            'prevYear' => [
-                'year'           => $prevYear,
-                'total'          => $prevData['totalRows'] ?? 0,
-                'pos'            => $prevClasif['Positiva'] ?? $prevClasif['positiva'] ?? 0,
-                'neg'            => $prevClasif['Negativa'] ?? $prevClasif['negativa'] ?? 0,
-                'sameMonthTotal' => $prevByMonth[$prevYearMonth] ?? 0,
-                'sameMonthPos'   => $prevByMonthPos[$prevYearMonth] ?? 0,
-                'sameMonthNeg'   => $prevByMonthNeg[$prevYearMonth] ?? 0,
-                'ytdTotal'       => $prevData['totalRows'] ?? 0,
-                'ytdPos'         => $prevClasif['Positiva'] ?? $prevClasif['positiva'] ?? 0,
-                'ytdNeg'         => $prevClasif['Negativa'] ?? $prevClasif['negativa'] ?? 0,
-                'byMonth'        => $prevByMonth,
-                'byMonthNeg'     => $prevByMonthNeg,
-                'byMonthPos'     => $prevByMonthPos,
-            ],
-        ];
-    }
 }

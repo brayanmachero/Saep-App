@@ -62,13 +62,21 @@ class StopWeeklyReport extends Command
             $mesLabel = now()->translatedFormat('F Y');
         }
 
-        // Aplicar filtro de empresa
+        // Aplicar filtro de empresa (empresa_observado)
         if ($empresa) {
-            $filters['empresa_observador'] = $empresa;
-            $this->info("Filtrando por empresa: {$empresa}");
+            $filters['empresa_observado'] = $empresa;
+            $this->info("Filtrando por empresa observado: {$empresa}");
         }
 
-        $analytics = $drive->getFilteredAnalytics($filters);
+        // Usar SQL si hay datos sincronizados, sino Google Drive
+        $sql = new \App\Services\StopAnalyticsService();
+        $useSql = $sql->hasSyncedData();
+
+        if ($useSql) {
+            $analytics = $sql->getFilteredAnalytics($filters);
+        } else {
+            $analytics = $drive->getFilteredAnalytics($filters);
+        }
 
         if (!$analytics || ($analytics['totalRows'] ?? 0) === 0) {
             $this->warn('No se encontraron datos para el período seleccionado.');
@@ -76,10 +84,14 @@ class StopWeeklyReport extends Command
         }
 
         // Comparativa año anterior + acumulado YTD
-        $comparison = self::buildComparison($drive, $filters, $empresa);
+        $comparison = $useSql
+            ? $sql->buildComparison($filters)
+            : self::buildComparison($drive, $filters);
 
         // Detalle de evaluación negativas
-        $evalDetail = $drive->getEvaluationDetail($filters) ?? [];
+        $evalDetail = $useSql
+            ? ($sql->getEvaluationDetail($filters) ?? [])
+            : ($drive->getEvaluationDetail($filters) ?? []);
 
         $periodo = $mesLabel ?? now()->format('d/m/Y');
 
@@ -185,20 +197,32 @@ class StopWeeklyReport extends Command
         // Usar empresa pasada o la de configuración
         $emp = $empresa ?: Configuracion::get('stop_report_empresa', '');
         if ($emp) {
-            $filters['empresa_observador'] = $emp;
+            $filters['empresa_observado'] = $emp;
         }
 
-        $analytics = $drive->getFilteredAnalytics($filters);
+        // Intentar usar SQL si hay datos sincronizados
+        $sql = new \App\Services\StopAnalyticsService();
+        $useSql = $sql->hasSyncedData();
+
+        if ($useSql) {
+            $analytics = $sql->getFilteredAnalytics($filters);
+        } else {
+            $analytics = $drive->getFilteredAnalytics($filters);
+        }
 
         if (!$analytics || ($analytics['totalRows'] ?? 0) === 0) {
             return ['analytics' => ['totalRows' => 0], 'periodo' => $mesLabel, 'mesLabel' => $mesLabel, 'comparison' => []];
         }
 
         // --- Comparativa: YTD año actual + año anterior ---
-        $comparison = self::buildComparison($drive, $filters, $emp);
+        $comparison = $useSql
+            ? $sql->buildComparison($filters)
+            : self::buildComparison($drive, $filters);
 
         // --- Detalle de evaluación negativas ---
-        $evalDetail = $drive->getEvaluationDetail($filters) ?? [];
+        $evalDetail = $useSql
+            ? ($sql->getEvaluationDetail($filters) ?? [])
+            : ($drive->getEvaluationDetail($filters) ?? []);
 
         return [
             'analytics'  => $analytics,
@@ -212,7 +236,7 @@ class StopWeeklyReport extends Command
     /**
      * Compute year-over-year and YTD comparison data.
      */
-    public static function buildComparison(GoogleDriveService $drive, array $baseFilters, ?string $empresa): array
+    public static function buildComparison(GoogleDriveService $drive, array $baseFilters): array
     {
         $currentYear  = (int) ($baseFilters['anio'] ?? now()->format('Y'));
         $prevYear     = $currentYear - 1;
@@ -222,13 +246,20 @@ class StopWeeklyReport extends Command
         // Previous year same month key (e.g. 2025-04)
         $prevYearMonth = $prevYear . '-' . str_pad($monthNum, 2, '0', STR_PAD_LEFT);
 
-        $empFilter = $empresa ? ['empresa_observador' => $empresa] : [];
+        // Carry over non-date filters (empresa_observado, empresa_observador, centro, etc.)
+        $carryFilters = array_filter([
+            'empresa_observador' => $baseFilters['empresa_observador'] ?? null,
+            'empresa_observado'  => $baseFilters['empresa_observado'] ?? null,
+            'centro'             => $baseFilters['centro'] ?? null,
+            'tipo_observacion'   => $baseFilters['tipo_observacion'] ?? null,
+            'clasificacion'      => $baseFilters['clasificacion'] ?? null,
+        ]);
 
         try {
             // YTD current year
-            $ytdData = $drive->getFilteredAnalytics(array_merge(['anio' => (string) $currentYear], $empFilter)) ?? [];
+            $ytdData = $drive->getFilteredAnalytics(array_merge(['anio' => (string) $currentYear], $carryFilters)) ?? [];
             // Previous year full
-            $prevData = $drive->getFilteredAnalytics(array_merge(['anio' => (string) $prevYear], $empFilter)) ?? [];
+            $prevData = $drive->getFilteredAnalytics(array_merge(['anio' => (string) $prevYear], $carryFilters)) ?? [];
         } catch (\Throwable $e) {
             Log::warning('stop:weekly-report: error obteniendo datos comparativos', ['error' => $e->getMessage()]);
             return [];
