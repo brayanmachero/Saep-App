@@ -67,7 +67,7 @@
                     <button type="button" onclick="event.preventDefault();toggleTableroMenu({{ $tablero->id }})" class="tablero-menu-btn" style="background:var(--card-bg,#fff);border:1px solid var(--border-color);border-radius:6px;padding:.25rem .45rem;cursor:pointer;font-size:.78rem;color:var(--text-muted);transition:all .12s;line-height:1;" title="Opciones">
                         <i class="bi bi-three-dots-vertical"></i>
                     </button>
-                    <div id="tablero-menu-{{ $tablero->id }}" class="tablero-dropdown" style="display:none;position:absolute;top:100%;right:0;margin-top:.3rem;background:var(--card-bg,#fff);border:1px solid var(--border-color);border-radius:8px;box-shadow:0 8px 25px rgba(0,0,0,.15);min-width:180px;overflow:hidden;z-index:20;">
+                    <div id="tablero-menu-{{ $tablero->id }}" class="tablero-dropdown" style="display:none;position:fixed;background:var(--card-bg,#fff);border:1px solid var(--border-color);border-radius:8px;box-shadow:0 8px 25px rgba(0,0,0,.15);min-width:200px;overflow:hidden;z-index:9999;">
                         {{-- Duplicar --}}
                         <form method="POST" action="{{ route('kanban.duplicar', $tablero) }}">
                             @csrf
@@ -192,7 +192,18 @@ function toggleTableroMenu(id) {
         if (d.id !== 'tablero-menu-' + id) d.style.display = 'none';
     });
     const menu = document.getElementById('tablero-menu-' + id);
-    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    if (menu.style.display === 'none' || !menu.style.display) {
+        // Position fixed relative to button
+        const btn = menu.closest('.tablero-menu-wrap').querySelector('.tablero-menu-btn');
+        const rect = btn.getBoundingClientRect();
+        menu.style.display = 'block';
+        // Position below the button, aligned right
+        menu.style.top = (rect.bottom + 4) + 'px';
+        menu.style.left = 'auto';
+        menu.style.right = (window.innerWidth - rect.right) + 'px';
+    } else {
+        menu.style.display = 'none';
+    }
 }
 // Close menus on click outside
 document.addEventListener('click', function(e) {
@@ -200,5 +211,9 @@ document.addEventListener('click', function(e) {
         document.querySelectorAll('.tablero-dropdown').forEach(d => d.style.display = 'none');
     }
 });
+// Close menus on scroll
+window.addEventListener('scroll', function() {
+    document.querySelectorAll('.tablero-dropdown').forEach(d => d.style.display = 'none');
+}, true);
 </script>
 @endsection
