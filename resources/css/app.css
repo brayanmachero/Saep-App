@@ -8,6 +8,10 @@
     --surface-color: #ffffff;
     --surface-card-solid: #ffffff;
     --surface-border: #e5e7eb;
+    --card-bg: #ffffff;
+    --border-color: #e5e7eb;
+    --hover-bg: #f9fafb;
+    --text-primary: #111827;
     --text-main: #111827;
     --text-muted: #6b7280;
     --sidebar-width: 260px;
@@ -25,6 +29,10 @@ body.dark-mode {
     --surface-color: #1f2937;
     --surface-border: #374151;
     --surface-card-solid: #1f2937;
+    --card-bg: #1f2937;
+    --border-color: #374151;
+    --hover-bg: #374151;
+    --text-primary: #f9fafb;
     --text-main: #f9fafb;
     --text-muted: #9ca3af;
     --glass-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.2);
