@@ -231,14 +231,16 @@
 
                     @foreach($dynamicFields as $field)
                     @php $opciones = $campoOpciones[$field['id']] ?? collect(); @endphp
-                    <div style="margin-bottom:1.25rem;">
-                        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;">
-                            <span style="font-size:.85rem;font-weight:600;">{{ $field['label'] }}</span>
-                            <span class="badge" style="font-size:.68rem">{{ $opciones->count() }} opciones</span>
+                    <div style="margin-bottom:.5rem;border:1px solid var(--surface-border);border-radius:10px;overflow:hidden;">
+                        <div style="display:flex;align-items:center;gap:.5rem;padding:.55rem .75rem;cursor:pointer;background:rgba(255,255,255,.02);" onclick="toggleSection('dyn-{{ $field['id'] }}')">
+                            <i class="bi bi-chevron-down section-chevron" id="chevron-dyn-{{ $field['id'] }}" style="font-size:.65rem;color:var(--text-muted);transition:transform .25s;transform:rotate(-90deg);flex-shrink:0;"></i>
+                            <span style="font-size:.85rem;font-weight:600;flex:1;">{{ $field['label'] }}</span>
+                            <span class="badge" style="font-size:.68rem">{{ $opciones->count() }}</span>
                         </div>
 
+                        <div id="dyn-{{ $field['id'] }}" style="display:none;padding:.5rem .75rem .75rem;">
                         @if($opciones->isEmpty())
-                            <p style="font-size:.8rem;color:var(--text-muted);padding:.5rem 0;">Sin opciones registradas.</p>
+                            <p style="font-size:.8rem;color:var(--text-muted);padding:.25rem 0;margin:0;">Sin opciones registradas.</p>
                         @else
                             <div style="display:flex;flex-direction:column;gap:.35rem;">
                                 @foreach($opciones as $opcion)
@@ -264,6 +266,7 @@
                                 @endforeach
                             </div>
                         @endif
+                        </div>
                     </div>
                     @endforeach
                 </div>
