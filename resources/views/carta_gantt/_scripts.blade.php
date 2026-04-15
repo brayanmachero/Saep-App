@@ -405,8 +405,8 @@ function openDetail(row) {
         let cls = 'sst-seg-none';
         let txt = MESES_CORTO[m];
         if (s && s.programado) {
-            const cantReal = (s.cantidad_realizada > 0) ? s.cantidad_realizada : (s.realizado ? cantProg : 0);
-            if (s.realizado) { cls = 'sst-seg-done'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' ✓'; }
+            const cantReal = s.realizado ? cantProg : (s.cantidad_realizada > 0 ? s.cantidad_realizada : 0);
+            if (s.realizado) { cls = 'sst-seg-done'; txt += cantProg > 1 ? ' ' + cantProg+'/'+cantProg : ' ✓'; }
             else if (m < MES_ACTUAL) { cls = 'sst-seg-late'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' !'; }
             else { cls = 'sst-seg-prog'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' ○'; }
         }
@@ -445,9 +445,10 @@ function updateStats() {
     let reprogMes = 0;
     const mesFiltro = selectedStatMonth;
 
-    // Helper: get realized quantity, handling the case where cantidad_realizada=0 but realizado=true
+    // Helper: get realized quantity
+    // If realizado=true, always count as fully done (cantProg)
     function getCantReal(s, cantProg) {
-        if (s.realizado) return s.cantidad_realizada > 0 ? s.cantidad_realizada : cantProg;
+        if (s.realizado) return cantProg;
         return s.cantidad_realizada > 0 ? s.cantidad_realizada : 0;
     }
 
