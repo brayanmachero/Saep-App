@@ -55,12 +55,21 @@ class RespuestaController extends Controller
             }
         }
 
+        $estadoSolicitado = $request->input('estado', 'Pendiente');
+
+        // If form doesn't require approval and user is not saving as draft, auto-approve
+        if ($estadoSolicitado !== 'Borrador' && !$formulario->requiere_aprobacion) {
+            $estadoFinal = 'Aprobado';
+        } else {
+            $estadoFinal = $estadoSolicitado;
+        }
+
         $respuesta = Respuesta::create([
             'formulario_id'   => $formulario->id,
             'version_form'    => $formulario->version,
             'usuario_id'      => auth()->id(),
             'departamento_id' => auth()->user()->departamento_id,
-            'estado'          => $request->input('estado', $formulario->requiere_aprobacion ? 'Pendiente' : 'Aprobado'),
+            'estado'          => $estadoFinal,
             'datos_json'      => json_encode($datos),
         ]);
 
@@ -139,9 +148,18 @@ class RespuestaController extends Controller
             'estado'     => ['in:Borrador,Pendiente'],
         ]);
 
+        $estadoSolicitado = $request->input('estado', 'Pendiente');
+        $formulario = $respuesta->formulario;
+
+        if ($estadoSolicitado !== 'Borrador' && !$formulario->requiere_aprobacion) {
+            $estadoFinal = 'Aprobado';
+        } else {
+            $estadoFinal = $estadoSolicitado;
+        }
+
         $respuesta->update([
             'datos_json' => $request->datos_json,
-            'estado'     => $request->input('estado', 'Pendiente'),
+            'estado'     => $estadoFinal,
         ]);
 
         return redirect()->route('respuestas.show', $respuesta)
