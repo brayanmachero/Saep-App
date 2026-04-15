@@ -43,6 +43,10 @@
             'fecha_inicio' => $a->fecha_inicio ? $a->fecha_inicio->format('Y-m-d') : null,
             'fecha_fin' => $a->fecha_fin ? $a->fecha_fin->format('Y-m-d') : null,
             'seguimiento' => $a->seguimiento_por_mes,
+            'reprogramaciones' => $a->reprogramaciones->map(fn($r) => [
+                'mes_original' => $r->mes_original,
+                'mes_nuevo' => $r->mes_nuevo,
+            ])->values()->toArray(),
         ];
     })->values();
 @endphp
@@ -106,12 +110,16 @@
             }
             $mesPct = $mesProgTotal > 0 ? (int) round($mesRealTotal / $mesProgTotal * 100) : 0;
             $totalReprogramaciones = 0;
+            $reprogMesActual = 0;
             $actConReprog = 0;
             $actPorVencer = 0;
             foreach ($allActividades as $a) {
                 $repCount = $a->reprogramaciones->count();
                 $totalReprogramaciones += $repCount;
                 if ($repCount > 0) $actConReprog++;
+                foreach ($a->reprogramaciones as $r) {
+                    if ($r->mes_original === $mesActual || $r->mes_nuevo === $mesActual) $reprogMesActual++;
+                }
                 if ($a->estaPorVencer) $actPorVencer++;
             }
         @endphp
@@ -137,7 +145,7 @@
         </div>
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#6366f1,#818cf8)"><i class="bi bi-calendar2-range"></i></div>
-            <div><div class="sst-stat-label">Reprogramaciones</div><div class="sst-stat-value" style="color:#6366f1">{{ $totalReprogramaciones }}</div></div>
+            <div><div class="sst-stat-label" id="labelReprogramaciones">Reprogramaciones</div><div class="sst-stat-value" id="statReprogramaciones" style="color:#6366f1">{{ $reprogMesActual }}</div></div>
         </div>
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#94a3b8,#cbd5e1)"><i class="bi bi-hourglass-split"></i></div>

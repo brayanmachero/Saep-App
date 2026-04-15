@@ -278,7 +278,7 @@ function toggleSeguimiento(actId, mes, el) {
         if (actData) {
             if (actData.seguimiento[mes]) {
                 actData.seguimiento[mes].realizado = data.realizado;
-                actData.seguimiento[mes].cantidad_realizada = data.cantidad_realizada ?? (data.realizado ? 1 : 0);
+                actData.seguimiento[mes].cantidad_realizada = (data.cantidad_realizada > 0) ? data.cantidad_realizada : (data.realizado ? 1 : 0);
             }
             if (data.estado) {
                 actData.estado = data.estado;
@@ -405,7 +405,7 @@ function openDetail(row) {
         let cls = 'sst-seg-none';
         let txt = MESES_CORTO[m];
         if (s && s.programado) {
-            const cantReal = s.cantidad_realizada ?? (s.realizado ? cantProg : 0);
+            const cantReal = (s.cantidad_realizada > 0) ? s.cantidad_realizada : (s.realizado ? cantProg : 0);
             if (s.realizado) { cls = 'sst-seg-done'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' ✓'; }
             else if (m < MES_ACTUAL) { cls = 'sst-seg-late'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' !'; }
             else { cls = 'sst-seg-prog'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' ○'; }
@@ -442,27 +442,39 @@ function updateStats() {
     let progTotal = 0, realTotal = 0;
     let mesProgTotal = 0, mesRealTotal = 0;
     let completadas = 0, enProgreso = 0, vencidosMes = 0, pendientesMes = 0;
+    let reprogMes = 0;
     const mesFiltro = selectedStatMonth;
 
+    // Helper: get realized quantity, handling the case where cantidad_realizada=0 but realizado=true
+    function getCantReal(s, cantProg) {
+        if (s.realizado) return s.cantidad_realizada > 0 ? s.cantidad_realizada : cantProg;
+        return s.cantidad_realizada > 0 ? s.cantidad_realizada : 0;
+    }
+
     actividadesData.forEach(a => {
-        let actProg = 0, actReal = 0;
         const cantProg = a.cantidad_programada || 1;
         for (let m = 1; m <= 12; m++) {
             const s = a.seguimiento[m];
             if (s && s.programado) {
-                progTotal += cantProg; actProg += cantProg;
-                const cantReal = s.cantidad_realizada ?? (s.realizado ? cantProg : 0);
-                realTotal += cantReal; actReal += cantReal;
+                const cantReal = getCantReal(s, cantProg);
+                progTotal += cantProg;
+                realTotal += cantReal;
                 if (!s.realizado && m < mesFiltro) { vencidosMes++; }
                 // Selected month stats
                 if (m === mesFiltro) {
                     mesProgTotal += cantProg;
                     mesRealTotal += cantReal;
                     if (s.realizado) { completadas++; }
-                    else if ((s.cantidad_realizada ?? 0) > 0) { enProgreso++; }
+                    else if (s.cantidad_realizada > 0) { enProgreso++; }
                     else { pendientesMes++; }
                 }
             }
+        }
+        // Count reprogramaciones related to the selected month
+        if (a.reprogramaciones) {
+            a.reprogramaciones.forEach(r => {
+                if (r.mes_original === mesFiltro || r.mes_nuevo === mesFiltro) reprogMes++;
+            });
         }
     });
 
@@ -489,16 +501,20 @@ function updateStats() {
     const elProg = document.getElementById('statEnProgreso');
     const elVenc = document.getElementById('statVencidas');
     const elPend = document.getElementById('statPendientes');
+    const elReprog = document.getElementById('statReprogramaciones');
     const lblComp = document.getElementById('labelCompletadas');
     const lblProg = document.getElementById('labelEnProgreso');
     const lblPend = document.getElementById('labelPendientes');
+    const lblReprog = document.getElementById('labelReprogramaciones');
     if (elComp) elComp.textContent = completadas;
     if (elProg) elProg.textContent = enProgreso;
     if (elVenc) elVenc.textContent = vencidosMes;
     if (elPend) elPend.textContent = pendientesMes;
+    if (elReprog) elReprog.textContent = reprogMes;
     if (lblComp) lblComp.textContent = 'Completadas ' + mesLabel;
     if (lblProg) lblProg.textContent = 'En Progreso ' + mesLabel;
     if (lblPend) lblPend.textContent = 'Pendientes ' + mesLabel;
+    if (lblReprog) lblReprog.textContent = 'Reprog. ' + mesLabel;
 
     // Update category progress bars
     document.querySelectorAll('.sst-cat-card').forEach(card => {
@@ -512,7 +528,7 @@ function updateStats() {
                 const s = actData.seguimiento[m];
                 if (s && s.programado) {
                     catProg += cantProg;
-                    catReal += s.cantidad_realizada ?? (s.realizado ? cantProg : 0);
+                    catReal += getCantReal(s, cantProg);
                 }
             }
         });
