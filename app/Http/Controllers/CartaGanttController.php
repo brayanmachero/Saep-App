@@ -100,7 +100,13 @@ class CartaGanttController extends Controller
             'centroCosto', 'responsable', 'creador',
         ]);
         $usuarios = User::orderBy('name')->get();
-        return view('carta_gantt.show', compact('cartaGantt', 'usuarios'));
+
+        $user = auth()->user();
+        $puedeCrear   = $user->tieneAcceso('carta_gantt', 'puede_crear');
+        $puedeEditar  = $user->tieneAcceso('carta_gantt', 'puede_editar');
+        $puedeEliminar = $user->tieneAcceso('carta_gantt', 'puede_eliminar');
+
+        return view('carta_gantt.show', compact('cartaGantt', 'usuarios', 'puedeCrear', 'puedeEditar', 'puedeEliminar'));
     }
 
     public function exportPdf(ProgramaSst $cartaGantt)
@@ -374,6 +380,12 @@ class CartaGanttController extends Controller
 
     public function updateSeguimiento(Request $request, SstActividad $actividad)
     {
+        // Solo puede editar seguimiento si tiene permiso de edición
+        $user = auth()->user();
+        if (!$user->tieneAcceso('carta_gantt', 'puede_editar')) {
+            return response()->json(['error' => 'No tiene permiso para editar seguimiento.'], 403);
+        }
+
         $request->validate([
             'mes'         => 'required|integer|min:1|max:12',
             'observacion' => 'nullable|string|max:1000',

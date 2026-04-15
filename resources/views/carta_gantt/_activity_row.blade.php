@@ -52,7 +52,7 @@
         </span>
     </td>
     {{-- 12 meses Gantt --}}
-    @php $cantProg = max(1, (int) ($act->cantidad_programada ?? 1)); @endphp
+    @php $cantProg = max(1, (int) ($act->cantidad_programada ?? 1)); $rolPuedeEditar = $puedeEditar ?? false; @endphp
     @for($m = 1; $m <= 12; $m++)
     @php
         $s = $seg[$m] ?? null;
@@ -64,6 +64,7 @@
     @endphp
     <td class="sst-td-mes {{ $m === $mesActual ? 'sst-mes-actual' : '' }}">
         @if($prog)
+        @if($rolPuedeEditar)
         @if($cantProg > 1)
         <button class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : ($parcial ? 'gantt-partial' : 'gantt-plan')) }}"
                 onclick="toggleSeguimiento({{ $act->id }}, {{ $m }}, this)"
@@ -77,6 +78,20 @@
             {{ $real ? '✓' : ($vencido ? '!' : '○') }}
         </button>
         @endif
+        @else
+        {{-- Solo vista: sin onclick --}}
+        @if($cantProg > 1)
+        <span class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : ($parcial ? 'gantt-partial' : 'gantt-plan')) }}" style="cursor:default;"
+              title="{{ $cantReal }}/{{ $cantProg }}">
+            {{ $real ? '✓' : ($cantReal > 0 ? $cantReal.'/'.$cantProg : '0/'.$cantProg) }}
+        </span>
+        @else
+        <span class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : 'gantt-plan') }}" style="cursor:default;"
+              title="{{ $real ? 'Realizado' : ($vencido ? 'Vencido' : 'Programado') }}">
+            {{ $real ? '✓' : ($vencido ? '!' : '○') }}
+        </span>
+        @endif
+        @endif
         @endif
     </td>
     @endfor
@@ -86,13 +101,14 @@
         $esSuperAdmin = $user->rol && $user->rol->codigo === 'SUPER_ADMIN';
         $esCreador = $user->id === $cartaGantt->creado_por;
         $esResponsable = $user->id === $act->responsable_id;
-        $puedeEditar = $esSuperAdmin || $esCreador;
+        $puedeEditarLocal = ($esSuperAdmin || $esCreador) && ($puedeEditar ?? false);
+        $puedeEliminarLocal = ($esSuperAdmin || $esCreador) && ($puedeEliminar ?? false);
         // Meses vencidos (programado, no realizado, mes pasado)
         $mesesVencidos = collect($seg)->filter(fn($s, $m) => $s['programado'] && !$s['realizado'] && $m < $mesActual)->keys()->all();
     @endphp
     <td style="text-align:right;white-space:nowrap">
         <div style="display:flex;gap:.2rem;justify-content:flex-end">
-            @if($puedeEditar)
+            @if($puedeEditarLocal)
             <button class="sst-icon-btn sst-icon-btn-xs" onclick="openEditModal(this.closest('tr'))" title="Editar">
                 <i class="bi bi-pencil"></i>
             </button>
@@ -100,7 +116,7 @@
             <button class="sst-icon-btn sst-icon-btn-xs" onclick="togglePlanes({{ $act->id }})" title="Planes de acción">
                 <i class="bi bi-clipboard-check"></i>
             </button>
-            @if(count($mesesVencidos) > 0 && ($esResponsable || $puedeEditar))
+            @if(count($mesesVencidos) > 0 && ($esResponsable || $puedeEditarLocal))
             <button class="sst-icon-btn sst-icon-btn-xs" style="color:#6366f1" onclick="openReprogramar({{ $act->id }}, {{ json_encode($mesesVencidos) }})" title="Reprogramar">
                 <i class="bi bi-calendar2-range"></i>
             </button>
@@ -111,7 +127,7 @@
                 <span style="font-size:.6rem;position:absolute;top:-2px;right:-4px;background:#8b5cf6;color:#fff;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;font-weight:700;">{{ $act->reprogramaciones->count() }}</span>
             </button>
             @endif
-            @if($puedeEditar)
+            @if($puedeEliminarLocal)
             <form method="POST" action="{{ route('carta-gantt.actividades.destroy', $act) }}"
                   onsubmit="return confirm('¿Eliminar esta actividad?')" style="display:inline">
                 @csrf @method('DELETE')
@@ -147,11 +163,13 @@
                 <td style="padding:.3rem .5rem;color:var(--text-muted)">{{ $plan->fecha_compromiso?->format('d/m/Y') ?? '—' }}</td>
                 <td style="padding:.3rem .5rem"><span class="badge {{ $plan->estado_badge }}">{{ $plan->estado_label }}</span></td>
                 <td style="padding:.3rem .5rem;text-align:right">
+                    @if($puedeEditarLocal)
                     <form method="POST" action="{{ route('carta-gantt.plan-accion.destroy', $plan) }}"
                           onsubmit="return confirm('¿Eliminar este plan?')" style="display:inline">
                         @csrf @method('DELETE')
                         <button type="submit" class="sst-icon-btn sst-icon-btn-xs sst-icon-btn-danger"><i class="bi bi-x-lg"></i></button>
                     </form>
+                    @endif
                 </td>
             </tr>
             @endforeach
@@ -161,6 +179,7 @@
         <p style="color:var(--text-muted);font-size:.78rem;font-style:italic;margin:0 0 .5rem">Sin planes de acción.</p>
         @endif
         {{-- Agregar plan --}}
+        @if($puedeEditarLocal)
         <form method="POST" action="{{ route('carta-gantt.plan-accion.store', $act) }}"
               style="display:flex;gap:.4rem;align-items:flex-end;flex-wrap:wrap">
             @csrf
@@ -169,6 +188,7 @@
             <div style="width:120px"><label class="sst-label">Fecha compromiso</label><input type="date" name="fecha_compromiso" class="form-input" style="font-size:.78rem"></div>
             <button type="submit" class="sst-btn sst-btn-sm sst-btn-primary" style="font-size:.75rem"><i class="bi bi-plus-lg"></i> Agregar</button>
         </form>
+        @endif
     </td>
 </tr>
 

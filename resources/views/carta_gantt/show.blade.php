@@ -62,10 +62,14 @@
             <a href="{{ route('carta-gantt.reporte-pdf', $cartaGantt) }}" class="sst-btn sst-btn-outline" target="_blank">
                 <i class="bi bi-file-earmark-pdf"></i> Reporte PDF
             </a>
+            @if($puedeCrear || $puedeEditar)
             <button class="sst-btn sst-btn-outline" onclick="document.getElementById('importModal').style.display='flex'">
                 <i class="bi bi-cloud-upload"></i> Importar CSV
             </button>
+            @endif
+            @if($puedeEditar)
             <a href="{{ route('carta-gantt.edit', $cartaGantt) }}" class="sst-btn sst-btn-outline"><i class="bi bi-pencil"></i> Editar</a>
+            @endif
             <a href="{{ route('carta-gantt.index') }}" class="sst-btn sst-btn-outline"><i class="bi bi-arrow-left"></i> Volver</a>
         </div>
     </div>
@@ -194,14 +198,18 @@
                 <div class="sst-cat-progress"><div class="sst-cat-progress-fill" style="width:{{ $catPct }}%"></div></div>
             </div>
             <div style="display:flex;gap:.35rem">
+                @if($puedeCrear || $puedeEditar)
                 <button class="sst-btn sst-btn-sm sst-btn-primary" onclick="toggleAddActividad({{ $categoria->id }})">
                     <i class="bi bi-plus-lg"></i> Actividad
                 </button>
+                @endif
+                @if($puedeEliminar)
                 <form method="POST" action="{{ route('carta-gantt.categorias.destroy', $categoria) }}"
                       onsubmit="return confirm('¿Eliminar esta categoría y todas sus actividades?')">
                     @csrf @method('DELETE')
                     <button type="submit" class="sst-btn sst-btn-sm sst-btn-danger"><i class="bi bi-trash3"></i></button>
                 </form>
+                @endif
             </div>
         </div>
 
@@ -257,7 +265,7 @@
             @include('carta_gantt._activity_row', ['act' => $act, 'mesActual' => $mesActual])
             @empty
             <tr><td colspan="17" style="padding:2rem;color:var(--text-muted);font-style:italic;text-align:center">
-                Sin actividades. <button class="sst-link" onclick="toggleAddActividad({{ $categoria->id }})">Agregar primera actividad</button>
+                Sin actividades. @if($puedeCrear || $puedeEditar)<button class="sst-link" onclick="toggleAddActividad({{ $categoria->id }})">Agregar primera actividad</button>@endif
             </td></tr>
             @endforelse
             </tbody>
@@ -268,6 +276,7 @@
     </div>
 
     {{-- ========== AGREGAR CATEGORÍA ========== --}}
+    @if($puedeCrear || $puedeEditar)
     <div class="sst-add-cat-card">
         <button class="sst-btn sst-btn-outline" onclick="toggleAddCat()" style="width:100%">
             <i class="bi bi-folder-plus"></i> Agregar Categoría
@@ -283,6 +292,7 @@
             </form>
         </div>
     </div>
+    @endif
 </div>
 
 {{-- ========== MODAL EDITAR ACTIVIDAD ========== --}}

@@ -252,7 +252,7 @@ Route::middleware('auth')->group(function () {
     });
 
     // --- TARJETA STOP CCU (Google Drive) ---
-    Route::middleware('modulo:kizeo_analytics')->group(function () {
+    Route::middleware('modulo:stop_dashboard')->group(function () {
         Route::get('stop-dashboard', [StopDashboardController::class, 'index'])->name('stop-dashboard');
         Route::post('stop-dashboard/sync', [StopDashboardController::class, 'sync'])->name('stop-dashboard.sync');
         Route::get('stop-dashboard/api/data', [StopDashboardController::class, 'apiData'])->name('stop-dashboard.api.data');

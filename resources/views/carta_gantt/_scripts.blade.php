@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // ============ CONSTANTS ============
 const ANIO = {{ $anioPrograma }};
 const MES_ACTUAL = {{ $mesActual }};
+const PUEDE_EDITAR = {{ ($puedeEditar ?? false) ? 'true' : 'false' }};
 const MESES = @json($mesesNombres);
 const MESES_CORTO = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const actividadesData = @json($actividadesJson);
@@ -219,21 +220,22 @@ function rebuildTableRows(table, columns) {
 
             if (col.type === 'month' && prog) {
                 const vencido = !real && col.mes < MES_ACTUAL;
-                const btn = document.createElement('button');
+                const btn = document.createElement(PUEDE_EDITAR ? 'button' : 'span');
                 if (cantProg > 1) {
                     btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : (parcial ? 'gantt-partial' : 'gantt-plan')));
                     btn.textContent = real ? '✓' : (cantReal > 0 ? cantReal+'/'+cantProg : '0/'+cantProg);
-                    btn.title = cantReal+'/'+cantProg + ' — clic para ' + (real ? 'resetear' : 'avanzar');
+                    btn.title = cantReal+'/'+cantProg + (PUEDE_EDITAR ? (' — clic para ' + (real ? 'resetear' : 'avanzar')) : '');
                 } else {
                     btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : 'gantt-plan'));
                     btn.textContent = real ? '✓' : (vencido ? '!' : '○');
-                    btn.title = real ? 'Realizado' : (vencido ? 'Vencido — clic para marcar' : 'Programado — clic para marcar');
+                    btn.title = real ? 'Realizado' : (vencido ? (PUEDE_EDITAR ? 'Vencido — clic para marcar' : 'Vencido') : (PUEDE_EDITAR ? 'Programado — clic para marcar' : 'Programado'));
                 }
-                btn.onclick = function() { toggleSeguimiento(actId, col.mes, btn); };
+                if (PUEDE_EDITAR) btn.onclick = function() { toggleSeguimiento(actId, col.mes, btn); };
+                else btn.style.cursor = 'default';
                 td.appendChild(btn);
             } else if (col.type === 'week' && prog) {
                 const vencido = !real && col.mes < MES_ACTUAL;
-                const btn = document.createElement('button');
+                const btn = document.createElement(PUEDE_EDITAR ? 'button' : 'span');
                 if (cantProg > 1) {
                     btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : (parcial ? 'gantt-partial' : 'gantt-plan')));
                     btn.textContent = real ? '✓' : (cantReal > 0 ? cantReal+'/'+cantProg : '0/'+cantProg);
@@ -241,16 +243,17 @@ function rebuildTableRows(table, columns) {
                     btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : 'gantt-plan'));
                     btn.textContent = real ? '✓' : (vencido ? '!' : '○');
                 }
-                btn.title = real ? 'Realizado' : (vencido ? 'Vencido — clic para marcar' : 'Programado — clic para marcar');
-                btn.onclick = function() { toggleSeguimiento(actId, col.mes, btn); };
+                btn.title = real ? 'Realizado' : (vencido ? 'Vencido' : 'Programado');
+                if (PUEDE_EDITAR) btn.onclick = function() { toggleSeguimiento(actId, col.mes, btn); };
+                else btn.style.cursor = 'default';
                 td.appendChild(btn);
             } else if (col.type === 'day' && prog) {
                 const vencido = !real && col.mes < MES_ACTUAL;
                 const dot = document.createElement('span');
-                dot.style.cssText = 'display:inline-block;width:10px;height:10px;border-radius:50%;cursor:pointer;';
+                dot.style.cssText = 'display:inline-block;width:10px;height:10px;border-radius:50%;' + (PUEDE_EDITAR ? 'cursor:pointer;' : 'cursor:default;');
                 dot.style.background = real ? '#10b981' : (vencido ? '#ef4444' : (parcial ? '#f59e0b' : '#6366f1'));
                 dot.title = cantProg > 1 ? (cantReal+'/'+cantProg) : (real ? 'Realizado' : (vencido ? 'Vencido' : 'Programado'));
-                dot.onclick = function() { toggleSeguimiento(actId, col.mes, dot); };
+                if (PUEDE_EDITAR) dot.onclick = function() { toggleSeguimiento(actId, col.mes, dot); };
                 td.appendChild(dot);
             }
 

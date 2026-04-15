@@ -68,7 +68,7 @@
             @endif
 
             {{-- SST --}}
-            @if(auth()->user()->tieneAcceso('kizeo_analytics') || auth()->user()->tieneAcceso('charlas') || auth()->user()->tieneAcceso('carta_gantt') || auth()->user()->tieneAcceso('visitas_sst') || auth()->user()->tieneAcceso('auditorias_sst') || auth()->user()->tieneAcceso('accidentes_sst') || auth()->user()->tieneAcceso('ley_karin') || auth()->user()->tieneAcceso('ley_karin_denuncia'))
+            @if(auth()->user()->tieneAcceso('kizeo_analytics') || auth()->user()->tieneAcceso('charlas') || auth()->user()->tieneAcceso('carta_gantt') || auth()->user()->tieneAcceso('visitas_sst') || auth()->user()->tieneAcceso('auditorias_sst') || auth()->user()->tieneAcceso('accidentes_sst') || auth()->user()->tieneAcceso('ley_karin') || auth()->user()->tieneAcceso('ley_karin_denuncia') || auth()->user()->tieneAcceso('stop_dashboard'))
             <div class="nav-section-label">Prevención SST</div>
             @if(auth()->user()->tieneAcceso('kizeo_analytics'))
             <a href="{{ route('kizeo.dashboard') }}" class="nav-item {{ request()->routeIs('kizeo.*') && !request()->routeIs('charla-tracking.*') ? 'active' : '' }}">
@@ -79,6 +79,8 @@
                 <i class="bi bi-clipboard-data"></i>
                 <span>Seguimiento Charlas</span>
             </a>
+            @endif
+            @if(auth()->user()->tieneAcceso('stop_dashboard'))
             <a href="{{ route('stop-dashboard') }}" class="nav-item {{ request()->routeIs('stop-dashboard*') ? 'active' : '' }}">
                 <i class="bi bi-hand-index-fill"></i>
                 <span>Tarjeta STOP CCU</span>
