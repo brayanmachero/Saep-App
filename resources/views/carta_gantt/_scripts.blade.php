@@ -478,8 +478,10 @@ function updateStats() {
     // Month progress
     const mBar = document.getElementById('monthProgressBar');
     const mNum = document.getElementById('monthProgressNum');
+    const lblAvMes = document.getElementById('labelAvanceMes');
     if (mBar) mBar.style.width = mesPct + '%';
     if (mNum) mNum.textContent = mesPct + '%';
+    if (lblAvMes) lblAvMes.textContent = 'Avance ' + MESES[mesFiltro];
 
     // Stat cards
     const mesLabel = MESES_CORTO[mesFiltro];

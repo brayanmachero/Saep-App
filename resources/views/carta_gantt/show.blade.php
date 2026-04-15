@@ -51,9 +51,17 @@
     {{-- ========== HEADER ========== --}}
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
         <div>
-            <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.35rem">
+            <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.35rem;flex-wrap:wrap">
                 <h2 class="page-heading" style="margin:0">{{ $cartaGantt->nombre }}</h2>
                 <span class="badge {{ $cartaGantt->estadoBadge }}">{{ ucfirst(strtolower($cartaGantt->estado)) }}</span>
+                <div style="display:flex;align-items:center;gap:.4rem;margin-left:.25rem">
+                    <i class="bi bi-funnel-fill" style="font-size:.8rem;color:var(--text-muted)"></i>
+                    <select id="mesFilterSelect" onchange="filterByMonth(this.value)" class="form-input" style="padding:.3rem .6rem;font-size:.8rem;min-width:auto;width:auto;border-radius:8px;font-weight:600">
+                        @for($m = 1; $m <= 12; $m++)
+                        <option value="{{ $m }}" {{ $m === $mesActual ? 'selected' : '' }}>{{ $mesesNombres[$m] }}</option>
+                        @endfor
+                    </select>
+                </div>
             </div>
             <div style="display:flex;align-items:center;gap:.75rem;font-size:.82rem;color:var(--text-muted);flex-wrap:wrap">
                 <span style="background:var(--surface-color);padding:.2rem .6rem;border-radius:6px;font-weight:600;font-family:monospace;font-size:.78rem;border:1px solid var(--surface-border)">{{ $cartaGantt->codigo ?? '—' }}</span>
@@ -107,16 +115,10 @@
                 if ($a->estaPorVencer) $actPorVencer++;
             }
         @endphp
-        <div class="sst-stat-card" style="position:relative">
+        <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa)"><i class="bi bi-calendar-check"></i></div>
             <div style="flex:1">
-                <div class="sst-stat-label" style="display:flex;align-items:center;gap:.4rem">
-                    Avance <select id="mesFilterSelect" onchange="filterByMonth(this.value)" style="border:1px solid var(--border-color);border-radius:6px;padding:.1rem .3rem;font-size:.75rem;background:var(--surface-color);color:var(--text-primary);cursor:pointer;font-weight:600">
-                        @for($m = 1; $m <= 12; $m++)
-                        <option value="{{ $m }}" {{ $m === $mesActual ? 'selected' : '' }}>{{ $mesesNombres[$m] }}</option>
-                        @endfor
-                    </select>
-                </div>
+                <div class="sst-stat-label" id="labelAvanceMes">Avance {{ $mesesNombres[$mesActual] }}</div>
                 <div class="sst-stat-value" id="monthProgressNum">{{ $mesPct }}%</div>
                 <div class="sst-progress-track"><div class="sst-progress-fill" id="monthProgressBar" style="width:{{ $mesPct }}%;background:linear-gradient(90deg,#8b5cf6,#a78bfa)"></div></div>
             </div>
