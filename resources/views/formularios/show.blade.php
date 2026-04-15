@@ -242,26 +242,18 @@
                         @if($opciones->isEmpty())
                             <p style="font-size:.8rem;color:var(--text-muted);padding:.25rem 0;margin:0;">Sin opciones registradas.</p>
                         @else
-                            <div style="display:flex;flex-direction:column;gap:.35rem;">
+                            <div style="display:flex;flex-direction:column;gap:.35rem;" id="dyn-list-{{ $field['id'] }}">
                                 @foreach($opciones as $opcion)
                                 <div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .65rem;background:rgba(255,255,255,.03);border:1px solid var(--surface-border);border-radius:8px;" id="opcion-row-{{ $opcion->id }}">
-                                    {{-- Inline edit form --}}
-                                    <form method="POST" action="{{ route('campo-opciones.update', $opcion) }}" style="flex:1;display:flex;align-items:center;gap:.5rem;">
-                                        @csrf
-                                        @method('PATCH')
-                                        <input type="text" name="valor" value="{{ $opcion->valor }}" class="form-input" style="font-size:.82rem;padding:.3rem .55rem;flex:1;">
-                                        <button type="submit" class="icon-btn" style="width:26px;height:26px;flex-shrink:0;" title="Guardar cambio">
-                                            <i class="bi bi-check-lg" style="font-size:.8rem;color:#10b981"></i>
-                                        </button>
-                                    </form>
-                                    {{-- Delete form --}}
-                                    <form method="POST" action="{{ route('campo-opciones.destroy', $opcion) }}" onsubmit="return confirm('¿Eliminar esta opción?')">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="icon-btn danger" style="width:26px;height:26px;flex-shrink:0;" title="Eliminar">
-                                            <i class="bi bi-trash3" style="font-size:.7rem"></i>
-                                        </button>
-                                    </form>
+                                    <input type="text" value="{{ $opcion->valor }}" class="form-input" style="font-size:.82rem;padding:.3rem .55rem;flex:1;" id="opcion-input-{{ $opcion->id }}">
+                                    <button type="button" class="icon-btn" style="width:26px;height:26px;flex-shrink:0;" title="Guardar cambio"
+                                        onclick="saveOpcion({{ $opcion->id }}, this)">
+                                        <i class="bi bi-check-lg" style="font-size:.8rem;color:#10b981"></i>
+                                    </button>
+                                    <button type="button" class="icon-btn danger" style="width:26px;height:26px;flex-shrink:0;" title="Eliminar"
+                                        onclick="deleteOpcion({{ $opcion->id }}, this)">
+                                        <i class="bi bi-trash3" style="font-size:.7rem"></i>
+                                    </button>
                                 </div>
                                 @endforeach
                             </div>
@@ -993,6 +985,70 @@ function confirmBulkDelete() {
     });
     document.body.appendChild(form);
     form.submit();
+}
+
+// ===== Dynamic options AJAX =====
+const _csrf = '{{ csrf_token() }}';
+
+function saveOpcion(id, btn) {
+    const input = document.getElementById('opcion-input-' + id);
+    const valor = input.value.trim();
+    if (!valor) return;
+
+    btn.style.opacity = '.4';
+    btn.disabled = true;
+
+    fetch('/campo-opciones/' + id, {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json','X-CSRF-TOKEN': _csrf,'Accept':'application/json'},
+        body: JSON.stringify({valor})
+    })
+    .then(r => { if (!r.ok) throw r; return r.json(); })
+    .then(data => {
+        if (data.merged) {
+            // Option was merged into existing — remove this row
+            const row = document.getElementById('opcion-row-' + id);
+            row.style.transition = 'opacity .3s';
+            row.style.opacity = '0';
+            setTimeout(() => row.remove(), 300);
+        } else {
+            // Flash green border briefly
+            input.style.borderColor = '#10b981';
+            setTimeout(() => input.style.borderColor = '', 1200);
+        }
+        if (typeof showToast === 'function') showToast(data.message, 'success');
+    })
+    .catch(async err => {
+        let msg = 'Error al guardar';
+        try { const j = await err.json(); msg = j.message || msg; } catch(e) {}
+        if (typeof showToast === 'function') showToast(msg, 'error');
+        else alert(msg);
+    })
+    .finally(() => { btn.style.opacity = '1'; btn.disabled = false; });
+}
+
+function deleteOpcion(id, btn) {
+    if (!confirm('¿Eliminar esta opción?')) return;
+
+    btn.style.opacity = '.4';
+    btn.disabled = true;
+
+    fetch('/campo-opciones/' + id, {
+        method: 'DELETE',
+        headers: {'X-CSRF-TOKEN': _csrf,'Accept':'application/json'}
+    })
+    .then(r => { if (!r.ok) throw r; return r.json(); })
+    .then(() => {
+        const row = document.getElementById('opcion-row-' + id);
+        row.style.transition = 'opacity .3s';
+        row.style.opacity = '0';
+        setTimeout(() => row.remove(), 300);
+        if (typeof showToast === 'function') showToast('Opción eliminada', 'success');
+    })
+    .catch(() => {
+        btn.style.opacity = '1'; btn.disabled = false;
+        if (typeof showToast === 'function') showToast('Error al eliminar', 'error');
+    });
 }
 </script>
 @endpush

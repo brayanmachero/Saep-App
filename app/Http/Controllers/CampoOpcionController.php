@@ -73,7 +73,9 @@ class CampoOpcionController extends Controller
             return back();
         }
 
-        DB::transaction(function () use ($opcion, $antiguo, $nuevo) {
+        $merged = false;
+
+        DB::transaction(function () use ($opcion, $antiguo, $nuevo, &$merged) {
             // Update all responses that have the old value in this field
             $respuestas = Respuesta::where('formulario_id', $opcion->formulario_id)
                 ->whereNotNull('datos_json')
@@ -97,22 +99,32 @@ class CampoOpcionController extends Controller
             if ($existente) {
                 // Merge: delete the old option since target already exists
                 $opcion->delete();
+                $merged = true;
             } else {
                 // Simple rename
                 $opcion->update(['valor' => $nuevo]);
             }
         });
 
-        $msg = "Opción actualizada: \"$antiguo\" → \"$nuevo\". Respuestas existentes actualizadas.";
-        return back()->with('success', $msg);
+        $msg = "\"$antiguo\" → \"$nuevo\"" . ($merged ? ' (fusionada)' : '');
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'merged' => $merged, 'valor' => $nuevo, 'message' => $msg]);
+        }
+
+        return back()->with('success', "Opción actualizada: $msg");
     }
 
     /**
      * Delete an option (admin).
      */
-    public function destroy(FormularioCampoOpcion $opcion)
+    public function destroy(Request $request, FormularioCampoOpcion $opcion)
     {
         $opcion->delete();
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true]);
+        }
 
         return back()->with('success', 'Opción eliminada correctamente.');
     }
