@@ -240,11 +240,30 @@ class StopWeeklyReport extends Command
     {
         $currentYear  = (int) ($baseFilters['anio'] ?? now()->format('Y'));
         $prevYear     = $currentYear - 1;
-        $currentMonth = $baseFilters['mes'] ?? now()->format('Y-m');
-        $monthNum     = (int) substr($currentMonth, 5, 2); // e.g. 04
+
+        // Determine the comparison period from filters (fecha_desde/fecha_hasta > mes > now)
+        $fechaDesde = $baseFilters['fecha_desde'] ?? null;
+        $fechaHasta = $baseFilters['fecha_hasta'] ?? null;
+
+        if ($fechaDesde && $fechaHasta) {
+            $startDate = \Carbon\Carbon::parse($fechaDesde);
+            $endDate   = \Carbon\Carbon::parse($fechaHasta);
+            $currentYear  = (int) $startDate->format('Y');
+            $prevYear     = $currentYear - 1;
+            $monthStart   = (int) $startDate->format('m');
+            $monthEnd     = (int) $endDate->format('m');
+            $prevFechaDesde = $startDate->copy()->subYear()->format('Y-m-d');
+            $prevFechaHasta = $endDate->copy()->subYear()->format('Y-m-d');
+            $useRange = true;
+        } else {
+            $currentMonth = $baseFilters['mes'] ?? now()->format('Y-m');
+            $monthStart   = (int) substr($currentMonth, 5, 2);
+            $monthEnd     = $monthStart;
+            $useRange = false;
+        }
 
         // Previous year same month key (e.g. 2025-04)
-        $prevYearMonth = $prevYear . '-' . str_pad($monthNum, 2, '0', STR_PAD_LEFT);
+        $prevYearMonth = $prevYear . '-' . str_pad($monthStart, 2, '0', STR_PAD_LEFT);
 
         // Carry over non-date filters (empresa_observado, empresa_observador, centro, etc.)
         $carryFilters = array_filter([
@@ -258,30 +277,51 @@ class StopWeeklyReport extends Command
         try {
             // YTD current year
             $ytdData = $drive->getFilteredAnalytics(array_merge(['anio' => (string) $currentYear], $carryFilters)) ?? [];
-            // Previous year full
-            $prevData = $drive->getFilteredAnalytics(array_merge(['anio' => (string) $prevYear], $carryFilters)) ?? [];
+
+            // Previous year: if using date range, fetch the same date range shifted -1 year
+            if ($useRange) {
+                $prevData = $drive->getFilteredAnalytics(array_merge([
+                    'fecha_desde' => $prevFechaDesde,
+                    'fecha_hasta' => $prevFechaHasta,
+                ], $carryFilters)) ?? [];
+                $prevFullYear = $drive->getFilteredAnalytics(array_merge(['anio' => (string) $prevYear], $carryFilters)) ?? [];
+            } else {
+                $prevData = $drive->getFilteredAnalytics(array_merge(['anio' => (string) $prevYear], $carryFilters)) ?? [];
+                $prevFullYear = $prevData;
+            }
         } catch (\Throwable $e) {
             Log::warning('stop:weekly-report: error obteniendo datos comparativos', ['error' => $e->getMessage()]);
             return [];
         }
 
         $ytdClasif  = $ytdData['clasificacion'] ?? [];
-        $prevClasif = $prevData['clasificacion'] ?? [];
+        $prevClasif = $prevFullYear['clasificacion'] ?? [];
 
-        // Previous year same month from byMonth
-        $prevMonthTotal = ($prevData['byMonth'][$prevYearMonth] ?? 0);
-        $prevMonthNeg   = ($prevData['byMonthNeg'][$prevYearMonth] ?? 0);
-        $prevMonthPos   = ($prevData['byMonthPos'][$prevYearMonth] ?? 0);
+        // Previous year same period totals
+        $prevByMonth    = $prevFullYear['byMonth'] ?? [];
+        $prevByMonthNeg = $prevFullYear['byMonthNeg'] ?? [];
+        $prevByMonthPos = $prevFullYear['byMonthPos'] ?? [];
 
-        // Previous year YTD (Jan to same month)
+        if ($useRange) {
+            $prevMonthTotal = $prevData['totalRows'] ?? 0;
+            $prevClasifPeriod = $prevData['clasificacion'] ?? [];
+            $prevMonthNeg = $prevClasifPeriod['Negativa'] ?? $prevClasifPeriod['negativa'] ?? 0;
+            $prevMonthPos = $prevClasifPeriod['Positiva'] ?? $prevClasifPeriod['positiva'] ?? 0;
+        } else {
+            $prevMonthTotal = ($prevByMonth[$prevYearMonth] ?? 0);
+            $prevMonthNeg   = ($prevByMonthNeg[$prevYearMonth] ?? 0);
+            $prevMonthPos   = ($prevByMonthPos[$prevYearMonth] ?? 0);
+        }
+
+        // Previous year YTD (Jan to last month of current period)
         $prevYtdTotal = 0;
         $prevYtdPos = 0;
         $prevYtdNeg = 0;
-        for ($m = 1; $m <= $monthNum; $m++) {
+        for ($m = 1; $m <= $monthEnd; $m++) {
             $key = $prevYear . '-' . str_pad($m, 2, '0', STR_PAD_LEFT);
-            $prevYtdTotal += ($prevData['byMonth'][$key] ?? 0);
-            $prevYtdPos   += ($prevData['byMonthPos'][$key] ?? 0);
-            $prevYtdNeg   += ($prevData['byMonthNeg'][$key] ?? 0);
+            $prevYtdTotal += ($prevByMonth[$key] ?? 0);
+            $prevYtdPos   += ($prevByMonthPos[$key] ?? 0);
+            $prevYtdNeg   += ($prevByMonthNeg[$key] ?? 0);
         }
 
         return [

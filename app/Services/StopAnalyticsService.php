@@ -504,8 +504,28 @@ class StopAnalyticsService
     {
         $currentYear  = (int) ($baseFilters['anio'] ?? now()->format('Y'));
         $prevYear     = $currentYear - 1;
-        $currentMonth = $baseFilters['mes'] ?? now()->format('Y-m');
-        $monthNum     = (int) substr($currentMonth, 5, 2);
+
+        // Determine the comparison period from filters (fecha_desde/fecha_hasta > mes > now)
+        $fechaDesde = $baseFilters['fecha_desde'] ?? null;
+        $fechaHasta = $baseFilters['fecha_hasta'] ?? null;
+
+        if ($fechaDesde && $fechaHasta) {
+            // Date range filter: derive months to compare from the previous year
+            $startDate = \Carbon\Carbon::parse($fechaDesde);
+            $endDate   = \Carbon\Carbon::parse($fechaHasta);
+            $currentYear  = (int) $startDate->format('Y');
+            $prevYear     = $currentYear - 1;
+            $monthStart   = (int) $startDate->format('m');
+            $monthEnd     = (int) $endDate->format('m');
+            $prevFechaDesde = $startDate->copy()->subYear()->format('Y-m-d');
+            $prevFechaHasta = $endDate->copy()->subYear()->format('Y-m-d');
+            $useRange = true;
+        } else {
+            $currentMonth = $baseFilters['mes'] ?? now()->format('Y-m');
+            $monthStart   = (int) substr($currentMonth, 5, 2);
+            $monthEnd     = $monthStart;
+            $useRange = false;
+        }
 
         // Carry over non-date filters
         $carryFilters = array_filter([
@@ -518,25 +538,48 @@ class StopAnalyticsService
 
         try {
             $ytdData  = $this->getFilteredAnalytics(array_merge(['anio' => (string) $currentYear], $carryFilters));
-            $prevData = $this->getFilteredAnalytics(array_merge(['anio' => (string) $prevYear], $carryFilters));
+
+            // Previous year: if using date range, fetch the same date range shifted -1 year
+            if ($useRange) {
+                $prevData = $this->getFilteredAnalytics(array_merge([
+                    'fecha_desde' => $prevFechaDesde,
+                    'fecha_hasta' => $prevFechaHasta,
+                ], $carryFilters));
+                $prevFullYear = $this->getFilteredAnalytics(array_merge(['anio' => (string) $prevYear], $carryFilters));
+            } else {
+                $prevData = $this->getFilteredAnalytics(array_merge(['anio' => (string) $prevYear], $carryFilters));
+                $prevFullYear = $prevData;
+            }
         } catch (\Throwable $e) {
             return [];
         }
 
         $ytdClasif  = $ytdData['clasificacion'] ?? [];
-        $prevClasif = $prevData['clasificacion'] ?? [];
+        $prevClasif = $prevFullYear['clasificacion'] ?? [];
 
-        $prevByMonth    = $prevData['byMonth'] ?? [];
-        $prevByMonthNeg = $prevData['byMonthNeg'] ?? [];
-        $prevByMonthPos = $prevData['byMonthPos'] ?? [];
+        $prevByMonth    = $prevFullYear['byMonth'] ?? [];
+        $prevByMonthNeg = $prevFullYear['byMonthNeg'] ?? [];
+        $prevByMonthPos = $prevFullYear['byMonthPos'] ?? [];
 
-        $prevYearMonth = $prevYear . '-' . str_pad($monthNum, 2, '0', STR_PAD_LEFT);
+        // Same period previous year totals
+        if ($useRange) {
+            // Use the direct query result for the shifted date range
+            $sameMonthTotal = $prevData['totalRows'] ?? 0;
+            $prevClasifPeriod = $prevData['clasificacion'] ?? [];
+            $sameMonthPos = $prevClasifPeriod['Positiva'] ?? $prevClasifPeriod['positiva'] ?? 0;
+            $sameMonthNeg = $prevClasifPeriod['Negativa'] ?? $prevClasifPeriod['negativa'] ?? 0;
+        } else {
+            $prevYearMonth = $prevYear . '-' . str_pad($monthStart, 2, '0', STR_PAD_LEFT);
+            $sameMonthTotal = $prevByMonth[$prevYearMonth] ?? 0;
+            $sameMonthPos   = $prevByMonthPos[$prevYearMonth] ?? 0;
+            $sameMonthNeg   = $prevByMonthNeg[$prevYearMonth] ?? 0;
+        }
 
-        // Previous year YTD (Jan to same month)
+        // Previous year YTD (Jan to last month of current period)
         $prevYtdTotal = 0;
         $prevYtdPos = 0;
         $prevYtdNeg = 0;
-        for ($m = 1; $m <= $monthNum; $m++) {
+        for ($m = 1; $m <= $monthEnd; $m++) {
             $key = $prevYear . '-' . str_pad($m, 2, '0', STR_PAD_LEFT);
             $prevYtdTotal += ($prevByMonth[$key] ?? 0);
             $prevYtdPos   += ($prevByMonthPos[$key] ?? 0);
@@ -559,9 +602,9 @@ class StopAnalyticsService
                 'total'          => $prevData['totalRows'] ?? 0,
                 'pos'            => $prevClasif['Positiva'] ?? $prevClasif['positiva'] ?? 0,
                 'neg'            => $prevClasif['Negativa'] ?? $prevClasif['negativa'] ?? 0,
-                'sameMonthTotal' => $prevByMonth[$prevYearMonth] ?? 0,
-                'sameMonthPos'   => $prevByMonthPos[$prevYearMonth] ?? 0,
-                'sameMonthNeg'   => $prevByMonthNeg[$prevYearMonth] ?? 0,
+                'sameMonthTotal' => $sameMonthTotal,
+                'sameMonthPos'   => $sameMonthPos,
+                'sameMonthNeg'   => $sameMonthNeg,
                 'ytdTotal'       => $prevYtdTotal,
                 'ytdPos'         => $prevYtdPos,
                 'ytdNeg'         => $prevYtdNeg,

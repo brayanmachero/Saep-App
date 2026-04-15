@@ -299,7 +299,7 @@
                     <tr>
                         <th>Métrica</th>
                         <th style="text-align:center">Periodo Actual</th>
-                        <th style="text-align:center">Mismo Mes {{ $prevYearLabel }}</th>
+                        <th style="text-align:center">Mismo Periodo {{ $prevYearLabel }}</th>
                         <th style="text-align:center">Var.</th>
                         <th style="text-align:center">Acum. {{ date('Y') }}</th>
                         <th style="text-align:center">Acum. {{ $prevYearLabel }}</th>
