@@ -60,7 +60,7 @@
     @else
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1.25rem;">
             @foreach($tableros as $tablero)
-            <a href="{{ route('kanban.show', $tablero) }}" class="tablero-card" style="display:block;padding:1.25rem;text-decoration:none;color:inherit;transition:transform .15s,box-shadow .15s;cursor:pointer;position:relative;background:var(--card-bg,#fff);border:1px solid var(--border-color);border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.06);" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,.1)';" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,0,0,.06)';">
+            <a href="{{ route('kanban.show', $tablero) }}" class="tablero-card" style="display:block;padding:1.25rem;text-decoration:none;color:inherit;transition:box-shadow .15s;cursor:pointer;position:relative;background:var(--card-bg,#fff);border:1px solid var(--border-color);border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.06);" onmouseover="this.style.boxShadow='0 8px 25px rgba(0,0,0,.1)';this.style.borderColor='var(--primary-color)'" onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,.06)';this.style.borderColor='var(--border-color)'">
 
                 {{-- Menú de acciones (tres puntos) --}}
                 <div class="tablero-menu-wrap" style="position:absolute;top:.6rem;right:.6rem;z-index:10;" onclick="event.stopPropagation()">
@@ -189,31 +189,45 @@
 function toggleTableroMenu(id) {
     // Close all other menus first
     document.querySelectorAll('.tablero-dropdown').forEach(d => {
-        if (d.id !== 'tablero-menu-' + id) d.style.display = 'none';
+        if (d.id !== 'tablero-menu-' + id) {
+            d.style.display = 'none';
+            // Return to original parent if moved to body
+            if (d._originalParent && d.parentElement === document.body) {
+                d._originalParent.appendChild(d);
+            }
+        }
     });
     const menu = document.getElementById('tablero-menu-' + id);
     if (menu.style.display === 'none' || !menu.style.display) {
-        // Position fixed relative to button
         const btn = menu.closest('.tablero-menu-wrap').querySelector('.tablero-menu-btn');
+        // Save original parent and move to body so it escapes any transform/overflow
+        if (!menu._originalParent) menu._originalParent = menu.parentElement;
+        document.body.appendChild(menu);
         const rect = btn.getBoundingClientRect();
         menu.style.display = 'block';
-        // Position below the button, aligned right
         menu.style.top = (rect.bottom + 4) + 'px';
         menu.style.left = 'auto';
         menu.style.right = (window.innerWidth - rect.right) + 'px';
     } else {
         menu.style.display = 'none';
+        if (menu._originalParent) menu._originalParent.appendChild(menu);
     }
+}
+function closeAllMenus() {
+    document.querySelectorAll('.tablero-dropdown').forEach(d => {
+        d.style.display = 'none';
+        if (d._originalParent && d.parentElement === document.body) {
+            d._originalParent.appendChild(d);
+        }
+    });
 }
 // Close menus on click outside
 document.addEventListener('click', function(e) {
-    if (!e.target.closest('.tablero-menu-wrap')) {
-        document.querySelectorAll('.tablero-dropdown').forEach(d => d.style.display = 'none');
+    if (!e.target.closest('.tablero-menu-wrap') && !e.target.closest('.tablero-dropdown')) {
+        closeAllMenus();
     }
 });
 // Close menus on scroll
-window.addEventListener('scroll', function() {
-    document.querySelectorAll('.tablero-dropdown').forEach(d => d.style.display = 'none');
-}, true);
+window.addEventListener('scroll', closeAllMenus, true);
 </script>
 @endsection
