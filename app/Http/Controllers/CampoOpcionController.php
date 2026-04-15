@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\FormularioCampoOpcion;
+use App\Models\Respuesta;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CampoOpcionController extends Controller
 {
@@ -55,6 +57,8 @@ class CampoOpcionController extends Controller
 
     /**
      * Update an option value (admin).
+     * If the target value already exists, merges both options.
+     * Also updates all existing responses that reference the old value.
      */
     public function update(Request $request, FormularioCampoOpcion $opcion)
     {
@@ -63,21 +67,44 @@ class CampoOpcionController extends Controller
         ]);
 
         $nuevo = trim($request->valor);
+        $antiguo = $opcion->valor;
 
-        // Check for duplicates in the same field
-        $existe = FormularioCampoOpcion::where('formulario_id', $opcion->formulario_id)
-            ->where('campo_id', $opcion->campo_id)
-            ->where('valor', $nuevo)
-            ->where('id', '!=', $opcion->id)
-            ->exists();
-
-        if ($existe) {
-            return back()->with('error', 'Ya existe una opción con ese valor.');
+        if ($nuevo === $antiguo) {
+            return back();
         }
 
-        $opcion->update(['valor' => $nuevo]);
+        DB::transaction(function () use ($opcion, $antiguo, $nuevo) {
+            // Update all responses that have the old value in this field
+            $respuestas = Respuesta::where('formulario_id', $opcion->formulario_id)
+                ->whereNotNull('datos_json')
+                ->get();
 
-        return back()->with('success', 'Opción actualizada correctamente.');
+            foreach ($respuestas as $resp) {
+                $datos = json_decode($resp->datos_json, true);
+                if (is_array($datos) && isset($datos[$opcion->campo_id]) && $datos[$opcion->campo_id] === $antiguo) {
+                    $datos[$opcion->campo_id] = $nuevo;
+                    $resp->update(['datos_json' => json_encode($datos, JSON_UNESCAPED_UNICODE)]);
+                }
+            }
+
+            // Check if the target value already exists as an option (merge case)
+            $existente = FormularioCampoOpcion::where('formulario_id', $opcion->formulario_id)
+                ->where('campo_id', $opcion->campo_id)
+                ->where('valor', $nuevo)
+                ->where('id', '!=', $opcion->id)
+                ->first();
+
+            if ($existente) {
+                // Merge: delete the old option since target already exists
+                $opcion->delete();
+            } else {
+                // Simple rename
+                $opcion->update(['valor' => $nuevo]);
+            }
+        });
+
+        $msg = "Opción actualizada: \"$antiguo\" → \"$nuevo\". Respuestas existentes actualizadas.";
+        return back()->with('success', $msg);
     }
 
     /**
