@@ -140,10 +140,11 @@ class CartaGanttController extends Controller
         for ($m = 1; $m <= 12; $m++) {
             $prog = 0; $real = 0;
             foreach ($todasActividades as $act) {
+                $cantProg = max(1, (int) $act->cantidad_programada);
                 foreach ($act->seguimiento as $seg) {
                     if ($seg->mes === $m && $seg->programado) {
-                        $prog += $act->cantidad_programada;
-                        $real += $seg->cantidad_realizada;
+                        $prog += $cantProg;
+                        $real += $seg->realizado ? $cantProg : ((int) $seg->cantidad_realizada > 0 ? (int) $seg->cantidad_realizada : 0);
                     }
                 }
             }

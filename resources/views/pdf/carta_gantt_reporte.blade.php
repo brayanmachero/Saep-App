@@ -561,8 +561,9 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
         <tbody>
             @foreach($vencidas as $act)
             @php
-                $actProg = $act->seguimiento->where('programado', true)->sum(fn($s) => $act->cantidad_programada);
-                $actReal = $act->seguimiento->sum('cantidad_realizada');
+                $cantProg = max(1, (int) $act->cantidad_programada);
+                $actProg = $act->seguimiento->where('programado', true)->count() * $cantProg;
+                $actReal = $act->seguimiento->where('programado', true)->sum(fn($s) => $s->realizado ? $cantProg : ((int) $s->cantidad_realizada > 0 ? (int) $s->cantidad_realizada : 0));
                 $actPct  = $actProg > 0 ? round(($actReal / $actProg) * 100) : 0;
             @endphp
             <tr>
@@ -646,8 +647,9 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
             @foreach($cartaGantt->categorias->sortBy('orden') as $cat)
                 @foreach($cat->actividades->sortBy('orden') as $act)
                 @php
-                    $actProg = $act->seguimiento->where('programado', true)->sum(fn($s) => $act->cantidad_programada);
-                    $actReal = $act->seguimiento->sum('cantidad_realizada');
+                    $cantProg = max(1, (int) $act->cantidad_programada);
+                    $actProg = $act->seguimiento->where('programado', true)->count() * $cantProg;
+                    $actReal = $act->seguimiento->where('programado', true)->sum(fn($s) => $s->realizado ? $cantProg : ((int) $s->cantidad_realizada > 0 ? (int) $s->cantidad_realizada : 0));
                     $actPct  = $actProg > 0 ? round(($actReal / $actProg) * 100) : 0;
                     $fillCls = $act->estado === 'COMPLETADA' ? 'fill-green' : ($actPct >= 50 ? 'fill-blue' : ($actPct > 0 ? 'fill-orange' : 'fill-gray'));
                     $estadoCls = match($act->estado) {

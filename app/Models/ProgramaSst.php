@@ -49,7 +49,7 @@ class ProgramaSst extends Model
         foreach ($seguimientos as $s) {
             $cant = max(1, (int) ($s->actividad->cantidad_programada ?? 1));
             $totalProg += $cant;
-            $totalReal += (int) ($s->cantidad_realizada ?? ($s->realizado ? $cant : 0));
+            $totalReal += $s->realizado ? $cant : ((int) $s->cantidad_realizada > 0 ? (int) $s->cantidad_realizada : 0);
         }
         return $totalProg > 0 ? (int) round($totalReal / $totalProg * 100) : 0;
     }
