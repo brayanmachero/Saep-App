@@ -37,6 +37,11 @@ class KanbanTarea extends Model
         return $this->belongsTo(User::class, 'asignado_a');
     }
 
+    public function asignados()
+    {
+        return $this->belongsToMany(User::class, 'kanban_tarea_asignados', 'tarea_id', 'user_id')->withTimestamps();
+    }
+
     public function creador()
     {
         return $this->belongsTo(User::class, 'creado_por');

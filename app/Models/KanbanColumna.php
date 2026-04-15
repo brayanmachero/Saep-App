@@ -9,7 +9,11 @@ class KanbanColumna extends Model
     protected $table = 'kanban_columnas';
 
     protected $fillable = [
-        'tablero_id', 'nombre', 'color', 'orden',
+        'tablero_id', 'nombre', 'color', 'orden', 'es_completada',
+    ];
+
+    protected $casts = [
+        'es_completada' => 'boolean',
     ];
 
     public function tablero()

@@ -449,8 +449,8 @@ body.dark-mode .badge.danger { background: rgba(239, 68, 68, 0.2); color: #f8717
 /* ── Dark mode: form inputs & selects ── */
 body.dark-mode .form-input,
 body.dark-mode .form-control {
-    background: rgba(31, 41, 55, 0.8);
-    border-color: rgba(75, 85, 99, 0.6);
+    background: #1f2937;
+    border-color: #4b5563;
     color: #f9fafb;
 }
 body.dark-mode .form-input:focus,
@@ -520,7 +520,7 @@ body.dark-mode .ds-dropdown .ds-option:hover {
     padding: 0.72rem 1rem;
     border-radius: 10px;
     border: 1px solid var(--surface-border);
-    background: rgba(255,255,255,0.04);
+    background: #ffffff;
     color: var(--text-main);
     font-size: 0.9rem;
     font-family: inherit;

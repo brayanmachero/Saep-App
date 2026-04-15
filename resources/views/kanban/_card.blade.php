@@ -4,8 +4,9 @@
     $pColor = $pColors[$tarea->prioridad] ?? '#6b7280';
     $clProgreso = $tarea->checklistProgreso;
     $coverImage = $tarea->adjuntos->first(fn ($a) => $a->esImagen());
+    $esCompletada = $tarea->columna?->es_completada ?? false;
 @endphp
-<div class="kanban-card" data-tarea-id="{{ $tarea->id }}" onclick="abrirDetalle({{ $tarea->id }})" style="background:var(--card-bg);border:1px solid var(--border-color);border-left:3px solid {{ $pColor }};border-radius:10px;padding:0;margin-bottom:.6rem;cursor:grab;transition:box-shadow .2s,transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.08);" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.12)';this.style.transform='translateY(-1px)';" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,.08)';this.style.transform='';">
+<div class="kanban-card" data-tarea-id="{{ $tarea->id }}" onclick="abrirDetalle({{ $tarea->id }})" style="background:var(--card-bg);border:1px solid var(--border-color);border-left:3px solid {{ $esCompletada ? '#10b981' : $pColor }};border-radius:10px;padding:0;margin-bottom:.6rem;cursor:grab;transition:box-shadow .2s,transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.08);{{ $esCompletada ? 'opacity:.7;' : '' }}" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.12)';this.style.transform='translateY(-1px)';" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,.08)';this.style.transform='';">
 
     {{-- Cover Image --}}
     @if($coverImage)
@@ -25,7 +26,10 @@
         @endif
 
         {{-- Título --}}
-        <div style="font-size:.84rem;font-weight:600;color:var(--text-primary);line-height:1.35;margin-bottom:.3rem;">{{ $tarea->titulo }}</div>
+        <div style="font-size:.84rem;font-weight:600;color:var(--text-primary);line-height:1.35;margin-bottom:.3rem;{{ $esCompletada ? 'text-decoration:line-through;' : '' }}">
+            @if($esCompletada)<i class="bi bi-check-circle-fill" style="color:#10b981;margin-right:.25rem;font-size:.75rem;"></i>@endif
+            {{ $tarea->titulo }}
+        </div>
 
         {{-- Descripción (preview) --}}
         @if($tarea->descripcion)
@@ -67,12 +71,19 @@
                 @endif
             </div>
 
-            {{-- Avatar asignado --}}
-            @if($tarea->asignado)
-            <span title="{{ $tarea->asignado->name }}" style="background:var(--primary-color);color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;">
-                {{ strtoupper(substr($tarea->asignado->name, 0, 2)) }}
-            </span>
-            @endif
+            {{-- Avatar asignados (multi) --}}
+            <div style="display:flex;align-items:center;">
+                @foreach($tarea->asignados->take(3) as $asig)
+                <span title="{{ $asig->name }}" style="background:var(--primary-color);color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;margin-left:{{ $loop->first ? '0' : '-6px' }};border:2px solid var(--card-bg);position:relative;z-index:{{ 10 - $loop->index }};">
+                    {{ strtoupper(substr($asig->name, 0, 2)) }}
+                </span>
+                @endforeach
+                @if($tarea->asignados->count() > 3)
+                <span style="background:var(--border-color);color:var(--text-muted);width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;margin-left:-6px;border:2px solid var(--card-bg);position:relative;z-index:6;">
+                    +{{ $tarea->asignados->count() - 3 }}
+                </span>
+                @endif
+            </div>
         </div>
     </div>
 </div>

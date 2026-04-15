@@ -111,17 +111,19 @@
             {{-- RIGHT: Sidebar (metadata, etiquetas, actividad) --}}
             <div class="modal-sidebar" style="width:240px;flex-shrink:0;padding:1.25rem .85rem;background:var(--card-bg);overflow-y:auto;">
 
-                {{-- Miembros / Asignado --}}
+                {{-- Miembros / Asignados (multi) --}}
                 <div style="margin-bottom:1rem;">
                     <label style="font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:.35rem;">
-                        <i class="bi bi-person"></i> Asignado
+                        <i class="bi bi-people"></i> Asignados
                     </label>
-                    <select id="detalle-asignado" class="form-input" style="font-size:.8rem;padding:.35rem .5rem;">
-                        <option value="">— Sin asignar —</option>
+                    <div id="detalle-asignados-container" style="max-height:130px;overflow-y:auto;border:1px solid var(--surface-border);border-radius:8px;padding:.3rem;">
                         @foreach($usuarios as $u)
-                            <option value="{{ $u->id }}">{{ $u->name }}</option>
+                        <label style="display:flex;align-items:center;gap:.35rem;padding:.15rem .25rem;font-size:.78rem;cursor:pointer;border-radius:5px;" onmouseover="this.style.background='var(--hover-bg)'" onmouseout="this.style.background=''">
+                            <input type="checkbox" class="detalle-asignado-cb" value="{{ $u->id }}" style="width:13px;height:13px;">
+                            <span>{{ $u->name }}</span>
+                        </label>
                         @endforeach
-                    </select>
+                    </div>
                 </div>
 
                 {{-- Prioridad --}}
@@ -225,7 +227,13 @@ function abrirDetalle(tareaId) {
             document.getElementById('detalle-titulo').value = data.titulo;
             document.getElementById('detalle-descripcion').value = data.descripcion || '';
             document.getElementById('detalle-prioridad').value = data.prioridad;
-            document.getElementById('detalle-asignado').value = data.asignado_a || '';
+
+            // Multi-assignees: check the right checkboxes
+            const asigIds = (data.asignados || []).map(a => a.id);
+            document.querySelectorAll('.detalle-asignado-cb').forEach(cb => {
+                cb.checked = asigIds.includes(parseInt(cb.value));
+            });
+
             document.getElementById('detalle-fecha-inicio').value = data.fecha_inicio || '';
             document.getElementById('detalle-fecha-vencimiento').value = data.fecha_vencimiento || '';
             document.getElementById('detalle-centro-costo').value = data.centro_costo_id || '';
@@ -276,12 +284,13 @@ function cerrarDetalle() {
 function guardarDetalle() {
     const id = document.getElementById('detalle-tarea-id').value;
     const etiquetas = [...document.querySelectorAll('.detalle-etiqueta-cb:checked')].map(cb => cb.value);
+    const asignados = [...document.querySelectorAll('.detalle-asignado-cb:checked')].map(cb => cb.value);
 
     const body = {
         titulo: document.getElementById('detalle-titulo').value,
         descripcion: document.getElementById('detalle-descripcion').value || null,
         prioridad: document.getElementById('detalle-prioridad').value,
-        asignado_a: document.getElementById('detalle-asignado').value || null,
+        asignados: asignados,
         fecha_inicio: document.getElementById('detalle-fecha-inicio').value || null,
         fecha_vencimiento: document.getElementById('detalle-fecha-vencimiento').value || null,
         centro_costo_id: document.getElementById('detalle-centro-costo').value || null,

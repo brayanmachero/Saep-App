@@ -35,7 +35,7 @@ class KanbanController extends Controller
             ->get();
 
         // Mis tareas (de todos los tableros visibles)
-        $misTareasCount = KanbanTarea::where('asignado_a', auth()->id())
+        $misTareasCount = KanbanTarea::whereHas('asignados', fn ($q) => $q->where('user_id', auth()->id()))
             ->whereHas('tablero', fn ($q) => $q->where('activo', true)->visiblesParaUsuario())
             ->count();
 
@@ -81,10 +81,10 @@ class KanbanController extends Controller
             'columnas.tareas' => function ($q) {
                 $q->where('archivada', false);
                 // Aplicar filtros a las tareas eager-loaded
-                if (request('filtro_asignado'))    $q->where('asignado_a', request('filtro_asignado'));
+                if (request('filtro_asignado'))    $q->whereHas('asignados', fn ($a) => $a->where('user_id', request('filtro_asignado')));
                 if (request('filtro_prioridad'))   $q->where('prioridad', request('filtro_prioridad'));
                 if (request('filtro_etiqueta'))     $q->whereHas('etiquetas', fn ($e) => $e->where('kanban_etiquetas.id', request('filtro_etiqueta')));
-                $q->with(['asignado', 'etiquetas', 'comentarios', 'adjuntos', 'checklistItems']);
+                $q->with(['asignados', 'etiquetas', 'comentarios', 'adjuntos', 'checklistItems']);
             },
             'etiquetas',
             'centroCosto',
@@ -138,6 +138,7 @@ class KanbanController extends Controller
                 $tarea->comentarios()->delete();
                 $tarea->adjuntos()->delete();
                 $tarea->etiquetas()->detach();
+                $tarea->asignados()->detach();
                 $tarea->delete();
             }
             $col->delete();
@@ -205,6 +206,16 @@ class KanbanController extends Controller
         return back()->with('success', 'Columna eliminada.');
     }
 
+    public function toggleCompletadaColumna(KanbanColumna $columna)
+    {
+        $columna->update(['es_completada' => !$columna->es_completada]);
+
+        return response()->json([
+            'success' => true,
+            'es_completada' => $columna->es_completada,
+        ]);
+    }
+
     // =====================================================
     // TAREAS
     // =====================================================
@@ -216,7 +227,8 @@ class KanbanController extends Controller
             'descripcion'       => 'nullable|string',
             'columna_id'        => 'required|exists:kanban_columnas,id',
             'prioridad'         => 'nullable|string|in:ALTA,MEDIA,BAJA',
-            'asignado_a'        => 'nullable|exists:users,id',
+            'asignados'         => 'nullable|array',
+            'asignados.*'       => 'exists:users,id',
             'centro_costo_id'   => 'nullable|exists:centros_costo,id',
             'fecha_inicio'      => 'nullable|date',
             'fecha_vencimiento' => 'nullable|date|after_or_equal:fecha_inicio',
@@ -229,7 +241,6 @@ class KanbanController extends Controller
             'titulo'            => $request->titulo,
             'descripcion'       => $request->descripcion,
             'prioridad'         => $request->prioridad ?? 'MEDIA',
-            'asignado_a'        => $request->asignado_a,
             'creado_por'        => auth()->id(),
             'centro_costo_id'   => $request->centro_costo_id,
             'fecha_inicio'      => $request->fecha_inicio,
@@ -237,29 +248,35 @@ class KanbanController extends Controller
             'orden'             => KanbanTarea::where('columna_id', $request->columna_id)->max('orden') + 1,
         ]);
 
+        // Multi-assignee sync
+        $asignadoIds = $request->asignados ?? [];
+        if (!empty($asignadoIds)) {
+            $tarea->asignados()->sync($asignadoIds);
+        }
+
         if ($request->etiquetas) {
             $tarea->etiquetas()->sync($request->etiquetas);
         }
 
         KanbanActividadLog::registrar($kanban->id, $tarea->id, 'created', "Tarea «{$tarea->titulo}» creada");
 
-        if ($tarea->asignado_a) {
+        // Notificar a los asignados
+        $tarea->load(['tablero', 'columna', 'asignados']);
+        foreach ($tarea->asignados as $asignado) {
             KanbanActividadLog::registrar($kanban->id, $tarea->id, 'assigned',
-                "Tarea asignada a " . ($tarea->asignado?->name ?? 'usuario'));
-        }
-
-        // Notificar al asignado
-        if ($tarea->asignado_a && $tarea->asignado && $tarea->asignado->email) {
-            try {
-                Mail::to($tarea->asignado->email)
-                    ->send(new KanbanTareaAsignadaMail($tarea->load(['tablero', 'columna']), auth()->user()));
-            } catch (\Throwable $e) {
-                \Log::warning('Kanban: no se pudo notificar asignación', ['error' => $e->getMessage()]);
+                "Tarea asignada a {$asignado->name}");
+            if ($asignado->email) {
+                try {
+                    Mail::to($asignado->email)
+                        ->send(new KanbanTareaAsignadaMail($tarea, auth()->user()));
+                } catch (\Throwable $e) {
+                    \Log::warning('Kanban: no se pudo notificar asignación', ['error' => $e->getMessage()]);
+                }
             }
         }
 
         if ($request->wantsJson()) {
-            $tarea->load(['asignado', 'etiquetas']);
+            $tarea->load(['asignados', 'etiquetas']);
             return response()->json(['success' => true, 'tarea' => $tarea]);
         }
         return back()->with('success', 'Tarea creada.');
@@ -271,7 +288,8 @@ class KanbanController extends Controller
             'titulo'            => 'required|string|max:300',
             'descripcion'       => 'nullable|string',
             'prioridad'         => 'nullable|string|in:ALTA,MEDIA,BAJA',
-            'asignado_a'        => 'nullable|exists:users,id',
+            'asignados'         => 'nullable|array',
+            'asignados.*'       => 'exists:users,id',
             'centro_costo_id'   => 'nullable|exists:centros_costo,id',
             'fecha_inicio'      => 'nullable|date',
             'fecha_vencimiento' => 'nullable|date|after_or_equal:fecha_inicio',
@@ -279,12 +297,16 @@ class KanbanController extends Controller
             'etiquetas.*'       => 'exists:kanban_etiquetas,id',
         ]);
 
-        $oldAsignado = $tarea->asignado_a;
+        $oldAsignadoIds = $tarea->asignados->pluck('id')->toArray();
 
         $tarea->update($request->only(
-            'titulo', 'descripcion', 'prioridad', 'asignado_a',
+            'titulo', 'descripcion', 'prioridad',
             'centro_costo_id', 'fecha_inicio', 'fecha_vencimiento'
         ));
+
+        // Multi-assignee sync
+        $newAsignadoIds = $request->asignados ?? [];
+        $tarea->asignados()->sync($newAsignadoIds);
 
         if ($request->has('etiquetas')) {
             $tarea->etiquetas()->sync($request->etiquetas ?? []);
@@ -292,18 +314,20 @@ class KanbanController extends Controller
 
         KanbanActividadLog::registrar($tarea->tablero_id, $tarea->id, 'updated', "Tarea «{$tarea->titulo}» actualizada");
 
-        // Notificar si cambió el asignado
-        $newAsignado = $tarea->asignado_a;
-        if ($newAsignado && $newAsignado != $oldAsignado) {
-            KanbanActividadLog::registrar($tarea->tablero_id, $tarea->id, 'assigned',
-                "Tarea asignada a " . ($tarea->asignado?->name ?? 'usuario'));
-
-            if ($tarea->asignado?->email) {
-                try {
-                    Mail::to($tarea->asignado->email)
-                        ->send(new KanbanTareaAsignadaMail($tarea->load(['tablero', 'columna']), auth()->user()));
-                } catch (\Throwable $e) {
-                    \Log::warning('Kanban: no se pudo notificar reasignación', ['error' => $e->getMessage()]);
+        // Notificar a nuevos asignados
+        $nuevos = array_diff($newAsignadoIds, $oldAsignadoIds);
+        if (!empty($nuevos)) {
+            $tarea->load(['tablero', 'columna']);
+            foreach (User::whereIn('id', $nuevos)->get() as $usuario) {
+                KanbanActividadLog::registrar($tarea->tablero_id, $tarea->id, 'assigned',
+                    "Tarea asignada a {$usuario->name}");
+                if ($usuario->email) {
+                    try {
+                        Mail::to($usuario->email)
+                            ->send(new KanbanTareaAsignadaMail($tarea, auth()->user()));
+                    } catch (\Throwable $e) {
+                        \Log::warning('Kanban: no se pudo notificar reasignación', ['error' => $e->getMessage()]);
+                    }
                 }
             }
         }
@@ -350,7 +374,8 @@ class KanbanController extends Controller
             'orden'      => 'required|integer|min:0',
         ]);
 
-        DB::transaction(function () use ($request, $tarea) {
+        $completada = false;
+        DB::transaction(function () use ($request, $tarea, &$completada) {
             $newColumnaId = (int) $request->columna_id;
             $newOrden     = (int) $request->orden;
             $oldColumnaId = $tarea->columna_id;
@@ -374,13 +399,19 @@ class KanbanController extends Controller
             ]);
 
             if ($oldColumnaId !== $newColumnaId) {
-                $colNueva = $tarea->fresh()->columna->nombre ?? '';
+                $colNueva = KanbanColumna::find($newColumnaId);
+                $completada = $colNueva?->es_completada ?? false;
                 KanbanActividadLog::registrar($tarea->tablero_id, $tarea->id, 'moved',
-                    "Tarea «{$tarea->titulo}» movida a «{$colNueva}»");
+                    "Tarea «{$tarea->titulo}» movida a «{$colNueva->nombre}»");
             }
         });
 
-        return response()->json(['success' => true, 'columna' => $tarea->fresh()->columna->nombre]);
+        $fresh = $tarea->fresh()->load('columna');
+        return response()->json([
+            'success' => true,
+            'columna' => $fresh->columna->nombre,
+            'completada' => $fresh->columna->es_completada,
+        ]);
     }
 
     // =====================================================
@@ -389,8 +420,8 @@ class KanbanController extends Controller
 
     public function misTareas()
     {
-        $tareas = KanbanTarea::with(['tablero', 'columna', 'etiquetas', 'asignado', 'checklistItems'])
-            ->where('asignado_a', auth()->id())
+        $tareas = KanbanTarea::with(['tablero', 'columna', 'etiquetas', 'asignados', 'checklistItems'])
+            ->whereHas('asignados', fn ($q) => $q->where('user_id', auth()->id()))
             ->where('archivada', false)
             ->whereHas('tablero', fn ($q) => $q->where('activo', true)->visiblesParaUsuario())
             ->orderByRaw("FIELD(prioridad, 'ALTA', 'MEDIA', 'BAJA')")
@@ -501,7 +532,7 @@ class KanbanController extends Controller
     public function showTarea(KanbanTarea $tarea)
     {
         $tarea->load([
-            'columna', 'asignado', 'creador', 'centroCosto', 'etiquetas',
+            'columna', 'asignados', 'creador', 'centroCosto', 'etiquetas',
             'comentarios.usuario', 'adjuntos.subidoPor', 'checklistItems',
         ]);
 
@@ -510,8 +541,7 @@ class KanbanController extends Controller
             'titulo'           => $tarea->titulo,
             'descripcion'      => $tarea->descripcion,
             'prioridad'        => $tarea->prioridad,
-            'asignado_a'       => $tarea->asignado_a,
-            'asignado_nombre'  => $tarea->asignado?->name,
+            'asignados'        => $tarea->asignados->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]),
             'creador_nombre'   => $tarea->creador?->name,
             'centro_costo_id'  => $tarea->centro_costo_id,
             'columna_id'       => $tarea->columna_id,
@@ -852,7 +882,7 @@ class KanbanController extends Controller
             return view('kanban.buscar', ['tareas' => collect(), 'q' => $q]);
         }
 
-        $tareas = KanbanTarea::with(['tablero', 'columna', 'asignado', 'etiquetas'])
+        $tareas = KanbanTarea::with(['tablero', 'columna', 'asignados', 'etiquetas'])
             ->where('archivada', false)
             ->whereHas('tablero', fn ($tb) => $tb->where('activo', true)->visiblesParaUsuario())
             ->where(function ($w) use ($q) {
@@ -894,7 +924,7 @@ class KanbanController extends Controller
     {
         $tareas = $kanban->tareas()
             ->where('archivada', true)
-            ->with(['columna', 'asignado', 'etiquetas'])
+            ->with(['columna', 'asignados', 'etiquetas'])
             ->orderByDesc('updated_at')
             ->get();
 
@@ -908,7 +938,7 @@ class KanbanController extends Controller
     public function exportarPdf(KanbanTablero $kanban)
     {
         $kanban->load([
-            'columnas.tareas' => fn ($q) => $q->where('archivada', false)->with(['asignado', 'etiquetas']),
+            'columnas.tareas' => fn ($q) => $q->where('archivada', false)->with(['asignados', 'etiquetas']),
             'creador', 'centroCosto',
         ]);
 
@@ -936,7 +966,8 @@ class KanbanController extends Controller
         $tareasAlta    = KanbanTarea::whereIn('tablero_id', $tableros)->where('archivada', false)->where('prioridad', 'ALTA')->count();
         $tareasVencidas= KanbanTarea::whereIn('tablero_id', $tableros)->where('archivada', false)
             ->whereNotNull('fecha_vencimiento')->where('fecha_vencimiento', '<', now())->count();
-        $misTareas     = KanbanTarea::whereIn('tablero_id', $tableros)->where('archivada', false)->where('asignado_a', $userId)->count();
+        $misTareas     = KanbanTarea::whereIn('tablero_id', $tableros)->where('archivada', false)
+            ->whereHas('asignados', fn ($q) => $q->where('user_id', $userId))->count();
 
         // Tareas por columna (agrupado)
         $porColumna = DB::table('kanban_tareas')
@@ -956,8 +987,9 @@ class KanbanController extends Controller
             ->pluck('total', 'prioridad');
 
         // Carga por usuario (top 10)
-        $cargaUsuarios = DB::table('kanban_tareas')
-            ->join('users', 'kanban_tareas.asignado_a', '=', 'users.id')
+        $cargaUsuarios = DB::table('kanban_tarea_asignados')
+            ->join('kanban_tareas', 'kanban_tarea_asignados.tarea_id', '=', 'kanban_tareas.id')
+            ->join('users', 'kanban_tarea_asignados.user_id', '=', 'users.id')
             ->whereIn('kanban_tareas.tablero_id', $tableros)
             ->where('kanban_tareas.archivada', false)
             ->select('users.name', DB::raw('COUNT(*) as total'))
@@ -979,7 +1011,7 @@ class KanbanController extends Controller
         $proximasVencer = KanbanTarea::whereIn('tablero_id', $tableros)
             ->where('archivada', false)
             ->whereBetween('fecha_vencimiento', [now(), now()->addDays(7)])
-            ->with(['tablero', 'asignado', 'columna'])
+            ->with(['tablero', 'asignados', 'columna'])
             ->orderBy('fecha_vencimiento')
             ->limit(10)
             ->get();

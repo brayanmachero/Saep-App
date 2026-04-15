@@ -381,6 +381,7 @@ Route::middleware('auth')->group(function () {
         // Columnas
         Route::post('kanban/{kanban}/columnas', [\App\Http\Controllers\KanbanController::class, 'storeColumna'])->name('kanban.columnas.store');
         Route::put('kanban/columnas/{columna}', [\App\Http\Controllers\KanbanController::class, 'updateColumna'])->name('kanban.columnas.update');
+        Route::patch('kanban/columnas/{columna}/toggle-completada', [\App\Http\Controllers\KanbanController::class, 'toggleCompletadaColumna'])->name('kanban.columnas.toggle-completada');
         Route::delete('kanban/columnas/{columna}', [\App\Http\Controllers\KanbanController::class, 'destroyColumna'])->name('kanban.columnas.destroy');
         // Tareas
         Route::get('kanban/tareas/{tarea}', [\App\Http\Controllers\KanbanController::class, 'showTarea'])->name('kanban.tareas.show');

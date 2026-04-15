@@ -93,8 +93,8 @@
                         <div class="task-title">{{ $tarea->titulo }}</div>
                         <div class="task-meta">
                             <span>{{ $tarea->prioridad }}</span>
-                            @if($tarea->asignado)
-                            <span>{{ $tarea->asignado->name }}</span>
+                            @if($tarea->asignados->isNotEmpty())
+                            <span>{{ $tarea->asignados->pluck('name')->join(', ') }}</span>
                             @endif
                             @if($tarea->fecha_vencimiento)
                             <span>{{ $tarea->fecha_vencimiento->format('d/m') }}</span>

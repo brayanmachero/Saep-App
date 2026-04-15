@@ -42,8 +42,8 @@
                 @endif
                 <div style="display:flex;align-items:center;gap:.75rem;font-size:.72rem;color:var(--text-muted);">
                     <span><i class="bi bi-columns-gap"></i> {{ $tarea->columna?->nombre }}</span>
-                    @if($tarea->asignado)
-                    <span><i class="bi bi-person"></i> {{ $tarea->asignado->name }}</span>
+                    @if($tarea->asignados->isNotEmpty())
+                    <span><i class="bi bi-people"></i> {{ $tarea->asignados->pluck('name')->join(', ') }}</span>
                     @endif
                     @if($tarea->fecha_vencimiento)
                     <span><i class="bi bi-clock"></i> {{ $tarea->fecha_vencimiento->format('d/m/Y') }}</span>

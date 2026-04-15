@@ -180,13 +180,15 @@
                         </select>
                     </div>
                     <div>
-                        <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.25rem;">Asignado a</label>
-                        <select name="asignado_a" class="form-input">
-                            <option value="">— Sin asignar —</option>
+                        <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.25rem;">Asignados</label>
+                        <div style="max-height:120px;overflow-y:auto;border:1px solid var(--surface-border);border-radius:10px;padding:.4rem;">
                             @foreach($usuarios as $u)
-                                <option value="{{ $u->id }}">{{ $u->name }}</option>
+                            <label style="display:flex;align-items:center;gap:.4rem;padding:.2rem .3rem;font-size:.8rem;cursor:pointer;border-radius:6px;" onmouseover="this.style.background='var(--hover-bg)'" onmouseout="this.style.background=''">
+                                <input type="checkbox" name="asignados[]" value="{{ $u->id }}" style="width:14px;height:14px;">
+                                <span>{{ $u->name }}</span>
+                            </label>
                             @endforeach
-                        </select>
+                        </div>
                     </div>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem;">
@@ -250,17 +252,25 @@
     @if($vista === 'kanban')
     <div id="kanban-board" style="display:flex;gap:1rem;overflow-x:auto;padding-bottom:1rem;min-height:60vh;">
         @foreach($kanban->columnas as $columna)
-        <div class="kanban-column" data-columna-id="{{ $columna->id }}" style="min-width:280px;max-width:320px;flex-shrink:0;">
+        <div class="kanban-column" data-columna-id="{{ $columna->id }}" data-es-completada="{{ $columna->es_completada ? '1' : '0' }}" style="min-width:280px;max-width:320px;flex-shrink:0;">
             {{-- Column header --}}
             <div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .75rem;border-radius:10px 10px 0 0;background:{{ $columna->color }}15;border-bottom:3px solid {{ $columna->color }};">
                 <div style="display:flex;align-items:center;gap:.4rem;">
                     <span style="width:10px;height:10px;border-radius:50%;background:{{ $columna->color }};"></span>
                     <span style="font-size:.82rem;font-weight:700;color:var(--text-primary);">{{ $columna->nombre }}</span>
                     <span style="font-size:.7rem;background:var(--text-muted);color:#fff;padding:0 .4rem;border-radius:8px;font-weight:600;">{{ $columna->tareas->count() }}</span>
+                    @if($columna->es_completada)
+                    <span title="Columna de completadas" style="color:#10b981;font-size:.75rem;"><i class="bi bi-check-circle-fill"></i></span>
+                    @endif
                 </div>
-                <button onclick="abrirModal({{ $columna->id }})" style="background:none;border:none;cursor:pointer;font-size:.9rem;color:var(--text-muted);" title="Añadir tarea">
-                    <i class="bi bi-plus-lg"></i>
-                </button>
+                <div style="display:flex;align-items:center;gap:.25rem;">
+                    <button onclick="toggleCompletadaCol({{ $columna->id }}, this)" style="background:none;border:none;cursor:pointer;font-size:.75rem;color:{{ $columna->es_completada ? '#10b981' : 'var(--text-muted)' }};opacity:.6;" title="Marcar como columna de completadas">
+                        <i class="bi bi-check-circle{{ $columna->es_completada ? '-fill' : '' }}"></i>
+                    </button>
+                    <button onclick="abrirModal({{ $columna->id }})" style="background:none;border:none;cursor:pointer;font-size:.9rem;color:var(--text-muted);" title="Añadir tarea">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                </div>
             </div>
             {{-- Tasks container (sortable) --}}
             <div class="kanban-tasks" data-columna-id="{{ $columna->id }}" style="padding:.5rem;min-height:100px;background:var(--card-bg);border-radius:0 0 10px 10px;border:1px solid var(--border-color);border-top:none;">
@@ -316,7 +326,7 @@
                             @php $pColors = ['ALTA'=>'#dc2626','MEDIA'=>'#f59e0b','BAJA'=>'#16a34a']; @endphp
                             <span style="font-size:.72rem;padding:.15rem .4rem;border-radius:6px;background:{{ $pColors[$tarea->prioridad] }}15;color:{{ $pColors[$tarea->prioridad] }};font-weight:600;">{{ $tarea->prioridad }}</span>
                         </td>
-                        <td style="font-size:.8rem;">{{ $tarea->asignado?->name ?? '—' }}</td>
+                        <td style="font-size:.8rem;">{{ $tarea->asignados->pluck('name')->join(', ') ?: '—' }}</td>
                         <td style="font-size:.8rem;">
                             @if($tarea->fecha_vencimiento)
                                 <span style="{{ $tarea->estaVencida ? 'color:#dc2626;font-weight:600;' : '' }}">
@@ -492,6 +502,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.error('Error moviendo tarea');
                         location.reload();
                     }
+
+                    // Visual completion feedback
+                    if (data.completada) {
+                        evt.item.style.opacity = '0.7';
+                        evt.item.style.borderLeft = '3px solid #10b981';
+                        const titleEl = evt.item.querySelector('[style*="font-weight:600"][style*="color:var(--text-primary)"]');
+                        if (titleEl) titleEl.style.textDecoration = 'line-through';
+                    } else {
+                        evt.item.style.opacity = '';
+                        const titleEl = evt.item.querySelector('[style*="font-weight:600"][style*="color:var(--text-primary)"]');
+                        if (titleEl) titleEl.style.textDecoration = '';
+                    }
+
                     // Actualizar contadores
                     document.querySelectorAll('.kanban-column').forEach(col => {
                         const count = col.querySelector('.kanban-tasks').children.length;
@@ -506,6 +529,20 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+function toggleCompletadaCol(columnaId, btn) {
+    fetch(`/kanban/columnas/${columnaId}/toggle-completada`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfTokenGlobal, 'Accept': 'application/json' },
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        }
+    })
+    .catch(() => alert('Error al actualizar columna'));
+}
 </script>
 <style>
 .kanban-ghost { opacity: .4; }
