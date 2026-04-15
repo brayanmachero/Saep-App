@@ -431,10 +431,18 @@ function escHtml(str) {
 }
 
 // ============ STATS UPDATE ============
+let selectedStatMonth = MES_ACTUAL;
+
+function filterByMonth(mes) {
+    selectedStatMonth = parseInt(mes);
+    updateStats();
+}
+
 function updateStats() {
     let progTotal = 0, realTotal = 0;
     let mesProgTotal = 0, mesRealTotal = 0;
-    let completadas = 0, enProgreso = 0, vencidosMes = 0;
+    let completadas = 0, enProgreso = 0, vencidosMes = 0, pendientesMes = 0;
+    const mesFiltro = selectedStatMonth;
 
     actividadesData.forEach(a => {
         let actProg = 0, actReal = 0;
@@ -445,15 +453,17 @@ function updateStats() {
                 progTotal += cantProg; actProg += cantProg;
                 const cantReal = s.cantidad_realizada ?? (s.realizado ? cantProg : 0);
                 realTotal += cantReal; actReal += cantReal;
-                if (!s.realizado && m < MES_ACTUAL) { vencidosMes++; }
-                // Current month
-                if (m === MES_ACTUAL) { mesProgTotal += cantProg; mesRealTotal += cantReal; }
+                if (!s.realizado && m < mesFiltro) { vencidosMes++; }
+                // Selected month stats
+                if (m === mesFiltro) {
+                    mesProgTotal += cantProg;
+                    mesRealTotal += cantReal;
+                    if (s.realizado) { completadas++; }
+                    else if ((s.cantidad_realizada ?? 0) > 0) { enProgreso++; }
+                    else { pendientesMes++; }
+                }
             }
         }
-        // Recalculate effective estado from data
-        if (a.estado === 'CANCELADA') return;
-        if (actProg > 0 && actReal >= actProg) completadas++;
-        else if (actReal > 0) enProgreso++;
     });
 
     const pct = progTotal > 0 ? Math.round(realTotal / progTotal * 100) : 0;
@@ -472,12 +482,21 @@ function updateStats() {
     if (mNum) mNum.textContent = mesPct + '%';
 
     // Stat cards
+    const mesLabel = MESES_CORTO[mesFiltro];
     const elComp = document.getElementById('statCompletadas');
     const elProg = document.getElementById('statEnProgreso');
     const elVenc = document.getElementById('statVencidas');
+    const elPend = document.getElementById('statPendientes');
+    const lblComp = document.getElementById('labelCompletadas');
+    const lblProg = document.getElementById('labelEnProgreso');
+    const lblPend = document.getElementById('labelPendientes');
     if (elComp) elComp.textContent = completadas;
     if (elProg) elProg.textContent = enProgreso;
     if (elVenc) elVenc.textContent = vencidosMes;
+    if (elPend) elPend.textContent = pendientesMes;
+    if (lblComp) lblComp.textContent = 'Completadas ' + mesLabel;
+    if (lblProg) lblProg.textContent = 'En Progreso ' + mesLabel;
+    if (lblPend) lblPend.textContent = 'Pendientes ' + mesLabel;
 
     // Update category progress bars
     document.querySelectorAll('.sst-cat-card').forEach(card => {

@@ -12,13 +12,17 @@
     $allActividades = collect();
     foreach ($cartaGantt->categorias as $cat) {
         foreach ($cat->actividades as $a) {
-            if ($a->estado === 'COMPLETADA') $completadas++;
-            elseif ($a->estado === 'EN_PROGRESO') $enProgreso++;
-            else $pendientes++;
             if ($a->estaPorVencer) $porVencer++;
             // Contar meses vencidos (programado + pasado + no realizado)
             foreach ($a->seguimiento_por_mes as $m => $s) {
                 if ($s['programado'] && !$s['realizado'] && $m < $mesActual) $vencidosMes++;
+            }
+            // Contar completadas/en progreso/pendientes del mes actual
+            $sMesAct = $a->seguimiento_por_mes[$mesActual] ?? null;
+            if ($sMesAct && $sMesAct['programado']) {
+                if ($sMesAct['realizado']) $completadas++;
+                elseif (($sMesAct['cantidad_realizada'] ?? 0) > 0) $enProgreso++;
+                else $pendientes++;
             }
             $allActividades->push($a);
         }
@@ -103,21 +107,27 @@
                 if ($a->estaPorVencer) $actPorVencer++;
             }
         @endphp
-        <div class="sst-stat-card">
+        <div class="sst-stat-card" style="position:relative">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa)"><i class="bi bi-calendar-check"></i></div>
             <div style="flex:1">
-                <div class="sst-stat-label">Avance {{ $mesesNombres[$mesActual] }}</div>
+                <div class="sst-stat-label" style="display:flex;align-items:center;gap:.4rem">
+                    Avance <select id="mesFilterSelect" onchange="filterByMonth(this.value)" style="border:1px solid var(--border-color);border-radius:6px;padding:.1rem .3rem;font-size:.75rem;background:var(--surface-color);color:var(--text-primary);cursor:pointer;font-weight:600">
+                        @for($m = 1; $m <= 12; $m++)
+                        <option value="{{ $m }}" {{ $m === $mesActual ? 'selected' : '' }}>{{ $mesesNombres[$m] }}</option>
+                        @endfor
+                    </select>
+                </div>
                 <div class="sst-stat-value" id="monthProgressNum">{{ $mesPct }}%</div>
                 <div class="sst-progress-track"><div class="sst-progress-fill" id="monthProgressBar" style="width:{{ $mesPct }}%;background:linear-gradient(90deg,#8b5cf6,#a78bfa)"></div></div>
             </div>
         </div>
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#10b981,#34d399)"><i class="bi bi-check-circle-fill"></i></div>
-            <div><div class="sst-stat-label">Completadas</div><div class="sst-stat-value" id="statCompletadas" style="color:#10b981">{{ $completadas }}</div></div>
+            <div><div class="sst-stat-label" id="labelCompletadas">Completadas</div><div class="sst-stat-value" id="statCompletadas" style="color:#10b981">{{ $completadas }}</div></div>
         </div>
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#f59e0b,#fbbf24)"><i class="bi bi-clock-history"></i></div>
-            <div><div class="sst-stat-label">En Progreso</div><div class="sst-stat-value" id="statEnProgreso" style="color:#f59e0b">{{ $enProgreso }}</div></div>
+            <div><div class="sst-stat-label" id="labelEnProgreso">En Progreso</div><div class="sst-stat-value" id="statEnProgreso" style="color:#f59e0b">{{ $enProgreso }}</div></div>
         </div>
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#ef4444,#f87171)"><i class="bi bi-exclamation-triangle-fill"></i></div>
@@ -129,7 +139,7 @@
         </div>
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#94a3b8,#cbd5e1)"><i class="bi bi-hourglass-split"></i></div>
-            <div><div class="sst-stat-label">Pendientes</div><div class="sst-stat-value" style="color:#94a3b8">{{ $pendientes }}</div></div>
+            <div><div class="sst-stat-label" id="labelPendientes">Pendientes</div><div class="sst-stat-value" id="statPendientes" style="color:#94a3b8">{{ $pendientes }}</div></div>
         </div>
         @if($actPorVencer > 0)
         <div class="sst-stat-card">
