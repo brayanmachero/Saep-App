@@ -372,6 +372,8 @@ Route::middleware('auth')->group(function () {
         Route::resource('kanban', \App\Http\Controllers\KanbanController::class);
         // Duplicar tablero
         Route::post('kanban/{kanban}/duplicar', [\App\Http\Controllers\KanbanController::class, 'duplicar'])->name('kanban.duplicar');
+        // Eliminar definitivamente
+        Route::delete('kanban/{kanban}/force-destroy', [\App\Http\Controllers\KanbanController::class, 'forceDestroy'])->name('kanban.force-destroy');
         // Exportar PDF
         Route::get('kanban/{kanban}/exportar-pdf', [\App\Http\Controllers\KanbanController::class, 'exportarPdf'])->name('kanban.exportar-pdf');
         // Tareas archivadas

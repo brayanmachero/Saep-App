@@ -5,15 +5,15 @@
     --primary-hover: #1e3a8a;
     --accent-color: #f97316;
     --bg-color: #f3f4f6;
-    --surface-color: rgba(255, 255, 255, 0.7);
+    --surface-color: #ffffff;
     --surface-card-solid: #ffffff;
-    --surface-border: rgba(255, 255, 255, 0.4);
+    --surface-border: #e5e7eb;
     --text-main: #111827;
     --text-muted: #6b7280;
     --sidebar-width: 260px;
     --sidebar-collapsed-width: 80px;
-    --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
-    --glass-blur: blur(12px);
+    --glass-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.06);
+    --glass-blur: none;
     --transition-speed: 0.3s;
 }
 
@@ -22,12 +22,12 @@ body.dark-mode {
     --primary-hover: #5b8af7;
     --accent-color: #fb923c;
     --bg-color: #111827;
-    --surface-color: rgba(31, 41, 55, 0.7);
-    --surface-border: rgba(55, 65, 81, 0.4);
+    --surface-color: #1f2937;
+    --surface-border: #374151;
     --surface-card-solid: #1f2937;
     --text-main: #f9fafb;
     --text-muted: #9ca3af;
-    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    --glass-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.2);
     color-scheme: dark;
 }
 
@@ -93,8 +93,6 @@ body {
     height: 100vh;
     width: var(--sidebar-width);
     background: var(--surface-color);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
     border-right: 1px solid var(--surface-border);
     transition: width var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 100;
@@ -324,7 +322,6 @@ body {
     color: var(--text-main);
     cursor: pointer;
     transition: all 0.2s;
-    backdrop-filter: var(--glass-blur);
 }
 .icon-btn:hover {
     transform: translateY(-2px);
@@ -332,20 +329,18 @@ body {
     color: var(--primary-color);
 }
 
-/* Dashboard Cards (Glassmorphism) */
+/* Dashboard Cards */
 .glass-card {
     background: var(--surface-color);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--surface-border);
-    border-radius: 20px;
+    border-radius: 14px;
     padding: 1.5rem;
     box-shadow: var(--glass-shadow);
     transition: transform 0.3s, box-shadow 0.3s;
 }
 .glass-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.1);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px 0 rgba(0, 0, 0, 0.08);
 }
 
 .stats-grid {
@@ -791,8 +786,6 @@ body.dark-mode .badge.secondary { background: rgba(107,114,128,0.2); color: #d1d
     right: 0;
     height: 64px;
     background: var(--surface-color);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
     border-top: 1px solid var(--surface-border);
     z-index: 101;
     padding: 0;

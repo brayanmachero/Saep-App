@@ -36,11 +36,11 @@
 
     {{-- Stats --}}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem;">
-        <div class="glass-card" style="padding:1rem 1.25rem;text-align:center;">
+        <div style="padding:1rem 1.25rem;text-align:center;background:var(--card-bg,#fff);border:1px solid var(--border-color);border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
             <div style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);font-weight:600;">Total Tableros</div>
             <div style="font-size:1.8rem;font-weight:700;color:var(--primary-color);">{{ $tableros->count() }}</div>
         </div>
-        <div class="glass-card" style="padding:1rem 1.25rem;text-align:center;">
+        <div style="padding:1rem 1.25rem;text-align:center;background:var(--card-bg,#fff);border:1px solid var(--border-color);border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
             <div style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);font-weight:600;">Total Tareas</div>
             <div style="font-size:1.8rem;font-weight:700;color:#3b82f6;">{{ $tableros->sum('tareas_count') }}</div>
         </div>
@@ -48,7 +48,7 @@
 
     {{-- Grid de tableros --}}
     @if($tableros->isEmpty())
-        <div class="glass-card" style="padding:3rem;text-align:center;">
+        <div style="padding:3rem;text-align:center;background:var(--card-bg,#fff);border:1px solid var(--border-color);border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
             <i class="bi bi-kanban" style="font-size:3rem;color:var(--text-muted);opacity:.4;"></i>
             <p style="margin-top:1rem;color:var(--text-muted);">No hay tableros creados aún.</p>
             @if(auth()->user()->tieneAcceso('kanban', 'puede_crear'))
@@ -60,14 +60,14 @@
     @else
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1.25rem;">
             @foreach($tableros as $tablero)
-            <a href="{{ route('kanban.show', $tablero) }}" class="glass-card tablero-card" style="padding:1.25rem;text-decoration:none;color:inherit;transition:transform .15s,box-shadow .15s;cursor:pointer;position:relative;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,.1)';" onmouseout="this.style.transform='';this.style.boxShadow='';">
+            <a href="{{ route('kanban.show', $tablero) }}" class="tablero-card" style="display:block;padding:1.25rem;text-decoration:none;color:inherit;transition:transform .15s,box-shadow .15s;cursor:pointer;position:relative;background:var(--card-bg,#fff);border:1px solid var(--border-color);border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.06);" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,.1)';" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,0,0,.06)';">
 
                 {{-- Menú de acciones (tres puntos) --}}
-                <div class="tablero-menu-wrap" style="position:absolute;top:.6rem;right:.6rem;z-index:10;" onclick="event.stopPropagation();event.preventDefault();">
-                    <button type="button" onclick="toggleTableroMenu({{ $tablero->id }})" class="tablero-menu-btn" style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:.25rem .45rem;cursor:pointer;font-size:.78rem;color:var(--text-muted);transition:all .12s;line-height:1;" title="Opciones">
+                <div class="tablero-menu-wrap" style="position:absolute;top:.6rem;right:.6rem;z-index:10;" onclick="event.stopPropagation()">
+                    <button type="button" onclick="event.preventDefault();toggleTableroMenu({{ $tablero->id }})" class="tablero-menu-btn" style="background:var(--card-bg,#fff);border:1px solid var(--border-color);border-radius:6px;padding:.25rem .45rem;cursor:pointer;font-size:.78rem;color:var(--text-muted);transition:all .12s;line-height:1;" title="Opciones">
                         <i class="bi bi-three-dots-vertical"></i>
                     </button>
-                    <div id="tablero-menu-{{ $tablero->id }}" class="tablero-dropdown" style="display:none;position:absolute;top:100%;right:0;margin-top:.3rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;box-shadow:0 8px 25px rgba(0,0,0,.15);min-width:160px;overflow:hidden;z-index:20;">
+                    <div id="tablero-menu-{{ $tablero->id }}" class="tablero-dropdown" style="display:none;position:absolute;top:100%;right:0;margin-top:.3rem;background:var(--card-bg,#fff);border:1px solid var(--border-color);border-radius:8px;box-shadow:0 8px 25px rgba(0,0,0,.15);min-width:180px;overflow:hidden;z-index:20;">
                         {{-- Duplicar --}}
                         <form method="POST" action="{{ route('kanban.duplicar', $tablero) }}">
                             @csrf
@@ -75,11 +75,18 @@
                                 <i class="bi bi-copy" style="color:var(--primary-color);font-size:.82rem;"></i> Duplicar tablero
                             </button>
                         </form>
-                        {{-- Eliminar (archivar) --}}
+                        {{-- Archivar --}}
                         <form method="POST" action="{{ route('kanban.destroy', $tablero) }}" onsubmit="return confirm('¿Archivar el tablero «{{ addslashes($tablero->nombre) }}»?')">
                             @csrf @method('DELETE')
-                            <button type="submit" style="width:100%;text-align:left;background:none;border:none;padding:.55rem .85rem;cursor:pointer;font-size:.78rem;color:#dc2626;display:flex;align-items:center;gap:.5rem;transition:background .1s;border-top:1px solid var(--border-color);" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='none'">
+                            <button type="submit" style="width:100%;text-align:left;background:none;border:none;padding:.55rem .85rem;cursor:pointer;font-size:.78rem;color:var(--text-muted);display:flex;align-items:center;gap:.5rem;transition:background .1s;border-top:1px solid var(--border-color);" onmouseover="this.style.background='var(--bg-color)'" onmouseout="this.style.background='none'">
                                 <i class="bi bi-archive" style="font-size:.82rem;"></i> Archivar tablero
+                            </button>
+                        </form>
+                        {{-- Eliminar definitivamente --}}
+                        <form method="POST" action="{{ route('kanban.force-destroy', $tablero) }}" onsubmit="return confirm('¿ELIMINAR DEFINITIVAMENTE el tablero «{{ addslashes($tablero->nombre) }}» y todas sus tareas? Esta acción no se puede deshacer.')">
+                            @csrf @method('DELETE')
+                            <button type="submit" style="width:100%;text-align:left;background:none;border:none;padding:.55rem .85rem;cursor:pointer;font-size:.78rem;color:#dc2626;display:flex;align-items:center;gap:.5rem;transition:background .1s;border-top:1px solid var(--border-color);" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='none'">
+                                <i class="bi bi-trash3" style="font-size:.82rem;"></i> Eliminar definitivamente
                             </button>
                         </form>
                     </div>
@@ -123,7 +130,7 @@
 
 {{-- Modal: Crear desde Plantilla --}}
 <div id="modal-plantilla" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;justify-content:center;align-items:center;backdrop-filter:blur(2px);" onclick="if(event.target===this)this.style.display='none'">
-    <div class="glass-card" style="padding:1.5rem;width:90%;max-width:520px;max-height:90vh;overflow-y:auto;" onclick="event.stopPropagation()">
+    <div style="padding:1.5rem;width:90%;max-width:520px;max-height:90vh;overflow-y:auto;background:var(--card-bg,#fff);border:1px solid var(--border-color);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.25);" onclick="event.stopPropagation()">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
             <h3 style="margin:0;font-size:1rem;font-weight:700;"><i class="bi bi-clipboard2-plus" style="color:var(--primary-color);"></i> Crear desde Plantilla</h3>
             <button onclick="document.getElementById('modal-plantilla').style.display='none'" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-muted);">&times;</button>

@@ -127,6 +127,29 @@ class KanbanController extends Controller
             ->with('success', 'Tablero archivado correctamente.');
     }
 
+    public function forceDestroy(KanbanTablero $kanban)
+    {
+        $nombre = $kanban->nombre;
+
+        // Eliminar tareas y dependencias
+        foreach ($kanban->columnas as $col) {
+            foreach ($col->tareas as $tarea) {
+                $tarea->checklistItems()->delete();
+                $tarea->comentarios()->delete();
+                $tarea->adjuntos()->delete();
+                $tarea->etiquetas()->detach();
+                $tarea->delete();
+            }
+            $col->delete();
+        }
+        $kanban->etiquetas()->delete();
+        $kanban->miembros()->detach();
+        $kanban->delete();
+
+        return redirect()->route('kanban.index')
+            ->with('success', "Tablero «{$nombre}» eliminado definitivamente.");
+    }
+
     // =====================================================
     // COLUMNAS (AJAX)
     // =====================================================
