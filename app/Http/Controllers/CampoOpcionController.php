@@ -52,4 +52,41 @@ class CampoOpcionController extends Controller
             'nuevo'  => $opcion->wasRecentlyCreated,
         ]);
     }
+
+    /**
+     * Update an option value (admin).
+     */
+    public function update(Request $request, FormularioCampoOpcion $opcion)
+    {
+        $request->validate([
+            'valor' => ['required', 'string', 'max:500'],
+        ]);
+
+        $nuevo = trim($request->valor);
+
+        // Check for duplicates in the same field
+        $existe = FormularioCampoOpcion::where('formulario_id', $opcion->formulario_id)
+            ->where('campo_id', $opcion->campo_id)
+            ->where('valor', $nuevo)
+            ->where('id', '!=', $opcion->id)
+            ->exists();
+
+        if ($existe) {
+            return back()->with('error', 'Ya existe una opción con ese valor.');
+        }
+
+        $opcion->update(['valor' => $nuevo]);
+
+        return back()->with('success', 'Opción actualizada correctamente.');
+    }
+
+    /**
+     * Delete an option (admin).
+     */
+    public function destroy(FormularioCampoOpcion $opcion)
+    {
+        $opcion->delete();
+
+        return back()->with('success', 'Opción eliminada correctamente.');
+    }
 }

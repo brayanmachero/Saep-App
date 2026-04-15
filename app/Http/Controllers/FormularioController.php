@@ -6,6 +6,7 @@ use App\Models\Cargo;
 use App\Models\CategoriaFormulario;
 use App\Models\Departamento;
 use App\Models\Formulario;
+use App\Models\FormularioCampoOpcion;
 use App\Models\Rol;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -141,7 +142,19 @@ class FormularioController extends Controller
             ->latest()
             ->get();
 
-        return view('formularios.show', compact('formulario', 'schema', 'stats', 'asignados', 'usuariosDisp', 'departamentos', 'cargos', 'roles', 'respuestas'));
+        // Opciones de campos dinámicos (para administración)
+        $dynamicFields = collect($schema)->filter(fn($f) => ($f['type'] ?? '') === 'select_dynamic');
+        $campoOpciones = [];
+        if ($dynamicFields->isNotEmpty()) {
+            $campoOpciones = FormularioCampoOpcion::where('formulario_id', $formulario->id)
+                ->whereIn('campo_id', $dynamicFields->pluck('id'))
+                ->orderBy('campo_id')
+                ->orderBy('valor')
+                ->get()
+                ->groupBy('campo_id');
+        }
+
+        return view('formularios.show', compact('formulario', 'schema', 'stats', 'asignados', 'usuariosDisp', 'departamentos', 'cargos', 'roles', 'respuestas', 'campoOpciones'));
     }
 
     public function edit(Formulario $formulario)

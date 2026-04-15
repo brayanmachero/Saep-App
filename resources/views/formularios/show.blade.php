@@ -211,6 +211,65 @@
                 </div>
             </div>
 
+            <!-- Gestión de opciones dinámicas -->
+            @php $dynamicFields = collect($schema)->filter(fn($f) => ($f['type'] ?? '') === 'select_dynamic'); @endphp
+            @if($dynamicFields->isNotEmpty() && auth()->user()->tieneAcceso('formularios', 'puede_editar'))
+            <div class="glass-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleSection('sec-opciones-din')">
+                    <h3 style="font-size:0.875rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:0.05em;margin:0;">
+                        <i class="bi bi-collection"></i> Listas Dinámicas
+                        <span style="font-size:0.8rem;font-weight:400;text-transform:none;letter-spacing:0;">
+                            — {{ $dynamicFields->count() }} campo(s)
+                        </span>
+                    </h3>
+                    <i class="bi bi-chevron-down section-chevron" id="chevron-sec-opciones-din" style="font-size:.75rem;color:var(--text-muted);transition:transform .25s;transform:rotate(-90deg);"></i>
+                </div>
+                <div id="sec-opciones-din" style="display:none;margin-top:1.25rem;">
+                    <p style="font-size:.78rem;color:var(--text-muted);margin:0 0 1rem;padding:.5rem .75rem;background:rgba(79,70,229,.04);border-radius:8px;">
+                        <i class="bi bi-info-circle"></i> Aquí puedes editar o eliminar las opciones acumuladas en cada lista dinámica para mantenerlas limpias.
+                    </p>
+
+                    @foreach($dynamicFields as $field)
+                    @php $opciones = $campoOpciones[$field['id']] ?? collect(); @endphp
+                    <div style="margin-bottom:1.25rem;">
+                        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;">
+                            <span style="font-size:.85rem;font-weight:600;">{{ $field['label'] }}</span>
+                            <span class="badge" style="font-size:.68rem">{{ $opciones->count() }} opciones</span>
+                        </div>
+
+                        @if($opciones->isEmpty())
+                            <p style="font-size:.8rem;color:var(--text-muted);padding:.5rem 0;">Sin opciones registradas.</p>
+                        @else
+                            <div style="display:flex;flex-direction:column;gap:.35rem;">
+                                @foreach($opciones as $opcion)
+                                <div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .65rem;background:rgba(255,255,255,.03);border:1px solid var(--surface-border);border-radius:8px;" id="opcion-row-{{ $opcion->id }}">
+                                    {{-- Inline edit form --}}
+                                    <form method="POST" action="{{ route('campo-opciones.update', $opcion) }}" style="flex:1;display:flex;align-items:center;gap:.5rem;">
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="text" name="valor" value="{{ $opcion->valor }}" class="form-input" style="font-size:.82rem;padding:.3rem .55rem;flex:1;">
+                                        <button type="submit" class="icon-btn" style="width:26px;height:26px;flex-shrink:0;" title="Guardar cambio">
+                                            <i class="bi bi-check-lg" style="font-size:.8rem;color:#10b981"></i>
+                                        </button>
+                                    </form>
+                                    {{-- Delete form --}}
+                                    <form method="POST" action="{{ route('campo-opciones.destroy', $opcion) }}" onsubmit="return confirm('¿Eliminar esta opción?')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="icon-btn danger" style="width:26px;height:26px;flex-shrink:0;" title="Eliminar">
+                                            <i class="bi bi-trash3" style="font-size:.7rem"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+            @endif
+
             <!-- Historial de versiones -->
             @if($formulario->versiones->count() > 0)
             <div class="glass-card">

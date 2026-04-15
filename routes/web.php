@@ -147,6 +147,12 @@ Route::middleware('auth')->group(function () {
             ->name('formularios.toggleActivo');
         Route::delete('formularios/{formulario}/desasignar/{user}', [FormularioController::class, 'desasignar'])
             ->name('formularios.desasignar');
+
+        // --- Admin: gestión de opciones de campos dinámicos ---
+        Route::patch('campo-opciones/{opcion}', [CampoOpcionController::class, 'update'])
+            ->name('campo-opciones.update');
+        Route::delete('campo-opciones/{opcion}', [CampoOpcionController::class, 'destroy'])
+            ->name('campo-opciones.destroy');
     });
 
     // --- Campo opciones: acceso para cualquier usuario autenticado (campos dinámicos en formularios) ---
