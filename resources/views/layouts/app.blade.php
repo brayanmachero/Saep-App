@@ -532,6 +532,25 @@
     @if(session('info'))
         showToast(@json(session('info')), 'info');
     @endif
+
+    // --- Preservar posición de scroll tras acciones (POST → redirect → GET) ---
+    (function() {
+        const key = 'saep_scroll_' + window.location.pathname;
+        const saved = sessionStorage.getItem(key);
+        if (saved !== null) {
+            sessionStorage.removeItem(key);
+            requestAnimationFrame(() => window.scrollTo({ top: parseInt(saved, 10), behavior: 'instant' }));
+        }
+        // Guardar scroll antes de enviar cualquier formulario
+        document.addEventListener('submit', function() {
+            sessionStorage.setItem(key, window.scrollY);
+        });
+        // Guardar scroll antes de hacer clic en enlaces con método POST (data-method o similar)
+        document.addEventListener('click', function(e) {
+            const link = e.target.closest('a[onclick*="submit"], button[type="submit"], form button, a[data-method]');
+            if (link) sessionStorage.setItem(key, window.scrollY);
+        });
+    })();
     </script>
 </body>
 </html>
