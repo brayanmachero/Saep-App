@@ -307,6 +307,9 @@ Route::middleware('auth')->group(function () {
         Route::post('roles',    [PermisoController::class, 'storeRol'])->name('roles.store');
         Route::put('roles/{rol}',  [PermisoController::class, 'updateRol'])->name('roles.update');
         Route::delete('roles/{rol}', [PermisoController::class, 'destroyRol'])->name('roles.destroy');
+        Route::post('modulos',           [PermisoController::class, 'storeModulo'])->name('modulos.store');
+        Route::put('modulos/{modulo}',   [PermisoController::class, 'updateModulo'])->name('modulos.update');
+        Route::delete('modulos/{modulo}',[PermisoController::class, 'destroyModulo'])->name('modulos.destroy');
     });
 
     // --- IMPORTACIÓN DE DATOS ---

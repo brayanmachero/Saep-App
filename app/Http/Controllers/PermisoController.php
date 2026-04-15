@@ -14,6 +14,8 @@ class PermisoController extends Controller
     {
         $roles   = Rol::orderBy('nombre')->get();
         $modulos = Modulo::where('activo', true)->orderBy('orden')->get()->groupBy('grupo');
+        $todosModulos = Modulo::where('activo', true)->orderBy('grupo')->orderBy('orden')->get();
+        $grupos  = Modulo::where('activo', true)->distinct()->pluck('grupo')->sort()->values();
 
         // Cargar permisos actuales
         $permisos = DB::table('rol_modulo')
@@ -21,7 +23,7 @@ class PermisoController extends Controller
             ->groupBy('rol_id')
             ->map(fn ($items) => $items->keyBy('modulo_id'));
 
-        return view('permisos.index', compact('roles', 'modulos', 'permisos'));
+        return view('permisos.index', compact('roles', 'modulos', 'todosModulos', 'grupos', 'permisos'));
     }
 
     public function update(Request $request)
@@ -142,5 +144,92 @@ class PermisoController extends Controller
         $rol->delete();
 
         return redirect()->route('permisos.index')->with('success', "Rol «{$rol->nombre}» eliminado.");
+    }
+
+    // =====================================================
+    // MÓDULOS CRUD
+    // =====================================================
+
+    public function storeModulo(Request $request)
+    {
+        $request->validate([
+            'nombre' => 'required|string|max:100',
+            'slug'   => 'nullable|string|max:80|unique:modulos,slug',
+            'grupo'  => 'required|string|max:80',
+            'icono'  => 'nullable|string|max:60',
+            'descripcion' => 'nullable|string|max:255',
+        ]);
+
+        $slug = $request->slug
+            ? Str::slug($request->slug, '_')
+            : Str::slug($request->nombre, '_');
+
+        if (Modulo::where('slug', $slug)->exists()) {
+            return back()->with('error', "Ya existe un módulo con el slug «{$slug}».")->withInput();
+        }
+
+        $maxOrden = Modulo::where('grupo', $request->grupo)->max('orden') ?? 0;
+
+        DB::beginTransaction();
+
+        $modulo = Modulo::create([
+            'nombre'      => $request->nombre,
+            'slug'        => $slug,
+            'grupo'       => $request->grupo,
+            'icono'       => $request->icono ?: 'bi-grid',
+            'descripcion' => $request->descripcion,
+            'orden'       => $maxOrden + 1,
+            'activo'      => true,
+        ]);
+
+        // Auto-alimentar rol_modulo para todos los roles existentes
+        $roles = Rol::all();
+        $rows = $roles->map(fn ($r) => [
+            'rol_id'          => $r->id,
+            'modulo_id'       => $modulo->id,
+            'puede_ver'       => false,
+            'puede_crear'     => false,
+            'puede_editar'    => false,
+            'puede_eliminar'  => false,
+            'created_at'      => now(),
+            'updated_at'      => now(),
+        ])->toArray();
+
+        DB::table('rol_modulo')->insert($rows);
+
+        DB::commit();
+
+        return redirect()->route('permisos.index')
+            ->with('success', "Módulo «{$modulo->nombre}» creado. Configure sus permisos en la matriz.");
+    }
+
+    public function updateModulo(Request $request, Modulo $modulo)
+    {
+        $request->validate([
+            'nombre' => 'required|string|max:100',
+            'slug'   => 'required|string|max:80|unique:modulos,slug,' . $modulo->id,
+            'grupo'  => 'required|string|max:80',
+            'icono'  => 'nullable|string|max:60',
+            'descripcion' => 'nullable|string|max:255',
+        ]);
+
+        $modulo->update([
+            'nombre'      => $request->nombre,
+            'slug'        => Str::slug($request->slug, '_'),
+            'grupo'       => $request->grupo,
+            'icono'       => $request->icono ?: 'bi-grid',
+            'descripcion' => $request->descripcion,
+        ]);
+
+        return redirect()->route('permisos.index')->with('success', "Módulo «{$modulo->nombre}» actualizado.");
+    }
+
+    public function destroyModulo(Modulo $modulo)
+    {
+        // Desactivar en lugar de eliminar (soft-delete lógico)
+        $modulo->update(['activo' => false]);
+        DB::table('rol_modulo')->where('modulo_id', $modulo->id)->delete();
+
+        return redirect()->route('permisos.index')->with('success', "Módulo «{$modulo->nombre}» desactivado.");
     }
 }

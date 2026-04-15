@@ -8,9 +8,14 @@
             <h2 class="page-heading"><i class="bi bi-key-fill" style="color:var(--accent-color)"></i> Permisos por Rol</h2>
             <p class="page-subheading">Gestione los roles del sistema y configure qué módulos puede ver y gestionar cada uno</p>
         </div>
-        <button onclick="document.getElementById('modal-crear-rol').style.display='flex'" class="btn-premium" style="padding:.5rem 1rem;font-size:.82rem;">
-            <i class="bi bi-plus-lg"></i> Nuevo Rol
-        </button>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+            <button onclick="document.getElementById('modal-crear-modulo').style.display='flex'" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;">
+                <i class="bi bi-grid-fill"></i> Nuevo Módulo
+            </button>
+            <button onclick="document.getElementById('modal-crear-rol').style.display='flex'" class="btn-premium" style="padding:.5rem 1rem;font-size:.82rem;">
+                <i class="bi bi-plus-lg"></i> Nuevo Rol
+            </button>
+        </div>
     </div>
 
     @include('partials._alerts')
@@ -45,6 +50,41 @@
             </div>
             @endforeach
         </div>
+    </div>
+
+    {{-- ===== MÓDULOS DEL SISTEMA ===== --}}
+    <div class="glass-card" style="margin-bottom:1.5rem;padding:1rem 1.25rem;">
+        <h3 style="font-size:.88rem;font-weight:700;color:var(--text-primary);margin-bottom:.75rem;">
+            <i class="bi bi-grid-fill" style="color:var(--accent-color);"></i> Módulos del Sistema
+            <span style="font-size:.72rem;color:var(--text-muted);font-weight:400;margin-left:.3rem;">({{ $todosModulos->count() }})</span>
+        </h3>
+        @foreach($todosModulos->groupBy('grupo') as $grupo => $mods)
+        <div style="margin-bottom:.65rem;">
+            <div style="font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.35rem;">{{ $grupo }}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:.45rem;">
+                @foreach($mods as $mod)
+                <div style="display:flex;align-items:center;gap:.4rem;padding:.35rem .7rem;border-radius:7px;border:1px solid var(--border-color);background:var(--card-bg);font-size:.76rem;">
+                    <i class="bi {{ $mod->icono }}" style="color:var(--accent-color);font-size:.8rem;"></i>
+                    <div>
+                        <span style="font-weight:600;color:var(--text-primary);">{{ $mod->nombre }}</span>
+                        <span style="font-size:.62rem;color:var(--text-muted);margin-left:.2rem;">({{ $mod->slug }})</span>
+                    </div>
+                    <div style="display:flex;gap:.2rem;margin-left:.4rem;">
+                        <button onclick="abrirEditarModulo({{ $mod->id }}, '{{ addslashes($mod->nombre) }}', '{{ $mod->slug }}', '{{ addslashes($mod->grupo) }}', '{{ $mod->icono }}', '{{ addslashes($mod->descripcion ?? '') }}')" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:.72rem;padding:.1rem;" title="Editar módulo">
+                        <i class="bi bi-pencil"></i>
+                        </button>
+                        <form method="POST" action="{{ route('modulos.destroy', $mod) }}" style="display:inline;" onsubmit="return confirm('¿Desactivar el módulo «{{ $mod->nombre }}»?')">
+                            @csrf @method('DELETE')
+                            <button type="submit" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:.72rem;padding:.1rem;opacity:.5;" title="Desactivar módulo" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                @endforeach
+            </div>
+        </div>
+        @endforeach
     </div>
 
     {{-- ===== MATRIZ DE PERMISOS ===== --}}
@@ -191,6 +231,16 @@ function abrirEditarRol(id, nombre, codigo) {
     document.getElementById('modal-editar-rol').style.display = 'flex';
 }
 
+function abrirEditarModulo(id, nombre, slug, grupo, icono, descripcion) {
+    document.getElementById('editar-mod-nombre').value = nombre;
+    document.getElementById('editar-mod-slug').value = slug;
+    document.getElementById('editar-mod-grupo').value = grupo;
+    document.getElementById('editar-mod-icono').value = icono;
+    document.getElementById('editar-mod-descripcion').value = descripcion;
+    document.getElementById('form-editar-modulo').action = '/modulos/' + id;
+    document.getElementById('modal-editar-modulo').style.display = 'flex';
+}
+
 function cerrarModal(id) {
     document.getElementById(id).style.display = 'none';
 }
@@ -239,6 +289,91 @@ function cerrarModal(id) {
             </div>
             <div style="display:flex;gap:.5rem;justify-content:flex-end;">
                 <button type="button" onclick="cerrarModal('modal-editar-rol')" class="btn-secondary" style="padding:.4rem .85rem;font-size:.8rem;">Cancelar</button>
+                <button type="submit" class="btn-premium" style="padding:.4rem .85rem;font-size:.8rem;"><i class="bi bi-check-lg"></i> Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Modal Crear Módulo --}}
+<div id="modal-crear-modulo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;justify-content:center;align-items:center;backdrop-filter:blur(2px);" onclick="if(event.target===this)cerrarModal('modal-crear-modulo')">
+    <div class="glass-card" style="width:90%;max-width:480px;padding:1.5rem;" onclick="event.stopPropagation()">
+        <h3 style="margin:0 0 1rem;font-size:1rem;font-weight:700;color:var(--text-primary);">
+            <i class="bi bi-grid-fill" style="color:var(--accent-color);"></i> Crear Nuevo Módulo
+        </h3>
+        <form method="POST" action="{{ route('modulos.store') }}">
+            @csrf
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.6rem;">
+                <div>
+                    <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Nombre *</label>
+                    <input type="text" name="nombre" class="form-input" required placeholder="Ej: Reportes SST" style="font-size:.83rem;">
+                </div>
+                <div>
+                    <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Slug (opcional)</label>
+                    <input type="text" name="slug" class="form-input" placeholder="Auto-generado" style="font-size:.83rem;">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.6rem;">
+                <div>
+                    <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Grupo *</label>
+                    <input type="text" name="grupo" class="form-input" required list="grupos-list" placeholder="Ej: Prevención SST" style="font-size:.83rem;">
+                    <datalist id="grupos-list">
+                        @foreach($grupos as $g)
+                        <option value="{{ $g }}">
+                        @endforeach
+                    </datalist>
+                </div>
+                <div>
+                    <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Icono Bootstrap</label>
+                    <input type="text" name="icono" class="form-input" placeholder="bi-grid" style="font-size:.83rem;">
+                </div>
+            </div>
+            <div style="margin-bottom:.85rem;">
+                <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Descripción (opcional)</label>
+                <input type="text" name="descripcion" class="form-input" placeholder="Breve descripción del módulo" style="font-size:.83rem;">
+            </div>
+            <div style="display:flex;gap:.5rem;justify-content:flex-end;">
+                <button type="button" onclick="cerrarModal('modal-crear-modulo')" class="btn-secondary" style="padding:.4rem .85rem;font-size:.8rem;">Cancelar</button>
+                <button type="submit" class="btn-premium" style="padding:.4rem .85rem;font-size:.8rem;"><i class="bi bi-check-lg"></i> Crear Módulo</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Modal Editar Módulo --}}
+<div id="modal-editar-modulo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;justify-content:center;align-items:center;backdrop-filter:blur(2px);" onclick="if(event.target===this)cerrarModal('modal-editar-modulo')">
+    <div class="glass-card" style="width:90%;max-width:480px;padding:1.5rem;" onclick="event.stopPropagation()">
+        <h3 style="margin:0 0 1rem;font-size:1rem;font-weight:700;color:var(--text-primary);">
+            <i class="bi bi-pencil" style="color:var(--accent-color);"></i> Editar Módulo
+        </h3>
+        <form method="POST" id="form-editar-modulo" action="">
+            @csrf @method('PUT')
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.6rem;">
+                <div>
+                    <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Nombre *</label>
+                    <input type="text" name="nombre" id="editar-mod-nombre" class="form-input" required style="font-size:.83rem;">
+                </div>
+                <div>
+                    <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Slug *</label>
+                    <input type="text" name="slug" id="editar-mod-slug" class="form-input" required style="font-size:.83rem;">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.6rem;">
+                <div>
+                    <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Grupo *</label>
+                    <input type="text" name="grupo" id="editar-mod-grupo" class="form-input" required list="grupos-list" style="font-size:.83rem;">
+                </div>
+                <div>
+                    <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Icono Bootstrap</label>
+                    <input type="text" name="icono" id="editar-mod-icono" class="form-input" style="font-size:.83rem;">
+                </div>
+            </div>
+            <div style="margin-bottom:.85rem;">
+                <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Descripción</label>
+                <input type="text" name="descripcion" id="editar-mod-descripcion" class="form-input" style="font-size:.83rem;">
+            </div>
+            <div style="display:flex;gap:.5rem;justify-content:flex-end;">
+                <button type="button" onclick="cerrarModal('modal-editar-modulo')" class="btn-secondary" style="padding:.4rem .85rem;font-size:.8rem;">Cancelar</button>
                 <button type="submit" class="btn-premium" style="padding:.4rem .85rem;font-size:.8rem;"><i class="bi bi-check-lg"></i> Guardar</button>
             </div>
         </form>
