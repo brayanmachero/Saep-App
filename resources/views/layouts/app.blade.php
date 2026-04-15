@@ -489,5 +489,49 @@
     </script>
 
     @stack('scripts')
+
+    {{-- Global Toast Notification System --}}
+    <div id="toast-container" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:99999;display:flex;flex-direction:column-reverse;gap:.5rem;max-width:400px;pointer-events:none;"></div>
+    <script>
+    function showToast(message, type = 'success', duration = 4000) {
+        const container = document.getElementById('toast-container');
+        const icons = { success:'bi-check-circle-fill', error:'bi-exclamation-circle-fill', warning:'bi-exclamation-triangle-fill', info:'bi-info-circle-fill' };
+        const colors = { success:'#10b981', error:'#ef4444', warning:'#f59e0b', info:'#3b82f6' };
+        const bgColors = { success:'#ecfdf5', error:'#fef2f2', warning:'#fffbeb', info:'#eff6ff' };
+        const icon = icons[type] || icons.success;
+        const color = colors[type] || colors.success;
+        const bg = bgColors[type] || bgColors.success;
+
+        const toast = document.createElement('div');
+        toast.style.cssText = `pointer-events:auto;display:flex;align-items:center;gap:.6rem;padding:.75rem 1rem;border-radius:10px;background:${bg};border:1px solid ${color}30;box-shadow:0 8px 25px rgba(0,0,0,.12);font-size:.85rem;color:#1f2937;opacity:0;transform:translateX(100%);transition:all .3s ease;min-width:280px;`;
+        toast.innerHTML = `<i class="bi ${icon}" style="color:${color};font-size:1.1rem;flex-shrink:0;"></i><span style="flex:1;line-height:1.35;">${message}</span><button onclick="this.parentElement.style.opacity='0';this.parentElement.style.transform='translateX(100%)';setTimeout(()=>this.parentElement.remove(),300)" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:1rem;padding:0 0 0 .5rem;line-height:1;">&times;</button>`;
+        container.appendChild(toast);
+
+        requestAnimationFrame(() => {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateX(0)';
+        });
+
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100%)';
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    }
+
+    // Auto-show session flash messages as toasts
+    @if(session('success'))
+        showToast(@json(session('success')), 'success');
+    @endif
+    @if(session('error'))
+        showToast(@json(session('error')), 'error');
+    @endif
+    @if(session('warning'))
+        showToast(@json(session('warning')), 'warning');
+    @endif
+    @if(session('info'))
+        showToast(@json(session('info')), 'info');
+    @endif
+    </script>
 </body>
 </html>

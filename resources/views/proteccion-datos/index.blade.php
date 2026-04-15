@@ -20,17 +20,6 @@
     </div>
 </div>
 
-@if(session('success'))
-<div style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 1rem 1.25rem; border-radius: 10px; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
-    <i class="bi bi-check-circle-fill"></i> {{ session('success') }}
-</div>
-@endif
-@if(session('info'))
-<div style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 1rem 1.25rem; border-radius: 10px; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
-    <i class="bi bi-info-circle-fill"></i> {{ session('info') }}
-</div>
-@endif
-
 {{-- Estado del consentimiento --}}
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-bottom: 2rem;">
     <div class="card-glass" style="padding: 1.5rem;">

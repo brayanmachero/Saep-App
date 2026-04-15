@@ -55,18 +55,6 @@
         </div>
     </div>
 
-    {{-- Mensajes --}}
-    @if(session('success'))
-    <div class="glass-card" style="padding:.75rem 1.25rem;margin-bottom:1rem;border-left:4px solid #22c55e;font-size:.85rem;color:#15803d;background:rgba(34,197,94,.06)">
-        <i class="bi bi-check-circle-fill"></i> {{ session('success') }}
-    </div>
-    @endif
-    @if(session('error'))
-    <div class="glass-card" style="padding:.75rem 1.25rem;margin-bottom:1rem;border-left:4px solid #dc2626;font-size:.85rem;color:#991b1b;background:rgba(220,38,38,.06)">
-        <i class="bi bi-exclamation-triangle-fill"></i> {{ session('error') }}
-    </div>
-    @endif
-
     {{-- Filtros --}}
     @if(isset($filterOptions) && !empty($filterOptions))
     <div class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1rem">

@@ -12,12 +12,6 @@
     </div>
 </div>
 
-@if(session('success'))
-<div style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 1rem 1.25rem; border-radius: 10px; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
-    <i class="bi bi-check-circle-fill"></i> {{ session('success') }}
-</div>
-@endif
-
 {{-- Stats --}}
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
     <div class="card-glass" style="padding: 1.25rem; text-align: center;">

@@ -35,12 +35,6 @@
         </div>
     </div>
 
-    @if(session('success'))
-    <div class="glass-card" style="padding:.75rem 1.25rem;margin-bottom:1rem;border-left:4px solid #22c55e;font-size:.85rem;color:#15803d;background:rgba(34,197,94,.06)">
-        <i class="bi bi-check-circle-fill"></i> {{ session('success') }}
-    </div>
-    @endif
-
     {{-- Filtros --}}
     <form method="GET" action="{{ route('charla-tracking.index') }}" class="filter-form">
         <div class="filter-group">

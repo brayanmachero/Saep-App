@@ -13,19 +13,9 @@
     </div>
 
     {{-- Alertas --}}
-    @if(session('warning'))
-        <div style="background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:12px;padding:1rem 1.25rem;color:#92400e;font-size:.9rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:.5rem;">
-            <i class="bi bi-exclamation-triangle-fill"></i> <strong>{{ session('warning') }}</strong>
-        </div>
-    @endif
     @if(auth()->user()->must_change_password)
         <div style="background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #ef4444;border-radius:12px;padding:1rem 1.25rem;color:#dc2626;font-size:.9rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:.5rem;">
             <i class="bi bi-shield-exclamation"></i> <strong>Tiene una contraseña provisoria.</strong> Debe cambiarla antes de continuar usando la plataforma.
-        </div>
-    @endif
-    @if(session('success'))
-        <div class="alert-success" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:1rem 1.25rem;color:#16a34a;font-size:.9rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:.5rem;">
-            <i class="bi bi-check-circle-fill"></i> {{ session('success') }}
         </div>
     @endif
     @if($errors->any())
