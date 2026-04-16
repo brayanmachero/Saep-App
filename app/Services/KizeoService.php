@@ -717,4 +717,126 @@ class KizeoService
             'cached_at'  => now()->toDateTimeString(),
         ];
     }
+
+    /* ──────────────────────────────────────────────────────────────
+     |  API v4 — Listas avanzadas (Advanced Lists)
+     |  Base URL diferente: /rest/public/v4
+     | ────────────────────────────────────────────────────────────── */
+
+    /**
+     * GET request a la API Kizeo v4 (listas avanzadas).
+     */
+    private function getV4(string $endpoint, array $query = [], int $timeout = 30): array
+    {
+        $baseV4 = 'https://www.kizeoforms.com/rest/public/v4';
+
+        $response = Http::withHeaders(['Authorization' => $this->token])
+            ->timeout($timeout)
+            ->get("{$baseV4}/{$endpoint}", $query);
+
+        if ($response->failed()) {
+            throw new \Exception("Kizeo API v4 error [{$response->status()}]: {$response->body()}");
+        }
+
+        return $response->json();
+    }
+
+    /**
+     * Obtener la definición (columnas/propiedades) de una lista avanzada.
+     */
+    public function getListDefinition(string $listId): array
+    {
+        $key = "kizeo_list_def_{$listId}";
+
+        return Cache::remember($key, 86400, function () use ($listId) {
+            return $this->getV4("lists/{$listId}/definition");
+        });
+    }
+
+    /**
+     * Obtener todos los items de una lista avanzada (paginado automático, máx 500 por request).
+     * Cacheado 2 horas (la lista se actualiza semanalmente).
+     */
+    public function getListItems(string $listId, bool $forceRefresh = false): array
+    {
+        $key = "kizeo_list_items_{$listId}";
+        if ($forceRefresh) Cache::forget($key);
+
+        return Cache::remember($key, 7200, function () use ($listId) {
+            $allItems = [];
+            $offset = 0;
+            $limit = 500;
+
+            do {
+                $data = $this->getV4("lists/{$listId}/items", [
+                    'offset' => $offset,
+                    'limit'  => $limit,
+                ]);
+
+                $items = is_array($data) ? $data : [];
+                $allItems = array_merge($allItems, $items);
+                $offset += $limit;
+            } while (count($items) === $limit);
+
+            return $allItems;
+        });
+    }
+
+    /**
+     * Obtener una lista simple (no avanzada) via API v3.
+     * Cacheado 2 horas.
+     */
+    public function getSimpleList(string $listId, bool $forceRefresh = false): array
+    {
+        $key = "kizeo_simple_list_{$listId}";
+        if ($forceRefresh) Cache::forget($key);
+
+        return Cache::remember($key, 7200, function () use ($listId) {
+            $data = $this->get("lists/{$listId}");
+            return $data['list']['items'] ?? [];
+        });
+    }
+
+    /**
+     * Obtener la lista "Personal Vigente" formateada para selects.
+     * Formato items v3: "RUT:RUT|Nombre:Nombre|Cargo:Cargo"
+     * Retorna array de ['id' => rut, 'label' => nombre, 'rut' => rut, 'cargo' => cargo].
+     */
+    public function getPersonalVigente(bool $forceRefresh = false): array
+    {
+        $listId = config('services.kizeo.personal_vigente_list_id');
+        if (!$listId) return [];
+
+        $items = $this->getSimpleList($listId, $forceRefresh);
+
+        $result = [];
+        foreach ($items as $item) {
+            // Formato: "RUT:RUT|Nombre:Nombre|Cargo:Cargo"
+            $fields = explode('|', $item);
+            $rut    = '';
+            $nombre = '';
+            $cargo  = '';
+
+            foreach ($fields as $i => $field) {
+                // Cada campo es "label:value" — tomar todo después del primer ":"
+                $colonPos = strpos($field, ':');
+                $value = $colonPos !== false ? substr($field, $colonPos + 1) : $field;
+
+                if ($i === 0) $rut    = trim($value);
+                if ($i === 1) $nombre = trim($value);
+                if ($i === 2) $cargo  = trim($value);
+            }
+
+            if ($nombre) {
+                $result[] = [
+                    'id'    => $rut,  // Usamos RUT como ID único
+                    'label' => $nombre,
+                    'rut'   => $rut,
+                    'cargo' => $cargo,
+                ];
+            }
+        }
+
+        return $result;
+    }
 }

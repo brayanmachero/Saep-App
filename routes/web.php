@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccidenteSstController;
+use App\Http\Controllers\OpcionAccidenteSstController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\AuditoriaSstController;
@@ -280,6 +281,22 @@ Route::middleware('auth')->group(function () {
     // --- SST: ACCIDENTES ---
     Route::middleware('modulo:accidentes_sst')->group(function () {
         Route::resource('accidentes-sst', AccidenteSstController::class);
+        Route::patch('accidentes-sst/{accidentesSst}/accion-rapida', [AccidenteSstController::class, 'accionRapida'])
+            ->name('accidentes-sst.accion-rapida');
+
+        // Catálogo de opciones (lesiones, causas, medidas)
+        Route::get('accidentes-sst-opciones', [OpcionAccidenteSstController::class, 'index'])
+            ->name('accidentes-sst.opciones');
+        Route::post('accidentes-sst-opciones', [OpcionAccidenteSstController::class, 'store'])
+            ->name('accidentes-sst.opciones.store');
+        Route::patch('accidentes-sst/opciones/{opcion}', [OpcionAccidenteSstController::class, 'update'])
+            ->name('accidentes-sst.opciones.update');
+        Route::patch('accidentes-sst/opciones/{opcion}/toggle', [OpcionAccidenteSstController::class, 'toggleActivo'])
+            ->name('accidentes-sst.opciones.toggle');
+        Route::delete('accidentes-sst/opciones/{opcion}', [OpcionAccidenteSstController::class, 'destroy'])
+            ->name('accidentes-sst.opciones.destroy');
+        Route::get('accidentes-sst/api/opciones/{tipo}', [OpcionAccidenteSstController::class, 'api'])
+            ->name('accidentes-sst.opciones.api');
     });
 
     // --- SST: LEY KARIN ---
