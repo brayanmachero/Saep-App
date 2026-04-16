@@ -12,7 +12,7 @@
         </a>
     </div>
     @include('partials._alerts')
-    <div class="glass-card">
+    <div class="glass-card" style="max-width:960px;margin:0 auto">
         <form method="POST" action="{{ route('accidentes-sst.update', $accidenteSst) }}">
             @csrf @method('PUT')
 
@@ -25,6 +25,7 @@
                 </div>
             </div>
 
+            <h4 class="section-title">Datos del Evento</h4>
             <div class="form-grid">
                 <div class="form-group">
                     <label>Fecha <span class="required">*</span></label>
@@ -66,29 +67,28 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="form-group">
-                    <label>Trabajador Afectado</label>
+                <div class="form-group" style="grid-column:1/-1">
+                    <label><i class="bi bi-person-fill" style="margin-right:.3rem"></i> Trabajador Afectado</label>
                     <input type="hidden" name="trabajador_data" id="trabajador_data"
                            value="{{ old('trabajador_data', $accidenteSst->trabajador_kizeo_id ? json_encode(['id' => $accidenteSst->trabajador_kizeo_id, 'label' => $accidenteSst->trabajador_nombre, 'rut' => $accidenteSst->trabajador_rut, 'cargo' => $accidenteSst->trabajador_cargo]) : '') }}">
-                    <div class="search-select-wrap" id="trabajador_wrap" style="position:relative">
+                    <div style="max-width:480px;position:relative">
                         <input type="text" class="form-control" id="trabajador_search" autocomplete="off"
                                placeholder="Buscar por nombre o RUT..." style="padding-right:2.5rem">
-                        <i class="bi bi-chevron-down" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none"></i>
+                        <i class="bi bi-search" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;font-size:.85rem"></i>
                         <div id="trabajador_dropdown" class="search-dropdown"></div>
                     </div>
                     <script type="application/json" id="personal_data">@json($personal)</script>
                     <small style="color:var(--text-muted);margin-top:.25rem;display:block">
                         <i class="bi bi-cloud-arrow-down"></i> Fuente: Lista Kizeo "Personal Vigente"
                     </small>
-                </div>
-            </div>
-
-            {{-- Detalle del trabajador seleccionado --}}
-            <div id="trabajador_info" style="display:none;background:var(--bg-tertiary);border-radius:.5rem;padding:.75rem 1rem;margin-bottom:1rem">
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem">
-                    <div><small style="color:var(--text-muted)">Nombre</small><div id="info_nombre" style="font-weight:600">—</div></div>
-                    <div><small style="color:var(--text-muted)">RUT</small><div id="info_rut">—</div></div>
-                    <div><small style="color:var(--text-muted)">Cargo</small><div id="info_cargo">—</div></div>
+                    {{-- Detalle del trabajador seleccionado --}}
+                    <div id="trabajador_info" class="trabajador-info-panel">
+                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem">
+                            <div><small style="color:var(--text-muted)">Nombre</small><div id="info_nombre" style="font-weight:600">—</div></div>
+                            <div><small style="color:var(--text-muted)">RUT</small><div id="info_rut">—</div></div>
+                            <div><small style="color:var(--text-muted)">Cargo</small><div id="info_cargo">—</div></div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -97,7 +97,7 @@
                 <textarea name="descripcion" class="form-control" rows="4" required>{{ old('descripcion', $accidenteSst->descripcion) }}</textarea>
             </div>
 
-            <h4 style="margin-top:1.5rem;color:var(--text-muted);font-size:.85rem;text-transform:uppercase;letter-spacing:.05em">Clasificación del Evento</h4>
+            <h4 class="section-title" style="margin-top:1.5rem">Clasificación del Evento</h4>
 
             <div class="form-group">
                 <label>Lesiones / Diagnóstico</label>
@@ -141,7 +141,8 @@
                 </div>
             </div>
 
-            <div class="form-grid">
+            <h4 class="section-title" style="margin-top:1.5rem">Información Adicional</h4>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0 1.5rem">
                 <div class="form-group">
                     <label>Días Perdidos</label>
                     <input type="number" name="dias_perdidos" value="{{ old('dias_perdidos', $accidenteSst->dias_perdidos) }}" class="form-control" min="0">
@@ -170,6 +171,15 @@
 </div>
 
 <style>
+.section-title {
+    margin-top:0; margin-bottom:1rem; color:var(--text-muted); font-size:.8rem;
+    text-transform:uppercase; letter-spacing:.06em; font-weight:600;
+    padding-bottom:.5rem; border-bottom:1px solid var(--surface-border, #e5e7eb);
+}
+.trabajador-info-panel {
+    display:none; background:var(--bg-tertiary); border-radius:.5rem;
+    padding:.75rem 1rem; margin-top:.75rem; border-left:3px solid var(--accent-primary, #6366f1);
+}
 .tag-select-wrap .tag-selected { display:flex; flex-wrap:wrap; gap:.35rem; margin-bottom:.35rem; }
 .tag-select-wrap .tag-badge {
     display:inline-flex; align-items:center; gap:.35rem; padding:.25rem .6rem;
