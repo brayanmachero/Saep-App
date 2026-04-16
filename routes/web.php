@@ -128,6 +128,8 @@ Route::middleware('auth')->group(function () {
         Route::resource('cargos', CargoController::class)->except(['show']);
     });
     Route::middleware('modulo:centros_costo')->group(function () {
+        Route::get('centros-costo/plantilla-csv', [CentroCostoController::class, 'descargarPlantilla'])->name('centros-costo.plantilla');
+        Route::post('centros-costo/importar', [CentroCostoController::class, 'importar'])->name('centros-costo.importar');
         Route::resource('centros-costo', CentroCostoController::class)->except(['show']);
     });
     Route::middleware('modulo:categorias_formularios')->group(function () {
