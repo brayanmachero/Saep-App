@@ -36,7 +36,7 @@
                     <label>Tipo <span class="required">*</span></label>
                     <select name="tipo" class="form-control @error('tipo') is-invalid @enderror" required>
                         <option value="">Seleccionar...</option>
-                        @foreach(['accidente_trabajo','accidente_trayecto','enfermedad_profesional','casi_accidente','incidente'] as $t)
+                        @foreach(['accidente_trabajo','accidente_trayecto','enfermedad_profesional','cuasi_accidente','incidente'] as $t)
                             <option value="{{ $t }}" {{ old('tipo') === $t ? 'selected' : '' }}>
                                 {{ ucfirst(str_replace('_',' ',$t)) }}
                             </option>

@@ -40,7 +40,7 @@
                 <div class="form-group">
                     <label>Tipo <span class="required">*</span></label>
                     <select name="tipo" class="form-control" required>
-                        @foreach(['accidente_trabajo','accidente_trayecto','enfermedad_profesional','casi_accidente','incidente'] as $t)
+                        @foreach(['accidente_trabajo','accidente_trayecto','enfermedad_profesional','cuasi_accidente','incidente'] as $t)
                             <option value="{{ $t }}" {{ old('tipo', $accidenteSst->tipo) === $t ? 'selected' : '' }}>
                                 {{ ucfirst(str_replace('_',' ',$t)) }}
                             </option>
