@@ -70,15 +70,13 @@
                     <label>Trabajador Afectado</label>
                     <input type="hidden" name="trabajador_data" id="trabajador_data"
                            value="{{ old('trabajador_data', $accidenteSst->trabajador_kizeo_id ? json_encode(['id' => $accidenteSst->trabajador_kizeo_id, 'label' => $accidenteSst->trabajador_nombre, 'rut' => $accidenteSst->trabajador_rut, 'cargo' => $accidenteSst->trabajador_cargo]) : '') }}">
-                    <select id="trabajador_select" class="form-control">
-                        <option value="">— Seleccionar Personal Vigente —</option>
-                        @foreach($personal as $p)
-                            <option value="{{ json_encode($p) }}"
-                                    {{ $accidenteSst->trabajador_kizeo_id == $p['id'] ? 'selected' : '' }}>
-                                {{ $p['label'] }} {{ $p['rut'] ? '('.$p['rut'].')' : '' }}
-                            </option>
-                        @endforeach
-                    </select>
+                    <div class="search-select-wrap" id="trabajador_wrap" style="position:relative">
+                        <input type="text" class="form-control" id="trabajador_search" autocomplete="off"
+                               placeholder="Buscar por nombre o RUT..." style="padding-right:2.5rem">
+                        <i class="bi bi-chevron-down" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none"></i>
+                        <div id="trabajador_dropdown" class="search-dropdown"></div>
+                    </div>
+                    <script type="application/json" id="personal_data">@json($personal)</script>
                     <small style="color:var(--text-muted);margin-top:.25rem;display:block">
                         <i class="bi bi-cloud-arrow-down"></i> Fuente: Lista Kizeo "Personal Vigente"
                     </small>
@@ -193,28 +191,81 @@
 .tag-dropdown .tag-opt.tag-create {
     border-top:1px solid var(--surface-border, #e5e7eb); display:flex; align-items:center; gap:.4rem; color:var(--accent-primary, #6366f1);
 }
+.search-dropdown {
+    display:none; position:absolute; left:0; right:0; z-index:999; max-height:250px; overflow-y:auto;
+    background:var(--surface-card-solid, #fff); border:1px solid var(--surface-border, #d1d5db);
+    border-radius:8px; margin-top:2px; box-shadow:0 8px 24px rgba(0,0,0,.18);
+}
+.search-dropdown .sd-item {
+    padding:.5rem .75rem; font-size:.85rem; cursor:pointer; transition:background .1s;
+}
+.search-dropdown .sd-item:hover { background:var(--bg-tertiary, #f3f4f6); }
+.search-dropdown .sd-item .sd-rut { color:var(--text-muted); font-size:.78rem; margin-left:.5rem; }
 </style>
 
 <script>
-document.getElementById('trabajador_select').addEventListener('change', function() {
+// ── Trabajador Afectado: Searchable dropdown ──
+(function() {
+    const personal = JSON.parse(document.getElementById('personal_data').textContent || '[]');
+    const searchInput = document.getElementById('trabajador_search');
+    const dropdown = document.getElementById('trabajador_dropdown');
     const hidden = document.getElementById('trabajador_data');
-    const info   = document.getElementById('trabajador_info');
-    if (this.value) {
-        hidden.value = this.value;
-        const data = JSON.parse(this.value);
+    const infoPanel = document.getElementById('trabajador_info');
+
+    function showInfo(data) {
         document.getElementById('info_nombre').textContent = data.label || '—';
-        document.getElementById('info_rut').textContent    = data.rut || '—';
-        document.getElementById('info_cargo').textContent  = data.cargo || '—';
-        info.style.display = 'block';
-    } else {
-        hidden.value = '';
-        info.style.display = 'none';
+        document.getElementById('info_rut').textContent = data.rut || '—';
+        document.getElementById('info_cargo').textContent = data.cargo || '—';
+        infoPanel.style.display = 'block';
     }
-});
-// Trigger on load if pre-selected
-if (document.getElementById('trabajador_data').value) {
-    document.getElementById('trabajador_select').dispatchEvent(new Event('change'));
-}
+
+    function selectPerson(p) {
+        searchInput.value = p.label + (p.rut ? ' (' + p.rut + ')' : '');
+        hidden.value = JSON.stringify(p);
+        showInfo(p);
+        dropdown.style.display = 'none';
+    }
+
+    function renderList(query) {
+        const q = query.toLowerCase();
+        const filtered = q ? personal.filter(p =>
+            (p.label || '').toLowerCase().includes(q) ||
+            (p.rut || '').toLowerCase().includes(q) ||
+            (p.cargo || '').toLowerCase().includes(q)
+        ) : personal;
+
+        if (filtered.length === 0) {
+            dropdown.innerHTML = '<div style="padding:.6rem .75rem;font-size:.82rem;color:var(--text-muted)">Sin resultados para "' + query + '"</div>';
+        } else {
+            dropdown.innerHTML = filtered.slice(0, 50).map(p =>
+                '<div class="sd-item" data-id="' + (p.id || '') + '">' +
+                p.label + '<span class="sd-rut">' + (p.rut || '') + '</span></div>'
+            ).join('');
+        }
+        dropdown.style.display = 'block';
+
+        dropdown.querySelectorAll('.sd-item').forEach(item => {
+            item.addEventListener('mousedown', e => {
+                e.preventDefault();
+                const match = personal.find(p => String(p.id) === item.dataset.id);
+                if (match) selectPerson(match);
+            });
+        });
+    }
+
+    searchInput.addEventListener('input', () => renderList(searchInput.value.trim()));
+    searchInput.addEventListener('focus', () => renderList(searchInput.value.trim()));
+    searchInput.addEventListener('blur', () => setTimeout(() => dropdown.style.display = 'none', 200));
+
+    // Preload if existing value
+    if (hidden.value) {
+        try {
+            const data = JSON.parse(hidden.value);
+            searchInput.value = data.label + (data.rut ? ' (' + data.rut + ')' : '');
+            showInfo(data);
+        } catch(e) {}
+    }
+})();
 
 // ── Tag Select Multi (searchable + create) ──
 document.querySelectorAll('.tag-select-wrap').forEach(wrap => {
