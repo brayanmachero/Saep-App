@@ -195,7 +195,15 @@
 
 @media (max-width: 860px) {
     .detail-layout { grid-template-columns: 1fr; }
-    .detail-tags-grid { grid-template-columns: 1fr; }
+    .detail-tags-grid { grid-template-columns: 1fr; gap: .75rem; }
+}
+@media (max-width: 640px) {
+    .detail-layout { gap: .75rem; }
+    .detail-card { padding: .85rem; border-radius: 10px; }
+    .detail-card-title { font-size: .85rem; margin-bottom: .65rem; padding-bottom: .5rem; }
+    .detail-field { flex-direction: column; align-items: flex-start; gap: .15rem; padding: .35rem 0; }
+    .detail-field .detail-label { margin-bottom: .1rem; }
+    .detail-label { font-size: .75rem; }
 }
 </style>
 @endsection

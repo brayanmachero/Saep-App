@@ -201,6 +201,11 @@
 }
 .search-dropdown .sd-item:hover { background:var(--bg-tertiary, #f3f4f6); }
 .search-dropdown .sd-item .sd-rut { color:var(--text-muted); font-size:.78rem; margin-left:.5rem; }
+
+@media (max-width: 640px) {
+    .trabajador-info-panel > div { grid-template-columns:1fr !important; }
+    .section-title { font-size:.75rem; }
+}
 </style>
 
 <script>

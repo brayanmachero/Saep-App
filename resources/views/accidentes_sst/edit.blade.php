@@ -142,7 +142,7 @@
             </div>
 
             <h4 class="section-title" style="margin-top:1.5rem">Información Adicional</h4>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0 1.5rem">
+            <div class="info-adicional-grid">
                 <div class="form-group">
                     <label>Días Perdidos</label>
                     <input type="number" name="dias_perdidos" value="{{ old('dias_perdidos', $accidenteSst->dias_perdidos) }}" class="form-control" min="0">
@@ -211,6 +211,13 @@
 }
 .search-dropdown .sd-item:hover { background:var(--bg-tertiary, #f3f4f6); }
 .search-dropdown .sd-item .sd-rut { color:var(--text-muted); font-size:.78rem; margin-left:.5rem; }
+.info-adicional-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:0 1.5rem; }
+
+@media (max-width: 640px) {
+    .trabajador-info-panel > div { grid-template-columns:1fr !important; }
+    .info-adicional-grid { grid-template-columns:1fr; }
+    .section-title { font-size:.75rem; }
+}
 </style>
 
 <script>
