@@ -10,35 +10,49 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('accidentes_sst', function (Blueprint $table) {
-            // Campos separados de fecha/hora usados por las vistas
-            $table->date('fecha_accidente')->nullable()->after('centro_costo_id');
-            $table->time('hora_accidente')->nullable()->after('fecha_accidente');
-
-            // Campos que usan las vistas pero no existían
-            $table->text('lesiones')->nullable()->after('descripcion');
-            $table->text('medidas_preventivas')->nullable()->after('medidas_correctivas');
-
-            // Trabajador de Kizeo (Personal Vigente)
-            $table->string('trabajador_kizeo_id', 100)->nullable()->after('trabajador_rut');
-            $table->string('trabajador_cargo', 200)->nullable()->after('trabajador_kizeo_id');
-
-            // Soft deletes (el modelo ya lo usa)
-            $table->softDeletes();
+            if (!Schema::hasColumn('accidentes_sst', 'fecha_accidente')) {
+                $table->date('fecha_accidente')->nullable()->after('centro_costo_id');
+            }
+            if (!Schema::hasColumn('accidentes_sst', 'hora_accidente')) {
+                $table->time('hora_accidente')->nullable()->after('fecha_accidente');
+            }
+            if (!Schema::hasColumn('accidentes_sst', 'lesiones')) {
+                $table->text('lesiones')->nullable()->after('descripcion');
+            }
+            if (!Schema::hasColumn('accidentes_sst', 'medidas_preventivas')) {
+                $table->text('medidas_preventivas')->nullable()->after('medidas_correctivas');
+            }
+            if (!Schema::hasColumn('accidentes_sst', 'trabajador_kizeo_id')) {
+                $table->string('trabajador_kizeo_id', 100)->nullable()->after('trabajador_rut');
+            }
+            if (!Schema::hasColumn('accidentes_sst', 'trabajador_cargo')) {
+                $table->string('trabajador_cargo', 200)->nullable()->after('trabajador_kizeo_id');
+            }
+            if (!Schema::hasColumn('accidentes_sst', 'deleted_at')) {
+                $table->softDeletes();
+            }
         });
 
         // Hacer nullable columnas que la vista no siempre llena
-        Schema::table('accidentes_sst', function (Blueprint $table) {
-            $table->string('trabajador_nombre', 200)->nullable()->change();
-            $table->string('lugar', 300)->nullable()->change();
-            $table->dateTime('fecha_hora_accidente')->nullable()->change();
-        });
+        if (Schema::hasColumn('accidentes_sst', 'trabajador_nombre')) {
+            Schema::table('accidentes_sst', function (Blueprint $table) {
+                $table->string('trabajador_nombre', 200)->nullable()->change();
+            });
+        }
+        if (Schema::hasColumn('accidentes_sst', 'lugar')) {
+            Schema::table('accidentes_sst', function (Blueprint $table) {
+                $table->string('lugar', 300)->nullable()->change();
+            });
+        }
+        if (Schema::hasColumn('accidentes_sst', 'fecha_hora_accidente')) {
+            Schema::table('accidentes_sst', function (Blueprint $table) {
+                $table->dateTime('fecha_hora_accidente')->nullable()->change();
+            });
+        }
 
         // Convertir enums a strings para flexibilidad (lowercase desde vistas)
-        // tipo
         DB::statement("ALTER TABLE accidentes_sst MODIFY COLUMN tipo VARCHAR(50) DEFAULT 'accidente_trabajo'");
-        // gravedad
         DB::statement("ALTER TABLE accidentes_sst MODIFY COLUMN gravedad VARCHAR(30) DEFAULT 'leve'");
-        // estado
         DB::statement("ALTER TABLE accidentes_sst MODIFY COLUMN estado VARCHAR(30) DEFAULT 'notificado'");
     }
 
