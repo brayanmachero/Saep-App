@@ -106,56 +106,41 @@
 
             <div class="form-group">
                 <label>Lesiones / Diagnóstico</label>
-                <div class="checkbox-grid">
-                    @foreach($lesiones as $op)
-                    <label class="checkbox-item">
-                        <input type="checkbox" name="lesiones_ids[]" value="{{ $op->id }}"
-                               {{ in_array($op->id, old('lesiones_ids', [])) ? 'checked' : '' }}>
-                        <span>{{ $op->nombre }}</span>
-                    </label>
-                    @endforeach
+                <div class="tag-select-wrap" data-name="lesiones_ids[]" data-tipo="lesion"
+                     data-api="{{ route('accidentes-sst.opciones.api', 'lesion') }}"
+                     data-store="{{ route('accidentes-sst.opciones.store') }}">
+                    <div class="tag-selected"></div>
+                    <div style="position:relative">
+                        <input type="text" class="form-control tag-search" placeholder="Buscar o crear lesión..." autocomplete="off">
+                        <div class="tag-dropdown"></div>
+                    </div>
                 </div>
-                @if($lesiones->isEmpty())
-                <small style="color:var(--text-muted)">No hay opciones.
-                    <a href="{{ route('accidentes-sst.opciones', ['tipo' => 'lesion']) }}">Configurar catálogo</a>
-                </small>
-                @endif
             </div>
 
             <div class="form-group">
                 <label>Causas del Accidente</label>
-                <div class="checkbox-grid">
-                    @foreach($causas as $op)
-                    <label class="checkbox-item">
-                        <input type="checkbox" name="causas_ids[]" value="{{ $op->id }}"
-                               {{ in_array($op->id, old('causas_ids', [])) ? 'checked' : '' }}>
-                        <span>{{ $op->nombre }}</span>
-                    </label>
-                    @endforeach
+                <div class="tag-select-wrap" data-name="causas_ids[]" data-tipo="causa"
+                     data-api="{{ route('accidentes-sst.opciones.api', 'causa') }}"
+                     data-store="{{ route('accidentes-sst.opciones.store') }}">
+                    <div class="tag-selected"></div>
+                    <div style="position:relative">
+                        <input type="text" class="form-control tag-search" placeholder="Buscar o crear causa..." autocomplete="off">
+                        <div class="tag-dropdown"></div>
+                    </div>
                 </div>
-                @if($causas->isEmpty())
-                <small style="color:var(--text-muted)">No hay opciones.
-                    <a href="{{ route('accidentes-sst.opciones', ['tipo' => 'causa']) }}">Configurar catálogo</a>
-                </small>
-                @endif
             </div>
 
             <div class="form-group">
                 <label>Medidas Preventivas</label>
-                <div class="checkbox-grid">
-                    @foreach($medidas as $op)
-                    <label class="checkbox-item">
-                        <input type="checkbox" name="medidas_ids[]" value="{{ $op->id }}"
-                               {{ in_array($op->id, old('medidas_ids', [])) ? 'checked' : '' }}>
-                        <span>{{ $op->nombre }}</span>
-                    </label>
-                    @endforeach
+                <div class="tag-select-wrap" data-name="medidas_ids[]" data-tipo="medida"
+                     data-api="{{ route('accidentes-sst.opciones.api', 'medida') }}"
+                     data-store="{{ route('accidentes-sst.opciones.store') }}">
+                    <div class="tag-selected"></div>
+                    <div style="position:relative">
+                        <input type="text" class="form-control tag-search" placeholder="Buscar o crear medida..." autocomplete="off">
+                        <div class="tag-dropdown"></div>
+                    </div>
                 </div>
-                @if($medidas->isEmpty())
-                <small style="color:var(--text-muted)">No hay opciones.
-                    <a href="{{ route('accidentes-sst.opciones', ['tipo' => 'medida']) }}">Configurar catálogo</a>
-                </small>
-                @endif
             </div>
 
             <div class="form-grid">
@@ -178,10 +163,27 @@
 </div>
 
 <style>
-.checkbox-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px,1fr)); gap:.5rem; margin-top:.35rem; }
-.checkbox-item { display:flex; align-items:center; gap:.5rem; padding:.4rem .6rem; border-radius:.35rem; cursor:pointer; transition:background .15s; }
-.checkbox-item:hover { background:var(--bg-tertiary); }
-.checkbox-item input[type="checkbox"] { accent-color:var(--accent-primary); width:1rem; height:1rem; }
+.tag-select-wrap .tag-selected { display:flex; flex-wrap:wrap; gap:.35rem; margin-bottom:.35rem; }
+.tag-select-wrap .tag-badge {
+    display:inline-flex; align-items:center; gap:.35rem; padding:.25rem .6rem;
+    background:var(--accent-primary, #6366f1); color:#fff; border-radius:1rem; font-size:.8rem; font-weight:500;
+}
+.tag-select-wrap .tag-badge button {
+    background:none; border:none; color:#fff; cursor:pointer; font-size:.9rem; line-height:1; opacity:.7; padding:0;
+}
+.tag-select-wrap .tag-badge button:hover { opacity:1; }
+.tag-dropdown {
+    display:none; position:absolute; left:0; right:0; z-index:999; max-height:200px; overflow-y:auto;
+    background:var(--surface-card-solid, #fff); border:1px solid var(--surface-border, #d1d5db);
+    border-radius:8px; margin-top:2px; box-shadow:0 8px 24px rgba(0,0,0,.18);
+}
+.tag-dropdown .tag-opt {
+    padding:.5rem .75rem; font-size:.85rem; cursor:pointer; transition:background .1s;
+}
+.tag-dropdown .tag-opt:hover { background:var(--bg-tertiary, #f3f4f6); }
+.tag-dropdown .tag-opt.tag-create {
+    border-top:1px solid var(--surface-border, #e5e7eb); display:flex; align-items:center; gap:.4rem; color:var(--accent-primary, #6366f1);
+}
 </style>
 
 <script>
@@ -204,5 +206,83 @@ document.getElementById('trabajador_select').addEventListener('change', function
 if (document.getElementById('trabajador_data').value) {
     document.getElementById('trabajador_select').dispatchEvent(new Event('change'));
 }
+
+// ── Tag Select Multi (searchable + create) ──
+document.querySelectorAll('.tag-select-wrap').forEach(wrap => {
+    const name     = wrap.dataset.name;
+    const tipo     = wrap.dataset.tipo;
+    const apiUrl   = wrap.dataset.api;
+    const storeUrl = wrap.dataset.store;
+    const search   = wrap.querySelector('.tag-search');
+    const dropdown = wrap.querySelector('.tag-dropdown');
+    const selBox   = wrap.querySelector('.tag-selected');
+    const csrf     = document.querySelector('meta[name="csrf-token"]')?.content;
+    const selected = new Map(); // id => nombre
+    let timer;
+
+    function renderTags() {
+        selBox.innerHTML = '';
+        selected.forEach((nombre, id) => {
+            const hidden = document.createElement('input');
+            hidden.type = 'hidden'; hidden.name = name; hidden.value = id;
+            const badge = document.createElement('span');
+            badge.className = 'tag-badge';
+            badge.innerHTML = nombre + ' <button type="button" data-id="' + id + '">&times;</button>';
+            badge.querySelector('button').addEventListener('click', () => { selected.delete(id); renderTags(); });
+            selBox.appendChild(hidden);
+            selBox.appendChild(badge);
+        });
+    }
+
+    function renderDropdown(items, query) {
+        let html = '';
+        items.forEach(item => {
+            if (!selected.has(String(item.id))) {
+                html += '<div class="tag-opt" data-id="' + item.id + '" data-nombre="' + (item.nombre || '').replace(/"/g, '&quot;') + '">' + (item.nombre || '') + '</div>';
+            }
+        });
+        if (query.length > 1 && !items.some(i => i.nombre.toLowerCase() === query.toLowerCase())) {
+            html += '<div class="tag-opt tag-create" data-nombre="' + query.replace(/"/g, '&quot;') + '"><i class="bi bi-plus-circle"></i> Crear "<strong>' + query + '</strong>"</div>';
+        }
+        if (!html) html = '<div style="padding:.6rem .75rem;font-size:.82rem;color:var(--text-muted)">Sin resultados</div>';
+        dropdown.innerHTML = html;
+        dropdown.style.display = 'block';
+
+        dropdown.querySelectorAll('.tag-opt').forEach(opt => {
+            opt.addEventListener('mousedown', e => {
+                e.preventDefault();
+                if (opt.classList.contains('tag-create')) {
+                    // Crear nueva opción via API
+                    fetch(storeUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                        body: JSON.stringify({ tipo: tipo, nombre: opt.dataset.nombre })
+                    }).then(r => r.json()).then(data => {
+                        const op = data.opcion || data;
+                        if (op.id) { selected.set(String(op.id), op.nombre || opt.dataset.nombre); renderTags(); }
+                    });
+                } else {
+                    selected.set(String(opt.dataset.id), opt.dataset.nombre);
+                    renderTags();
+                }
+                search.value = '';
+                dropdown.style.display = 'none';
+            });
+        });
+    }
+
+    function doSearch() {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+            const q = search.value.trim();
+            fetch(apiUrl + '?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } })
+                .then(r => r.json()).then(items => renderDropdown(items, q)).catch(() => {});
+        }, 200);
+    }
+
+    search.addEventListener('input', doSearch);
+    search.addEventListener('focus', doSearch);
+    search.addEventListener('blur', () => setTimeout(() => dropdown.style.display = 'none', 200));
+});
 </script>
 @endsection
