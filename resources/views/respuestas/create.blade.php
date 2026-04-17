@@ -167,15 +167,30 @@
                             </div>
 
                         @elseif($field['type'] === 'file')
-                            <input type="file" name="file_{{ $field['id'] }}{{ !empty($field['multiple']) ? '[]' : '' }}"
-                                id="field_{{ $field['id'] }}"
-                                class="form-input" data-id="{{ $field['id'] }}" data-is-file="1"
-                                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
-                                {{ !empty($field['multiple']) ? 'multiple' : '' }}
-                                {{ !empty($field['required']) ? 'required' : '' }}>
-                            <small style="color:var(--text-muted);font-size:.75rem">
-                                PDF, Word, Excel o imágenes (máx. 10MB{{ !empty($field['multiple']) ? ' c/u' : '' }})
-                            </small>
+                            @if(!empty($field['multiple']))
+                                {{-- Multi-file: uploader interactivo --}}
+                                <div class="multi-file-upload" data-field-id="{{ $field['id'] }}" data-required="{{ !empty($field['required']) ? '1' : '0' }}">
+                                    <div class="mfu-dropzone" style="border:2px dashed var(--surface-border);border-radius:10px;padding:1.5rem;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface-hover);">
+                                        <i class="bi bi-cloud-arrow-up" style="font-size:1.5rem;color:var(--accent-color);"></i>
+                                        <p style="margin:.5rem 0 0;font-size:.85rem;color:var(--text-muted);">
+                                            Haz clic o arrastra archivos aquí
+                                        </p>
+                                        <small style="color:var(--text-muted);font-size:.72rem">PDF, Word, Excel o imágenes · máx. 10MB c/u</small>
+                                    </div>
+                                    <input type="file" class="mfu-input" style="display:none"
+                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp" multiple>
+                                    <div class="mfu-list" style="display:flex;flex-direction:column;gap:.4rem;margin-top:.5rem;"></div>
+                                </div>
+                            @else
+                                <input type="file" name="file_{{ $field['id'] }}"
+                                    id="field_{{ $field['id'] }}"
+                                    class="form-input" data-id="{{ $field['id'] }}" data-is-file="1"
+                                    accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
+                                    {{ !empty($field['required']) ? 'required' : '' }}>
+                                <small style="color:var(--text-muted);font-size:.75rem">
+                                    PDF, Word, Excel o imágenes (máx. 10MB)
+                                </small>
+                            @endif
 
                         @elseif($field['type'] === 'select_dynamic')
                             <div class="dynamic-select-wrap" data-field-id="{{ $field['id'] }}"
@@ -461,6 +476,103 @@ document.querySelectorAll('.dynamic-select-wrap').forEach(wrap => {
 
     searchInput.addEventListener('blur', function() {
         setTimeout(() => { dropdown.style.display = 'none'; }, 200);
+    });
+});
+
+// ── Multi-file upload (acumulativo) ──
+document.querySelectorAll('.multi-file-upload').forEach(container => {
+    const fieldId = container.dataset.fieldId;
+    const isRequired = container.dataset.required === '1';
+    const dropzone = container.querySelector('.mfu-dropzone');
+    const fileInput = container.querySelector('.mfu-input');
+    const listEl = container.querySelector('.mfu-list');
+    const form = document.getElementById('dynamic-form');
+
+    // Almacén acumulativo de archivos
+    let fileStore = [];
+
+    function renderList() {
+        listEl.innerHTML = '';
+        fileStore.forEach((file, idx) => {
+            const isImage = file.type.startsWith('image/');
+            const sizeKB = (file.size / 1024).toFixed(0);
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:.5rem;padding:.4rem .6rem;background:var(--surface-hover);border-radius:8px;font-size:.8rem;';
+            row.innerHTML = `
+                <i class="bi ${isImage ? 'bi-image' : 'bi-file-earmark'}" style="color:var(--accent-color);font-size:1rem;"></i>
+                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${file.name}">${file.name}</span>
+                <small style="color:var(--text-muted);white-space:nowrap;">${sizeKB} KB</small>
+                <button type="button" data-idx="${idx}" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1rem;padding:0;line-height:1;" title="Quitar">
+                    <i class="bi bi-x-circle"></i>
+                </button>
+            `;
+            row.querySelector('button').addEventListener('click', () => {
+                fileStore.splice(idx, 1);
+                renderList();
+            });
+            listEl.appendChild(row);
+        });
+
+        // Actualizar contador en dropzone
+        const counter = dropzone.querySelector('.mfu-counter');
+        if (fileStore.length > 0) {
+            if (counter) {
+                counter.textContent = `${fileStore.length} archivo${fileStore.length > 1 ? 's' : ''} seleccionado${fileStore.length > 1 ? 's' : ''}`;
+            } else {
+                const badge = document.createElement('p');
+                badge.className = 'mfu-counter';
+                badge.style.cssText = 'margin:.4rem 0 0;font-size:.78rem;color:var(--accent-color);font-weight:600;';
+                badge.textContent = `${fileStore.length} archivo${fileStore.length > 1 ? 's' : ''} seleccionado${fileStore.length > 1 ? 's' : ''}`;
+                dropzone.appendChild(badge);
+            }
+        } else if (counter) {
+            counter.remove();
+        }
+    }
+
+    function addFiles(files) {
+        for (const f of files) {
+            // Evitar duplicados por nombre+tamaño
+            const exists = fileStore.some(s => s.name === f.name && s.size === f.size);
+            if (!exists) fileStore.push(f);
+        }
+        renderList();
+    }
+
+    // Click para abrir selector
+    dropzone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length) addFiles(fileInput.files);
+        fileInput.value = ''; // Reset para poder re-seleccionar mismo archivo
+    });
+
+    // Drag & drop
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.style.borderColor = 'var(--accent-color)'; dropzone.style.background = 'rgba(99,102,241,0.06)'; });
+    dropzone.addEventListener('dragleave', () => { dropzone.style.borderColor = ''; dropzone.style.background = ''; });
+    dropzone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropzone.style.borderColor = '';
+        dropzone.style.background = '';
+        if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+    });
+
+    // Al enviar el form, inyectar los archivos como inputs reales
+    form.addEventListener('submit', function() {
+        // Remover inputs previos de este campo
+        form.querySelectorAll(`input[name="file_${fieldId}[]"]`).forEach(el => el.remove());
+
+        // Crear un input por cada archivo usando DataTransfer
+        if (fileStore.length > 0) {
+            const dt = new DataTransfer();
+            fileStore.forEach(f => dt.items.add(f));
+            const inp = document.createElement('input');
+            inp.type = 'file';
+            inp.name = `file_${fieldId}[]`;
+            inp.multiple = true;
+            inp.style.display = 'none';
+            inp.files = dt.files;
+            form.appendChild(inp);
+        }
     });
 });
 </script>

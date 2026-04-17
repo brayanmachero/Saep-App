@@ -136,34 +136,65 @@
                             @php
                                 $existingFiles = [];
                                 if (is_array($val) && isset($val['path'])) {
-                                    $existingFiles = [$val]; // single file legacy
+                                    $existingFiles = [$val];
                                 } elseif (is_array($val) && isset($val[0]['path'])) {
-                                    $existingFiles = $val; // multi-file
+                                    $existingFiles = $val;
                                 }
                             @endphp
-                            @if(count($existingFiles))
-                                <div style="margin-bottom:.5rem;">
-                                    <small style="color:var(--text-muted);font-size:.72rem">Archivos actuales:</small>
-                                    <div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.25rem;">
-                                        @foreach($existingFiles as $archivo)
-                                            <a href="{{ asset('storage/' . $archivo['path']) }}" target="_blank"
-                                               style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--accent-color);text-decoration:none;">
-                                                <i class="bi bi-paperclip"></i> {{ $archivo['name'] ?? 'Archivo' }}
-                                                @if(isset($archivo['size']))
-                                                    <small style="color:var(--text-muted);">({{ number_format($archivo['size']/1024, 0) }} KB)</small>
-                                                @endif
-                                            </a>
-                                        @endforeach
+                            @if(!empty($field['multiple']))
+                                {{-- Multi-file uploader --}}
+                                <div class="multi-file-upload" data-field-id="{{ $field['id'] }}" data-required="0">
+                                    @if(count($existingFiles))
+                                        <div style="margin-bottom:.5rem;">
+                                            <small style="color:var(--text-muted);font-size:.72rem">Archivos actuales (se mantienen si no subes nuevos):</small>
+                                            <div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.25rem;">
+                                                @foreach($existingFiles as $archivo)
+                                                    <a href="{{ asset('storage/' . $archivo['path']) }}" target="_blank"
+                                                       style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--accent-color);text-decoration:none;">
+                                                        <i class="bi bi-paperclip"></i> {{ $archivo['name'] ?? 'Archivo' }}
+                                                        @if(isset($archivo['size']))
+                                                            <small style="color:var(--text-muted);">({{ number_format($archivo['size']/1024, 0) }} KB)</small>
+                                                        @endif
+                                                    </a>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    @endif
+                                    <div class="mfu-dropzone" style="border:2px dashed var(--surface-border);border-radius:10px;padding:1.25rem;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface-hover);">
+                                        <i class="bi bi-cloud-arrow-up" style="font-size:1.3rem;color:var(--accent-color);"></i>
+                                        <p style="margin:.4rem 0 0;font-size:.82rem;color:var(--text-muted);">
+                                            {{ count($existingFiles) ? 'Subir nuevos archivos para reemplazar' : 'Haz clic o arrastra archivos aquí' }}
+                                        </p>
+                                        <small style="color:var(--text-muted);font-size:.72rem">PDF, Word, Excel o imágenes · máx. 10MB c/u</small>
                                     </div>
+                                    <input type="file" class="mfu-input" style="display:none"
+                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp" multiple>
+                                    <div class="mfu-list" style="display:flex;flex-direction:column;gap:.4rem;margin-top:.5rem;"></div>
                                 </div>
+                            @else
+                                @if(count($existingFiles))
+                                    <div style="margin-bottom:.5rem;">
+                                        <small style="color:var(--text-muted);font-size:.72rem">Archivo actual:</small>
+                                        <div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.25rem;">
+                                            @foreach($existingFiles as $archivo)
+                                                <a href="{{ asset('storage/' . $archivo['path']) }}" target="_blank"
+                                                   style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--accent-color);text-decoration:none;">
+                                                    <i class="bi bi-paperclip"></i> {{ $archivo['name'] ?? 'Archivo' }}
+                                                    @if(isset($archivo['size']))
+                                                        <small style="color:var(--text-muted);">({{ number_format($archivo['size']/1024, 0) }} KB)</small>
+                                                    @endif
+                                                </a>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endif
+                                <input type="file" name="file_{{ $field['id'] }}"
+                                    id="field_{{ $field['id'] }}" class="form-input" data-id="{{ $field['id'] }}" data-is-file="1"
+                                    accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp">
+                                <small style="color:var(--text-muted);font-size:.72rem">
+                                    {{ count($existingFiles) ? 'Seleccionar para reemplazar' : 'PDF, Word, Excel o imágenes (máx. 10MB)' }}
+                                </small>
                             @endif
-                            <input type="file" name="file_{{ $field['id'] }}{{ !empty($field['multiple']) ? '[]' : '' }}"
-                                id="field_{{ $field['id'] }}" class="form-input" data-id="{{ $field['id'] }}" data-is-file="1"
-                                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
-                                {{ !empty($field['multiple']) ? 'multiple' : '' }}>
-                            <small style="color:var(--text-muted);font-size:.72rem">
-                                {{ count($existingFiles) ? 'Seleccionar para reemplazar' : 'PDF, Word, Excel o imágenes (máx. 10MB)' }}
-                            </small>
                         @endif
                     </div>
                 @endif
@@ -241,5 +272,70 @@ window.clearSignature = function(id) {
     document.getElementById('field_' + id).value = '';
     delete datos[id];
 };
+
+// ── Multi-file upload (acumulativo) ──
+document.querySelectorAll('.multi-file-upload').forEach(container => {
+    const fieldId = container.dataset.fieldId;
+    const dropzone = container.querySelector('.mfu-dropzone');
+    const fileInput = container.querySelector('.mfu-input');
+    const listEl = container.querySelector('.mfu-list');
+    const form = document.getElementById('dynamic-edit-form');
+    let fileStore = [];
+
+    function renderList() {
+        listEl.innerHTML = '';
+        fileStore.forEach((file, idx) => {
+            const isImage = file.type.startsWith('image/');
+            const sizeKB = (file.size / 1024).toFixed(0);
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:.5rem;padding:.4rem .6rem;background:var(--surface-hover);border-radius:8px;font-size:.8rem;';
+            row.innerHTML = `
+                <i class="bi ${isImage ? 'bi-image' : 'bi-file-earmark'}" style="color:var(--accent-color);font-size:1rem;"></i>
+                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${file.name}">${file.name}</span>
+                <small style="color:var(--text-muted);white-space:nowrap;">${sizeKB} KB</small>
+                <button type="button" data-idx="${idx}" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1rem;padding:0;line-height:1;" title="Quitar">
+                    <i class="bi bi-x-circle"></i>
+                </button>`;
+            row.querySelector('button').addEventListener('click', () => { fileStore.splice(idx, 1); renderList(); });
+            listEl.appendChild(row);
+        });
+        const counter = dropzone.querySelector('.mfu-counter');
+        if (fileStore.length > 0) {
+            if (counter) { counter.textContent = `${fileStore.length} archivo${fileStore.length > 1 ? 's' : ''} nuevo${fileStore.length > 1 ? 's' : ''}`; }
+            else {
+                const badge = document.createElement('p');
+                badge.className = 'mfu-counter';
+                badge.style.cssText = 'margin:.4rem 0 0;font-size:.78rem;color:var(--accent-color);font-weight:600;';
+                badge.textContent = `${fileStore.length} archivo${fileStore.length > 1 ? 's' : ''} nuevo${fileStore.length > 1 ? 's' : ''}`;
+                dropzone.appendChild(badge);
+            }
+        } else if (counter) { counter.remove(); }
+    }
+
+    function addFiles(files) {
+        for (const f of files) {
+            if (!fileStore.some(s => s.name === f.name && s.size === f.size)) fileStore.push(f);
+        }
+        renderList();
+    }
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => { if (fileInput.files.length) addFiles(fileInput.files); fileInput.value = ''; });
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.style.borderColor = 'var(--accent-color)'; });
+    dropzone.addEventListener('dragleave', () => { dropzone.style.borderColor = ''; });
+    dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.style.borderColor = ''; if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+
+    form.addEventListener('submit', function() {
+        form.querySelectorAll(`input[name="file_${fieldId}[]"]`).forEach(el => el.remove());
+        if (fileStore.length > 0) {
+            const dt = new DataTransfer();
+            fileStore.forEach(f => dt.items.add(f));
+            const inp = document.createElement('input');
+            inp.type = 'file'; inp.name = `file_${fieldId}[]`; inp.multiple = true; inp.style.display = 'none';
+            inp.files = dt.files;
+            form.appendChild(inp);
+        }
+    });
+});
 </script>
 @endpush
