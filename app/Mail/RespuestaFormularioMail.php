@@ -43,11 +43,25 @@ class RespuestaFormularioMail extends Mailable
         foreach ($this->schema as $field) {
             if ($field['type'] === 'file' && isset($this->datos[$field['id']])) {
                 $fileData = $this->datos[$field['id']];
-                $path = $fileData['path'] ?? null;
-                if ($path && Storage::disk('public')->exists($path)) {
-                    $attachments[] = Attachment::fromStorageDisk('public', $path)
-                        ->as($fileData['name'] ?? basename($path))
-                        ->withMime($fileData['mime'] ?? 'application/octet-stream');
+
+                // Multi-file: array of file objects [{path, name, mime, size}, ...]
+                if (isset($fileData[0]['path'])) {
+                    foreach ($fileData as $item) {
+                        if ($item['path'] && Storage::disk('public')->exists($item['path'])) {
+                            $attachments[] = Attachment::fromStorageDisk('public', $item['path'])
+                                ->as($item['name'] ?? basename($item['path']))
+                                ->withMime($item['mime'] ?? 'application/octet-stream');
+                        }
+                    }
+                }
+                // Single file: {path, name, mime, size}
+                elseif (isset($fileData['path'])) {
+                    $path = $fileData['path'];
+                    if ($path && Storage::disk('public')->exists($path)) {
+                        $attachments[] = Attachment::fromStorageDisk('public', $path)
+                            ->as($fileData['name'] ?? basename($path))
+                            ->withMime($fileData['mime'] ?? 'application/octet-stream');
+                    }
                 }
             }
         }

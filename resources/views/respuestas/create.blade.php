@@ -167,12 +167,14 @@
                             </div>
 
                         @elseif($field['type'] === 'file')
-                            <input type="file" name="file_{{ $field['id'] }}" id="field_{{ $field['id'] }}"
+                            <input type="file" name="file_{{ $field['id'] }}{{ !empty($field['multiple']) ? '[]' : '' }}"
+                                id="field_{{ $field['id'] }}"
                                 class="form-input" data-id="{{ $field['id'] }}" data-is-file="1"
                                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
+                                {{ !empty($field['multiple']) ? 'multiple' : '' }}
                                 {{ !empty($field['required']) ? 'required' : '' }}>
                             <small style="color:var(--text-muted);font-size:.75rem">
-                                PDF, Word, Excel o imágenes (máx. 10MB)
+                                PDF, Word, Excel o imágenes (máx. 10MB{{ !empty($field['multiple']) ? ' c/u' : '' }})
                             </small>
 
                         @elseif($field['type'] === 'select_dynamic')

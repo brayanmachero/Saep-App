@@ -131,6 +131,39 @@
                                     <i class="bi bi-eraser"></i> Limpiar firma
                                 </button>
                             </div>
+
+                        @elseif($field['type'] === 'file')
+                            @php
+                                $existingFiles = [];
+                                if (is_array($val) && isset($val['path'])) {
+                                    $existingFiles = [$val]; // single file legacy
+                                } elseif (is_array($val) && isset($val[0]['path'])) {
+                                    $existingFiles = $val; // multi-file
+                                }
+                            @endphp
+                            @if(count($existingFiles))
+                                <div style="margin-bottom:.5rem;">
+                                    <small style="color:var(--text-muted);font-size:.72rem">Archivos actuales:</small>
+                                    <div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.25rem;">
+                                        @foreach($existingFiles as $archivo)
+                                            <a href="{{ asset('storage/' . $archivo['path']) }}" target="_blank"
+                                               style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--accent-color);text-decoration:none;">
+                                                <i class="bi bi-paperclip"></i> {{ $archivo['name'] ?? 'Archivo' }}
+                                                @if(isset($archivo['size']))
+                                                    <small style="color:var(--text-muted);">({{ number_format($archivo['size']/1024, 0) }} KB)</small>
+                                                @endif
+                                            </a>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+                            <input type="file" name="file_{{ $field['id'] }}{{ !empty($field['multiple']) ? '[]' : '' }}"
+                                id="field_{{ $field['id'] }}" class="form-input" data-id="{{ $field['id'] }}" data-is-file="1"
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
+                                {{ !empty($field['multiple']) ? 'multiple' : '' }}>
+                            <small style="color:var(--text-muted);font-size:.72rem">
+                                {{ count($existingFiles) ? 'Seleccionar para reemplazar' : 'PDF, Word, Excel o imágenes (máx. 10MB)' }}
+                            </small>
                         @endif
                     </div>
                 @endif
@@ -158,7 +191,7 @@ const datos = @json(json_decode($respuesta->datos_json ?? '{}', true));
 
 document.getElementById('dynamic-edit-form')?.addEventListener('submit', function() {
     document.querySelectorAll('.field-input').forEach(el => {
-        if (el.type !== 'hidden') datos[el.dataset.id] = el.value;
+        if (el.type !== 'hidden' && !el.dataset.isFile) datos[el.dataset.id] = el.value;
     });
     document.getElementById('datos_json').value = JSON.stringify(datos);
 });

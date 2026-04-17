@@ -97,6 +97,7 @@
                             @php $val = $datos[$field['id']] ?? null; @endphp
                             @if($field['type'] === 'file')
                                 @if($val && is_array($val) && isset($val['path']))
+                                    {{-- Single file (legacy format) --}}
                                     <a href="{{ asset('storage/' . $val['path']) }}" target="_blank"
                                        style="display:inline-flex;align-items:center;gap:.3rem;font-size:.82rem;color:var(--accent-color);text-decoration:none;">
                                         <i class="bi bi-download"></i> {{ $val['name'] ?? 'Descargar' }}
@@ -104,6 +105,19 @@
                                             <small style="color:var(--text-muted);">({{ number_format($val['size']/1024, 0) }} KB)</small>
                                         @endif
                                     </a>
+                                @elseif($val && is_array($val) && isset($val[0]['path']))
+                                    {{-- Multiple files --}}
+                                    <div style="display:flex;flex-direction:column;gap:.4rem;">
+                                        @foreach($val as $archivo)
+                                            <a href="{{ asset('storage/' . $archivo['path']) }}" target="_blank"
+                                               style="display:inline-flex;align-items:center;gap:.3rem;font-size:.82rem;color:var(--accent-color);text-decoration:none;">
+                                                <i class="bi bi-download"></i> {{ $archivo['name'] ?? 'Descargar' }}
+                                                @if(isset($archivo['size']))
+                                                    <small style="color:var(--text-muted);">({{ number_format($archivo['size']/1024, 0) }} KB)</small>
+                                                @endif
+                                            </a>
+                                        @endforeach
+                                    </div>
                                 @elseif($val)
                                     <a href="{{ $val }}" target="_blank" style="font-size:.85rem;color:var(--accent-color);text-decoration:none;">
                                         <i class="bi bi-download"></i> Descargar

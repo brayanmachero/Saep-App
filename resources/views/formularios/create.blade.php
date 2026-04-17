@@ -566,6 +566,15 @@
                     <input type="number" id="m-max" class="form-input" value="${f.max ?? ''}">
                 </div>
             </div>` : ''}
+            ${type === 'file' ? `
+            <div class="form-group">
+                <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+                    <input type="checkbox" id="m-multiple" ${f.multiple ? 'checked' : ''}
+                        style="width:16px;height:16px;accent-color:var(--primary-color);">
+                    Permitir múltiples archivos
+                </label>
+                <small style="color:var(--text-muted);font-size:.72rem">El usuario podrá subir varias fotos o documentos en un solo campo</small>
+            </div>` : ''}
             ${type === 'select_tabla' ? `
             <div class="form-group">
                 <label>Fuente de datos *</label>
@@ -652,6 +661,9 @@
             const mx = document.getElementById('m-max').value;
             if (mn !== '') field.min = parseFloat(mn);
             if (mx !== '') field.max = parseFloat(mx);
+        }
+        if (type === 'file') {
+            field.multiple = document.getElementById('m-multiple')?.checked || false;
         }
         if (type === 'select_tabla') {
             field.tabla = document.getElementById('m-tabla').value;

@@ -50,7 +50,13 @@
                             $display = '—';
 
                             if ($field['type'] === 'file' && is_array($valor)) {
-                                $display = $valor['name'] ?? 'Archivo adjunto';
+                                if (isset($valor['name'])) {
+                                    $display = $valor['name'];
+                                } elseif (isset($valor[0]['name'])) {
+                                    $display = implode(', ', array_column($valor, 'name'));
+                                } else {
+                                    $display = 'Archivo(s) adjunto(s)';
+                                }
                             } elseif ($field['type'] === 'checkbox' && is_array($valor)) {
                                 $display = implode(', ', $valor);
                             } elseif ($field['type'] === 'signature') {

@@ -44,15 +44,33 @@ class RespuestaController extends Controller
         $schema = json_decode($formulario->schema_json ?? '[]', true);
 
         foreach ($schema as $field) {
-            if ($field['type'] === 'file' && $request->hasFile('file_' . $field['id'])) {
-                $file = $request->file('file_' . $field['id']);
-                $path = $file->store('respuestas/adjuntos/' . $formulario->id, 'public');
-                $datos[$field['id']] = [
-                    'path'     => $path,
-                    'name'     => $file->getClientOriginalName(),
-                    'mime'     => $file->getClientMimeType(),
-                    'size'     => $file->getSize(),
-                ];
+            if ($field['type'] === 'file') {
+                $multiple = !empty($field['multiple']);
+                $inputName = 'file_' . $field['id'];
+
+                if ($multiple && $request->hasFile($inputName)) {
+                    $files = $request->file($inputName);
+                    $items = [];
+                    foreach ((array) $files as $file) {
+                        $path = $file->store('respuestas/adjuntos/' . $formulario->id, 'public');
+                        $items[] = [
+                            'path' => $path,
+                            'name' => $file->getClientOriginalName(),
+                            'mime' => $file->getClientMimeType(),
+                            'size' => $file->getSize(),
+                        ];
+                    }
+                    $datos[$field['id']] = $items;
+                } elseif (!$multiple && $request->hasFile($inputName)) {
+                    $file = $request->file($inputName);
+                    $path = $file->store('respuestas/adjuntos/' . $formulario->id, 'public');
+                    $datos[$field['id']] = [
+                        'path'     => $path,
+                        'name'     => $file->getClientOriginalName(),
+                        'mime'     => $file->getClientMimeType(),
+                        'size'     => $file->getSize(),
+                    ];
+                }
             }
         }
 
@@ -168,8 +186,47 @@ class RespuestaController extends Controller
             $estadoFinal = $estadoSolicitado;
         }
 
+        // Handle file uploads on edit
+        $datos = json_decode($request->datos_json, true) ?? [];
+        $schema = json_decode($formulario->schema_json ?? '[]', true);
+        $existingDatos = json_decode($respuesta->datos_json ?? '{}', true);
+
+        foreach ($schema as $field) {
+            if ($field['type'] === 'file') {
+                $multiple = !empty($field['multiple']);
+                $inputName = 'file_' . $field['id'];
+
+                if ($multiple && $request->hasFile($inputName)) {
+                    $files = $request->file($inputName);
+                    $items = [];
+                    foreach ((array) $files as $file) {
+                        $path = $file->store('respuestas/adjuntos/' . $formulario->id, 'public');
+                        $items[] = [
+                            'path' => $path,
+                            'name' => $file->getClientOriginalName(),
+                            'mime' => $file->getClientMimeType(),
+                            'size' => $file->getSize(),
+                        ];
+                    }
+                    $datos[$field['id']] = $items;
+                } elseif (!$multiple && $request->hasFile($inputName)) {
+                    $file = $request->file($inputName);
+                    $path = $file->store('respuestas/adjuntos/' . $formulario->id, 'public');
+                    $datos[$field['id']] = [
+                        'path'     => $path,
+                        'name'     => $file->getClientOriginalName(),
+                        'mime'     => $file->getClientMimeType(),
+                        'size'     => $file->getSize(),
+                    ];
+                } elseif (isset($existingDatos[$field['id']])) {
+                    // Keep existing file(s) if no new upload
+                    $datos[$field['id']] = $existingDatos[$field['id']];
+                }
+            }
+        }
+
         $respuesta->update([
-            'datos_json' => $request->datos_json,
+            'datos_json' => json_encode($datos),
             'estado'     => $estadoFinal,
         ]);
 
