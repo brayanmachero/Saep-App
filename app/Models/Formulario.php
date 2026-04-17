@@ -24,17 +24,20 @@ class Formulario extends Model
         'requiere_aprobacion',
         'aprobador_rol_id',
         'genera_pdf',
+        'enviar_email_respuesta',
+        'email_notificacion',
         'template_pdf_id',
         'fuente_trabajadores',
         'creado_por',
     ];
 
     protected $casts = [
-        'activo'              => 'boolean',
-        'requiere_aprobacion' => 'boolean',
-        'genera_pdf'          => 'boolean',
-        'fecha_inicio'        => 'date',
-        'fecha_fin'           => 'date',
+        'activo'                  => 'boolean',
+        'requiere_aprobacion'     => 'boolean',
+        'genera_pdf'              => 'boolean',
+        'enviar_email_respuesta'  => 'boolean',
+        'fecha_inicio'            => 'date',
+        'fecha_fin'               => 'date',
     ];
 
     public function departamento()

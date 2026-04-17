@@ -74,6 +74,8 @@ class FormularioController extends Controller
             'requiere_aprobacion' => ['boolean'],
             'aprobador_rol_id'    => ['nullable', 'exists:roles,id'],
             'genera_pdf'          => ['boolean'],
+            'enviar_email_respuesta' => ['boolean'],
+            'email_notificacion'  => ['nullable', 'string', 'max:500'],
             'fecha_inicio'        => ['nullable', 'date'],
             'fecha_fin'           => ['nullable', 'date', 'after_or_equal:fecha_inicio'],
             'frecuencia'          => ['nullable', 'in:unica,diaria,semanal,quincenal,mensual'],
@@ -103,6 +105,8 @@ class FormularioController extends Controller
             'requiere_aprobacion' => $request->boolean('requiere_aprobacion'),
             'aprobador_rol_id'    => $request->aprobador_rol_id,
             'genera_pdf'          => $request->boolean('genera_pdf'),
+            'enviar_email_respuesta' => $request->boolean('enviar_email_respuesta'),
+            'email_notificacion'  => $request->email_notificacion,
             'creado_por'          => auth()->id(),
         ]);
 
@@ -293,6 +297,8 @@ class FormularioController extends Controller
             'requiere_aprobacion' => ['boolean'],
             'aprobador_rol_id'    => ['nullable', 'exists:roles,id'],
             'genera_pdf'          => ['boolean'],
+            'enviar_email_respuesta' => ['boolean'],
+            'email_notificacion'  => ['nullable', 'string', 'max:500'],
             'fecha_inicio'        => ['nullable', 'date'],
             'fecha_fin'           => ['nullable', 'date', 'after_or_equal:fecha_inicio'],
             'frecuencia'          => ['nullable', 'in:unica,diaria,semanal,quincenal,mensual'],
@@ -327,6 +333,8 @@ class FormularioController extends Controller
             'requiere_aprobacion' => $request->boolean('requiere_aprobacion'),
             'aprobador_rol_id'    => $request->aprobador_rol_id,
             'genera_pdf'          => $request->boolean('genera_pdf'),
+            'enviar_email_respuesta' => $request->boolean('enviar_email_respuesta'),
+            'email_notificacion'  => $request->email_notificacion,
         ]);
 
         return redirect()->route('formularios.show', $formulario)

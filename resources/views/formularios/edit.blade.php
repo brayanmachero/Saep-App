@@ -130,6 +130,21 @@
                         Genera PDF al completar
                     </label>
                 </div>
+                <div class="form-group">
+                    <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+                        <input type="checkbox" name="enviar_email_respuesta" value="1" id="chk-email-resp"
+                            {{ old('enviar_email_respuesta', $formulario->enviar_email_respuesta) ? 'checked' : '' }}
+                            style="width:16px;height:16px;accent-color:var(--primary-color);">
+                        <i class="bi bi-envelope" style="font-size:.9rem"></i> Enviar email al recibir respuesta
+                    </label>
+                </div>
+                <div class="form-group" id="email-notif-group" style="grid-column:1/-1;{{ old('enviar_email_respuesta', $formulario->enviar_email_respuesta) ? '' : 'display:none' }}">
+                    <label>Emails de destino</label>
+                    <input type="text" name="email_notificacion" class="form-input"
+                        value="{{ old('email_notificacion', $formulario->email_notificacion) }}"
+                        placeholder="correo1@empresa.cl, correo2@empresa.cl">
+                    <small style="color:var(--text-muted);font-size:.72rem">Separar múltiples emails con coma. Recibirán las respuestas completas con adjuntos.</small>
+                </div>
             </div>
         </div>
 
@@ -649,6 +664,11 @@
 
     document.getElementById('req-aprobacion').addEventListener('change', function () {
         document.getElementById('aprobador-group').style.display = this.checked ? '' : 'none';
+    });
+
+    // Toggle email notificación
+    document.getElementById('chk-email-resp').addEventListener('change', function () {
+        document.getElementById('email-notif-group').style.display = this.checked ? '' : 'none';
     });
 
     document.getElementById('form-builder-form').addEventListener('submit', e => {

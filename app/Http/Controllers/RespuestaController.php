@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\RespuestaAprobadaMail;
 use App\Mail\RespuestaCreadaMail;
+use App\Mail\RespuestaFormularioMail;
 use App\Models\FormularioCampoOpcion;
 use App\Models\Formulario;
 use App\Models\Respuesta;
@@ -109,6 +110,16 @@ class RespuestaController extends Controller
                     'info',
                     route('respuestas.show', $respuesta)
                 ));
+            }
+        }
+
+        // Send email notification to configured recipients (independent of approval flow)
+        if ($respuesta->estado !== 'Borrador' && $formulario->enviar_email_respuesta && $formulario->email_notificacion) {
+            $emails = array_filter(array_map('trim', explode(',', $formulario->email_notificacion)));
+            foreach ($emails as $email) {
+                if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    Mail::to($email)->send(new RespuestaFormularioMail($respuesta));
+                }
             }
         }
 
