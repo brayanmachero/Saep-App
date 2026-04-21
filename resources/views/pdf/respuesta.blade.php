@@ -7,14 +7,12 @@
     $folio = 'SAEP-' . str_pad($respuesta->id, 6, '0', STR_PAD_LEFT);
     $hash = strtoupper(substr(hash('sha256', $respuesta->id . $respuesta->created_at . ($respuesta->usuario->email ?? '')), 0, 16));
     $fechaEmision = now()->format('d/m/Y H:i:s');
-@php
     $allFields = collect($schema)->filter(fn($f) => $f['type'] !== 'divider')->values();
     $textFields = $allFields->filter(fn($f) => $f['type'] !== 'file');
     $fileFields  = $allFields->filter(fn($f) => $f['type'] === 'file');
     $half = (int) ceil($textFields->count() / 2);
     $leftFields = $textFields->slice(0, $half);
     $rightFields = $textFields->slice($half);
-@endphp
 @endphp
 <style>
     @page { margin: 0; }
