@@ -7,10 +7,14 @@
     $folio = 'SAEP-' . str_pad($respuesta->id, 6, '0', STR_PAD_LEFT);
     $hash = strtoupper(substr(hash('sha256', $respuesta->id . $respuesta->created_at . ($respuesta->usuario->email ?? '')), 0, 16));
     $fechaEmision = now()->format('d/m/Y H:i:s');
+@php
     $allFields = collect($schema)->filter(fn($f) => $f['type'] !== 'divider')->values();
-    $half = (int) ceil($allFields->count() / 2);
-    $leftFields = $allFields->slice(0, $half);
-    $rightFields = $allFields->slice($half);
+    $textFields = $allFields->filter(fn($f) => $f['type'] !== 'file');
+    $fileFields  = $allFields->filter(fn($f) => $f['type'] === 'file');
+    $half = (int) ceil($textFields->count() / 2);
+    $leftFields = $textFields->slice(0, $half);
+    $rightFields = $textFields->slice($half);
+@endphp
 @endphp
 <style>
     @page { margin: 0; }
@@ -162,7 +166,7 @@
         @endif
     </table>
 
-    {{-- DATOS SIDE BY SIDE --}}
+    {{-- DATOS SIDE BY SIDE (solo campos no-file) --}}
     <div class="st">Datos del Formulario</div>
     <table class="cols" cellpadding="0" cellspacing="0">
         <tr>
@@ -173,34 +177,6 @@
                         @php $val = $datos[$field['id']] ?? null; @endphp
                         @if($field['type'] === 'signature' && $val && str_starts_with($val, 'data:image'))
                             <div class="sig-box"><img src="{{ $val }}" alt="Firma"></div>
-                        @elseif($field['type'] === 'file' && is_array($val) && isset($val['path']))
-                            @php
-                                $isImg = str_starts_with($val['mime'] ?? '', 'image/');
-                                $localPath = \Illuminate\Support\Facades\Storage::disk('public')->path($val['path']);
-                            @endphp
-                            @if($isImg && file_exists($localPath))
-                                <div class="fv" style="padding:4px;text-align:center;">
-                                    <img src="{{ $localPath }}" alt="{{ $val['name'] ?? '' }}" style="max-width:100%;max-height:100px;">
-                                    <div style="font-size:8px;color:#6b7280;margin-top:2px;">{{ $val['name'] ?? '' }}@if(isset($val['size'])) ({{ number_format($val['size']/1024, 0) }} KB)@endif</div>
-                                </div>
-                            @else
-                                <div class="fv">{{ $val['name'] ?? '—' }}@if(isset($val['size'])) <span style="color:#6b7280;font-size:8px;">({{ number_format($val['size']/1024, 0) }} KB)</span>@endif</div>
-                            @endif
-                        @elseif($field['type'] === 'file' && is_array($val) && isset($val[0]['path']))
-                            @foreach($val as $fileItem)
-                                @php
-                                    $isImg = str_starts_with($fileItem['mime'] ?? '', 'image/');
-                                    $localPath = \Illuminate\Support\Facades\Storage::disk('public')->path($fileItem['path']);
-                                @endphp
-                                @if($isImg && file_exists($localPath))
-                                    <div style="margin-bottom:4px;text-align:center;">
-                                        <img src="{{ $localPath }}" alt="{{ $fileItem['name'] ?? '' }}" style="max-width:100%;max-height:80px;">
-                                        <div style="font-size:7px;color:#6b7280;">{{ $fileItem['name'] ?? '' }}</div>
-                                    </div>
-                                @else
-                                    <div class="fv" style="margin-bottom:3px;">{{ $fileItem['name'] ?? '—' }}@if(isset($fileItem['size'])) <span style="color:#6b7280;font-size:8px;">({{ number_format($fileItem['size']/1024, 0) }} KB)</span>@endif</div>
-                                @endif
-                            @endforeach
                         @elseif($field['type'] === 'textarea')
                             <div class="fv" style="white-space:pre-line;min-height:40px;">{{ $val ?: '—' }}</div>
                         @elseif(is_array($val))
@@ -218,34 +194,10 @@
                         @php $val = $datos[$field['id']] ?? null; @endphp
                         @if($field['type'] === 'signature' && $val && str_starts_with($val, 'data:image'))
                             <div class="sig-box"><img src="{{ $val }}" alt="Firma"></div>
-                        @elseif($field['type'] === 'file' && is_array($val) && isset($val['path']))
-                            @php
-                                $isImg = str_starts_with($val['mime'] ?? '', 'image/');
-                                $localPath = \Illuminate\Support\Facades\Storage::disk('public')->path($val['path']);
-                            @endphp
-                            @if($isImg && file_exists($localPath))
-                                <div class="fv" style="padding:4px;text-align:center;">
-                                    <img src="{{ $localPath }}" alt="{{ $val['name'] ?? '' }}" style="max-width:100%;max-height:100px;">
-                                    <div style="font-size:8px;color:#6b7280;margin-top:2px;">{{ $val['name'] ?? '' }}@if(isset($val['size'])) ({{ number_format($val['size']/1024, 0) }} KB)@endif</div>
-                                </div>
-                            @else
-                                <div class="fv">{{ $val['name'] ?? '—' }}@if(isset($val['size'])) <span style="color:#6b7280;font-size:8px;">({{ number_format($val['size']/1024, 0) }} KB)</span>@endif</div>
-                            @endif
-                        @elseif($field['type'] === 'file' && is_array($val) && isset($val[0]['path']))
-                            @foreach($val as $fileItem)
-                                @php
-                                    $isImg = str_starts_with($fileItem['mime'] ?? '', 'image/');
-                                    $localPath = \Illuminate\Support\Facades\Storage::disk('public')->path($fileItem['path']);
-                                @endphp
-                                @if($isImg && file_exists($localPath))
-                                    <div style="margin-bottom:4px;text-align:center;">
-                                        <img src="{{ $localPath }}" alt="{{ $fileItem['name'] ?? '' }}" style="max-width:100%;max-height:80px;">
-                                        <div style="font-size:7px;color:#6b7280;">{{ $fileItem['name'] ?? '' }}</div>
-                                    </div>
-                                @else
-                                    <div class="fv" style="margin-bottom:3px;">{{ $fileItem['name'] ?? '—' }}@if(isset($fileItem['size'])) <span style="color:#6b7280;font-size:8px;">({{ number_format($fileItem['size']/1024, 0) }} KB)</span>@endif</div>
-                                @endif
-                            @endforeach
+                        @elseif($field['type'] === 'textarea')
+                            <div class="fv" style="white-space:pre-line;min-height:40px;">{{ $val ?: '—' }}</div>
+                        @elseif(is_array($val))
+                            <div class="fv">{{ collect($val)->flatten()->filter(fn($v) => !is_array($v))->implode(', ') ?: '—' }}</div>
                         @else
                             <div class="fv">{{ $val ?: '—' }}</div>
                         @endif
@@ -254,6 +206,75 @@
             </td>
         </tr>
     </table>
+
+    {{-- ARCHIVOS ADJUNTOS (sección separada, ancho completo) --}}
+    @if($fileFields->isNotEmpty())
+    @php
+        // Recolectar todos los items de archivo en un array plano con su label
+        $todosArchivos = [];
+        foreach ($fileFields as $field) {
+            $val = $datos[$field['id']] ?? null;
+            if (!$val) continue;
+            $items = isset($val[0]['path']) ? $val : (isset($val['path']) ? [$val] : []);
+            foreach ($items as $item) {
+                $todosArchivos[] = ['label' => $field['label'], 'item' => $item];
+            }
+        }
+        $imagenes  = array_filter($todosArchivos, fn($a) => str_starts_with($a['item']['mime'] ?? '', 'image/'));
+        $noImgFiles = array_filter($todosArchivos, fn($a) => !str_starts_with($a['item']['mime'] ?? '', 'image/'));
+    @endphp
+    @if(!empty($todosArchivos))
+    <div style="margin-top:14px;">
+        <div class="st">Archivos Adjuntos</div>
+
+        {{-- Imágenes en grilla horizontal (3 por fila) --}}
+        @if(!empty($imagenes))
+        <table style="width:100%;border-collapse:collapse;" cellpadding="0" cellspacing="0">
+            <tr>
+            @php $col = 0; @endphp
+            @foreach($imagenes as $arch)
+                @php
+                    $localPath = \Illuminate\Support\Facades\Storage::disk('public')->path($arch['item']['path']);
+                @endphp
+                @if(file_exists($localPath))
+                <td style="width:33.33%;padding:4px;vertical-align:top;text-align:center;border:1px solid #e5e7eb;">
+                    <img src="{{ $localPath }}" alt="{{ $arch['item']['name'] ?? '' }}"
+                         style="max-width:100%;max-height:110px;object-fit:contain;display:block;margin:0 auto;">
+                    <div style="font-size:7px;color:#6b7280;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                        {{ $arch['label'] }}: {{ $arch['item']['name'] ?? '' }}
+                    </div>
+                </td>
+                @php $col++; @endphp
+                @if($col % 3 === 0 && !$loop->last)
+                </tr><tr>
+                @endif
+                @endif
+            @endforeach
+            {{-- Rellenar celdas vacías para completar la última fila --}}
+            @if($col % 3 !== 0)
+                @for($i = 0; $i < (3 - ($col % 3)); $i++)
+                    <td style="width:33.33%;"></td>
+                @endfor
+            @endif
+            </tr>
+        </table>
+        @endif
+
+        {{-- Archivos no imagen --}}
+        @if(!empty($noImgFiles))
+        <div style="margin-top:6px;">
+            @foreach($noImgFiles as $arch)
+            <div style="display:inline-block;padding:4px 8px;margin:2px;border:1px solid #e5e7eb;background:#fafbfc;font-size:8px;">
+                <span style="color:#6b7280;">{{ $arch['label'] }}:</span>
+                {{ $arch['item']['name'] ?? '—' }}
+                @if(isset($arch['item']['size'])) <span style="color:#9ca3af;">({{ number_format($arch['item']['size']/1024, 0) }} KB)</span>@endif
+            </div>
+            @endforeach
+        </div>
+        @endif
+    </div>
+    @endif
+    @endif
 
     {{-- APROBACIONES --}}
     @if($respuesta->aprobaciones->count() > 0)
