@@ -571,6 +571,7 @@
                         <select id="m-cond-op" class="form-input" style="font-size:.82rem">
                             <option value="equals" ${condOp==='equals'?'selected':''}>Igual a</option>
                             <option value="not_equals" ${condOp==='not_equals'?'selected':''}>Diferente de</option>
+                            <option value="contains" ${condOp==='contains'?'selected':''}>Contiene</option>
                             <option value="filled" ${condOp==='filled'?'selected':''}>Tiene valor</option>
                             <option value="empty" ${condOp==='empty'?'selected':''}>Está vacío</option>
                         </select>

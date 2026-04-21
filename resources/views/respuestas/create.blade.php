@@ -377,6 +377,7 @@ function evalConditions() {
         switch (op) {
             case 'equals': visible = val === expected; break;
             case 'not_equals': visible = val !== expected; break;
+            case 'contains': visible = val.split(',').map(v => v.trim()).includes(expected.trim()); break;
             case 'filled': visible = val !== '' && val !== null && val !== undefined; break;
             case 'empty': visible = val === '' || val === null || val === undefined; break;
         }
