@@ -182,6 +182,8 @@ Route::middleware('auth')->group(function () {
         Route::patch('respuestas/{respuesta}/estado', [RespuestaController::class, 'cambiarEstado'])
             ->name('respuestas.estado')
             ->middleware('permission:puede_aprobar');
+        Route::post('respuestas/{respuesta}/reenviar-mail', [RespuestaController::class, 'reenviarMail'])
+            ->name('respuestas.reenviarMail');
         Route::get('respuestas-exportar', [RespuestaController::class, 'exportar'])
             ->name('respuestas.exportar');
         Route::get('respuestas-plantilla/{formulario}', [RespuestaController::class, 'plantillaImport'])

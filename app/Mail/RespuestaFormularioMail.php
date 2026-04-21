@@ -18,8 +18,11 @@ class RespuestaFormularioMail extends Mailable
     public array $schema;
     public array $datos;
 
-    public function __construct(public Respuesta $respuesta)
-    {
+    public function __construct(
+        public Respuesta $respuesta,
+        private ?string $pdfContent = null,
+        private ?string $pdfFilename = null,
+    ) {
         $this->schema = json_decode($respuesta->formulario->schema_json ?? '[]', true);
         $this->datos = json_decode($respuesta->datos_json ?? '{}', true);
     }
@@ -66,10 +69,9 @@ class RespuestaFormularioMail extends Mailable
             }
         }
 
-        // Attach PDF if form generates it and it exists
-        if ($this->respuesta->pdf_url && Storage::disk('public')->exists($this->respuesta->pdf_url)) {
-            $attachments[] = Attachment::fromStorageDisk('public', $this->respuesta->pdf_url)
-                ->as($this->respuesta->formulario->nombre . '.pdf')
+        // Attach generated PDF if provided
+        if ($this->pdfContent !== null) {
+            $attachments[] = Attachment::fromData(fn () => $this->pdfContent, $this->pdfFilename ?? ($this->respuesta->formulario->nombre . '.pdf'))
                 ->withMime('application/pdf');
         }
 

@@ -9,8 +9,10 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Cambiar enum estado para admitir más valores
-        DB::statement("ALTER TABLE kizeo_charla_tracking MODIFY estado ENUM('completado','pendiente','transferido','recuperado') DEFAULT 'pendiente'");
+        // En MySQL/MariaDB se amplía el enum; en SQLite no es necesario.
+        if (in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE kizeo_charla_tracking MODIFY estado ENUM('completado','pendiente','transferido','recuperado') DEFAULT 'pendiente'");
+        }
 
         Schema::table('kizeo_charla_tracking', function (Blueprint $table) {
             $table->string('estatus_kizeo', 30)->nullable()->after('estado')
@@ -42,6 +44,8 @@ return new class extends Migration
             ]);
         });
 
-        DB::statement("ALTER TABLE kizeo_charla_tracking MODIFY estado ENUM('completado','pendiente') DEFAULT 'pendiente'");
+        if (in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE kizeo_charla_tracking MODIFY estado ENUM('completado','pendiente') DEFAULT 'pendiente'");
+        }
     }
 };

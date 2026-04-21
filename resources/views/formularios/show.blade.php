@@ -667,6 +667,12 @@
                                 <a href="{{ route('pdf.respuesta', $resp) }}" class="icon-btn" style="width:28px;height:28px;text-decoration:none;" target="_blank" title="Descargar PDF">
                                     <i class="bi bi-file-earmark-pdf" style="font-size:.7rem;"></i>
                                 </a>
+                                <form method="POST" action="{{ route('respuestas.reenviarMail', $resp) }}" style="display:inline;" onsubmit="return confirm('¿Reenviar el correo con PDF a los destinatarios de esta respuesta?')">
+                                    @csrf
+                                    <button type="submit" class="icon-btn" style="width:28px;height:28px;" title="Reenviar correo con PDF">
+                                        <i class="bi bi-envelope-arrow-up" style="font-size:.7rem;"></i>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                         @endforeach
@@ -871,11 +877,19 @@ window.openDrawer = function(id) {
         if (f.type === 'signature') {
             rendered = val ? `<img src="${val}" alt="Firma" style="max-width:180px;border:1px solid var(--surface-border);border-radius:6px;">` : '<span style="color:var(--text-muted);font-style:italic;">Sin firma</span>';
         } else if (f.type === 'file') {
-            if (val && typeof val === 'object' && val.path) {
-                const size = val.size ? ` (${Math.round(val.size/1024)} KB)` : '';
-                rendered = `<a href="/storage/${val.path}" target="_blank" style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--accent-color);text-decoration:none;padding:.3rem .6rem;background:var(--surface-color);border:1px solid var(--surface-border);border-radius:6px;">
-                    <i class="bi bi-download"></i> ${val.name || 'Descargar'}${size}
-                </a>`;
+            const renderFileItem = (item) => {
+                const isImg = item.mime && item.mime.startsWith('image/');
+                const size = item.size ? ` (${Math.round(item.size/1024)} KB)` : '';
+                if (isImg) {
+                    return `<div style="margin-bottom:.4rem;"><img src="/storage/${item.path}" alt="${item.name||''}" style="max-width:100%;max-height:160px;border-radius:6px;border:1px solid var(--surface-border);display:block;margin-bottom:.25rem;"><a href="/storage/${item.path}" target="_blank" style="font-size:.75rem;color:var(--accent-color);text-decoration:none;">${item.name||'Ver imagen'}${size}</a></div>`;
+                } else {
+                    return `<a href="/storage/${item.path}" target="_blank" style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--accent-color);text-decoration:none;padding:.3rem .6rem;background:var(--surface-color);border:1px solid var(--surface-border);border-radius:6px;margin-bottom:.3rem;"><i class="bi bi-download"></i> ${item.name||'Descargar'}${size}</a>`;
+                }
+            };
+            if (val && Array.isArray(val) && val.length > 0 && val[0] && val[0].path) {
+                rendered = val.map(renderFileItem).join('');
+            } else if (val && typeof val === 'object' && val.path) {
+                rendered = renderFileItem(val);
             } else {
                 rendered = '<span style="color:var(--text-muted);font-style:italic;">Sin archivo</span>';
             }

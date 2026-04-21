@@ -50,10 +50,12 @@ return new class extends Migration
             });
         }
 
-        // Convertir enums a strings para flexibilidad (lowercase desde vistas)
-        DB::statement("ALTER TABLE accidentes_sst MODIFY COLUMN tipo VARCHAR(50) DEFAULT 'accidente_trabajo'");
-        DB::statement("ALTER TABLE accidentes_sst MODIFY COLUMN gravedad VARCHAR(30) DEFAULT 'leve'");
-        DB::statement("ALTER TABLE accidentes_sst MODIFY COLUMN estado VARCHAR(30) DEFAULT 'notificado'");
+        // En MySQL/MariaDB se ajustan los tipos; en SQLite no es necesario.
+        if (in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE accidentes_sst MODIFY COLUMN tipo VARCHAR(50) DEFAULT 'accidente_trabajo'");
+            DB::statement("ALTER TABLE accidentes_sst MODIFY COLUMN gravedad VARCHAR(30) DEFAULT 'leve'");
+            DB::statement("ALTER TABLE accidentes_sst MODIFY COLUMN estado VARCHAR(30) DEFAULT 'notificado'");
+        }
     }
 
     public function down(): void

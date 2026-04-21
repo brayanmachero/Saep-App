@@ -9,9 +9,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Cambiar enums a string para flexibilidad (MariaDB enum es case-sensitive)
-        DB::statement("ALTER TABLE ley_karin MODIFY COLUMN tipo VARCHAR(50) NOT NULL DEFAULT 'ACOSO_LABORAL'");
-        DB::statement("ALTER TABLE ley_karin MODIFY COLUMN estado VARCHAR(30) NOT NULL DEFAULT 'RECIBIDA'");
+        // En MySQL/MariaDB se ajustan las columnas; en SQLite no es necesario.
+        if (in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE ley_karin MODIFY COLUMN tipo VARCHAR(50) NOT NULL DEFAULT 'ACOSO_LABORAL'");
+            DB::statement("ALTER TABLE ley_karin MODIFY COLUMN estado VARCHAR(30) NOT NULL DEFAULT 'RECIBIDA'");
+        }
 
         Schema::table('ley_karin', function (Blueprint $table) {
             $table->string('canal', 50)->nullable()->after('centro_costo_id');
@@ -27,7 +29,9 @@ return new class extends Migration
             $table->dropColumn(['canal', 'confidencial', 'fecha_plazo_investigacion', 'medidas_adoptadas']);
         });
 
-        DB::statement("ALTER TABLE ley_karin MODIFY COLUMN tipo ENUM('ACOSO_LABORAL','ACOSO_SEXUAL','VIOLENCIA_EN_TRABAJO') NOT NULL DEFAULT 'ACOSO_LABORAL'");
-        DB::statement("ALTER TABLE ley_karin MODIFY COLUMN estado ENUM('RECIBIDA','EN_INVESTIGACION','RESUELTA','ARCHIVADA') NOT NULL DEFAULT 'RECIBIDA'");
+        if (in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE ley_karin MODIFY COLUMN tipo ENUM('ACOSO_LABORAL','ACOSO_SEXUAL','VIOLENCIA_EN_TRABAJO') NOT NULL DEFAULT 'ACOSO_LABORAL'");
+            DB::statement("ALTER TABLE ley_karin MODIFY COLUMN estado ENUM('RECIBIDA','EN_INVESTIGACION','RESUELTA','ARCHIVADA') NOT NULL DEFAULT 'RECIBIDA'");
+        }
     }
 };

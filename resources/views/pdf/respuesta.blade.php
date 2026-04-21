@@ -173,12 +173,38 @@
                         @php $val = $datos[$field['id']] ?? null; @endphp
                         @if($field['type'] === 'signature' && $val && str_starts_with($val, 'data:image'))
                             <div class="sig-box"><img src="{{ $val }}" alt="Firma"></div>
-                        @elseif($field['type'] === 'file' && is_array($val) && isset($val['name']))
-                            <div class="fv">{{ $val['name'] }}@if(isset($val['size'])) <span style="color:#6b7280;font-size:8px;">({{ number_format($val['size']/1024, 0) }} KB)</span>@endif</div>
+                        @elseif($field['type'] === 'file' && is_array($val) && isset($val['path']))
+                            @php
+                                $isImg = str_starts_with($val['mime'] ?? '', 'image/');
+                                $localPath = \Illuminate\Support\Facades\Storage::disk('public')->path($val['path']);
+                            @endphp
+                            @if($isImg && file_exists($localPath))
+                                <div class="fv" style="padding:4px;text-align:center;">
+                                    <img src="{{ $localPath }}" alt="{{ $val['name'] ?? '' }}" style="max-width:100%;max-height:100px;">
+                                    <div style="font-size:8px;color:#6b7280;margin-top:2px;">{{ $val['name'] ?? '' }}@if(isset($val['size'])) ({{ number_format($val['size']/1024, 0) }} KB)@endif</div>
+                                </div>
+                            @else
+                                <div class="fv">{{ $val['name'] ?? '—' }}@if(isset($val['size'])) <span style="color:#6b7280;font-size:8px;">({{ number_format($val['size']/1024, 0) }} KB)</span>@endif</div>
+                            @endif
+                        @elseif($field['type'] === 'file' && is_array($val) && isset($val[0]['path']))
+                            @foreach($val as $fileItem)
+                                @php
+                                    $isImg = str_starts_with($fileItem['mime'] ?? '', 'image/');
+                                    $localPath = \Illuminate\Support\Facades\Storage::disk('public')->path($fileItem['path']);
+                                @endphp
+                                @if($isImg && file_exists($localPath))
+                                    <div style="margin-bottom:4px;text-align:center;">
+                                        <img src="{{ $localPath }}" alt="{{ $fileItem['name'] ?? '' }}" style="max-width:100%;max-height:80px;">
+                                        <div style="font-size:7px;color:#6b7280;">{{ $fileItem['name'] ?? '' }}</div>
+                                    </div>
+                                @else
+                                    <div class="fv" style="margin-bottom:3px;">{{ $fileItem['name'] ?? '—' }}@if(isset($fileItem['size'])) <span style="color:#6b7280;font-size:8px;">({{ number_format($fileItem['size']/1024, 0) }} KB)</span>@endif</div>
+                                @endif
+                            @endforeach
                         @elseif($field['type'] === 'textarea')
                             <div class="fv" style="white-space:pre-line;min-height:40px;">{{ $val ?: '—' }}</div>
                         @elseif(is_array($val))
-                            <div class="fv">{{ implode(', ', $val) }}</div>
+                            <div class="fv">{{ collect($val)->flatten()->filter(fn($v) => !is_array($v))->implode(', ') ?: '—' }}</div>
                         @else
                             <div class="fv">{{ $val ?: '—' }}</div>
                         @endif
@@ -192,12 +218,34 @@
                         @php $val = $datos[$field['id']] ?? null; @endphp
                         @if($field['type'] === 'signature' && $val && str_starts_with($val, 'data:image'))
                             <div class="sig-box"><img src="{{ $val }}" alt="Firma"></div>
-                        @elseif($field['type'] === 'file' && is_array($val) && isset($val['name']))
-                            <div class="fv">{{ $val['name'] }}@if(isset($val['size'])) <span style="color:#6b7280;font-size:8px;">({{ number_format($val['size']/1024, 0) }} KB)</span>@endif</div>
-                        @elseif($field['type'] === 'textarea')
-                            <div class="fv" style="white-space:pre-line;min-height:40px;">{{ $val ?: '—' }}</div>
-                        @elseif(is_array($val))
-                            <div class="fv">{{ implode(', ', $val) }}</div>
+                        @elseif($field['type'] === 'file' && is_array($val) && isset($val['path']))
+                            @php
+                                $isImg = str_starts_with($val['mime'] ?? '', 'image/');
+                                $localPath = \Illuminate\Support\Facades\Storage::disk('public')->path($val['path']);
+                            @endphp
+                            @if($isImg && file_exists($localPath))
+                                <div class="fv" style="padding:4px;text-align:center;">
+                                    <img src="{{ $localPath }}" alt="{{ $val['name'] ?? '' }}" style="max-width:100%;max-height:100px;">
+                                    <div style="font-size:8px;color:#6b7280;margin-top:2px;">{{ $val['name'] ?? '' }}@if(isset($val['size'])) ({{ number_format($val['size']/1024, 0) }} KB)@endif</div>
+                                </div>
+                            @else
+                                <div class="fv">{{ $val['name'] ?? '—' }}@if(isset($val['size'])) <span style="color:#6b7280;font-size:8px;">({{ number_format($val['size']/1024, 0) }} KB)</span>@endif</div>
+                            @endif
+                        @elseif($field['type'] === 'file' && is_array($val) && isset($val[0]['path']))
+                            @foreach($val as $fileItem)
+                                @php
+                                    $isImg = str_starts_with($fileItem['mime'] ?? '', 'image/');
+                                    $localPath = \Illuminate\Support\Facades\Storage::disk('public')->path($fileItem['path']);
+                                @endphp
+                                @if($isImg && file_exists($localPath))
+                                    <div style="margin-bottom:4px;text-align:center;">
+                                        <img src="{{ $localPath }}" alt="{{ $fileItem['name'] ?? '' }}" style="max-width:100%;max-height:80px;">
+                                        <div style="font-size:7px;color:#6b7280;">{{ $fileItem['name'] ?? '' }}</div>
+                                    </div>
+                                @else
+                                    <div class="fv" style="margin-bottom:3px;">{{ $fileItem['name'] ?? '—' }}@if(isset($fileItem['size'])) <span style="color:#6b7280;font-size:8px;">({{ number_format($fileItem['size']/1024, 0) }} KB)</span>@endif</div>
+                                @endif
+                            @endforeach
                         @else
                             <div class="fv">{{ $val ?: '—' }}</div>
                         @endif

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\RespuestaAprobadaMail;
 use App\Mail\RespuestaCreadaMail;
 use App\Mail\RespuestaFormularioMail;
+use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\FormularioCampoOpcion;
 use App\Models\Formulario;
 use App\Models\Respuesta;
@@ -131,13 +132,38 @@ class RespuestaController extends Controller
             }
         }
 
-        // Send email notification to configured recipients (independent of approval flow)
-        if ($respuesta->estado !== 'Borrador' && $formulario->enviar_email_respuesta && $formulario->email_notificacion) {
-            $emails = array_filter(array_map('trim', explode(',', $formulario->email_notificacion)));
-            foreach ($emails as $email) {
-                if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    Mail::to($email)->send(new RespuestaFormularioMail($respuesta));
+        // Generate PDF inline if form enables it
+        $pdfContent = null;
+        $pdfFilename = null;
+        if ($respuesta->estado !== 'Borrador' && $formulario->genera_pdf) {
+            $respuesta->load('formulario', 'usuario.departamento', 'usuario.cargo', 'aprobaciones.aprobador');
+            $pdfContent = Pdf::loadView('pdf.respuesta', compact('respuesta', 'datos', 'schema'))
+                ->setPaper('a4', 'portrait')
+                ->output();
+            $pdfFilename = 'solicitud-' . str_pad($respuesta->id, 5, '0', STR_PAD_LEFT) . '.pdf';
+        }
+
+        // Send email to form filler + configured recipients
+        if ($respuesta->estado !== 'Borrador') {
+            $emailsDestinatarios = [];
+
+            // Always send to the person who filled the form
+            if (!empty($respuesta->usuario->email)) {
+                $emailsDestinatarios[] = $respuesta->usuario->email;
+            }
+
+            // Also send to configured notification emails if enabled
+            if ($formulario->enviar_email_respuesta && $formulario->email_notificacion) {
+                $configured = array_filter(array_map('trim', explode(',', $formulario->email_notificacion)));
+                foreach ($configured as $email) {
+                    if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                        $emailsDestinatarios[] = $email;
+                    }
                 }
+            }
+
+            foreach (array_unique($emailsDestinatarios) as $email) {
+                Mail::to($email)->send(new RespuestaFormularioMail($respuesta, $pdfContent, $pdfFilename));
             }
         }
 
@@ -147,6 +173,45 @@ class RespuestaController extends Controller
 
         return redirect()->route('respuestas.show', $respuesta)
             ->with('success', $msg);
+    }
+
+    public function reenviarMail(Respuesta $respuesta)
+    {
+        $respuesta->load('formulario', 'usuario.departamento', 'usuario.cargo', 'aprobaciones.aprobador');
+        $formulario = $respuesta->formulario;
+        $datos  = json_decode($respuesta->datos_json ?? '{}', true);
+        $schema = json_decode($formulario->schema_json ?? '[]', true);
+
+        // Generate PDF if form enables it
+        $pdfContent = null;
+        $pdfFilename = null;
+        if ($formulario->genera_pdf) {
+            $pdfContent = Pdf::loadView('pdf.respuesta', compact('respuesta', 'datos', 'schema'))
+                ->setPaper('a4', 'portrait')
+                ->output();
+            $pdfFilename = 'solicitud-' . str_pad($respuesta->id, 5, '0', STR_PAD_LEFT) . '.pdf';
+        }
+
+        $emailsDestinatarios = [];
+
+        if (!empty($respuesta->usuario->email)) {
+            $emailsDestinatarios[] = $respuesta->usuario->email;
+        }
+
+        if ($formulario->enviar_email_respuesta && $formulario->email_notificacion) {
+            $configured = array_filter(array_map('trim', explode(',', $formulario->email_notificacion)));
+            foreach ($configured as $email) {
+                if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $emailsDestinatarios[] = $email;
+                }
+            }
+        }
+
+        foreach (array_unique($emailsDestinatarios) as $email) {
+            Mail::to($email)->send(new RespuestaFormularioMail($respuesta, $pdfContent, $pdfFilename));
+        }
+
+        return back()->with('success', 'Correo reenviado correctamente a ' . implode(', ', array_unique($emailsDestinatarios)) . '.');
     }
 
     public function show(Respuesta $respuesta)

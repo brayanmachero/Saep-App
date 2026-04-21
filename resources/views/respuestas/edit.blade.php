@@ -92,13 +92,14 @@
                             </select>
 
                         @elseif($field['type'] === 'radio')
+                            @php $checkedRadio = is_array($val) ? $val : (is_string($val) && $val !== '' ? [$val] : []); @endphp
                             <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.25rem;">
                                 @foreach($field['options'] ?? [] as $opt)
                                     <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
-                                        <input type="radio" name="field_{{ $field['id'] }}" value="{{ $opt }}"
-                                            onchange="updateRadio('{{ $field['id'] }}', this.value)"
-                                            {{ $val === $opt ? 'checked' : '' }}
-                                            {{ !empty($field['required']) ? 'required' : '' }}>
+                                        <input type="checkbox" value="{{ $opt }}"
+                                            data-check-group="{{ $field['id'] }}"
+                                            onchange="updateCheckbox('{{ $field['id'] }}')"
+                                            {{ in_array($opt, $checkedRadio) ? 'checked' : '' }}>
                                         {{ $opt }}
                                     </label>
                                 @endforeach
