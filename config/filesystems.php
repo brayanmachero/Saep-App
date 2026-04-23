@@ -39,12 +39,15 @@ return [
         ],
 
         'public' => [
-            'driver' => 'local',
-            'root' => storage_path('app/public'),
-            'url' => env('APP_URL').'/storage',
+            'driver'    => 'azure',
+            'name'      => env('AZURE_STORAGE_NAME'),
+            'key'       => env('AZURE_STORAGE_KEY'),
+            'container' => env('AZURE_STORAGE_CONTAINER', 'saep-files'),
+            'url'       => env('AZURE_STORAGE_URL'),
+            'prefix'    => null,
             'visibility' => 'public',
-            'throw' => false,
-            'report' => false,
+            'throw'     => false,
+            'report'    => false,
         ],
 
         's3' => [
@@ -58,6 +61,17 @@ return [
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => false,
             'report' => false,
+        ],
+
+        'azure' => [
+            'driver'    => 'azure',
+            'name'      => env('AZURE_STORAGE_NAME'),
+            'key'       => env('AZURE_STORAGE_KEY'),
+            'container' => env('AZURE_STORAGE_CONTAINER', 'saep-files'),
+            'url'       => env('AZURE_STORAGE_URL'),
+            'prefix'    => null,
+            'throw'     => false,
+            'report'    => false,
         ],
 
     ],
