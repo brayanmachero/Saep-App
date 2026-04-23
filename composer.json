@@ -12,8 +12,7 @@
         "laravel/framework": "^11.31",
         "laravel/socialite": "*",
         "laravel/tinker": "^2.9",
-        "phpoffice/phpspreadsheet": "^5.5",
-        "resend/resend-laravel": "*"
+        "phpoffice/phpspreadsheet": "^5.5"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
