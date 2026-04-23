@@ -94,6 +94,13 @@ class DocumentacionController extends Controller
                 'estado'      => 'pendiente',
                 'version'     => null,
             ],
+            'infraestructura' => [
+                'titulo'      => 'Infraestructura y DevOps',
+                'icono'       => 'bi-cloud-fill',
+                'descripcion' => 'Stack técnico, arquitectura Azure, deploy automático, variables de entorno y servicios externos.',
+                'estado'      => 'completo',
+                'version'     => '1.0',
+            ],
         ];
     }
 
