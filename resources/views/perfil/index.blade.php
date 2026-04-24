@@ -38,7 +38,7 @@
             {{-- Foto --}}
             <div style="position:relative;display:inline-block;margin-bottom:1.25rem;">
                 @if($user->foto_perfil)
-                    <img src="{{ Storage::url($user->foto_perfil) }}" alt="Foto de perfil"
+                    <img src="{{ Storage::disk('public')->url($user->foto_perfil) }}" alt="Foto de perfil"
                          style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:4px solid var(--primary-color);">
                 @else
                     <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,#0f1b4c,#1e3a8a);display:flex;align-items:center;justify-content:center;margin:0 auto;">

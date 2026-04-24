@@ -11,7 +11,7 @@
     {{-- Cover Image --}}
     @if($coverImage)
     <div style="width:100%;height:120px;overflow:hidden;border-radius:10px 10px 0 0;border-bottom:1px solid var(--border-color);">
-        <img src="{{ Storage::url($coverImage->ruta) }}" alt="" style="width:100%;height:100%;object-fit:cover;" loading="lazy">
+        <img src="{{ Storage::disk('public')->url($coverImage->ruta) }}" alt="" style="width:100%;height:100%;object-fit:cover;" loading="lazy">
     </div>
     @endif
 

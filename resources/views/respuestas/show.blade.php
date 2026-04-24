@@ -98,7 +98,7 @@
                             @if($field['type'] === 'file')
                                 @if($val && is_array($val) && isset($val['path']))
                                     {{-- Single file (legacy format) --}}
-                                    <a href="{{ Storage::url($val['path']) }}" target="_blank"
+                                    <a href="{{ Storage::disk('public')->url($val['path']) }}" target="_blank"
                                        style="display:inline-flex;align-items:center;gap:.3rem;font-size:.82rem;color:var(--accent-color);text-decoration:none;">
                                         <i class="bi bi-download"></i> {{ $val['name'] ?? 'Descargar' }}
                                         @if(isset($val['size']))
@@ -109,7 +109,7 @@
                                     {{-- Multiple files --}}
                                     <div style="display:flex;flex-direction:column;gap:.4rem;">
                                         @foreach($val as $archivo)
-                                            <a href="{{ Storage::url($archivo['path']) }}" target="_blank"
+                                            <a href="{{ Storage::disk('public')->url($archivo['path']) }}" target="_blank"
                                                style="display:inline-flex;align-items:center;gap:.3rem;font-size:.82rem;color:var(--accent-color);text-decoration:none;">
                                                 <i class="bi bi-download"></i> {{ $archivo['name'] ?? 'Descargar' }}
                                                 @if(isset($archivo['size']))
