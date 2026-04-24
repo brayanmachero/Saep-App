@@ -34,6 +34,8 @@ use App\Http\Controllers\LeyKarinPublicoController;
 use App\Http\Controllers\StopDashboardController;
 use App\Http\Controllers\CampoOpcionController;
 use App\Http\Controllers\MisFormulariosController;
+use App\Http\Controllers\ContratacionPublicoController;
+use App\Http\Controllers\ContratacionController;
 use Illuminate\Support\Facades\Route;
 
 // --- WEBHOOK KIZEO (público, sin auth ni CSRF) ---
@@ -65,6 +67,17 @@ Route::prefix('denuncia-ley-karin')->group(function () {
     Route::post('/enviar',         [LeyKarinPublicoController::class, 'store'])->name('ley-karin-publico.store');
     Route::get('/confirmacion/{folio}', [LeyKarinPublicoController::class, 'confirmacion'])->name('ley-karin-publico.confirmacion');
     Route::post('/logout',         [LeyKarinPublicoController::class, 'logout'])->name('ley-karin-publico.logout');
+});
+
+// --- PORTAL CONTRATACIÓN PÚBLICA (sin autenticación SAEP, requiere Google OAuth) ---
+Route::prefix('postulacion')->group(function () {
+    Route::get('/',                    [ContratacionPublicoController::class, 'inicio'])->name('contratacion-publico.inicio');
+    Route::get('/auth/google',         [ContratacionPublicoController::class, 'redirectGoogle'])->name('contratacion-publico.google');
+    Route::get('/auth/callback',       [ContratacionPublicoController::class, 'callbackGoogle'])->name('contratacion-publico.callback');
+    Route::get('/formulario',          [ContratacionPublicoController::class, 'formulario'])->name('contratacion-publico.formulario');
+    Route::post('/enviar',             [ContratacionPublicoController::class, 'store'])->name('contratacion-publico.store');
+    Route::get('/confirmacion/{folio}',[ContratacionPublicoController::class, 'confirmacion'])->name('contratacion-publico.confirmacion');
+    Route::post('/logout',             [ContratacionPublicoController::class, 'logout'])->name('contratacion-publico.logout');
 });
 
 // App (requiere autenticación)
@@ -438,6 +451,18 @@ Route::middleware('auth')->group(function () {
         Route::get('kanban/{kanban}/actividad', [\App\Http\Controllers\KanbanController::class, 'actividad'])->name('kanban.actividad');
         // Calendario API
         Route::get('kanban/{kanban}/calendar-data', [\App\Http\Controllers\KanbanController::class, 'calendarData'])->name('kanban.calendar-data');
+    });
+
+    // --- CONTRATACIÓN (RRHH / Admin) ---
+    Route::middleware('modulo:contratacion')->prefix('contratacion')->name('contratacion.')->group(function () {
+        Route::get('/',                              [ContratacionController::class, 'index'])->name('index');
+        Route::get('/{postulante}',                  [ContratacionController::class, 'show'])->name('show');
+        Route::patch('/{postulante}',                [ContratacionController::class, 'update'])->name('update');
+        Route::get('/{postulante}/zip',              [ContratacionController::class, 'descargarZip'])->name('zip');
+        Route::get('/{postulante}/doc/{campo}',      [ContratacionController::class, 'descargarDocumento'])->name('documento');
+        Route::get('/exportar/excel',                [ContratacionController::class, 'exportarExcel'])->name('export-excel');
+        Route::get('/configuracion/emails',          [ContratacionController::class, 'configuracion'])->name('configuracion');
+        Route::patch('/configuracion/emails',        [ContratacionController::class, 'guardarConfiguracion'])->name('guardar-configuracion');
     });
 
     }); // fin middleware consentimiento

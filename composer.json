@@ -12,7 +12,7 @@
         "laravel/framework": "^11.31",
         "laravel/socialite": "*",
         "laravel/tinker": "^2.9",
-        "league/flysystem-azure-blob-storage": "*",
+        "league/flysystem-azure-blob-storage": "^3.31",
         "phpoffice/phpspreadsheet": "^5.5"
     },
     "require-dev": {

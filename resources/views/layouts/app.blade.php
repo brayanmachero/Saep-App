@@ -127,6 +127,12 @@
                 <span>Canal de Denuncia</span>
             </a>
             @endif
+            @if(auth()->user()->tieneAcceso('contratacion'))
+            <a href="{{ route('contratacion.index') }}" class="nav-item {{ request()->routeIs('contratacion.*') ? 'active' : '' }}">
+                <i class="bi bi-person-badge-fill"></i>
+                <span>Contratación</span>
+            </a>
+            @endif
             @endif
 
             {{-- ADMINISTRACIÓN --}}
