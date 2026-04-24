@@ -33,12 +33,22 @@ class AppServiceProvider extends ServiceProvider
 
             $client = BlobRestProxy::createBlobService($connectionString);
             $adapter = new AzureBlobStorageAdapter($client, $config['container'], $config['prefix'] ?? '');
+            $diskConfig = $config;
 
-            return new FilesystemAdapter(
-                new Filesystem($adapter),
-                $adapter,
-                $config
-            );
+            return new class(new Filesystem($adapter), $adapter, $diskConfig) extends FilesystemAdapter {
+                public function url($path): string
+                {
+                    if (isset($this->config['prefix'])) {
+                        $path = $this->concatPathToUrl($this->config['prefix'], $path);
+                    }
+
+                    if (isset($this->config['url'])) {
+                        return $this->concatPathToUrl($this->config['url'], $path);
+                    }
+
+                    return parent::url($path);
+                }
+            };
         });
     }
 }
