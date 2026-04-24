@@ -10,9 +10,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
+      id-token: write
       contents: read
 
     steps:
@@ -29,7 +30,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Cache Composer dependencies
         uses: actions/cache@v4
@@ -38,38 +38,26 @@ jobs:
           key: composer-${{ hashFiles('composer.lock') }}
           restore-keys: composer-
 
+      - name: Cache node_modules
+        id: cache-npm
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-
+
       - name: Instalar dependencias PHP (producción)
         run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress
 
       - name: Instalar dependencias NPM
+        if: steps.cache-npm.outputs.cache-hit != 'true'
         run: npm ci
 
       - name: Compilar assets (Vite)
         run: npm run build
 
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: php-app
-          path: .
-          exclude: |
-            node_modules/
-            tests/
-            .env.example
-          include-hidden-files: true
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      id-token: write
-      contents: read
-
-    steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: php-app
+      - name: Limpiar node_modules antes del deploy
+        run: rm -rf node_modules
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -80,9 +68,7 @@ jobs:
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
-        id: deploy-to-webapp
         with:
           app-name: 'saep-app'
           slot-name: 'Production'
           package: .
-          
