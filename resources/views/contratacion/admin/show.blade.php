@@ -26,6 +26,9 @@
             <a href="{{ route('contratacion.zip', $postulante) }}" class="btn-ghost">
                 <i class="bi bi-file-zip-fill" style="color:#f59e0b;"></i> Descargar ZIP
             </a>
+            <a href="{{ route('contratacion.ficha-pdf', $postulante) }}" class="btn-ghost" target="_blank">
+                <i class="bi bi-file-earmark-pdf-fill" style="color:#ef4444;"></i> Ficha PDF
+            </a>
             @endif
         </div>
     </div>

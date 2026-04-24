@@ -460,6 +460,7 @@ Route::middleware('auth')->group(function () {
         Route::patch('/{postulante}',                [ContratacionController::class, 'update'])->name('update');
         Route::get('/{postulante}/zip',              [ContratacionController::class, 'descargarZip'])->name('zip');
         Route::get('/{postulante}/doc/{campo}',      [ContratacionController::class, 'descargarDocumento'])->name('documento');
+        Route::get('/{postulante}/ficha-pdf',        [ContratacionController::class, 'fichaPdf'])->name('ficha-pdf');
         Route::get('/exportar/excel',                [ContratacionController::class, 'exportarExcel'])->name('export-excel');
         Route::get('/configuracion/emails',          [ContratacionController::class, 'configuracion'])->name('configuracion');
         Route::patch('/configuracion/emails',        [ContratacionController::class, 'guardarConfiguracion'])->name('guardar-configuracion');

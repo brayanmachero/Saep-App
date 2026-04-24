@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Configuracion;
 use App\Models\PostulanteContratacion;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -196,5 +197,57 @@ class ContratacionController extends Controller
         }
 
         return back()->with('success', 'Configuración guardada.');
+    }
+
+    // ─── Ficha PDF del postulante ─────────────────────────────────
+    public function fichaPdf(PostulanteContratacion $postulante)
+    {
+        $campos = [
+            'carnet_frontal'    => 'Carnet de Identidad (Frontal)',
+            'carnet_reverso'    => 'Carnet de Identidad (Reverso)',
+            'certificado_afp'   => 'Certificado AFP',
+            'certificado_fonasa'=> 'Certificado FONASA',
+            'licencia_conducir' => 'Licencia de Conducir',
+        ];
+
+        // Preparar documentos: imágenes como base64, PDFs como referencia
+        $documentos = [];
+        foreach ($campos as $campo => $label) {
+            if (empty($postulante->$campo)) continue;
+
+            $ruta = $postulante->$campo;
+            $ext  = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
+
+            if (!Storage::disk('public')->exists($ruta)) {
+                $documentos[] = ['label' => $label, 'tipo' => 'ausente', 'data' => null, 'ext' => $ext];
+                continue;
+            }
+
+            if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                $contenido = Storage::disk('public')->get($ruta);
+                $mime      = match($ext) {
+                    'png'  => 'image/png',
+                    'gif'  => 'image/gif',
+                    'webp' => 'image/webp',
+                    default => 'image/jpeg',
+                };
+                $documentos[] = [
+                    'label' => $label,
+                    'tipo'  => 'imagen',
+                    'data'  => 'data:' . $mime . ';base64,' . base64_encode($contenido),
+                    'ext'   => $ext,
+                ];
+            } else {
+                // Es PDF: no se puede embeber inline en dompdf, se indica con url
+                $url = Storage::disk('public')->url($ruta);
+                $documentos[] = ['label' => $label, 'tipo' => 'pdf', 'data' => $url, 'ext' => $ext];
+            }
+        }
+
+        $pdf = Pdf::loadView('pdf.contratacion_ficha', compact('postulante', 'documentos'))
+            ->setPaper('a4', 'portrait');
+
+        $filename = $postulante->folio . '_ficha.pdf';
+        return $pdf->download($filename);
     }
 }
