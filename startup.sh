@@ -16,6 +16,14 @@ fi
 
 cd /home/site/wwwroot
 
+# Restaurar google-credentials.json desde variable de entorno (Base64)
+if [ -n "$GOOGLE_CREDENTIALS_BASE64" ]; then
+    echo "$GOOGLE_CREDENTIALS_BASE64" | base64 -d > /home/site/wwwroot/google-credentials.json
+    echo "google-credentials.json restaurado OK"
+else
+    echo "WARN: GOOGLE_CREDENTIALS_BASE64 no definida, Google Drive no funcionará"
+fi
+
 php artisan storage:link --force 2>/dev/null || true
 php artisan config:cache
 php artisan route:cache
