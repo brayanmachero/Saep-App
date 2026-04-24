@@ -733,6 +733,7 @@
 <script>
     window.__respuestas = @json($respuestasJson);
     window.__schema = @json($schemaJson);
+    const storageBaseUrl = '{{ rtrim(Storage::disk('public')->url(''), '/') }}';
 </script>
 
 {{-- ===== MODAL IMPORTAR ===== --}}
@@ -880,10 +881,11 @@ window.openDrawer = function(id) {
             const renderFileItem = (item) => {
                 const isImg = item.mime && item.mime.startsWith('image/');
                 const size = item.size ? ` (${Math.round(item.size/1024)} KB)` : '';
+                const fileUrl = storageBaseUrl + '/' + item.path;
                 if (isImg) {
-                    return `<div style="margin-bottom:.4rem;"><img src="/storage/${item.path}" alt="${item.name||''}" style="max-width:100%;max-height:160px;border-radius:6px;border:1px solid var(--surface-border);display:block;margin-bottom:.25rem;"><a href="/storage/${item.path}" target="_blank" style="font-size:.75rem;color:var(--accent-color);text-decoration:none;">${item.name||'Ver imagen'}${size}</a></div>`;
+                    return `<div style="margin-bottom:.4rem;"><img src="${fileUrl}" alt="${item.name||''}" style="max-width:100%;max-height:160px;border-radius:6px;border:1px solid var(--surface-border);display:block;margin-bottom:.25rem;"><a href="${fileUrl}" target="_blank" style="font-size:.75rem;color:var(--accent-color);text-decoration:none;">${item.name||'Ver imagen'}${size}</a></div>`;
                 } else {
-                    return `<a href="/storage/${item.path}" target="_blank" style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--accent-color);text-decoration:none;padding:.3rem .6rem;background:var(--surface-color);border:1px solid var(--surface-border);border-radius:6px;margin-bottom:.3rem;"><i class="bi bi-download"></i> ${item.name||'Descargar'}${size}</a>`;
+                    return `<a href="${fileUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--accent-color);text-decoration:none;padding:.3rem .6rem;background:var(--surface-color);border:1px solid var(--surface-border);border-radius:6px;margin-bottom:.3rem;"><i class="bi bi-download"></i> ${item.name||'Descargar'}${size}</a>`;
                 }
             };
             if (val && Array.isArray(val) && val.length > 0 && val[0] && val[0].path) {

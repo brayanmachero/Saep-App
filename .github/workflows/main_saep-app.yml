@@ -31,6 +31,13 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
       - name: Instalar dependencias PHP (producción)
         run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress
 
@@ -45,6 +52,10 @@ jobs:
         with:
           name: php-app
           path: .
+          exclude: |
+            node_modules/
+            tests/
+            .env.example
           include-hidden-files: true
 
   deploy:

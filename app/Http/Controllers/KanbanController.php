@@ -571,7 +571,7 @@ class KanbanController extends Controller
                 'nombre_original' => $a->nombre_original,
                 'tamanio'         => $a->tamanioFormateado,
                 'es_imagen'       => $a->esImagen(),
-                'url_imagen'      => $a->esImagen() ? Storage::url($a->ruta) : null,
+                'url_imagen'      => $a->esImagen() ? Storage::disk('public')->url($a->ruta) : null,
                 'subido_por'      => $a->subidoPor?->name ?? 'Sistema',
                 'fecha'           => $a->created_at->diffForHumans(),
                 'url_descargar'   => route('kanban.adjuntos.descargar', $a->id),
@@ -677,7 +677,7 @@ class KanbanController extends Controller
             'nombre_original' => $adjunto->nombre_original,
             'tamanio'         => $adjunto->tamanioFormateado,
             'es_imagen'       => $adjunto->esImagen(),
-            'url_imagen'      => $adjunto->esImagen() ? Storage::url($adjunto->ruta) : null,
+            'url_imagen'      => $adjunto->esImagen() ? Storage::disk('public')->url($adjunto->ruta) : null,
             'subido_por'      => auth()->user()->name,
             'fecha'           => 'Justo ahora',
             'url_descargar'   => route('kanban.adjuntos.descargar', $adjunto->id),
@@ -693,13 +693,15 @@ class KanbanController extends Controller
 
     public function descargarAdjunto(KanbanAdjunto $adjunto)
     {
-        $path = Storage::disk('public')->path($adjunto->ruta);
-
-        if (!file_exists($path)) {
+        if (!Storage::disk('public')->exists($adjunto->ruta)) {
             abort(404, 'Archivo no encontrado');
         }
 
-        return response()->download($path, $adjunto->nombre_original);
+        return response()->streamDownload(function () use ($adjunto) {
+            echo Storage::disk('public')->get($adjunto->ruta);
+        }, $adjunto->nombre_original, [
+            'Content-Type' => $adjunto->mime_type ?? 'application/octet-stream',
+        ]);
     }
 
     // =====================================================
