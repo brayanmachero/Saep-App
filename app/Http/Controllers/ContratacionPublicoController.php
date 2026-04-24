@@ -28,8 +28,8 @@ class ContratacionPublicoController extends Controller
     public function redirectGoogle()
     {
         return Socialite::driver('google')
+            ->redirectUrl(route('contratacion-publico.callback'))
             ->scopes(['openid', 'email', 'profile'])
-            ->with(['state' => 'contratacion'])
             ->redirect();
     }
 
@@ -37,7 +37,10 @@ class ContratacionPublicoController extends Controller
     public function callbackGoogle()
     {
         try {
-            $googleUser = Socialite::driver('google')->stateless()->user();
+            $googleUser = Socialite::driver('google')
+                ->redirectUrl(route('contratacion-publico.callback'))
+                ->stateless()
+                ->user();
 
             Session::put('contratacion_google_user', [
                 'id'     => $googleUser->getId(),
