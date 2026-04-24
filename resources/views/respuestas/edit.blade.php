@@ -150,7 +150,7 @@
                                             <small style="color:var(--text-muted);font-size:.72rem">Archivos actuales (se mantienen si no subes nuevos):</small>
                                             <div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.25rem;">
                                                 @foreach($existingFiles as $archivo)
-                                                    <a href="{{ asset('storage/' . $archivo['path']) }}" target="_blank"
+                                                    <a href="{{ Storage::url($archivo['path']) }}" target="_blank"
                                                        style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--accent-color);text-decoration:none;">
                                                         <i class="bi bi-paperclip"></i> {{ $archivo['name'] ?? 'Archivo' }}
                                                         @if(isset($archivo['size']))
@@ -178,7 +178,7 @@
                                         <small style="color:var(--text-muted);font-size:.72rem">Archivo actual:</small>
                                         <div style="display:flex;flex-direction:column;gap:.25rem;margin-top:.25rem;">
                                             @foreach($existingFiles as $archivo)
-                                                <a href="{{ asset('storage/' . $archivo['path']) }}" target="_blank"
+                                                <a href="{{ Storage::url($archivo['path']) }}" target="_blank"
                                                    style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;color:var(--accent-color);text-decoration:none;">
                                                     <i class="bi bi-paperclip"></i> {{ $archivo['name'] ?? 'Archivo' }}
                                                     @if(isset($archivo['size']))

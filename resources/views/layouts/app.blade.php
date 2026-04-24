@@ -228,7 +228,7 @@
         <div class="user-profile">
             <a href="{{ route('perfil.show') }}" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:.65rem;width:100%;">
                 @if(auth()->user()->foto_perfil)
-                    <img src="{{ asset('storage/' . auth()->user()->foto_perfil) }}" alt="Foto" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+                    <img src="{{ Storage::url(auth()->user()->foto_perfil) }}" alt="Foto" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">
                 @else
                     <div class="avatar">
                         {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 1)) }}{{ strtoupper(substr(strstr(auth()->user()->name ?? ' X', ' '), 1, 1)) }}
@@ -282,7 +282,7 @@
                 </div>
                 <a href="{{ route('perfil.show') }}" class="icon-btn" title="Mi Perfil" style="text-decoration:none;">
                     @if(auth()->user()->foto_perfil)
-                        <img src="{{ asset('storage/' . auth()->user()->foto_perfil) }}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">
+                        <img src="{{ Storage::url(auth()->user()->foto_perfil) }}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">
                     @else
                         <i class="bi bi-person-circle"></i>
                     @endif
