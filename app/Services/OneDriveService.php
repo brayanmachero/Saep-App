@@ -219,6 +219,104 @@ class OneDriveService
     }
 
     /**
+     * Obtener el Site ID de un sitio SharePoint específico (cacheado por nombre de sitio).
+     */
+    private function getSiteIdForSite(string $siteName): ?string
+    {
+        $cacheKey = 'msgraph_sharepoint_site_id_' . $siteName;
+
+        return Cache::rememberForever($cacheKey, function () use ($siteName) {
+            $token = $this->getAccessToken();
+            if (!$token) {
+                return null;
+            }
+
+            $url = "https://graph.microsoft.com/v1.0/sites/{$this->sharepointHost}:/sites/{$siteName}";
+            $response = Http::withToken($token)->get($url);
+
+            if ($response->failed()) {
+                Log::error('SharePoint: Error obteniendo Site ID para ' . $siteName, [
+                    'url'    => $url,
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+                return null;
+            }
+
+            $siteId = $response->json('id');
+            Log::info('SharePoint: Site ID obtenido para ' . $siteName, ['siteId' => $siteId]);
+            return $siteId;
+        });
+    }
+
+    /**
+     * Subir archivo a un sitio SharePoint específico (distinto al configurado por defecto).
+     * La ruta es relativa a la raíz del drive del sitio.
+     */
+    public function uploadFileToSite(string $site, string $content, string $remotePath, string $contentType = 'application/pdf'): bool
+    {
+        if (!$this->isConfigured()) {
+            Log::warning('SharePoint: Servicio no configurado, se omite subida');
+            return false;
+        }
+
+        $token = $this->getAccessToken();
+        if (!$token) {
+            return false;
+        }
+
+        $siteId = $this->getSiteIdForSite($site);
+        if (!$siteId) {
+            return false;
+        }
+
+        $fullPath = $this->sanitizePath($remotePath);
+        $url      = "https://graph.microsoft.com/v1.0/sites/{$siteId}/drive/root:/{$fullPath}:/content";
+        $fileSize = strlen($content);
+
+        if ($fileSize > 4 * 1024 * 1024) {
+            return $this->uploadLargeFile($token, $siteId, $fullPath, $content, $contentType);
+        }
+
+        $response = Http::withToken($token)
+            ->withHeaders(['Content-Type' => $contentType])
+            ->withBody($content, $contentType)
+            ->put($url);
+
+        if ($response->successful()) {
+            Log::info('SharePoint: Archivo subido a ' . $site . ' exitosamente', [
+                'path'   => $fullPath,
+                'size'   => $fileSize,
+                'itemId' => $response->json('id'),
+            ]);
+            return true;
+        }
+
+        Log::error('SharePoint: Error subiendo archivo a ' . $site, [
+            'path'   => $fullPath,
+            'status' => $response->status(),
+            'body'   => $response->body(),
+        ]);
+
+        if ($response->status() === 401) {
+            Cache::forget('msgraph_access_token');
+            $newToken = $this->getAccessToken();
+            if ($newToken) {
+                $retry = Http::withToken($newToken)
+                    ->withHeaders(['Content-Type' => $contentType])
+                    ->withBody($content, $contentType)
+                    ->put($url);
+                if ($retry->successful()) {
+                    Log::info('SharePoint: Archivo subido a ' . $site . ' en reintento', ['path' => $fullPath]);
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Sanitizar ruta para SharePoint (remover caracteres inválidos).
      */
     private function sanitizePath(string $path): string

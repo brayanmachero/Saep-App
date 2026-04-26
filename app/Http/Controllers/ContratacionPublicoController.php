@@ -6,7 +6,10 @@ use App\Mail\ContratacionAcuseReciboMail;
 use App\Mail\ContratacionNuevoPostulanteMail;
 use App\Models\Configuracion;
 use App\Models\PostulanteContratacion;
+use App\Services\OneDriveService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
@@ -146,6 +149,13 @@ class ContratacionPublicoController extends Controller
             $this->notificarRrhh($postulante);
         }
 
+        // Subir documentos + ficha PDF a SharePoint (no crítico)
+        try {
+            $this->subirASharePoint($postulante);
+        } catch (\Throwable $e) {
+            Log::warning('SharePoint contratacion upload falló (no crítico): ' . $e->getMessage());
+        }
+
         return redirect()->route('contratacion-publico.confirmacion', $postulante->folio);
     }
 
@@ -162,6 +172,88 @@ class ContratacionPublicoController extends Controller
         Session::forget('contratacion_google_user');
         return redirect()->route('contratacion-publico.inicio')
             ->with('success', 'Sesión cerrada correctamente.');
+    }
+
+    // ─── Subida a SharePoint ─────────────────────────────────────
+    private function subirASharePoint(PostulanteContratacion $postulante): void
+    {
+        $graphConfig = config('services.microsoft_graph');
+        $site        = $graphConfig['contratacion_site']   ?? 'RRH';
+        $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
+
+        $oneDrive = app(OneDriveService::class);
+        if (!$oneDrive->isConfigured()) {
+            return;
+        }
+
+        // Carpeta del postulante: "{RUT} - {Nombre}"
+        $carpeta = $postulante->rut . ' - ' . $postulante->nombre;
+
+        // 1. Subir cada documento original desde Azure Blob
+        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir'];
+        foreach ($camposDocs as $campo) {
+            if (empty($postulante->$campo)) continue;
+            if (!Storage::disk('public')->exists($postulante->$campo)) continue;
+
+            $ext     = strtolower(pathinfo($postulante->$campo, PATHINFO_EXTENSION));
+            $mime    = match($ext) {
+                'png'          => 'image/png',
+                'gif'          => 'image/gif',
+                'webp'         => 'image/webp',
+                'jpg', 'jpeg'  => 'image/jpeg',
+                default        => 'application/pdf',
+            };
+            $content = Storage::disk('public')->get($postulante->$campo);
+            $oneDrive->uploadFileToSite($site, $content, "{$folder}/{$carpeta}/{$campo}.{$ext}", $mime);
+        }
+
+        // 2. Generar PDF consolidado y subirlo
+        $documentos   = [];
+        $camposLabels = [
+            'carnet_frontal'     => 'Carnet de Identidad (Frontal)',
+            'carnet_reverso'     => 'Carnet de Identidad (Reverso)',
+            'certificado_afp'    => 'Certificado AFP',
+            'certificado_fonasa' => 'Certificado FONASA',
+            'licencia_conducir'  => 'Licencia de Conducir',
+        ];
+        foreach ($camposLabels as $campo => $label) {
+            if (empty($postulante->$campo)) continue;
+            $ruta = $postulante->$campo;
+            $ext  = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
+
+            if (!Storage::disk('public')->exists($ruta)) {
+                $documentos[] = ['label' => $label, 'tipo' => 'ausente', 'data' => null, 'ext' => $ext];
+                continue;
+            }
+
+            if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                $contenido    = Storage::disk('public')->get($ruta);
+                $mime         = match($ext) {
+                    'png'  => 'image/png',
+                    'gif'  => 'image/gif',
+                    'webp' => 'image/webp',
+                    default => 'image/jpeg',
+                };
+                $documentos[] = [
+                    'label' => $label,
+                    'tipo'  => 'imagen',
+                    'data'  => 'data:' . $mime . ';base64,' . base64_encode($contenido),
+                    'ext'   => $ext,
+                ];
+            } else {
+                $documentos[] = ['label' => $label, 'tipo' => 'pdf', 'data' => Storage::disk('public')->url($ruta), 'ext' => $ext];
+            }
+        }
+
+        $pdfContent = Pdf::loadView('pdf.contratacion_ficha', compact('postulante', 'documentos'))
+            ->setPaper('a4', 'portrait')
+            ->output();
+
+        $oneDrive->uploadFileToSite(
+            $site,
+            $pdfContent,
+            "{$folder}/{$carpeta}/{$postulante->folio}_ficha.pdf"
+        );
     }
 
     // ─── Notificación RRHH ───────────────────────────────────────
