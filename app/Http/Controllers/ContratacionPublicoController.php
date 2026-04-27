@@ -284,115 +284,162 @@ class ContratacionPublicoController extends Controller
                 'size'  => strlen($fichaBytes),
             ]);
 
-            // Paso B: Merge con FPDI si hay documentos PDF
+            // Paso B: Merge con GS/FPDI si hay documentos PDF
             $tempFiles = [];
             if (!empty($pdfDocRutas)) {
+                // ── Guardar ficha como archivo temporal ──────────────────────────
                 $tempFicha = tempnam($tmpDir, 'ficha_') . '.pdf';
                 file_put_contents($tempFicha, $fichaBytes);
                 $tempFiles[] = $tempFicha;
 
-                $fpdi = null;
-
-                // Importar páginas de la ficha DomPDF
-                try {
-                    $fpdi = new Fpdi();
-                    $n = $fpdi->setSourceFile($tempFicha);
-                    for ($i = 1; $i <= $n; $i++) {
-                        $tpl = $fpdi->importPage($i);
-                        [$w, $h] = array_values($fpdi->getTemplateSize($tpl));
-                        $fpdi->AddPage($h > $w ? 'P' : 'L', [$w, $h]);
-                        $fpdi->useTemplate($tpl, 0, 0, $w, $h, true);
-                    }
-                } catch (\Throwable $ex) {
-                    Log::warning('SharePoint contratacion: no se pudo importar ficha con FPDI, usando DomPDF solo', [
-                        'folio' => $postulante->folio,
-                        'error' => $ex->getMessage(),
-                    ]);
-                    // Fallback: subir solo la ficha DomPDF
-                    $fpdi = null;
+                // ── Descargar todos los PDFs a archivos temporales ───────────────
+                $docTempPaths = []; // label => path
+                foreach ($pdfDocRutas as $docInfo) {
+                    $pdfBytes = Storage::disk('public')->get($docInfo['ruta']);
+                    $tempDoc  = tempnam($tmpDir, 'doc_') . '.pdf';
+                    file_put_contents($tempDoc, $pdfBytes ?? '');
+                    $tempFiles[]                     = $tempDoc;
+                    $docTempPaths[$docInfo['label']] = $tempDoc;
                 }
 
-                if ($fpdi !== null) {
-                    // Importar cada documento PDF
-                    foreach ($pdfDocRutas as $docInfo) {
-                        $pdfBytes = Storage::disk('public')->get($docInfo['ruta']);
-                        $tempDoc  = tempnam($tmpDir, 'doc_') . '.pdf';
-                        file_put_contents($tempDoc, $pdfBytes);
-                        $tempFiles[] = $tempDoc;
+                $gsPath = $this->gsPath();
+                Log::info('SharePoint contratacion: PDF merge diagnóstico', [
+                    'folio'     => $postulante->folio,
+                    'gs_path'   => $gsPath ?: 'N/A',
+                    'exec'      => function_exists('exec')      ? 'sí' : 'no',
+                    'proc_open' => function_exists('proc_open') ? 'sí' : 'no',
+                    'imagick'   => class_exists('Imagick')       ? 'sí' : 'no',
+                    'docs'      => count($pdfDocRutas),
+                ]);
 
-                        // Intento 1: FPDI directo
-                        $merged = false;
-                        try {
-                            $n = $fpdi->setSourceFile($tempDoc);
-                            for ($i = 1; $i <= $n; $i++) {
-                                $tpl = $fpdi->importPage($i);
-                                [$w, $h] = array_values($fpdi->getTemplateSize($tpl));
-                                $fpdi->AddPage($h > $w ? 'P' : 'L', [$w, $h]);
-                                $fpdi->useTemplate($tpl, 0, 0, $w, $h, true);
-                            }
-                            $merged = true;
-                            Log::info('SharePoint contratacion: documento PDF importado con FPDI', [
-                                'folio' => $postulante->folio,
-                                'label' => $docInfo['label'],
-                            ]);
-                        } catch (\Throwable $ex) {
-                            Log::warning('SharePoint contratacion: FPDI falló, intentando Imagick', [
-                                'folio' => $postulante->folio,
-                                'label' => $docInfo['label'],
-                                'error' => $ex->getMessage(),
-                            ]);
+                $fichaFinalizada = false;
+
+                // ════════════════════════════════════════════════════════════════
+                // Estrategia 1: GS merge directo de TODOS los PDFs (maneja PDF 1.5+)
+                // ════════════════════════════════════════════════════════════════
+                if ($gsPath) {
+                    $tempMerged = tempnam($tmpDir, 'merged_') . '.pdf';
+                    @unlink($tempMerged);
+                    $tempFiles[] = $tempMerged;
+
+                    $allInputs = array_merge([$tempFicha], array_values($docTempPaths));
+                    $inputArgs = implode(' ', array_map('escapeshellarg', $allInputs));
+                    $cmd = sprintf(
+                        '%s -dBATCH -dNOPAUSE -dNOSAFER -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -sOutputFile=%s %s 2>&1',
+                        escapeshellarg($gsPath),
+                        escapeshellarg($tempMerged),
+                        $inputArgs
+                    );
+                    $gsOut = []; $gsRet = -1;
+                    $this->runShell($cmd, $gsOut, $gsRet);
+
+                    if ($gsRet === 0 && file_exists($tempMerged) && filesize($tempMerged) > 1000) {
+                        $fichaBytes      = file_get_contents($tempMerged);
+                        $fichaFinalizada = true;
+                        Log::info('SharePoint contratacion: merge exitoso via GS pdfwrite', ['folio' => $postulante->folio]);
+                    } else {
+                        Log::warning('SharePoint contratacion: GS pdfwrite falló', [
+                            'folio' => $postulante->folio,
+                            'ret'   => $gsRet,
+                            'out'   => implode("\n", array_slice($gsOut, 0, 10)),
+                        ]);
+                    }
+                }
+
+                // ════════════════════════════════════════════════════════════════
+                // Estrategia 2: FPDI por documento + Imagick / GS-a-PNG fallback
+                // ════════════════════════════════════════════════════════════════
+                if (!$fichaFinalizada) {
+                    $fpdi = null;
+                    try {
+                        $fpdi = new Fpdi();
+                        $n = $fpdi->setSourceFile($tempFicha);
+                        for ($i = 1; $i <= $n; $i++) {
+                            $tpl = $fpdi->importPage($i);
+                            [$w, $h] = array_values($fpdi->getTemplateSize($tpl));
+                            $fpdi->AddPage($h > $w ? 'P' : 'L', [$w, $h]);
+                            $fpdi->useTemplate($tpl, 0, 0, $w, $h, true);
                         }
+                    } catch (\Throwable $ex) {
+                        Log::warning('SharePoint contratacion: FPDI no pudo importar ficha', [
+                            'folio' => $postulante->folio,
+                            'error' => $ex->getMessage(),
+                        ]);
+                        $fpdi = null;
+                    }
 
-                        // Intento 2: Imagick — convierte cada página a imagen PNG
-                        if (!$merged && class_exists('Imagick')) {
+                    if ($fpdi !== null) {
+                        foreach ($pdfDocRutas as $docInfo) {
+                            $tempDoc   = $docTempPaths[$docInfo['label']];
+                            $docMerged = false;
+
+                            // 2a: FPDI directo
                             try {
-                                $imagick = new \Imagick();
-                                $imagick->setResolution(150, 150);
-                                $imagick->readImage($tempDoc);
-                                foreach ($imagick as $pageImg) {
-                                    $pageImg->setImageFormat('png');
-                                    $pageImg->setImageColorspace(\Imagick::COLORSPACE_SRGB);
-                                    $imgW    = $pageImg->getImageWidth();
-                                    $imgH    = $pageImg->getImageHeight();
-                                    $pxMm    = 25.4 / 150;
-                                    $wMm     = round($imgW * $pxMm, 2);
-                                    $hMm     = round($imgH * $pxMm, 2);
-                                    $tempPng = tempnam($tmpDir, 'pg_') . '.png';
-                                    file_put_contents($tempPng, $pageImg->getImageBlob());
-                                    $tempFiles[] = $tempPng;
-                                    $fpdi->AddPage($hMm > $wMm ? 'P' : 'L', [$wMm, $hMm]);
-                                    $fpdi->Image($tempPng, 0, 0, $wMm, $hMm, 'PNG');
+                                $n = $fpdi->setSourceFile($tempDoc);
+                                for ($i = 1; $i <= $n; $i++) {
+                                    $tpl = $fpdi->importPage($i);
+                                    [$w, $h] = array_values($fpdi->getTemplateSize($tpl));
+                                    $fpdi->AddPage($h > $w ? 'P' : 'L', [$w, $h]);
+                                    $fpdi->useTemplate($tpl, 0, 0, $w, $h, true);
                                 }
-                                $imagick->destroy();
-                                $merged = true;
-                                Log::info('SharePoint contratacion: documento PDF convertido con Imagick', [
+                                $docMerged = true;
+                            } catch (\Throwable $ex) {
+                                Log::warning('SharePoint contratacion: FPDI falló', [
                                     'folio' => $postulante->folio,
                                     'label' => $docInfo['label'],
-                                ]);
-                            } catch (\Throwable $ex2) {
-                                Log::warning('SharePoint contratacion: Imagick también falló', [
-                                    'folio' => $postulante->folio,
-                                    'label' => $docInfo['label'],
-                                    'error' => $ex2->getMessage(),
+                                    'error' => $ex->getMessage(),
                                 ]);
                             }
-                        }
 
-                        // Intento 3: Ghostscript directo via shell (no requiere policy ImageMagick)
-                        if (!$merged) {
-                            $gsPath = trim(@shell_exec('which gs 2>/dev/null') ?? '');
-                            if ($gsPath) {
+                            // 2b: Imagick
+                            if (!$docMerged && class_exists('Imagick')) {
+                                try {
+                                    $imagick = new \Imagick();
+                                    $imagick->setResolution(150, 150);
+                                    $imagick->readImage($tempDoc);
+                                    foreach ($imagick as $pageImg) {
+                                        $pageImg->setImageFormat('png');
+                                        $pageImg->setImageColorspace(\Imagick::COLORSPACE_SRGB);
+                                        $imgW    = $pageImg->getImageWidth();
+                                        $imgH    = $pageImg->getImageHeight();
+                                        $pxMm    = 25.4 / 150;
+                                        $wMm     = round($imgW * $pxMm, 2);
+                                        $hMm     = round($imgH * $pxMm, 2);
+                                        $tempPng = tempnam($tmpDir, 'pg_') . '.png';
+                                        file_put_contents($tempPng, $pageImg->getImageBlob());
+                                        $tempFiles[] = $tempPng;
+                                        $fpdi->AddPage($hMm > $wMm ? 'P' : 'L', [$wMm, $hMm]);
+                                        $fpdi->Image($tempPng, 0, 0, $wMm, $hMm, 'PNG');
+                                    }
+                                    $imagick->destroy();
+                                    $docMerged = true;
+                                    Log::info('SharePoint contratacion: Imagick convirtió doc', [
+                                        'folio' => $postulante->folio,
+                                        'label' => $docInfo['label'],
+                                    ]);
+                                } catch (\Throwable $ex2) {
+                                    Log::warning('SharePoint contratacion: Imagick falló', [
+                                        'folio' => $postulante->folio,
+                                        'label' => $docInfo['label'],
+                                        'error' => $ex2->getMessage(),
+                                    ]);
+                                }
+                            }
+
+                            // 2c: GS a PNG
+                            if (!$docMerged && $gsPath) {
                                 $pngDir = $tmpDir . '/gs_' . uniqid();
                                 @mkdir($pngDir, 0755);
                                 $cmd = sprintf(
-                                    '%s -dBATCH -dNOPAUSE -dSAFER -sDEVICE=png16m -r150 -sOutputFile=%s %s 2>/dev/null',
+                                    '%s -dBATCH -dNOPAUSE -dNOSAFER -sDEVICE=png16m -r150 -sOutputFile=%s %s 2>&1',
                                     escapeshellarg($gsPath),
                                     escapeshellarg($pngDir . '/page_%04d.png'),
                                     escapeshellarg($tempDoc)
                                 );
-                                exec($cmd, $gsOut, $gsRet);
+                                $gsOut = []; $gsRet = -1;
+                                $this->runShell($cmd, $gsOut, $gsRet);
                                 if ($gsRet === 0) {
-                                    $pngPages = glob($pngDir . '/page_*.png');
+                                    $pngPages = glob($pngDir . '/page_*.png') ?: [];
                                     natsort($pngPages);
                                     foreach ($pngPages as $pngFile) {
                                         [$imgW, $imgH] = @getimagesize($pngFile) ?: [595, 842];
@@ -403,38 +450,41 @@ class ContratacionPublicoController extends Controller
                                         $fpdi->AddPage($hMm > $wMm ? 'P' : 'L', [$wMm, $hMm]);
                                         $fpdi->Image($pngFile, 0, 0, $wMm, $hMm, 'PNG');
                                     }
-                                    $merged = true;
-                                    Log::info('SharePoint contratacion: documento PDF convertido con Ghostscript', [
+                                    $docMerged = true;
+                                    Log::info('SharePoint contratacion: GS PNG convirtió doc', [
                                         'folio' => $postulante->folio,
                                         'label' => $docInfo['label'],
                                     ]);
                                 } else {
-                                    Log::warning('SharePoint contratacion: Ghostscript también falló', [
+                                    Log::warning('SharePoint contratacion: GS PNG falló', [
                                         'folio' => $postulante->folio,
                                         'label' => $docInfo['label'],
+                                        'ret'   => $gsRet,
+                                        'out'   => implode("\n", array_slice($gsOut, 0, 5)),
                                     ]);
                                 }
-                                @rmdir($pngDir);
-                            } else {
-                                Log::warning('SharePoint contratacion: Ghostscript no disponible en el servidor', [
+                            }
+
+                            if (!$docMerged) {
+                                Log::warning('SharePoint contratacion: todos los métodos fallaron', [
                                     'folio' => $postulante->folio,
                                     'label' => $docInfo['label'],
                                 ]);
                             }
                         }
+
+                        $fichaBytes = $fpdi->Output('S');
+                        Log::info('SharePoint contratacion: merge FPDI completado', [
+                            'folio' => $postulante->folio,
+                            'size'  => strlen($fichaBytes),
+                        ]);
                     }
-
-                    $fichaBytes = $fpdi->Output('S');
-                    Log::info('SharePoint contratacion: merge FPDI completado', [
-                        'folio' => $postulante->folio,
-                        'size'  => strlen($fichaBytes),
-                    ]);
                 }
+            }
 
-                // Limpiar archivos temporales
-                foreach ($tempFiles as $tf) {
-                    @unlink($tf);
-                }
+            // Limpiar archivos temporales
+            foreach ($tempFiles as $tf) {
+                @unlink($tf);
             }
 
             ini_set('memory_limit', $memPrev);
@@ -475,5 +525,68 @@ class ContratacionPublicoController extends Controller
                 } catch (\Exception) {}
             }
         }
+    }
+
+    // ─── Helper: encontrar ruta de Ghostscript ────────────────────────────────
+    private function gsPath(): string
+    {
+        // Primero buscar directamente (no requiere exec/shell_exec)
+        foreach (['/usr/bin/gs', '/usr/local/bin/gs', '/bin/gs'] as $p) {
+            if (@is_executable($p)) {
+                return $p;
+            }
+        }
+        if (function_exists('shell_exec')) {
+            $p = trim((string)(@shell_exec('which gs 2>/dev/null') ?? ''));
+            if ($p && @is_executable($p)) {
+                return $p;
+            }
+        }
+        if (function_exists('exec')) {
+            $out = []; $ret = -1;
+            @exec('which gs 2>/dev/null', $out, $ret);
+            if ($ret === 0 && !empty($out[0])) {
+                $p = trim($out[0]);
+                if (@is_executable($p)) {
+                    return $p;
+                }
+            }
+        }
+        return '';
+    }
+
+    // ─── Helper: ejecutar comando en shell con múltiples fallbacks ────────────
+    private function runShell(string $cmd, array &$output, int &$retVal): bool
+    {
+        if (function_exists('exec')) {
+            exec($cmd, $output, $retVal);
+            return true;
+        }
+        if (function_exists('proc_open')) {
+            $desc = [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ];
+            $proc = @proc_open($cmd, $desc, $pipes);
+            if (is_resource($proc)) {
+                fclose($pipes[0]);
+                $stdout = stream_get_contents($pipes[1]);
+                $stderr = stream_get_contents($pipes[2]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                $retVal = proc_close($proc);
+                $output = array_values(array_filter(explode("\n", trim($stdout . "\n" . $stderr))));
+                return true;
+            }
+        }
+        if (function_exists('passthru')) {
+            ob_start();
+            passthru($cmd, $retVal);
+            $output = array_values(array_filter(explode("\n", ob_get_clean())));
+            return true;
+        }
+        $retVal = -1;
+        return false;
     }
 }
