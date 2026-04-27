@@ -208,52 +208,96 @@ class ContratacionPublicoController extends Controller
         }
 
         // 2. Generar PDF consolidado y subirlo
-        $documentos   = [];
-        $camposLabels = [
-            'carnet_frontal'     => 'Carnet de Identidad (Frontal)',
-            'carnet_reverso'     => 'Carnet de Identidad (Reverso)',
-            'certificado_afp'    => 'Certificado AFP',
-            'certificado_fonasa' => 'Certificado FONASA',
-            'licencia_conducir'  => 'Licencia de Conducir',
-        ];
-        foreach ($camposLabels as $campo => $label) {
-            if (empty($postulante->$campo)) continue;
-            $ruta = $postulante->$campo;
-            $ext  = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
+        try {
+            Log::info('SharePoint contratacion: construyendo array documentos', ['folio' => $postulante->folio]);
 
-            if (!Storage::disk('public')->exists($ruta)) {
-                $documentos[] = ['label' => $label, 'tipo' => 'ausente', 'data' => null, 'ext' => $ext];
-                continue;
+            $documentos   = [];
+            $camposLabels = [
+                'carnet_frontal'     => 'Carnet de Identidad (Frontal)',
+                'carnet_reverso'     => 'Carnet de Identidad (Reverso)',
+                'certificado_afp'    => 'Certificado AFP',
+                'certificado_fonasa' => 'Certificado FONASA',
+                'licencia_conducir'  => 'Licencia de Conducir',
+            ];
+            foreach ($camposLabels as $campo => $label) {
+                if (empty($postulante->$campo)) continue;
+                $ruta = $postulante->$campo;
+                $ext  = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
+
+                if (!Storage::disk('public')->exists($ruta)) {
+                    $documentos[] = ['label' => $label, 'tipo' => 'ausente', 'data' => null, 'ext' => $ext];
+                    continue;
+                }
+
+                if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                    $contenido    = Storage::disk('public')->get($ruta);
+                    $mime         = match($ext) {
+                        'png'  => 'image/png',
+                        'gif'  => 'image/gif',
+                        'webp' => 'image/webp',
+                        default => 'image/jpeg',
+                    };
+                    $documentos[] = [
+                        'label' => $label,
+                        'tipo'  => 'imagen',
+                        'data'  => 'data:' . $mime . ';base64,' . base64_encode($contenido),
+                        'ext'   => $ext,
+                    ];
+                } else {
+                    // Para PDFs: construir URL pública directamente (Storage::url puede fallar en Azure)
+                    $blobUrl = rtrim(config('filesystems.disks.public.url', env('AZURE_STORAGE_URL', '')), '/')
+                        . '/' . ltrim($ruta, '/');
+                    $documentos[] = ['label' => $label, 'tipo' => 'pdf', 'data' => $blobUrl, 'ext' => $ext];
+                }
             }
 
-            if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
-                $contenido    = Storage::disk('public')->get($ruta);
-                $mime         = match($ext) {
-                    'png'  => 'image/png',
-                    'gif'  => 'image/gif',
-                    'webp' => 'image/webp',
-                    default => 'image/jpeg',
-                };
-                $documentos[] = [
-                    'label' => $label,
-                    'tipo'  => 'imagen',
-                    'data'  => 'data:' . $mime . ';base64,' . base64_encode($contenido),
-                    'ext'   => $ext,
-                ];
-            } else {
-                $documentos[] = ['label' => $label, 'tipo' => 'pdf', 'data' => Storage::disk('public')->url($ruta), 'ext' => $ext];
+            Log::info('SharePoint contratacion: generando PDF ficha', [
+                'folio'  => $postulante->folio,
+                'docs'   => count($documentos),
+                'tipos'  => array_column($documentos, 'tipo'),
+            ]);
+
+            // Asegurar directorio temporal escribible para DomPDF
+            $tmpDir = sys_get_temp_dir();
+            $fontDir = storage_path('fonts');
+            if (!is_dir($fontDir)) {
+                @mkdir($fontDir, 0755, true);
             }
+
+            // Aumentar límite de memoria para DomPDF
+            $memPrev = ini_get('memory_limit');
+            ini_set('memory_limit', '256M');
+
+            $pdfContent = Pdf::loadView('pdf.contratacion_ficha', compact('postulante', 'documentos'))
+                ->setPaper('a4', 'portrait')
+                ->setOption('isRemoteEnabled', false)
+                ->setOption('tempDir', $tmpDir)
+                ->setOption('fontDir', $fontDir)
+                ->setOption('fontCache', $tmpDir)
+                ->output();
+
+            ini_set('memory_limit', $memPrev);
+
+            Log::info('SharePoint contratacion: PDF generado, subiendo a SharePoint', [
+                'folio' => $postulante->folio,
+                'size'  => strlen($pdfContent),
+            ]);
+
+            $oneDrive->uploadFileToSite(
+                $site,
+                $pdfContent,
+                "{$folder}/{$carpeta}/{$postulante->folio}_ficha.pdf"
+            );
+
+            Log::info('SharePoint contratacion: ficha PDF subida exitosamente', ['folio' => $postulante->folio]);
+        } catch (\Throwable $e) {
+            Log::error('SharePoint contratacion: fallo en generacion/subida de ficha PDF', [
+                'folio'   => $postulante->folio,
+                'error'   => $e->getMessage(),
+                'file'    => $e->getFile() . ':' . $e->getLine(),
+                'trace'   => substr($e->getTraceAsString(), 0, 2000),
+            ]);
         }
-
-        $pdfContent = Pdf::loadView('pdf.contratacion_ficha', compact('postulante', 'documentos'))
-            ->setPaper('a4', 'portrait')
-            ->output();
-
-        $oneDrive->uploadFileToSite(
-            $site,
-            $pdfContent,
-            "{$folder}/{$carpeta}/{$postulante->folio}_ficha.pdf"
-        );
     }
 
     // ─── Notificación RRHH ───────────────────────────────────────
