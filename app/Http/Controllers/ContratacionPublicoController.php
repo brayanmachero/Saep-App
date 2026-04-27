@@ -291,10 +291,11 @@ class ContratacionPublicoController extends Controller
                 file_put_contents($tempFicha, $fichaBytes);
                 $tempFiles[] = $tempFicha;
 
-                $fpdi = new Fpdi();
+                $fpdi = null;
 
                 // Importar páginas de la ficha DomPDF
                 try {
+                    $fpdi = new Fpdi();
                     $n = $fpdi->setSourceFile($tempFicha);
                     for ($i = 1; $i <= $n; $i++) {
                         $tpl = $fpdi->importPage($i);

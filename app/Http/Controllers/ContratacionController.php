@@ -16,17 +16,6 @@ use ZipArchive;
 
 class ContratacionController extends Controller
 {
-    // ─── Middleware: solo admin ───────────────────────────────────
-    public function __construct()
-    {
-        $this->middleware(function ($request, $next) {
-            if (!auth()->check() || auth()->user()->rol !== 'admin') {
-                abort(403, 'Acceso no autorizado.');
-            }
-            return $next($request);
-        });
-    }
-
     // ─── Listado ─────────────────────────────────────────────────
     public function index(Request $request)
     {
@@ -334,9 +323,9 @@ class ContratacionController extends Controller
             file_put_contents($tempFicha, $fichaBytes);
             $tempFiles[] = $tempFicha;
 
-            $fpdi = new Fpdi();
-
+            $fpdi = null;
             try {
+                $fpdi = new Fpdi();
                 $n = $fpdi->setSourceFile($tempFicha);
                 for ($i = 1; $i <= $n; $i++) {
                     $tpl = $fpdi->importPage($i);
