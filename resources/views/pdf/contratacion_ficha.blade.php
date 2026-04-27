@@ -134,8 +134,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
             <div class="doc-block">
                 <div class="doc-label">{{ $doc['label'] }}</div>
                 <div class="doc-pdf-note">
-                    Documento subido como PDF. Acceder en:
-                    {{ $doc['data'] }}
+                    Documento adjunto en páginas siguientes.
                 </div>
             </div>
         @endforeach

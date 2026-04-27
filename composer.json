@@ -13,7 +13,8 @@
         "laravel/socialite": "*",
         "laravel/tinker": "^2.9",
         "league/flysystem-azure-blob-storage": "^3.31",
-        "phpoffice/phpspreadsheet": "^5.5"
+        "phpoffice/phpspreadsheet": "^5.5",
+        "setasign/fpdi": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

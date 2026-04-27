@@ -9,6 +9,7 @@ use App\Models\PostulanteContratacion;
 use App\Services\OneDriveService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use setasign\Fpdi\Fpdi;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Session;
@@ -212,6 +213,7 @@ class ContratacionPublicoController extends Controller
             Log::info('SharePoint contratacion: construyendo array documentos', ['folio' => $postulante->folio]);
 
             $documentos   = [];
+            $pdfDocRutas  = []; // rutas de documentos PDF a mergear después
             $camposLabels = [
                 'carnet_frontal'     => 'Carnet de Identidad (Frontal)',
                 'carnet_reverso'     => 'Carnet de Identidad (Reverso)',
@@ -244,31 +246,32 @@ class ContratacionPublicoController extends Controller
                         'ext'   => $ext,
                     ];
                 } else {
-                    // Para PDFs: construir URL pública directamente (Storage::url puede fallar en Azure)
-                    $blobUrl = rtrim(config('filesystems.disks.public.url', env('AZURE_STORAGE_URL', '')), '/')
-                        . '/' . ltrim($ruta, '/');
-                    $documentos[] = ['label' => $label, 'tipo' => 'pdf', 'data' => $blobUrl, 'ext' => $ext];
+                    // PDF: lo marcamos para append con FPDI (no se muestra en la ficha DomPDF)
+                    $documentos[]   = ['label' => $label, 'tipo' => 'pdf', 'data' => null, 'ext' => $ext];
+                    $pdfDocRutas[]  = ['label' => $label, 'ruta' => $ruta];
                 }
             }
 
             Log::info('SharePoint contratacion: generando PDF ficha', [
-                'folio'  => $postulante->folio,
-                'docs'   => count($documentos),
-                'tipos'  => array_column($documentos, 'tipo'),
+                'folio'     => $postulante->folio,
+                'docs'      => count($documentos),
+                'tipos'     => array_column($documentos, 'tipo'),
+                'pdf_count' => count($pdfDocRutas),
             ]);
 
             // Asegurar directorio temporal escribible para DomPDF
-            $tmpDir = sys_get_temp_dir();
+            $tmpDir  = sys_get_temp_dir();
             $fontDir = storage_path('fonts');
             if (!is_dir($fontDir)) {
                 @mkdir($fontDir, 0755, true);
             }
 
-            // Aumentar límite de memoria para DomPDF
+            // Aumentar límite de memoria
             $memPrev = ini_get('memory_limit');
-            ini_set('memory_limit', '256M');
+            ini_set('memory_limit', '384M');
 
-            $pdfContent = Pdf::loadView('pdf.contratacion_ficha', compact('postulante', 'documentos'))
+            // Paso A: DomPDF genera la ficha con datos personales + imágenes
+            $fichaBytes = Pdf::loadView('pdf.contratacion_ficha', compact('postulante', 'documentos'))
                 ->setPaper('a4', 'portrait')
                 ->setOption('isRemoteEnabled', false)
                 ->setOption('tempDir', $tmpDir)
@@ -276,16 +279,90 @@ class ContratacionPublicoController extends Controller
                 ->setOption('fontCache', $tmpDir)
                 ->output();
 
+            Log::info('SharePoint contratacion: ficha DomPDF generada', [
+                'folio' => $postulante->folio,
+                'size'  => strlen($fichaBytes),
+            ]);
+
+            // Paso B: Merge con FPDI si hay documentos PDF
+            $tempFiles = [];
+            if (!empty($pdfDocRutas)) {
+                $tempFicha = tempnam($tmpDir, 'ficha_') . '.pdf';
+                file_put_contents($tempFicha, $fichaBytes);
+                $tempFiles[] = $tempFicha;
+
+                $fpdi = new Fpdi();
+
+                // Importar páginas de la ficha DomPDF
+                try {
+                    $n = $fpdi->setSourceFile($tempFicha);
+                    for ($i = 1; $i <= $n; $i++) {
+                        $tpl = $fpdi->importPage($i);
+                        [$w, $h] = array_values($fpdi->getTemplateSize($tpl));
+                        $fpdi->AddPage($h > $w ? 'P' : 'L', [$w, $h]);
+                        $fpdi->useTemplate($tpl, 0, 0, $w, $h, true);
+                    }
+                } catch (\Throwable $ex) {
+                    Log::warning('SharePoint contratacion: no se pudo importar ficha con FPDI, usando DomPDF solo', [
+                        'folio' => $postulante->folio,
+                        'error' => $ex->getMessage(),
+                    ]);
+                    // Fallback: subir solo la ficha DomPDF
+                    $fpdi = null;
+                }
+
+                if ($fpdi !== null) {
+                    // Importar cada documento PDF
+                    foreach ($pdfDocRutas as $docInfo) {
+                        $pdfBytes = Storage::disk('public')->get($docInfo['ruta']);
+                        $tempDoc  = tempnam($tmpDir, 'doc_') . '.pdf';
+                        file_put_contents($tempDoc, $pdfBytes);
+                        $tempFiles[] = $tempDoc;
+
+                        try {
+                            $n = $fpdi->setSourceFile($tempDoc);
+                            for ($i = 1; $i <= $n; $i++) {
+                                $tpl = $fpdi->importPage($i);
+                                [$w, $h] = array_values($fpdi->getTemplateSize($tpl));
+                                $fpdi->AddPage($h > $w ? 'P' : 'L', [$w, $h]);
+                                $fpdi->useTemplate($tpl, 0, 0, $w, $h, true);
+                            }
+                            Log::info('SharePoint contratacion: documento PDF importado', [
+                                'folio' => $postulante->folio,
+                                'label' => $docInfo['label'],
+                            ]);
+                        } catch (\Throwable $ex) {
+                            Log::warning('SharePoint contratacion: no se pudo importar documento PDF con FPDI', [
+                                'folio' => $postulante->folio,
+                                'label' => $docInfo['label'],
+                                'error' => $ex->getMessage(),
+                            ]);
+                        }
+                    }
+
+                    $fichaBytes = $fpdi->Output('S');
+                    Log::info('SharePoint contratacion: merge FPDI completado', [
+                        'folio' => $postulante->folio,
+                        'size'  => strlen($fichaBytes),
+                    ]);
+                }
+
+                // Limpiar archivos temporales
+                foreach ($tempFiles as $tf) {
+                    @unlink($tf);
+                }
+            }
+
             ini_set('memory_limit', $memPrev);
 
-            Log::info('SharePoint contratacion: PDF generado, subiendo a SharePoint', [
+            Log::info('SharePoint contratacion: PDF final listo, subiendo a SharePoint', [
                 'folio' => $postulante->folio,
-                'size'  => strlen($pdfContent),
+                'size'  => strlen($fichaBytes),
             ]);
 
             $oneDrive->uploadFileToSite(
                 $site,
-                $pdfContent,
+                $fichaBytes,
                 "{$folder}/{$carpeta}/{$postulante->folio}_ficha.pdf"
             );
 
