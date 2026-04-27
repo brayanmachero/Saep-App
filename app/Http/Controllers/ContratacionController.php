@@ -4,11 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Configuracion;
 use App\Models\PostulanteContratacion;
+use App\Services\OneDriveService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use setasign\Fpdi\Fpdi;
 use ZipArchive;
 
 class ContratacionController extends Controller
@@ -202,17 +205,81 @@ class ContratacionController extends Controller
     // ─── Ficha PDF del postulante ─────────────────────────────────
     public function fichaPdf(PostulanteContratacion $postulante)
     {
-        $campos = [
-            'carnet_frontal'    => 'Carnet de Identidad (Frontal)',
-            'carnet_reverso'    => 'Carnet de Identidad (Reverso)',
-            'certificado_afp'   => 'Certificado AFP',
-            'certificado_fonasa'=> 'Certificado FONASA',
-            'licencia_conducir' => 'Licencia de Conducir',
+        $fichaBytes = $this->generarFichaBytes($postulante);
+        $filename   = $postulante->folio . '_ficha.pdf';
+
+        return response($fichaBytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    // ─── Re-sincronizar ficha en SharePoint ───────────────────────
+    public function resincronizarSharePoint(PostulanteContratacion $postulante)
+    {
+        $oneDrive = app(OneDriveService::class);
+        if (!$oneDrive->isConfigured()) {
+            return back()->with('error', 'Microsoft Graph no está configurado.');
+        }
+
+        try {
+            $graphConfig = config('services.microsoft_graph');
+            $site        = $graphConfig['contratacion_site']   ?? 'RRH';
+            $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
+            $carpeta     = $postulante->rut . ' - ' . $postulante->nombre;
+
+            // Re-subir documentos originales
+            $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir'];
+            foreach ($camposDocs as $campo) {
+                if (empty($postulante->$campo)) continue;
+                if (!Storage::disk('public')->exists($postulante->$campo)) continue;
+
+                $ext     = strtolower(pathinfo($postulante->$campo, PATHINFO_EXTENSION));
+                $mime    = match($ext) {
+                    'png'         => 'image/png',
+                    'gif'         => 'image/gif',
+                    'webp'        => 'image/webp',
+                    'jpg','jpeg'  => 'image/jpeg',
+                    default       => 'application/pdf',
+                };
+                $content = Storage::disk('public')->get($postulante->$campo);
+                $oneDrive->uploadFileToSite($site, $content, "{$folder}/{$carpeta}/{$campo}.{$ext}", $mime);
+            }
+
+            // Re-generar y subir ficha PDF
+            $fichaBytes = $this->generarFichaBytes($postulante);
+            $oneDrive->uploadFileToSite(
+                $site,
+                $fichaBytes,
+                "{$folder}/{$carpeta}/{$postulante->folio}_ficha.pdf"
+            );
+
+            Log::info('Contratacion admin: resincronizacion SharePoint completada', ['folio' => $postulante->folio]);
+            return back()->with('success', 'Ficha y documentos sincronizados en SharePoint correctamente.');
+        } catch (\Throwable $e) {
+            Log::error('Contratacion admin: fallo resincronizacion SharePoint', [
+                'folio' => $postulante->folio,
+                'error' => $e->getMessage(),
+            ]);
+            return back()->with('error', 'Error al sincronizar con SharePoint: ' . $e->getMessage());
+        }
+    }
+
+    // ─── Generar bytes de la ficha PDF (DomPDF + FPDI merge) ─────
+    private function generarFichaBytes(PostulanteContratacion $postulante): string
+    {
+        $camposLabels = [
+            'carnet_frontal'     => 'Carnet de Identidad (Frontal)',
+            'carnet_reverso'     => 'Carnet de Identidad (Reverso)',
+            'certificado_afp'    => 'Certificado AFP',
+            'certificado_fonasa' => 'Certificado FONASA',
+            'licencia_conducir'  => 'Licencia de Conducir',
         ];
 
-        // Preparar documentos: imágenes como base64, PDFs como referencia
-        $documentos = [];
-        foreach ($campos as $campo => $label) {
+        $documentos  = [];
+        $pdfDocRutas = [];
+
+        foreach ($camposLabels as $campo => $label) {
             if (empty($postulante->$campo)) continue;
 
             $ruta = $postulante->$campo;
@@ -224,8 +291,8 @@ class ContratacionController extends Controller
             }
 
             if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
-                $contenido = Storage::disk('public')->get($ruta);
-                $mime      = match($ext) {
+                $contenido    = Storage::disk('public')->get($ruta);
+                $mime         = match($ext) {
                     'png'  => 'image/png',
                     'gif'  => 'image/gif',
                     'webp' => 'image/webp',
@@ -238,16 +305,79 @@ class ContratacionController extends Controller
                     'ext'   => $ext,
                 ];
             } else {
-                // Es PDF: no se puede embeber inline en dompdf, se indica con url
-                $url = Storage::disk('public')->url($ruta);
-                $documentos[] = ['label' => $label, 'tipo' => 'pdf', 'data' => $url, 'ext' => $ext];
+                $documentos[]  = ['label' => $label, 'tipo' => 'pdf', 'data' => null, 'ext' => $ext];
+                $pdfDocRutas[] = ['label' => $label, 'ruta' => $ruta];
             }
         }
 
-        $pdf = Pdf::loadView('pdf.contratacion_ficha', compact('postulante', 'documentos'))
-            ->setPaper('a4', 'portrait');
+        $tmpDir  = sys_get_temp_dir();
+        $fontDir = storage_path('fonts');
+        if (!is_dir($fontDir)) {
+            @mkdir($fontDir, 0755, true);
+        }
 
-        $filename = $postulante->folio . '_ficha.pdf';
-        return $pdf->download($filename);
+        $memPrev    = ini_get('memory_limit');
+        ini_set('memory_limit', '384M');
+
+        $fichaBytes = Pdf::loadView('pdf.contratacion_ficha', compact('postulante', 'documentos'))
+            ->setPaper('a4', 'portrait')
+            ->setOption('isRemoteEnabled', false)
+            ->setOption('tempDir', $tmpDir)
+            ->setOption('fontDir', $fontDir)
+            ->setOption('fontCache', $tmpDir)
+            ->output();
+
+        $tempFiles = [];
+
+        if (!empty($pdfDocRutas)) {
+            $tempFicha   = tempnam($tmpDir, 'ficha_') . '.pdf';
+            file_put_contents($tempFicha, $fichaBytes);
+            $tempFiles[] = $tempFicha;
+
+            $fpdi = new Fpdi();
+
+            try {
+                $n = $fpdi->setSourceFile($tempFicha);
+                for ($i = 1; $i <= $n; $i++) {
+                    $tpl = $fpdi->importPage($i);
+                    [$w, $h] = array_values($fpdi->getTemplateSize($tpl));
+                    $fpdi->AddPage($h > $w ? 'P' : 'L', [$w, $h]);
+                    $fpdi->useTemplate($tpl, 0, 0, $w, $h, true);
+                }
+            } catch (\Throwable) {
+                $fpdi = null;
+            }
+
+            if ($fpdi !== null) {
+                foreach ($pdfDocRutas as $docInfo) {
+                    $pdfBytes    = Storage::disk('public')->get($docInfo['ruta']);
+                    $tempDoc     = tempnam($tmpDir, 'doc_') . '.pdf';
+                    file_put_contents($tempDoc, $pdfBytes);
+                    $tempFiles[] = $tempDoc;
+
+                    try {
+                        $n = $fpdi->setSourceFile($tempDoc);
+                        for ($i = 1; $i <= $n; $i++) {
+                            $tpl = $fpdi->importPage($i);
+                            [$w, $h] = array_values($fpdi->getTemplateSize($tpl));
+                            $fpdi->AddPage($h > $w ? 'P' : 'L', [$w, $h]);
+                            $fpdi->useTemplate($tpl, 0, 0, $w, $h, true);
+                        }
+                    } catch (\Throwable) {
+                        // Omitir este documento si FPDI no puede leerlo
+                    }
+                }
+
+                $fichaBytes = $fpdi->Output('S');
+            }
+
+            foreach ($tempFiles as $tf) {
+                @unlink($tf);
+            }
+        }
+
+        ini_set('memory_limit', $memPrev);
+
+        return $fichaBytes;
     }
 }

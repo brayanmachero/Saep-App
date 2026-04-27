@@ -461,6 +461,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/{postulante}/zip',              [ContratacionController::class, 'descargarZip'])->name('zip');
         Route::get('/{postulante}/doc/{campo}',      [ContratacionController::class, 'descargarDocumento'])->name('documento');
         Route::get('/{postulante}/ficha-pdf',        [ContratacionController::class, 'fichaPdf'])->name('ficha-pdf');
+        Route::post('/{postulante}/resincronizar',   [ContratacionController::class, 'resincronizarSharePoint'])->name('resincronizar');
         Route::get('/exportar/excel',                [ContratacionController::class, 'exportarExcel'])->name('export-excel');
         Route::get('/configuracion/emails',          [ContratacionController::class, 'configuracion'])->name('configuracion');
         Route::patch('/configuracion/emails',        [ContratacionController::class, 'guardarConfiguracion'])->name('guardar-configuracion');

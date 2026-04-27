@@ -30,6 +30,14 @@
                 <i class="bi bi-file-earmark-pdf-fill" style="color:#ef4444;"></i> Ficha PDF
             </a>
             @endif
+            <form method="POST" action="{{ route('contratacion.resincronizar', $postulante) }}" style="display:inline;">
+                @csrf
+                <button type="submit" class="btn-ghost"
+                        onclick="return confirm('¿Re-sincronizar documentos y ficha PDF en SharePoint?')"
+                        title="Vuelve a subir todos los documentos y regenera la ficha PDF en SharePoint">
+                    <i class="bi bi-cloud-upload" style="color:#0ea5e9;"></i> Sincronizar SharePoint
+                </button>
+            </form>
         </div>
     </div>
 
