@@ -77,7 +77,7 @@ Route::prefix('postulacion')->group(function () {
     Route::get('/formulario',          [ContratacionPublicoController::class, 'formulario'])->name('contratacion-publico.formulario');
     Route::post('/enviar',             [ContratacionPublicoController::class, 'store'])->name('contratacion-publico.store');
     Route::get('/confirmacion/{folio}',[ContratacionPublicoController::class, 'confirmacion'])->name('contratacion-publico.confirmacion');
-    Route::post('/logout',             [ContratacionPublicoController::class, 'logout'])->name('contratacion-publico.logout');
+    Route::get('/logout',              [ContratacionPublicoController::class, 'logout'])->name('contratacion-publico.logout');
 });
 
 // App (requiere autenticación)
