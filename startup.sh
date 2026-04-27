@@ -2,6 +2,21 @@
 
 echo "=== SAEP Platform Startup Script ==="
 
+# ─── Instalar Ghostscript (necesario para que Imagick convierta PDFs 1.5+) ───
+echo "Instalando Ghostscript..."
+apt-get install -y --no-install-recommends ghostscript 2>/dev/null \
+    && echo "Ghostscript instalado OK" \
+    || echo "WARN: ghostscript install failed (non-fatal)"
+
+# ─── Permitir que ImageMagick procese PDFs (política de seguridad por defecto bloquea PDF) ───
+for policyFile in /etc/ImageMagick-6/policy.xml /etc/ImageMagick-7/policy.xml; do
+    if [ -f "$policyFile" ]; then
+        sed -i 's/<policy domain="coder" rights="none" pattern="PDF"/<policy domain="coder" rights="read|write" pattern="PDF"/g' "$policyFile" \
+            && echo "ImageMagick policy actualizada: $policyFile" \
+            || echo "WARN: no se pudo actualizar policy en $policyFile"
+    fi
+done
+
 # Copiar nginx.conf del repo al directorio de nginx y recargar
 NGINX_CONF_SRC="/home/site/wwwroot/nginx.conf"
 NGINX_CONF_DST="/etc/nginx/sites-available/default"

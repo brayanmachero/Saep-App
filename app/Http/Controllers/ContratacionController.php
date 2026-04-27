@@ -385,6 +385,42 @@ class ContratacionController extends Controller
                             Log::warning('Imagick no pudo convertir PDF: ' . $docInfo['label'] . ' — ' . $ex2->getMessage());
                         }
                     }
+
+                    // Intento 3: Ghostscript directo via shell (no requiere policy ImageMagick)
+                    if (!$merged) {
+                        $gsPath = trim(@shell_exec('which gs 2>/dev/null') ?? '');
+                        if ($gsPath) {
+                            $pngDir = $tmpDir . '/gs_' . uniqid();
+                            @mkdir($pngDir, 0755);
+                            $cmd = sprintf(
+                                '%s -dBATCH -dNOPAUSE -dSAFER -sDEVICE=png16m -r150 -sOutputFile=%s %s 2>/dev/null',
+                                escapeshellarg($gsPath),
+                                escapeshellarg($pngDir . '/page_%04d.png'),
+                                escapeshellarg($tempDoc)
+                            );
+                            exec($cmd, $gsOut, $gsRet);
+                            if ($gsRet === 0) {
+                                $pngPages = glob($pngDir . '/page_*.png');
+                                natsort($pngPages);
+                                foreach ($pngPages as $pngFile) {
+                                    [$imgW, $imgH] = @getimagesize($pngFile) ?: [595, 842];
+                                    $pxMm = 25.4 / 150;
+                                    $wMm  = round($imgW * $pxMm, 2);
+                                    $hMm  = round($imgH * $pxMm, 2);
+                                    $tempFiles[] = $pngFile;
+                                    $fpdi->AddPage($hMm > $wMm ? 'P' : 'L', [$wMm, $hMm]);
+                                    $fpdi->Image($pngFile, 0, 0, $wMm, $hMm, 'PNG');
+                                }
+                                $merged = true;
+                                Log::info('GS: documento convertido con Ghostscript: ' . $docInfo['label']);
+                            } else {
+                                Log::warning('GS: Ghostscript también falló: ' . $docInfo['label']);
+                            }
+                            @rmdir($pngDir);
+                        } else {
+                            Log::warning('GS: Ghostscript no disponible en el servidor: ' . $docInfo['label']);
+                        }
+                    }
                 }
 
                 $fichaBytes = $fpdi->Output('S');
