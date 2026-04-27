@@ -217,25 +217,7 @@ class ContratacionController extends Controller
             $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
             $carpeta     = $postulante->rut . ' - ' . $postulante->nombre;
 
-            // Re-subir documentos originales
-            $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir'];
-            foreach ($camposDocs as $campo) {
-                if (empty($postulante->$campo)) continue;
-                if (!Storage::disk('public')->exists($postulante->$campo)) continue;
-
-                $ext     = strtolower(pathinfo($postulante->$campo, PATHINFO_EXTENSION));
-                $mime    = match($ext) {
-                    'png'         => 'image/png',
-                    'gif'         => 'image/gif',
-                    'webp'        => 'image/webp',
-                    'jpg','jpeg'  => 'image/jpeg',
-                    default       => 'application/pdf',
-                };
-                $content = Storage::disk('public')->get($postulante->$campo);
-                $oneDrive->uploadFileToSite($site, $content, "{$folder}/{$carpeta}/{$campo}.{$ext}", $mime);
-            }
-
-            // Re-generar y subir ficha PDF
+            // Re-generar y subir ficha PDF consolidada
             $fichaBytes = $this->generarFichaBytes($postulante);
             $oneDrive->uploadFileToSite(
                 $site,
@@ -244,7 +226,7 @@ class ContratacionController extends Controller
             );
 
             Log::info('Contratacion admin: resincronizacion SharePoint completada', ['folio' => $postulante->folio]);
-            return back()->with('success', 'Ficha y documentos sincronizados en SharePoint correctamente.');
+            return back()->with('success', 'Ficha consolidada sincronizada en SharePoint correctamente.');
         } catch (\Throwable $e) {
             Log::error('Contratacion admin: fallo resincronizacion SharePoint', [
                 'folio' => $postulante->folio,

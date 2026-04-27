@@ -190,25 +190,7 @@ class ContratacionPublicoController extends Controller
         // Carpeta del postulante: "{RUT} - {Nombre}"
         $carpeta = $postulante->rut . ' - ' . $postulante->nombre;
 
-        // 1. Subir cada documento original desde Azure Blob
-        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir'];
-        foreach ($camposDocs as $campo) {
-            if (empty($postulante->$campo)) continue;
-            if (!Storage::disk('public')->exists($postulante->$campo)) continue;
-
-            $ext     = strtolower(pathinfo($postulante->$campo, PATHINFO_EXTENSION));
-            $mime    = match($ext) {
-                'png'          => 'image/png',
-                'gif'          => 'image/gif',
-                'webp'         => 'image/webp',
-                'jpg', 'jpeg'  => 'image/jpeg',
-                default        => 'application/pdf',
-            };
-            $content = Storage::disk('public')->get($postulante->$campo);
-            $oneDrive->uploadFileToSite($site, $content, "{$folder}/{$carpeta}/{$campo}.{$ext}", $mime);
-        }
-
-        // 2. Generar PDF consolidado y subirlo
+        // Generar PDF consolidado y subirlo
         try {
             Log::info('SharePoint contratacion: construyendo array documentos', ['folio' => $postulante->folio]);
 
