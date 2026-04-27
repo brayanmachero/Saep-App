@@ -320,6 +320,8 @@ class ContratacionPublicoController extends Controller
                         file_put_contents($tempDoc, $pdfBytes);
                         $tempFiles[] = $tempDoc;
 
+                        // Intento 1: FPDI directo
+                        $merged = false;
                         try {
                             $n = $fpdi->setSourceFile($tempDoc);
                             for ($i = 1; $i <= $n; $i++) {
@@ -328,16 +330,52 @@ class ContratacionPublicoController extends Controller
                                 $fpdi->AddPage($h > $w ? 'P' : 'L', [$w, $h]);
                                 $fpdi->useTemplate($tpl, 0, 0, $w, $h, true);
                             }
-                            Log::info('SharePoint contratacion: documento PDF importado', [
+                            $merged = true;
+                            Log::info('SharePoint contratacion: documento PDF importado con FPDI', [
                                 'folio' => $postulante->folio,
                                 'label' => $docInfo['label'],
                             ]);
                         } catch (\Throwable $ex) {
-                            Log::warning('SharePoint contratacion: no se pudo importar documento PDF con FPDI', [
+                            Log::warning('SharePoint contratacion: FPDI falló, intentando Imagick', [
                                 'folio' => $postulante->folio,
                                 'label' => $docInfo['label'],
                                 'error' => $ex->getMessage(),
                             ]);
+                        }
+
+                        // Intento 2: Imagick — convierte cada página a imagen PNG
+                        if (!$merged && class_exists('Imagick')) {
+                            try {
+                                $imagick = new \Imagick();
+                                $imagick->setResolution(150, 150);
+                                $imagick->readImage($tempDoc);
+                                foreach ($imagick as $pageImg) {
+                                    $pageImg->setImageFormat('png');
+                                    $pageImg->setImageColorspace(\Imagick::COLORSPACE_SRGB);
+                                    $imgW    = $pageImg->getImageWidth();
+                                    $imgH    = $pageImg->getImageHeight();
+                                    $pxMm    = 25.4 / 150;
+                                    $wMm     = round($imgW * $pxMm, 2);
+                                    $hMm     = round($imgH * $pxMm, 2);
+                                    $tempPng = tempnam($tmpDir, 'pg_') . '.png';
+                                    file_put_contents($tempPng, $pageImg->getImageBlob());
+                                    $tempFiles[] = $tempPng;
+                                    $fpdi->AddPage($hMm > $wMm ? 'P' : 'L', [$wMm, $hMm]);
+                                    $fpdi->Image($tempPng, 0, 0, $wMm, $hMm, 'PNG');
+                                }
+                                $imagick->destroy();
+                                $merged = true;
+                                Log::info('SharePoint contratacion: documento PDF convertido con Imagick', [
+                                    'folio' => $postulante->folio,
+                                    'label' => $docInfo['label'],
+                                ]);
+                            } catch (\Throwable $ex2) {
+                                Log::warning('SharePoint contratacion: Imagick también falló', [
+                                    'folio' => $postulante->folio,
+                                    'label' => $docInfo['label'],
+                                    'error' => $ex2->getMessage(),
+                                ]);
+                            }
                         }
                     }
 

@@ -344,6 +344,8 @@ class ContratacionController extends Controller
                     file_put_contents($tempDoc, $pdfBytes);
                     $tempFiles[] = $tempDoc;
 
+                    // Intento 1: FPDI directo
+                    $merged = false;
                     try {
                         $n = $fpdi->setSourceFile($tempDoc);
                         for ($i = 1; $i <= $n; $i++) {
@@ -352,8 +354,36 @@ class ContratacionController extends Controller
                             $fpdi->AddPage($h > $w ? 'P' : 'L', [$w, $h]);
                             $fpdi->useTemplate($tpl, 0, 0, $w, $h, true);
                         }
-                    } catch (\Throwable) {
-                        // Omitir este documento si FPDI no puede leerlo
+                        $merged = true;
+                    } catch (\Throwable $ex) {
+                        Log::warning('FPDI no pudo importar PDF (intentando Imagick): ' . $docInfo['label'] . ' — ' . $ex->getMessage());
+                    }
+
+                    // Intento 2: Imagick — convierte cada página a imagen PNG
+                    if (!$merged && class_exists('Imagick')) {
+                        try {
+                            $imagick = new \Imagick();
+                            $imagick->setResolution(150, 150);
+                            $imagick->readImage($tempDoc);
+                            foreach ($imagick as $pageImg) {
+                                $pageImg->setImageFormat('png');
+                                $pageImg->setImageColorspace(\Imagick::COLORSPACE_SRGB);
+                                $imgW    = $pageImg->getImageWidth();
+                                $imgH    = $pageImg->getImageHeight();
+                                $pxMm    = 25.4 / 150;
+                                $wMm     = round($imgW * $pxMm, 2);
+                                $hMm     = round($imgH * $pxMm, 2);
+                                $tempPng = tempnam($tmpDir, 'pg_') . '.png';
+                                file_put_contents($tempPng, $pageImg->getImageBlob());
+                                $tempFiles[] = $tempPng;
+                                $fpdi->AddPage($hMm > $wMm ? 'P' : 'L', [$wMm, $hMm]);
+                                $fpdi->Image($tempPng, 0, 0, $wMm, $hMm, 'PNG');
+                            }
+                            $imagick->destroy();
+                            $merged = true;
+                        } catch (\Throwable $ex2) {
+                            Log::warning('Imagick no pudo convertir PDF: ' . $docInfo['label'] . ' — ' . $ex2->getMessage());
+                        }
                     }
                 }
 
