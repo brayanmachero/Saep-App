@@ -210,9 +210,42 @@
     </div>
 </div>
 
+{{-- ============================================================ --}}
+{{-- Modal Lightbox Preview de Adjunto                           --}}
+{{-- ============================================================ --}}
+<div id="modal-preview-adjunto"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:20000;justify-content:center;align-items:center;padding:1rem;"
+     onclick="if(event.target===this)cerrarPreviewAdjunto()">
+    <div style="background:var(--card-bg);border-radius:12px;width:min(95vw,1000px);max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6);" onclick="event.stopPropagation()">
+
+        {{-- Header preview --}}
+        <div style="padding:.6rem 1rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-color);flex-shrink:0;gap:.5rem;">
+            <div style="display:flex;align-items:center;gap:.45rem;min-width:0;flex:1;">
+                <i id="preview-icono" class="bi bi-file-earmark" style="font-size:1rem;color:var(--primary-color);flex-shrink:0;"></i>
+                <span id="preview-nombre" style="font-size:.85rem;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem;flex-shrink:0;">
+                <a id="preview-descargar" href="#" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .65rem;border-radius:6px;border:1px solid var(--border-color);font-size:.75rem;color:var(--text-primary);text-decoration:none;white-space:nowrap;"
+                   title="Descargar">
+                    <i class="bi bi-download"></i> Descargar
+                </a>
+                <button onclick="cerrarPreviewAdjunto()" title="Cerrar (Esc)"
+                        style="background:none;border:none;font-size:1.4rem;line-height:1;cursor:pointer;color:var(--text-muted);padding:.1rem .4rem;">&times;</button>
+            </div>
+        </div>
+
+        {{-- Contenido del preview --}}
+        <div id="preview-content"
+             style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:1.25rem;min-height:280px;max-height:82vh;background:var(--card-bg);">
+        </div>
+    </div>
+</div>
+
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}';
 let detalleTareaId = null;
+const adjuntosData = {}; // mapa id → objeto adjunto para el preview
 
 function abrirDetalle(tareaId) {
     detalleTareaId = tareaId;
@@ -469,26 +502,85 @@ function renderAdjuntos(adjuntos) {
 }
 
 function crearAdjuntoEl(a) {
+    // Guardar datos en el mapa para acceso seguro desde el preview
+    adjuntosData[a.id] = a;
+
     const div = document.createElement('div');
     div.id = 'adjunto-' + a.id;
-    div.style.cssText = 'display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;border-radius:6px;border:1px solid var(--border-color);margin-bottom:.35rem;font-size:.8rem;';
+    div.style.cssText = 'display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;border-radius:6px;border:1px solid var(--border-color);margin-bottom:.35rem;font-size:.8rem;transition:border-color .15s;';
 
-    const thumbHtml = a.es_imagen && a.url_imagen
-        ? `<img src="${a.url_imagen}" alt="" style="width:40px;height:40px;border-radius:4px;object-fit:cover;flex-shrink:0;">`
-        : `<i class="bi bi-file-earmark" style="font-size:1.1rem;color:var(--primary-color);flex-shrink:0;"></i>`;
+    const ext = (a.nombre_original || '').toLowerCase().split('.').pop();
+    const esPdf = ext === 'pdf';
+    const puedePreview = (a.es_imagen && a.url_imagen) || esPdf;
 
-    div.innerHTML = `
-        ${thumbHtml}
-        <div style="flex:1;min-width:0;">
-            <a href="${a.url_descargar}" style="font-weight:600;color:var(--text-primary);text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(a.nombre_original)}">
-                ${escapeHtml(a.nombre_original)}
-            </a>
-            <div style="font-size:.68rem;color:var(--text-muted);">${a.tamanio} · ${a.subido_por} · ${a.fecha}</div>
-        </div>
-        <button onclick="eliminarAdjunto(${a.id})" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:.8rem;opacity:.5;flex-shrink:0;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">
-            <i class="bi bi-trash"></i>
-        </button>
-    `;
+    // Thumbnail / icono izquierdo
+    const thumb = document.createElement(a.es_imagen && a.url_imagen ? 'img' : 'i');
+    if (a.es_imagen && a.url_imagen) {
+        thumb.src = a.url_imagen;
+        thumb.alt = '';
+        thumb.style.cssText = 'width:40px;height:40px;border-radius:4px;object-fit:cover;flex-shrink:0;';
+    } else {
+        thumb.className = esPdf ? 'bi bi-file-pdf' : 'bi bi-file-earmark';
+        thumb.style.cssText = `font-size:1.4rem;flex-shrink:0;color:${esPdf ? '#dc2626' : 'var(--primary-color)'};`;
+    }
+    if (puedePreview) {
+        thumb.style.cursor = 'pointer';
+        thumb.title = 'Ver preview';
+        thumb.addEventListener('click', () => abrirPreviewAdjunto(a.id));
+    }
+
+    // Columna central: nombre + meta
+    const info = document.createElement('div');
+    info.style.cssText = 'flex:1;min-width:0;';
+
+    if (puedePreview) {
+        // Nombre clickeable que abre el preview
+        const nombre = document.createElement('span');
+        nombre.style.cssText = 'font-weight:600;color:var(--primary-color);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;text-decoration:underline;text-underline-offset:2px;';
+        nombre.title = a.nombre_original;
+        nombre.textContent = a.nombre_original;
+        nombre.addEventListener('click', () => abrirPreviewAdjunto(a.id));
+        info.appendChild(nombre);
+    } else {
+        const enlace = document.createElement('a');
+        enlace.href = a.url_descargar;
+        enlace.target = '_blank';
+        enlace.style.cssText = 'font-weight:600;color:var(--text-primary);text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        enlace.title = a.nombre_original;
+        enlace.textContent = a.nombre_original;
+        info.appendChild(enlace);
+    }
+
+    const meta = document.createElement('div');
+    meta.style.cssText = 'font-size:.68rem;color:var(--text-muted);margin-top:.1rem;';
+    meta.textContent = `${a.tamanio} · ${a.subido_por} · ${a.fecha}`;
+    info.appendChild(meta);
+
+    // Botón eliminar
+    const btnDel = document.createElement('button');
+    btnDel.style.cssText = 'background:none;border:none;cursor:pointer;color:#dc2626;font-size:.8rem;opacity:.4;flex-shrink:0;padding:.2rem;';
+    btnDel.title = 'Eliminar adjunto';
+    btnDel.innerHTML = '<i class="bi bi-trash"></i>';
+    btnDel.addEventListener('mouseover', () => btnDel.style.opacity = '1');
+    btnDel.addEventListener('mouseout', () => btnDel.style.opacity = '.4');
+    btnDel.addEventListener('click', () => eliminarAdjunto(a.id));
+
+    div.appendChild(thumb);
+    div.appendChild(info);
+
+    // Botón ojo de preview (solo si aplica)
+    if (puedePreview) {
+        const btnEye = document.createElement('button');
+        btnEye.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--primary-color);font-size:.85rem;opacity:.55;flex-shrink:0;padding:.2rem;';
+        btnEye.title = 'Ver preview';
+        btnEye.innerHTML = '<i class="bi bi-eye"></i>';
+        btnEye.addEventListener('mouseover', () => btnEye.style.opacity = '1');
+        btnEye.addEventListener('mouseout', () => btnEye.style.opacity = '.55');
+        btnEye.addEventListener('click', () => abrirPreviewAdjunto(a.id));
+        div.appendChild(btnEye);
+    }
+
+    div.appendChild(btnDel);
     return div;
 }
 
@@ -604,9 +696,78 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Close with Escape
+// =============================================
+// PREVIEW DE ADJUNTOS (lightbox)
+// =============================================
+const IMG_EXTS = ['jpg','jpeg','png','gif','webp','bmp','svg','avif'];
+
+function abrirPreviewAdjunto(adjuntoId) {
+    const a = adjuntosData[adjuntoId];
+    if (!a) return;
+
+    const ext = (a.nombre_original || '').toLowerCase().split('.').pop();
+    const esPdf  = ext === 'pdf';
+    const esImg  = IMG_EXTS.includes(ext) || (a.es_imagen && a.url_imagen);
+    const urlVista = (esImg && a.url_imagen) ? a.url_imagen : a.url_descargar;
+
+    // Rellenar header
+    document.getElementById('preview-nombre').textContent = a.nombre_original;
+    document.getElementById('preview-descargar').href = a.url_descargar;
+
+    const icono = document.getElementById('preview-icono');
+    icono.className = esImg ? 'bi bi-image' : (esPdf ? 'bi bi-file-pdf' : 'bi bi-file-earmark');
+    icono.style.color  = esPdf ? '#dc2626' : 'var(--primary-color)';
+
+    // Construir contenido
+    const content = document.getElementById('preview-content');
+    content.innerHTML = '<div style="color:var(--text-muted);font-size:.8rem;">Cargando…</div>';
+
+    if (esImg) {
+        const img = document.createElement('img');
+        img.alt = a.nombre_original;
+        img.style.cssText = 'max-width:100%;max-height:78vh;object-fit:contain;border-radius:6px;box-shadow:0 4px 20px rgba(0,0,0,.3);';
+        img.onload  = () => { content.innerHTML = ''; content.appendChild(img); };
+        img.onerror = () => { content.innerHTML = '<div style="color:#ef4444;font-size:.8rem;">No se pudo cargar la imagen.</div>'; };
+        img.src = urlVista;
+    } else if (esPdf) {
+        content.innerHTML = '';
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'width:100%;height:78vh;';
+        const iframe = document.createElement('iframe');
+        iframe.src = urlVista + '#toolbar=1';
+        iframe.style.cssText = 'width:100%;height:100%;border:none;border-radius:4px;';
+        iframe.title = a.nombre_original;
+        wrap.appendChild(iframe);
+        content.appendChild(wrap);
+    } else {
+        content.innerHTML = `
+            <div style="text-align:center;padding:2.5rem 1rem;">
+                <i class="bi bi-file-earmark" style="font-size:3.5rem;color:var(--text-muted);display:block;margin-bottom:.75rem;"></i>
+                <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:1.25rem;">Vista previa no disponible para este tipo de archivo.</p>
+                <a href="${a.url_descargar}" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .9rem;border-radius:7px;background:var(--primary-color);color:#fff;text-decoration:none;font-size:.82rem;font-weight:600;">
+                    <i class="bi bi-download"></i> Descargar archivo
+                </a>
+            </div>`;
+    }
+
+    document.getElementById('modal-preview-adjunto').style.display = 'flex';
+}
+
+function cerrarPreviewAdjunto() {
+    document.getElementById('modal-preview-adjunto').style.display = 'none';
+    // Limpiar iframe/img para liberar memoria
+    document.getElementById('preview-content').innerHTML = '';
+}
+
+// Close with Escape — preview primero, luego el detalle
 document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && detalleTareaId) cerrarDetalle();
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('modal-preview-adjunto').style.display === 'flex') {
+        cerrarPreviewAdjunto();
+    } else if (detalleTareaId) {
+        cerrarDetalle();
+    }
 });
 
 // ACTIVIDAD EN DETALLE
