@@ -71,11 +71,11 @@
                 </select>
             </div>
             <div style="display:flex;gap:.5rem;">
-                <button type="submit" class="btn btn-sm btn-primary">
+                <button type="submit" class="btn-premium" style="padding:.5rem 1.1rem;font-size:.85rem;">
                     <i class="bi bi-search"></i> Filtrar
                 </button>
-                <a href="{{ route('contratacion.index') }}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-x"></i>
+                <a href="{{ route('contratacion.index') }}" class="btn-ghost" style="padding:.5rem .85rem;font-size:.85rem;">
+                    <i class="bi bi-x-lg"></i>
                 </a>
             </div>
         </form>

@@ -38,7 +38,7 @@
                     @enderror
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-sm">
+                <button type="submit" class="btn-premium" style="padding:.55rem 1.25rem;font-size:.85rem;">
                     <i class="bi bi-check-lg"></i> Guardar
                 </button>
             </form>

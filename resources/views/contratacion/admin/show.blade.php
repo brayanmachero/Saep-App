@@ -183,7 +183,7 @@
                             rows="5" placeholder="Notas internas de RRHH...">{{ $postulante->observaciones }}</textarea>
                     </div>
 
-                    <button type="submit" class="btn btn-primary btn-sm w-100">
+                    <button type="submit" class="btn-premium" style="width:100%;justify-content:center;padding:.55rem;font-size:.85rem;">
                         <i class="bi bi-check-lg"></i> Guardar Cambios
                     </button>
                 </form>
