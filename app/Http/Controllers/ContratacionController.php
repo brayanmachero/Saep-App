@@ -110,6 +110,7 @@ class ContratacionController extends Controller
             Mail::to($postulante->email)->send(new ContratacionAcuseReciboMail($postulante));
         } catch (\Exception $e) {
             Log::warning('Contratacion manual: no se pudo enviar acuse recibo', ['error' => $e->getMessage()]);
+            \App\Models\MailLog::recordFailed($postulante->email, "Acuse recibo {$postulante->folio}", $e->getMessage(), 'ContratacionAcuseReciboMail');
         }
 
         // Notificación RRHH
@@ -137,7 +138,9 @@ class ContratacionController extends Controller
             if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 try {
                     Mail::to($email)->send(new ContratacionNuevoPostulanteMail($postulante));
-                } catch (\Exception) {}
+                } catch (\Exception $e) {
+                    \App\Models\MailLog::recordFailed($email, "Nuevo postulante {$postulante->folio}", $e->getMessage(), 'ContratacionNuevoPostulanteMail');
+                }
             }
         }
     }

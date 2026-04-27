@@ -2,7 +2,10 @@
 
 namespace App\Providers;
 
+use App\Listeners\LogMailSent;
 use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Mail\Events\MessageSent;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
 use League\Flysystem\AzureBlobStorage\AzureBlobStorageAdapter;
@@ -24,6 +27,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // ── Listener global: loguear todos los mails enviados ─────
+        Event::listen(MessageSent::class, LogMailSent::class);
+
         Storage::extend('azure', function ($app, $config) {
             $connectionString = sprintf(
                 'DefaultEndpointsProtocol=https;AccountName=%s;AccountKey=%s;EndpointSuffix=core.windows.net',
