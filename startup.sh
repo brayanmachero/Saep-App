@@ -17,6 +17,22 @@ for policyFile in /etc/ImageMagick-6/policy.xml /etc/ImageMagick-7/policy.xml; d
     fi
 done
 
+# ─── Aumentar límites de upload en PHP-FPM ─────────────────────────────────
+PHP_INI_FILE=$(php --ini 2>/dev/null | grep 'Loaded Configuration File' | awk '{print $NF}')
+if [ -z "$PHP_INI_FILE" ] || [ "$PHP_INI_FILE" = "(none)" ]; then
+    PHP_INI_FILE="/usr/local/etc/php/php.ini"
+fi
+PHP_INI_DIR=$(php --ini 2>/dev/null | grep 'Scan for additional' | awk '{print $NF}')
+if [ -n "$PHP_INI_DIR" ] && [ -d "$PHP_INI_DIR" ]; then
+    cat > "$PHP_INI_DIR/99-upload.ini" <<'EOF'
+upload_max_filesize = 50M
+post_max_size = 64M
+EOF
+    echo "PHP upload limits configurados en $PHP_INI_DIR/99-upload.ini"
+else
+    echo "WARN: no se encontró directorio de ini adicionales"
+fi
+
 # Copiar nginx.conf del repo al directorio de nginx y recargar
 NGINX_CONF_SRC="/home/site/wwwroot/nginx.conf"
 NGINX_CONF_DST="/etc/nginx/sites-available/default"
