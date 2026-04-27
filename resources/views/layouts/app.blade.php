@@ -191,6 +191,12 @@
                 <span>Webhooks Log</span>
             </a>
             @endif
+            @if(auth()->user()->tieneAcceso('configuracion'))
+            <a href="{{ route('mail-logs.index') }}" class="nav-item {{ request()->routeIs('mail-logs.*') ? 'active' : '' }}">
+                <i class="bi bi-envelope-check"></i>
+                <span>Monitor de Correos</span>
+            </a>
+            @endif
             @endif
 
             {{-- PROTECCIÓN DE DATOS (Ley 21.719) --}}
