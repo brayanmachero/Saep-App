@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ContratacionAcuseReciboMail;
+use App\Mail\ContratacionNuevoPostulanteMail;
 use App\Models\Configuracion;
 use App\Models\PostulanteContratacion;
 use App\Services\OneDriveService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -51,6 +54,111 @@ class ContratacionController extends Controller
     public function show(PostulanteContratacion $postulante)
     {
         return view('contratacion.admin.show', compact('postulante'));
+    }
+
+    // ─── Ingreso manual (form) ────────────────────────────────────
+    public function create()
+    {
+        return view('contratacion.admin.create');
+    }
+
+    // ─── Ingreso manual (guardar) ─────────────────────────────────
+    public function storeManual(Request $request)
+    {
+        $request->validate([
+            'nombre'             => 'required|string|max:200',
+            'rut'                => ['required', 'string', 'max:20', function ($attr, $val, $fail) {
+                if (!PostulanteContratacion::validarRut($val)) {
+                    $fail('El RUT ingresado no es válido.');
+                }
+            }],
+            'email'              => 'required|email|max:200',
+            'carnet_frontal'     => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'carnet_reverso'     => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'certificado_afp'    => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'certificado_fonasa' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'licencia_conducir'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+        ]);
+
+        $rutLimpio     = preg_replace('/[^0-9kK]/', '', strtoupper($request->rut));
+        $rutFormateado = PostulanteContratacion::formatearRut($rutLimpio);
+        $rutCarpeta    = strtolower(preg_replace('/\./', '', $rutLimpio));
+
+        $datos = [
+            'nombre' => $request->nombre,
+            'rut'    => $rutFormateado,
+            'email'  => $request->email,
+        ];
+
+        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir'];
+        foreach ($camposDocs as $campo) {
+            if ($request->hasFile($campo)) {
+                $ext  = $request->file($campo)->getClientOriginalExtension();
+                $path = $request->file($campo)->storeAs(
+                    "contratacion/{$rutCarpeta}",
+                    "{$campo}.{$ext}",
+                    'public'
+                );
+                $datos[$campo] = $path;
+            }
+        }
+
+        $postulante = PostulanteContratacion::create($datos);
+
+        // Acuse al postulante
+        try {
+            Mail::to($postulante->email)->send(new ContratacionAcuseReciboMail($postulante));
+        } catch (\Exception $e) {
+            Log::warning('Contratacion manual: no se pudo enviar acuse recibo', ['error' => $e->getMessage()]);
+        }
+
+        // Notificación RRHH
+        $this->notificarRrhh($postulante);
+
+        // Subir ficha consolidada a SharePoint (no crítico)
+        try {
+            $this->subirFichaSharePoint($postulante);
+        } catch (\Throwable $e) {
+            Log::warning('Contratacion manual: SharePoint upload falló: ' . $e->getMessage());
+        }
+
+        return redirect()->route('contratacion.show', $postulante)
+            ->with('success', "Postulante {$postulante->folio} ingresado correctamente.");
+    }
+
+    // ─── Helper: notificar RRHH ───────────────────────────────────
+    private function notificarRrhh(PostulanteContratacion $postulante): void
+    {
+        $destinatarios = Configuracion::get('contratacion_emails_notificacion', '');
+        if (empty(trim($destinatarios))) return;
+
+        $emails = array_filter(array_map('trim', explode(',', $destinatarios)));
+        foreach ($emails as $email) {
+            if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                try {
+                    Mail::to($email)->send(new ContratacionNuevoPostulanteMail($postulante));
+                } catch (\Exception) {}
+            }
+        }
+    }
+
+    // ─── Helper: subir ficha PDF a SharePoint ─────────────────────
+    private function subirFichaSharePoint(PostulanteContratacion $postulante): void
+    {
+        $oneDrive = app(OneDriveService::class);
+        if (!$oneDrive->isConfigured()) return;
+
+        $graphConfig = config('services.microsoft_graph');
+        $site        = $graphConfig['contratacion_site']   ?? 'RRHH';
+        $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
+        $carpeta     = $postulante->rut . ' - ' . $postulante->nombre;
+
+        $fichaBytes = $this->generarFichaBytes($postulante);
+        $oneDrive->uploadFileToSite(
+            $site,
+            $fichaBytes,
+            "{$folder}/{$carpeta}/{$postulante->folio}_ficha.pdf"
+        );
     }
 
     // ─── Actualizar estado ────────────────────────────────────────

@@ -24,6 +24,9 @@
             <a href="{{ route('contratacion.configuracion') }}" class="btn-ghost">
                 <i class="bi bi-gear-fill"></i> Configuración
             </a>
+            <a href="{{ route('contratacion.create') }}" class="btn-premium">
+                <i class="bi bi-person-plus-fill"></i> Ingresar manual
+            </a>
         </div>
     </div>
 

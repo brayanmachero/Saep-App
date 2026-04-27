@@ -456,6 +456,8 @@ Route::middleware('auth')->group(function () {
     // --- CONTRATACIÓN (RRHH / Admin) ---
     Route::middleware('modulo:contratacion')->prefix('contratacion')->name('contratacion.')->group(function () {
         Route::get('/',                              [ContratacionController::class, 'index'])->name('index');
+        Route::get('/crear',                         [ContratacionController::class, 'create'])->name('create');
+        Route::post('/crear',                        [ContratacionController::class, 'storeManual'])->name('store-manual');
         Route::get('/{postulante}',                  [ContratacionController::class, 'show'])->name('show');
         Route::patch('/{postulante}',                [ContratacionController::class, 'update'])->name('update');
         Route::get('/{postulante}/zip',              [ContratacionController::class, 'descargarZip'])->name('zip');
