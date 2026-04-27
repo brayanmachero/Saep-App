@@ -72,3 +72,16 @@ jobs:
           app-name: 'saep-app'
           slot-name: 'Production'
           package: .
+
+      - name: Ejecutar migraciones en producción
+        run: |
+          CREDS=$(az webapp deployment list-publishing-credentials \
+            --name saep-app --resource-group saep-rg \
+            --query '{u:publishingUserName,p:publishingPassword}' -o tsv)
+          KUSER=$(echo "$CREDS" | awk '{print $1}')
+          KPASS=$(echo "$CREDS" | awk '{print $2}')
+          curl -sf -X POST "https://saep-app.scm.azurewebsites.net/api/command" \
+            -u "$KUSER:$KPASS" \
+            -H "Content-Type: application/json" \
+            -d '{"command":"php artisan migrate --force 2>&1","dir":"/home/site/wwwroot"}' \
+            | jq -r '.Output,.Error'
