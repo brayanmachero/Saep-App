@@ -22,7 +22,10 @@ class PostulanteContratacion extends Model
         static::creating(function ($model) {
             if (empty($model->folio)) {
                 $year = date('Y');
-                $seq  = static::whereYear('created_at', $year)->count() + 1;
+                $last = static::whereYear('created_at', $year)
+                    ->orderByRaw('CAST(SUBSTRING_INDEX(folio, \'-\', -1) AS UNSIGNED) DESC')
+                    ->value('folio');
+                $seq = $last ? ((int) substr(strrchr($last, '-'), 1)) + 1 : 1;
                 $model->folio = 'POST-' . $year . '-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
             }
         });

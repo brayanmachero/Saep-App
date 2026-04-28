@@ -65,7 +65,8 @@
                             name="rut"
                             value="{{ old('rut') }}"
                             class="form-control @error('rut') is-invalid @enderror"
-                            placeholder="Ej: 12.345.678-9"
+                            placeholder="12.345.678-9"
+                            data-rut
                             required
                         >
                         @error('rut')
