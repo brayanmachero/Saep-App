@@ -140,21 +140,16 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     </div>
 
     @foreach([$carnetFrontal, $carnetReverso] as $carnet)
-        @if($carnet)
+        @if($carnet && $carnet['tipo'] === 'imagen')
             <div style="margin: 0 28px 8px;">
                 <div class="doc-label">{{ $carnet['label'] }}</div>
-                @if($carnet['tipo'] === 'imagen')
-                    <div style="text-align:center; padding:4px; border:1px solid #e2e8f0; background:#fff;">
-                        <img src="{{ $carnet['data'] }}" alt="{{ $carnet['label'] }}"
-                             style="max-width:100%; max-height:380px; width:auto; height:auto;">
-                    </div>
-                @elseif($carnet['tipo'] === 'pdf')
-                    <div class="doc-pdf-note">Documento adjunto en páginas siguientes.</div>
-                @else
-                    <div class="doc-ausente">Documento no subido.</div>
-                @endif
+                <div style="text-align:center; padding:4px; border:1px solid #e2e8f0; background:#fff;">
+                    <img src="{{ $carnet['data'] }}" alt="{{ $carnet['label'] }}"
+                         style="max-width:100%; max-height:380px; width:auto; height:auto;">
+                </div>
             </div>
         @endif
+        {{-- si carnet es PDF → FPDI lo consolida al final, sin nota --}}
     @endforeach
 
     {{-- ═══════════════════════════════════════════════════════════════════ --}}
