@@ -160,7 +160,7 @@ class ContratacionController extends Controller
         $oneDrive->uploadFileToSite(
             $site,
             $fichaBytes,
-            "{$folder}/{$carpeta}/{$postulante->folio}_ficha.pdf"
+            "{$folder}/{$carpeta}/" . $this->fichaFilename($postulante)
         );
     }
 
@@ -306,7 +306,7 @@ class ContratacionController extends Controller
     public function fichaPdf(PostulanteContratacion $postulante)
     {
         $fichaBytes = $this->generarFichaBytes($postulante);
-        $filename   = $postulante->folio . '_ficha.pdf';
+        $filename   = $this->fichaFilename($postulante);
 
         return response($fichaBytes, 200, [
             'Content-Type'        => 'application/pdf',
@@ -333,7 +333,7 @@ class ContratacionController extends Controller
             $oneDrive->uploadFileToSite(
                 $site,
                 $fichaBytes,
-                "{$folder}/{$carpeta}/{$postulante->folio}_ficha.pdf"
+                "{$folder}/{$carpeta}/" . $this->fichaFilename($postulante)
             );
 
             Log::info('Contratacion admin: resincronizacion SharePoint completada', ['folio' => $postulante->folio]);
@@ -584,6 +584,14 @@ class ContratacionController extends Controller
         ini_set('memory_limit', $memPrev);
 
         return $fichaBytes;
+    }
+
+    // ─── Helper: nombre estándar del PDF consolidado ─────────────────────────
+    private function fichaFilename(PostulanteContratacion $postulante): string
+    {
+        $seq = (int) substr(strrchr($postulante->folio, '-'), 1);
+        $num = str_pad($seq, 3, '0', STR_PAD_LEFT);
+        return $postulante->rut . ' - FICHA ' . $num . '.pdf';
     }
 
     // ─── Helper: encontrar ruta de Ghostscript ────────────────────────────────
