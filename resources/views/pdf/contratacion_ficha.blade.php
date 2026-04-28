@@ -110,59 +110,69 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 </div>
 @endif
 
-{{-- Documentos --}}
-<div class="section-bar" style="margin-top:20px;">
-    <span class="section-title">Documentos Adjuntos</span>
-</div>
+@php
+    // Separar carnet frontal/reverso del resto de documentos
+    $carnetFrontal = null;
+    $carnetReverso = null;
+    $otrosDocs     = [];
+    foreach ($documentos as $doc) {
+        $ll = strtolower($doc['label']);
+        if (str_contains($ll, 'frontal')) {
+            $carnetFrontal = $doc;
+        } elseif (str_contains($ll, 'reverso')) {
+            $carnetReverso = $doc;
+        } else {
+            $otrosDocs[] = $doc;
+        }
+    }
+@endphp
 
+{{-- ═══════════════════════════════════════════════════════════════════ --}}
+{{-- PÁGINA 1 — Cédula de identidad (frontal + reverso) una bajo la otra --}}
+{{-- ═══════════════════════════════════════════════════════════════════ --}}
 @if(empty($documentos))
-    <div class="doc-ausente" style="margin:0 28px;">Este postulante aún no ha subido ningún documento.</div>
+    <div class="doc-ausente" style="margin:12px 28px 0;">Este postulante aún no ha subido ningún documento.</div>
 @else
-    @php
-        $imagenes = array_values(array_filter($documentos, fn($d) => $d['tipo'] === 'imagen'));
-        $pdfs     = array_values(array_filter($documentos, fn($d) => $d['tipo'] === 'pdf'));
-        $ausentes = array_values(array_filter($documentos, fn($d) => $d['tipo'] === 'ausente'));
-        $pares    = array_chunk($imagenes, 2);
-    @endphp
+    <div class="section-bar" style="margin-top:14px;">
+        <span class="section-title">Cédula de Identidad</span>
+    </div>
 
-    @if(count($imagenes))
-        {{-- Tabla HTML real: DomPDF maneja <table> sin los saltos de página que causa display:table en CSS --}}
-        @foreach($pares as $par)
-        <table style="width:100%; border-collapse:collapse; margin-bottom:12px; padding:0 28px; page-break-inside:avoid;">
-            <tr>
-                <td style="width:50%; vertical-align:top; padding:0 6px 0 28px;">
-                    <div class="doc-label">{{ $par[0]['label'] }}</div>
-                    <div class="doc-img"><img src="{{ $par[0]['data'] }}" alt="{{ $par[0]['label'] }}"></div>
-                </td>
-                <td style="width:50%; vertical-align:top; padding:0 28px 0 6px;">
-                    @if(isset($par[1]))
-                        <div class="doc-label">{{ $par[1]['label'] }}</div>
-                        <div class="doc-img"><img src="{{ $par[1]['data'] }}" alt="{{ $par[1]['label'] }}"></div>
-                    @endif
-                </td>
-            </tr>
-        </table>
-        @endforeach
-    @endif
-
-    @if(count($pdfs))
-        <div class="section-bar" style="margin-top:14px;">
-            <span class="section-title" style="font-size:9px; color:#475569; border-left-color:#475569;">Documentos en formato PDF</span>
-        </div>
-        @foreach($pdfs as $doc)
-            <div style="margin: 0 28px 10px; page-break-inside:avoid;">
-                <div class="doc-label">{{ $doc['label'] }}</div>
-                <div class="doc-pdf-note">Documento adjunto en páginas siguientes.</div>
+    @foreach([$carnetFrontal, $carnetReverso] as $carnet)
+        @if($carnet)
+            <div style="margin: 0 28px 8px;">
+                <div class="doc-label">{{ $carnet['label'] }}</div>
+                @if($carnet['tipo'] === 'imagen')
+                    <div style="text-align:center; padding:4px; border:1px solid #e2e8f0; background:#fff;">
+                        <img src="{{ $carnet['data'] }}" alt="{{ $carnet['label'] }}"
+                             style="max-width:100%; max-height:380px; width:auto; height:auto;">
+                    </div>
+                @elseif($carnet['tipo'] === 'pdf')
+                    <div class="doc-pdf-note">Documento adjunto en páginas siguientes.</div>
+                @else
+                    <div class="doc-ausente">Documento no subido.</div>
+                @endif
             </div>
-        @endforeach
-    @endif
+        @endif
+    @endforeach
 
-    @if(count($ausentes))
-        <div style="margin: 8px 28px 0; font-size:8.5px; color:#94a3b8;">
-            <strong>Documentos no subidos:</strong>
-            {{ implode(', ', array_column($ausentes, 'label')) }}
+    {{-- ═══════════════════════════════════════════════════════════════════ --}}
+    {{-- PÁGINAS 2+ — Cada documento ocupa una hoja completa               --}}
+    {{-- ═══════════════════════════════════════════════════════════════════ --}}
+    @foreach($otrosDocs as $doc)
+        <div style="page-break-before: always; margin: 0; padding: 8px 28px 0;">
+            <div class="doc-label" style="margin-bottom:8px;">{{ $doc['label'] }}</div>
+            @if($doc['tipo'] === 'imagen')
+                <div style="text-align:center; padding:4px 0;">
+                    <img src="{{ $doc['data'] }}" alt="{{ $doc['label'] }}"
+                         style="max-width:100%; max-height:1020px; width:auto; height:auto;">
+                </div>
+            @elseif($doc['tipo'] === 'pdf')
+                <div class="doc-pdf-note">Documento adjunto en páginas siguientes.</div>
+            @else
+                <div class="doc-ausente">Documento no subido.</div>
+            @endif
         </div>
-    @endif
+    @endforeach
 @endif
 
 </body>
