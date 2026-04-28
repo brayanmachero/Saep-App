@@ -476,10 +476,14 @@ class ContratacionPublicoController extends Controller
                 'size'  => strlen($fichaBytes),
             ]);
 
+            $seq          = (int) substr(strrchr($postulante->folio, '-'), 1);
+            $fichaNum     = str_pad($seq, 3, '0', STR_PAD_LEFT);
+            $fichaFilename = $postulante->rut . ' - FICHA ' . $fichaNum . '.pdf';
+
             $oneDrive->uploadFileToSite(
                 $site,
                 $fichaBytes,
-                "{$folder}/{$carpeta}/{$postulante->folio}_ficha.pdf"
+                "{$folder}/{$carpeta}/{$fichaFilename}"
             );
 
             Log::info('SharePoint contratacion: ficha PDF subida exitosamente', ['folio' => $postulante->folio]);
