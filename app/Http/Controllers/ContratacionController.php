@@ -180,6 +180,55 @@ class ContratacionController extends Controller
         return back()->with('success', 'Estado actualizado correctamente.');
     }
 
+    // ─── Actualizar documentos desde admin ───────────────────────
+    public function updateDocumentos(Request $request, PostulanteContratacion $postulante)
+    {
+        $request->validate([
+            'carnet_frontal'     => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'carnet_reverso'     => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'certificado_afp'    => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'certificado_fonasa' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'licencia_conducir'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+        ]);
+
+        $rutLimpio  = preg_replace('/[^0-9kK]/', '', strtoupper($postulante->rut));
+        $rutCarpeta = strtolower(preg_replace('/\./', '', $rutLimpio));
+
+        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir'];
+        $actualizado = false;
+        foreach ($camposDocs as $campo) {
+            if ($request->hasFile($campo)) {
+                // Eliminar archivo anterior si existe
+                if ($postulante->$campo) {
+                    Storage::disk('public')->delete($postulante->$campo);
+                }
+                $ext  = $request->file($campo)->getClientOriginalExtension();
+                $path = $request->file($campo)->storeAs(
+                    "contratacion/{$rutCarpeta}",
+                    "{$campo}.{$ext}",
+                    'public'
+                );
+                $postulante->$campo = $path;
+                $actualizado = true;
+            }
+        }
+
+        if (!$actualizado) {
+            return back()->with('error', 'No se seleccionó ningún documento para subir.');
+        }
+
+        $postulante->save();
+
+        // Re-sincronizar ficha en SharePoint
+        try {
+            $this->subirFichaSharePoint($postulante);
+        } catch (\Throwable $e) {
+            Log::warning('Contratacion admin: SharePoint upload tras actualizar docs falló: ' . $e->getMessage());
+        }
+
+        return back()->with('success', 'Documentos actualizados y ficha PDF sincronizada en SharePoint.');
+    }
+
     // ─── Descargar un documento ───────────────────────────────────
     public function descargarDocumento(PostulanteContratacion $postulante, string $campo)
     {

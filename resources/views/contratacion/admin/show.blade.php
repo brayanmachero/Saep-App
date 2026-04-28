@@ -137,6 +137,36 @@
                     </div>
                     @endforeach
                 </div>
+
+                <!-- Formulario de carga/reemplazo de documentos -->
+                <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border);">
+                    <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:1rem;display:flex;align-items:center;gap:.4rem;">
+                        <i class="bi bi-cloud-arrow-up" style="color:#0ea5e9;"></i> Subir / Reemplazar Documentos
+                    </div>
+                    <form method="POST" action="{{ route('contratacion.update-documentos', $postulante) }}"
+                          enctype="multipart/form-data">
+                        @csrf
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem;">
+                            @foreach($docsCampos as $campo => $info)
+                            <div>
+                                <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.3rem;">
+                                    {{ $info['label'] }}
+                                    @if($postulante->$campo)
+                                    <span style="font-size:.65rem;color:#0369a1;">(reemplazar)</span>
+                                    @endif
+                                </label>
+                                <input type="file" name="{{ $campo }}"
+                                       accept=".jpg,.jpeg,.png,.pdf"
+                                       class="form-control form-control-sm"
+                                       style="font-size:.78rem;">
+                            </div>
+                            @endforeach
+                        </div>
+                        <button type="submit" class="btn-premium" style="width:100%;justify-content:center;padding:.5rem;font-size:.82rem;">
+                            <i class="bi bi-cloud-upload"></i> Guardar Documentos y Sincronizar SharePoint
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
 
