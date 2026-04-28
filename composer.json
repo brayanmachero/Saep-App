@@ -14,7 +14,7 @@
         "laravel/tinker": "^2.9",
         "league/flysystem-azure-blob-storage": "^3.31",
         "phpoffice/phpspreadsheet": "^5.5",
-        "setasign/fpdf": "^1.8",
+        "setasign/fpdf": "1.8",
         "setasign/fpdi": "*"
     },
     "require-dev": {
