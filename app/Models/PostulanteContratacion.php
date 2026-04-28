@@ -41,7 +41,7 @@ class PostulanteContratacion extends Model
 
     public function getEstadoLabelAttribute(): string
     {
-        return self::estadosMap()[$this->estado]['label'] ?? $this->estado;
+        return self::estadosMap()[$this->estado]['label'] ?? ($this->estado ?? 'Sin estado');
     }
 
     public function getEstadoColorAttribute(): string

@@ -241,23 +241,23 @@ class ContratacionController extends Controller
         // Encabezados
         $headers = ['Folio', 'Nombre', 'RUT', 'Email', 'Estado', 'Carnet F.', 'Carnet R.', 'AFP', 'FONASA', 'Licencia', 'Fecha'];
         foreach ($headers as $i => $h) {
-            $sheet->setCellValueByColumnAndRow($i + 1, 1, $h);
+            $sheet->setCellValue([$i + 1, 1], $h);
         }
 
         // Datos
         foreach ($postulantes as $idx => $p) {
             $row = $idx + 2;
-            $sheet->setCellValueByColumnAndRow(1,  $row, $p->folio);
-            $sheet->setCellValueByColumnAndRow(2,  $row, $p->nombre);
-            $sheet->setCellValueByColumnAndRow(3,  $row, $p->rut);
-            $sheet->setCellValueByColumnAndRow(4,  $row, $p->email);
-            $sheet->setCellValueByColumnAndRow(5,  $row, $p->estado_label);
-            $sheet->setCellValueByColumnAndRow(6,  $row, $p->carnet_frontal     ? 'Sí' : 'No');
-            $sheet->setCellValueByColumnAndRow(7,  $row, $p->carnet_reverso     ? 'Sí' : 'No');
-            $sheet->setCellValueByColumnAndRow(8,  $row, $p->certificado_afp    ? 'Sí' : 'No');
-            $sheet->setCellValueByColumnAndRow(9,  $row, $p->certificado_fonasa ? 'Sí' : 'No');
-            $sheet->setCellValueByColumnAndRow(10, $row, $p->licencia_conducir  ? 'Sí' : 'No');
-            $sheet->setCellValueByColumnAndRow(11, $row, $p->created_at->format('d/m/Y H:i'));
+            $sheet->setCellValue([1,  $row], $p->folio);
+            $sheet->setCellValue([2,  $row], $p->nombre);
+            $sheet->setCellValue([3,  $row], $p->rut);
+            $sheet->setCellValue([4,  $row], $p->email);
+            $sheet->setCellValue([5,  $row], $p->estado_label);
+            $sheet->setCellValue([6,  $row], $p->carnet_frontal     ? 'Sí' : 'No');
+            $sheet->setCellValue([7,  $row], $p->carnet_reverso     ? 'Sí' : 'No');
+            $sheet->setCellValue([8,  $row], $p->certificado_afp    ? 'Sí' : 'No');
+            $sheet->setCellValue([9,  $row], $p->certificado_fonasa ? 'Sí' : 'No');
+            $sheet->setCellValue([10, $row], $p->licencia_conducir  ? 'Sí' : 'No');
+            $sheet->setCellValue([11, $row], $p->created_at->format('d/m/Y H:i'));
         }
 
         // Autowidth
