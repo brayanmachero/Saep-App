@@ -156,22 +156,31 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     @endforeach
 
     {{-- ═══════════════════════════════════════════════════════════════════ --}}
-    {{-- PÁGINAS 2+ — Cada documento ocupa una hoja completa               --}}
+    {{-- PÁGINAS 2+ — Imágenes en hoja completa; notas PDF inline          --}}
     {{-- ═══════════════════════════════════════════════════════════════════ --}}
     @foreach($otrosDocs as $doc)
-        <div style="page-break-before: always; margin: 0; padding: 8px 28px 0;">
-            <div class="doc-label" style="margin-bottom:8px;">{{ $doc['label'] }}</div>
-            @if($doc['tipo'] === 'imagen')
+        @if($doc['tipo'] === 'imagen')
+            {{-- Imagen: hoja dedicada completa --}}
+            <div style="page-break-before: always; margin: 0; padding: 8px 28px 0;">
+                <div class="doc-label" style="margin-bottom:8px;">{{ $doc['label'] }}</div>
                 <div style="text-align:center; padding:4px 0;">
                     <img src="{{ $doc['data'] }}" alt="{{ $doc['label'] }}"
                          style="max-width:100%; max-height:1020px; width:auto; height:auto;">
                 </div>
-            @elseif($doc['tipo'] === 'pdf')
+            </div>
+        @elseif($doc['tipo'] === 'pdf')
+            {{-- PDF: sólo nota inline, sin salto de página --}}
+            <div style="margin: 8px 28px 0;">
+                <div class="doc-label" style="margin-bottom:4px;">{{ $doc['label'] }}</div>
                 <div class="doc-pdf-note">Documento adjunto en páginas siguientes.</div>
-            @else
+            </div>
+        @else
+            {{-- Ausente: inline sin salto de página --}}
+            <div style="margin: 8px 28px 0;">
+                <div class="doc-label" style="margin-bottom:4px;">{{ $doc['label'] }}</div>
                 <div class="doc-ausente">Documento no subido.</div>
-            @endif
-        </div>
+            </div>
+        @endif
     @endforeach
 @endif
 
