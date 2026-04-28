@@ -322,6 +322,33 @@ class ContratacionController extends Controller
             ->deleteFileAfterSend(true);
     }
 
+    // ─── Eliminar postulante (permanente) ────────────────────────
+    public function destroy(PostulanteContratacion $postulante)
+    {
+        if (!auth()->user()->tieneAcceso('contratacion', 'puede_eliminar')) {
+            abort(403, 'No tienes permiso para eliminar registros.');
+        }
+
+        // Eliminar archivos del storage
+        $campos = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir'];
+        foreach ($campos as $campo) {
+            if (!empty($postulante->$campo)) {
+                Storage::disk('public')->delete($postulante->$campo);
+            }
+        }
+
+        $folio = $postulante->folio;
+        $postulante->delete();
+
+        Log::info('Contratacion: postulante eliminado', [
+            'folio'      => $folio,
+            'deleted_by' => auth()->id(),
+        ]);
+
+        return redirect()->route('contratacion.index')
+            ->with('success', "Registro {$folio} eliminado permanentemente.");
+    }
+
     // ─── Configuración (emails notificación) ─────────────────────
     public function configuracion()
     {

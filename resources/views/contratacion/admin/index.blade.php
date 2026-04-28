@@ -162,6 +162,13 @@
                                 <i class="bi bi-file-zip-fill" style="color:#f59e0b;"></i>
                             </a>
                             @endif
+                            @if(auth()->user()->tieneAcceso('contratacion', 'puede_eliminar'))
+                            <button type="button" class="btn-icon" title="Eliminar registro"
+                                onclick="confirmarEliminar('{{ $p->id }}', '{{ addslashes($p->folio) }}', '{{ addslashes($p->nombre) }}')"
+                                style="color:#ef4444;">
+                                <i class="bi bi-trash3-fill"></i>
+                            </button>
+                            @endif
                         </td>
                     </tr>
                     @endforeach
@@ -178,4 +185,48 @@
     </div>
 
 </div>
+
+{{-- Modal eliminar --}}
+@if(auth()->user()->tieneAcceso('contratacion', 'puede_eliminar'))
+<div id="modal-eliminar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;justify-content:center;align-items:center;backdrop-filter:blur(3px)">
+    <div class="glass-card" style="max-width:440px;width:90%;padding:1.75rem;">
+        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;">
+            <div style="width:44px;height:44px;border-radius:12px;background:#fee2e2;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <i class="bi bi-exclamation-triangle-fill" style="color:#ef4444;font-size:1.2rem;"></i>
+            </div>
+            <div>
+                <h3 style="margin:0;font-size:1rem;font-weight:700;color:var(--text-main);">Eliminar registro</h3>
+                <p style="margin:0;font-size:.78rem;color:var(--text-muted);">Esta acción no se puede deshacer</p>
+            </div>
+        </div>
+        <p style="font-size:.875rem;color:var(--text-main);margin-bottom:.25rem;">¿Eliminar permanentemente el registro?</p>
+        <p id="modal-eliminar-info" style="font-size:.82rem;font-weight:600;color:#dc2626;margin-bottom:1.25rem;"></p>
+        <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:1.25rem;">Se eliminarán el registro y todos los documentos adjuntos del sistema.</p>
+        <div style="display:flex;gap:.75rem;justify-content:flex-end;">
+            <button type="button" class="btn-ghost" onclick="cerrarModalEliminar()">Cancelar</button>
+            <form id="form-eliminar" method="POST" style="display:inline;">
+                @csrf
+                @method('DELETE')
+                <button type="submit" style="display:inline-flex;align-items:center;gap:.4rem;padding:.6rem 1.2rem;border-radius:10px;background:#ef4444;color:#fff;border:none;font-weight:600;font-size:.875rem;cursor:pointer;">
+                    <i class="bi bi-trash3-fill"></i> Eliminar definitivamente
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+function confirmarEliminar(id, folio, nombre) {
+    document.getElementById('modal-eliminar-info').textContent = folio + ' — ' + nombre;
+    document.getElementById('form-eliminar').action = '/contratacion/' + id;
+    document.getElementById('modal-eliminar').style.display = 'flex';
+}
+function cerrarModalEliminar() {
+    document.getElementById('modal-eliminar').style.display = 'none';
+}
+document.getElementById('modal-eliminar').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModalEliminar();
+});
+</script>
+@endif
+
 @endsection
