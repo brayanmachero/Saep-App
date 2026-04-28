@@ -9,7 +9,7 @@
         </div>
         {{-- Limpiar registros antiguos --}}
         <div>
-            <button type="button" class="btn-ghost" onclick="var m=document.getElementById('modal-limpiar');m.classList.remove('hidden');m.style.display='flex';">
+            <button type="button" class="btn-ghost" onclick="document.getElementById('modal-limpiar').style.display='flex';">
                 <i class="bi bi-trash3"></i> Limpiar antiguos
             </button>
         </div>
@@ -151,7 +151,7 @@
 </div>
 
 {{-- Modal limpiar --}}
-<div id="modal-limpiar" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;">
+<div id="modal-limpiar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;">
     <div class="glass-card" style="width:380px;padding:1.5rem;">
         <h3 style="margin:0 0 1rem;">Limpiar registros</h3>
         <form method="POST" action="{{ route('mail-logs.limpiar') }}">
@@ -167,7 +167,7 @@
                 </div>
             </div>
             <div style="display:flex;gap:.5rem;justify-content:flex-end;">
-                <button type="button" class="btn-ghost" onclick="var m=document.getElementById('modal-limpiar');m.classList.add('hidden');m.style.display='';">Cancelar</button>
+                <button type="button" class="btn-ghost" onclick="document.getElementById('modal-limpiar').style.display='none';">Cancelar</button>
                 <button type="submit" class="btn-premium" style="background:linear-gradient(135deg,#dc2626,#b91c1c);">
                     <i class="bi bi-trash3"></i> Eliminar
                 </button>
