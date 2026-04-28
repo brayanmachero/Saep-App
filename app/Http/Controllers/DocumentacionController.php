@@ -99,7 +99,28 @@ class DocumentacionController extends Controller
                 'icono'       => 'bi-cloud-fill',
                 'descripcion' => 'Stack técnico, arquitectura Azure, deploy automático, variables de entorno y servicios externos.',
                 'estado'      => 'completo',
+                'version'     => '2.0',
+            ],
+            'contratacion' => [
+                'titulo'      => 'Contratación RRHH',
+                'icono'       => 'bi-person-badge-fill',
+                'descripcion' => 'Portal de postulación, panel admin RRHH, generación de ficha PDF consolidada y sincronización con SharePoint.',
+                'estado'      => 'completo',
+                'version'     => '1.1',
+            ],
+            'monitor-correos' => [
+                'titulo'      => 'Monitor de Correos',
+                'icono'       => 'bi-envelope-check-fill',
+                'descripcion' => 'Log de correos transaccionales enviados y fallidos. Estadísticas, filtros, preview de HTML y limpieza de registros.',
+                'estado'      => 'completo',
                 'version'     => '1.0',
+            ],
+            'kanban' => [
+                'titulo'      => 'Tablero Kanban',
+                'icono'       => 'bi-kanban-fill',
+                'descripcion' => 'Tableros de tareas por centro de costo: columnas, prioridades, asignados, checklist, adjuntos y log de actividad.',
+                'estado'      => 'pendiente',
+                'version'     => null,
             ],
         ];
     }

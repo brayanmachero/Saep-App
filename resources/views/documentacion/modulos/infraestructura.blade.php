@@ -26,7 +26,7 @@
             <a href="#azure" class="btn-ghost" style="font-size:.8rem;padding:.35rem .75rem;">Recursos Azure</a>
             <a href="#deploy" class="btn-ghost" style="font-size:.8rem;padding:.35rem .75rem;">Deploy Automático</a>
             <a href="#storage" class="btn-ghost" style="font-size:.8rem;padding:.35rem .75rem;">Almacenamiento</a>
-            <a href="#email" class="btn-ghost" style="font-size:.8rem;padding:.35rem .75rem;">Correo (ACS)</a>
+            <a href="#email" class="btn-ghost" style="font-size:.8rem;padding:.35rem .75rem;">Correo (Resend)</a>
             <a href="#dominio" class="btn-ghost" style="font-size:.8rem;padding:.35rem .75rem;">Dominio y DNS</a>
             <a href="#env" class="btn-ghost" style="font-size:.8rem;padding:.35rem .75rem;">Variables de Entorno</a>
             <a href="#accesos" class="btn-ghost" style="font-size:.8rem;padding:.35rem .75rem;">Accesos</a>
@@ -101,8 +101,7 @@
                         ['App Service Plan','ASP-saeprg-81da','Hosting Plan','Plan B1, Linux'],
                         ['Base de datos','saep-mysql','MySQL Flexible Server 8.0','Host: saep-mysql.mysql.database.azure.com, SSL requerido'],
                         ['Almacenamiento','saepplatformstorage','Storage Account (Blob)','Contenedor: saep-files, acceso público por blob'],
-                        ['Correo (ACS)','saep-communication','Azure Communication Services','SMTP: smtp.azurecomm.net:587/TLS'],
-                        ['Email Service','saep-email','Email Communication Service','Vinculado a saep-communication'],
+                        ['Correo (Resend)','resend.com','Resend API — resend/resend-php','Driver: resend, from: noreply@saep.cl'],
                         ['Identidad','oidc-msi-a544','Managed Identity','Para autenticación entre servicios Azure'],
                     ] as $r)
                     <tr style="border-bottom:1px solid var(--surface-border);">
@@ -180,6 +179,7 @@
                 ['bi-kanban-fill','#8b5cf6','Adjuntos Kanban','kanban/adjuntos/{id}/'],
                 ['bi-ui-checks','#10b981','Adjuntos formularios','respuestas/adjuntos/{id}/'],
                 ['bi-shield-exclamation','#ef4444','Evidencias Ley Karin','ley_karin/{id}/'],
+                ['bi-person-badge-fill','#6366f1','Documentos Contratación','contratacion/{rut_sin_formato}/'],
             ] as [$icono,$color,$titulo,$ruta])
             <div style="background:var(--surface-bg);border-radius:.5rem;padding:.875rem;display:flex;align-items:center;gap:.75rem;">
                 <i class="bi {{ $icono }}" style="font-size:1.4rem;color:{{ $color }};flex-shrink:0;"></i>
@@ -196,28 +196,26 @@
         </div>
     </div>
 
-    {{-- 5. Correo (ACS) --}}
+    {{-- 5. Correo (Resend) --}}
     <div class="glass-card" style="margin-bottom:1.5rem;" id="email">
         <div style="border-bottom:1px solid var(--surface-border);padding-bottom:.75rem;margin-bottom:1.25rem;">
             <h3 style="margin:0;font-size:1.1rem;display:flex;align-items:center;gap:.5rem;">
                 <span style="background:var(--primary-color);color:#fff;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.85rem;">5</span>
-                Correo Transaccional (Azure Communication Services)
+                Correo Transaccional (Resend)
             </h3>
         </div>
         <p style="line-height:1.6;margin:0 0 1rem;">
-            El envío de correos (bienvenida, alertas, Ley Karin, reset de contraseña, etc.) usa <strong>Azure Communication Services</strong>
-            como relay SMTP. Se migró desde Resend en abril 2026.
+            El envío de correos (bienvenida, alertas, Ley Karin, reset de contraseña, etc.) usa <strong>Resend</strong>
+            como proveedor transaccional mediante el paquete <code>resend/resend-php</code>. El driver de Laravel es <code>resend</code>.
         </p>
         <div style="overflow-x:auto;">
             <table style="width:100%;border-collapse:collapse;font-size:.875rem;">
                 <tbody>
                     @foreach([
-                        ['MAIL_MAILER','smtp','Transporte de correo'],
-                        ['MAIL_HOST','smtp.azurecomm.net','Servidor SMTP de ACS'],
-                        ['MAIL_PORT','587','Puerto TLS'],
-                        ['MAIL_USERNAME','saep-communication','Nombre del recurso ACS'],
-                        ['MAIL_FROM_ADDRESS','notificaciones@saep.cl','Remitente visible'],
-                        ['MAIL_FROM_NAME','SAEP notificaciones','Nombre visible'],
+                        ['MAIL_MAILER','resend','Driver de correo (NO smtp)'],
+                        ['RESEND_API_KEY','(secreto)','API Key de resend.com'],
+                        ['MAIL_FROM_ADDRESS','noreply@saep.cl','Remitente visible'],
+                        ['MAIL_FROM_NAME','SAEP Platform','Nombre visible del remitente'],
                     ] as [$var,$val,$desc])
                     <tr style="border-bottom:1px solid var(--surface-border);">
                         <td style="padding:.5rem .75rem;"><code style="font-size:.8rem;background:var(--surface-bg);padding:.15rem .4rem;border-radius:.3rem;">{{ $var }}</code></td>
@@ -228,11 +226,10 @@
                 </tbody>
             </table>
         </div>
-        <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:.5rem;padding:.875rem;margin-top:1rem;font-size:.85rem;">
-            <strong><i class="bi bi-clock-history" style="color:#f59e0b;"></i> Pendiente:</strong>
-            El dominio <code>saep.cl</code> requiere verificación DNS en ACS para que los correos se envíen desde
-            <code>notificaciones@saep.cl</code>. Mientras tanto, el SMTP funciona pero el remitente real es el dominio
-            de ACS. Ver sección de Dominio y DNS.
+        <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.25);border-radius:.5rem;padding:.875rem;margin-top:1rem;font-size:.85rem;">
+            <strong><i class="bi bi-envelope-check-fill" style="color:#3b82f6;"></i> Monitor de correos:</strong>
+            <span style="color:var(--text-muted);"> Todos los correos enviados y fallidos quedan registrados automáticamente.
+            Ver <a href="{{ route('documentacion.show', 'monitor-correos') }}">documentación del Monitor de Correos</a>.</span>
         </div>
     </div>
 
@@ -301,7 +298,7 @@
             @foreach([
                 ['App','APP_KEY, APP_URL, APP_ENV, APP_DEBUG','Configuración base de Laravel'],
                 ['Base de datos','DB_CONNECTION, DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD, MYSQL_ATTR_SSL_CA','Conexión MySQL Flexible Server con SSL'],
-                ['Correo','MAIL_MAILER, MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD, MAIL_ENCRYPTION, MAIL_FROM_ADDRESS, MAIL_FROM_NAME','SMTP Azure Communication Services'],
+                ['Correo','MAIL_MAILER, RESEND_API_KEY, MAIL_FROM_ADDRESS, MAIL_FROM_NAME','Resend API (driver: resend, paquete: resend/resend-php)'],
                 ['Almacenamiento','AZURE_STORAGE_NAME, AZURE_STORAGE_KEY, AZURE_STORAGE_CONTAINER, AZURE_STORAGE_URL, FILESYSTEM_DISK','Azure Blob Storage'],
                 ['Autenticación Google','GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI','OAuth Google via Laravel Socialite'],
                 ['Google APIs','GOOGLE_APPLICATION_CREDENTIALS','Ruta credenciales Google API (Drive, etc.)'],
