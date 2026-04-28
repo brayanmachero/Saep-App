@@ -55,32 +55,48 @@
     </div>
 
     <!-- Filtros -->
+    @php
+        $activeFilters = collect(['buscar', 'estado'])->filter(fn($k) => request($k) !== null && request($k) !== '')->count();
+    @endphp
     <div class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1.5rem;">
-        <form method="GET" action="{{ route('contratacion.index') }}" class="d-flex" style="gap:.75rem;flex-wrap:wrap;align-items:flex-end;">
-            <div style="flex:1;min-width:200px;">
-                <label style="font-size:.78rem;font-weight:600;color:var(--text-muted);margin-bottom:.3rem;display:block;">Buscar</label>
-                <input type="text" name="buscar" class="form-control form-control-sm"
-                    value="{{ request('buscar') }}"
-                    placeholder="Folio, nombre, RUT o correo...">
+        <form method="GET" action="{{ route('contratacion.index') }}">
+            <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;">
+                <i class="bi bi-funnel-fill" style="color:var(--accent-color)"></i>
+                <h3 style="font-size:.85rem;font-weight:600;margin:0;color:var(--text-primary)">Filtros</h3>
+                @if($activeFilters > 0)
+                    <span style="background:var(--accent-color);color:#fff;font-size:.68rem;padding:.1rem .45rem;border-radius:10px;font-weight:700">{{ $activeFilters }} activo{{ $activeFilters > 1 ? 's' : '' }}</span>
+                @endif
             </div>
-            <div style="min-width:160px;">
-                <label style="font-size:.78rem;font-weight:600;color:var(--text-muted);margin-bottom:.3rem;display:block;">Estado</label>
-                <select name="estado" class="form-select form-select-sm">
-                    <option value="">Todos</option>
-                    <option value="pendiente"   {{ request('estado') === 'pendiente'   ? 'selected' : '' }}>Pendiente</option>
-                    <option value="en_revision" {{ request('estado') === 'en_revision' ? 'selected' : '' }}>En Revisión</option>
-                    <option value="aprobado"    {{ request('estado') === 'aprobado'    ? 'selected' : '' }}>Aprobado</option>
-                    <option value="rechazado"   {{ request('estado') === 'rechazado'   ? 'selected' : '' }}>Rechazado</option>
-                </select>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.75rem;margin-bottom:.75rem;">
+                <div>
+                    <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Buscar</label>
+                    <input type="text" name="buscar" class="form-input"
+                        value="{{ request('buscar') }}"
+                        placeholder="Folio, nombre, RUT o correo...">
+                </div>
+                <div>
+                    <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem;">Estado</label>
+                    <select name="estado" class="form-input" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="pendiente"   {{ request('estado') === 'pendiente'   ? 'selected' : '' }}>Pendiente</option>
+                        <option value="en_revision" {{ request('estado') === 'en_revision' ? 'selected' : '' }}>En Revisión</option>
+                        <option value="aprobado"    {{ request('estado') === 'aprobado'    ? 'selected' : '' }}>Aprobado</option>
+                        <option value="rechazado"   {{ request('estado') === 'rechazado'   ? 'selected' : '' }}>Rechazado</option>
+                    </select>
+                </div>
+                <div style="display:flex;align-items:flex-end;gap:.5rem;">
+                    <button type="submit" class="btn-secondary" style="flex:1;">
+                        <i class="bi bi-funnel-fill"></i> Filtrar
+                    </button>
+                </div>
             </div>
-            <div style="display:flex;gap:.5rem;">
-                <button type="submit" class="btn-premium" style="padding:.5rem 1.1rem;font-size:.85rem;">
-                    <i class="bi bi-search"></i> Filtrar
-                </button>
-                <a href="{{ route('contratacion.index') }}" class="btn-ghost" style="padding:.5rem .85rem;font-size:.85rem;">
-                    <i class="bi bi-x-lg"></i>
-                </a>
-            </div>
+            @if($activeFilters > 0)
+                <div>
+                    <a href="{{ route('contratacion.index') }}" style="font-size:.78rem;color:#ef4444;text-decoration:none;display:inline-flex;align-items:center;gap:.25rem;">
+                        <i class="bi bi-x-circle"></i> Limpiar filtros
+                    </a>
+                </div>
+            @endif
         </form>
     </div>
 
