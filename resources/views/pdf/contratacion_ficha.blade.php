@@ -112,23 +112,21 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 
 @php
     // Separar carnet frontal/reverso del resto de documentos
-    // y dentro del resto, separar imágenes de PDFs/ausentes
+    // Solo las imágenes del resto se renderizan; los PDFs se consolidan vía FPDI sin nota
     $carnetFrontal = null;
     $carnetReverso = null;
-    $otrosDocs     = [];
+    $otrosImagen   = [];
     foreach ($documentos as $doc) {
         $ll = strtolower($doc['label']);
         if (str_contains($ll, 'frontal')) {
             $carnetFrontal = $doc;
         } elseif (str_contains($ll, 'reverso')) {
             $carnetReverso = $doc;
-        } else {
-            $otrosDocs[] = $doc;
+        } elseif ($doc['tipo'] === 'imagen') {
+            $otrosImagen[] = $doc;
         }
+        // tipo === 'pdf' → ignorado en template, se consolida al final por el controller
     }
-    // Separar en dos grupos: los que son PDF/ausente (notas inline) y los que son imagen (página completa)
-    $otrosInline  = array_filter($otrosDocs, fn($d) => $d['tipo'] !== 'imagen');
-    $otrosImagen  = array_filter($otrosDocs, fn($d) => $d['tipo'] === 'imagen');
 @endphp
 
 {{-- ═══════════════════════════════════════════════════════════════════ --}}
@@ -160,27 +158,8 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     @endforeach
 
     {{-- ═══════════════════════════════════════════════════════════════════ --}}
-    {{-- PÁGINA 1 (cont.) — Notas de docs PDF/ausentes inline               --}}
-    {{-- Se muestran en la misma página que los carnets, sin salto forzado  --}}
-    {{-- ═══════════════════════════════════════════════════════════════════ --}}
-    @if(!empty($otrosInline))
-        <div class="section-bar" style="margin-top:12px;">
-            <span class="section-title">Otros Documentos</span>
-        </div>
-        @foreach($otrosInline as $doc)
-            <div style="margin: 6px 28px 0;">
-                <div class="doc-label" style="margin-bottom:4px;">{{ $doc['label'] }}</div>
-                @if($doc['tipo'] === 'pdf')
-                    <div class="doc-pdf-note">Documento adjunto en páginas siguientes.</div>
-                @else
-                    <div class="doc-ausente">Documento no subido.</div>
-                @endif
-            </div>
-        @endforeach
-    @endif
-
-    {{-- ═══════════════════════════════════════════════════════════════════ --}}
-    {{-- PÁGINAS 2+ — Solo imágenes, cada una en hoja completa             --}}
+    {{-- PÁGINAS 2+ — Cada imagen ocupa una hoja completa                  --}}
+    {{-- Los PDFs no se muestran aquí, se consolidan al final por FPDI     --}}
     {{-- ═══════════════════════════════════════════════════════════════════ --}}
     @foreach($otrosImagen as $doc)
         <div style="page-break-before: always; margin: 0; padding: 8px 28px 0;">
