@@ -112,6 +112,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 
 @php
     // Separar carnet frontal/reverso del resto de documentos
+    // y dentro del resto, separar imágenes de PDFs/ausentes
     $carnetFrontal = null;
     $carnetReverso = null;
     $otrosDocs     = [];
@@ -125,6 +126,9 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
             $otrosDocs[] = $doc;
         }
     }
+    // Separar en dos grupos: los que son PDF/ausente (notas inline) y los que son imagen (página completa)
+    $otrosInline  = array_filter($otrosDocs, fn($d) => $d['tipo'] !== 'imagen');
+    $otrosImagen  = array_filter($otrosDocs, fn($d) => $d['tipo'] === 'imagen');
 @endphp
 
 {{-- ═══════════════════════════════════════════════════════════════════ --}}
@@ -156,31 +160,36 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     @endforeach
 
     {{-- ═══════════════════════════════════════════════════════════════════ --}}
-    {{-- PÁGINAS 2+ — Imágenes en hoja completa; notas PDF inline          --}}
+    {{-- PÁGINA 1 (cont.) — Notas de docs PDF/ausentes inline               --}}
+    {{-- Se muestran en la misma página que los carnets, sin salto forzado  --}}
     {{-- ═══════════════════════════════════════════════════════════════════ --}}
-    @foreach($otrosDocs as $doc)
-        @if($doc['tipo'] === 'imagen')
-            {{-- Imagen: hoja dedicada completa --}}
-            <div style="page-break-before: always; margin: 0; padding: 8px 28px 0;">
-                <div class="doc-label" style="margin-bottom:8px;">{{ $doc['label'] }}</div>
-                <div style="text-align:center; padding:4px 0;">
-                    <img src="{{ $doc['data'] }}" alt="{{ $doc['label'] }}"
-                         style="max-width:100%; max-height:1020px; width:auto; height:auto;">
-                </div>
-            </div>
-        @elseif($doc['tipo'] === 'pdf')
-            {{-- PDF: sólo nota inline, sin salto de página --}}
-            <div style="margin: 8px 28px 0;">
+    @if(!empty($otrosInline))
+        <div class="section-bar" style="margin-top:12px;">
+            <span class="section-title">Otros Documentos</span>
+        </div>
+        @foreach($otrosInline as $doc)
+            <div style="margin: 6px 28px 0;">
                 <div class="doc-label" style="margin-bottom:4px;">{{ $doc['label'] }}</div>
-                <div class="doc-pdf-note">Documento adjunto en páginas siguientes.</div>
+                @if($doc['tipo'] === 'pdf')
+                    <div class="doc-pdf-note">Documento adjunto en páginas siguientes.</div>
+                @else
+                    <div class="doc-ausente">Documento no subido.</div>
+                @endif
             </div>
-        @else
-            {{-- Ausente: inline sin salto de página --}}
-            <div style="margin: 8px 28px 0;">
-                <div class="doc-label" style="margin-bottom:4px;">{{ $doc['label'] }}</div>
-                <div class="doc-ausente">Documento no subido.</div>
+        @endforeach
+    @endif
+
+    {{-- ═══════════════════════════════════════════════════════════════════ --}}
+    {{-- PÁGINAS 2+ — Solo imágenes, cada una en hoja completa             --}}
+    {{-- ═══════════════════════════════════════════════════════════════════ --}}
+    @foreach($otrosImagen as $doc)
+        <div style="page-break-before: always; margin: 0; padding: 8px 28px 0;">
+            <div class="doc-label" style="margin-bottom:8px;">{{ $doc['label'] }}</div>
+            <div style="text-align:center; padding:4px 0;">
+                <img src="{{ $doc['data'] }}" alt="{{ $doc['label'] }}"
+                     style="max-width:100%; max-height:1020px; width:auto; height:auto;">
             </div>
-        @endif
+        </div>
     @endforeach
 @endif
 
