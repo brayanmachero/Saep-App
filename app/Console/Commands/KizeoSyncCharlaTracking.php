@@ -6,6 +6,7 @@ use App\Models\KizeoCharlaTracking;
 use App\Services\KizeoService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class KizeoSyncCharlaTracking extends Command
@@ -179,6 +180,9 @@ class KizeoSyncCharlaTracking extends Command
             $this->info("  Completados:  {$completed}");
             $this->info("  Transferidos: {$transferred}");
             $this->info("  Pendientes:   {$pending}");
+
+            // Guardar marca de tiempo real de la sincronización
+            Cache::put('charla_tracking_last_sync', now()->toDateTimeString(), now()->addDays(30));
 
             Log::info('kizeo:sync-charla-tracking completado', [
                 'form_id'     => $formId,

@@ -8,13 +8,14 @@ use App\Models\KizeoCharlaTracking;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 
 class CharlaTrackingController extends Controller
 {
     public function index(Request $request)
     {
-        // Filtros
-        $desde  = $request->input('desde', now()->subDays(30)->format('Y-m-d'));
+        // Filtros — por defecto: primer día del mes en curso al día de hoy
+        $desde  = $request->input('desde', now()->startOfMonth()->format('Y-m-d'));
         $hasta  = $request->input('hasta', now()->format('Y-m-d'));
         $estado = $request->input('estado', 'todos');
         $buscar = $request->input('buscar');
@@ -153,7 +154,8 @@ class CharlaTrackingController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        $ultimaSync = KizeoCharlaTracking::max('updated_at');
+        // Última sincronización real (guardada en caché por el comando de sync)
+        $ultimaSync = Cache::get('charla_tracking_last_sync');
 
         return view('charla-tracking.index', compact(
             'desde', 'hasta', 'estado', 'buscar',
