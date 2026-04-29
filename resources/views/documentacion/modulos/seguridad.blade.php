@@ -336,7 +336,7 @@
                     <li>Email de bienvenida con credenciales provisorias</li>
                     <li>Email de restablecimiento con token hasheado</li>
                     <li>Templates profesionales con marca SAEP</li>
-                    <li>Enviados vía Resend (notificaciones@bmachero.com)</li>
+                    <li>Enviados vía Microsoft Graph (notificaciones@saep.cl)</li>
                 </ul>
             </div>
         </div>

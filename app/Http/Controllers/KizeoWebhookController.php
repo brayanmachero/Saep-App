@@ -327,7 +327,7 @@ class KizeoWebhookController extends Controller
             if ($envioActivo === '1' || $envioActivo === 'true') {
                 $destinatariosRaw = Configuracion::get(
                     'kizeo_vehiculos_destinatarios',
-                    config('services.kizeo.notify_email', 'brayan@bmachero.com')
+                    config('services.kizeo.notify_email', 'notificaciones@saep.cl')
                 );
                 $destinatarios = array_filter(array_map('trim', explode(',', $destinatariosRaw)));
 
@@ -507,7 +507,7 @@ class KizeoWebhookController extends Controller
             if ($envioActivo === '1' || $envioActivo === 'true') {
                 $destinatariosRaw = Configuracion::get(
                     'kizeo_charla_sst_destinatarios',
-                    config('services.kizeo.notify_email', 'brayan@bmachero.com')
+                    config('services.kizeo.notify_email', 'notificaciones@saep.cl')
                 );
                 $destinatarios = array_filter(array_map('trim', explode(',', $destinatariosRaw)));
 

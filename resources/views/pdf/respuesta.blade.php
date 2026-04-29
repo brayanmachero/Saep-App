@@ -331,7 +331,7 @@
         </td>
         <td style="text-align:right;width:40%;">
             Verificaci&oacute;n: {{ $hash }}<br>
-            saep.bmachero.com
+            saep.cl
         </td>
     </tr>
 </table>

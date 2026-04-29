@@ -11,7 +11,7 @@ return new class extends Migration
         $rows = [
             [
                 'clave'       => 'kizeo_vehiculos_destinatarios',
-                'valor'       => 'brayan@bmachero.com',
+                'valor'       => 'notificaciones@saep.cl',
                 'tipo'        => 'TEXT',
                 'categoria'   => 'notificaciones',
                 'descripcion' => 'Destinatarios del Acta de Vehículos (separar con coma)',

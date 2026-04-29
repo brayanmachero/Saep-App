@@ -75,7 +75,7 @@
     <tr>
         <td style="background:#0f1b4c;padding:16px 36px;text-align:center;">
             <p style="font-size:11px;color:rgba(255,255,255,0.5);margin:0;">
-                © {{ date('Y') }} SAEP Platform · saep.bmachero.com
+                © {{ date('Y') }} SAEP Platform · saep.cl
             </p>
         </td>
     </tr>

@@ -201,7 +201,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     <div class="ff-divider"></div>
     <div class="ff-row">
         <div class="ff-cell">
-            <span class="ff-legal">Documento generado automáticamente por SAEP Platform &bull; saep.bmachero.com &bull; Información confidencial de uso interno &bull; &copy; {{ date('Y') }} SAEP — Todos los derechos reservados</span>
+            <span class="ff-legal">Documento generado automáticamente por SAEP Platform &bull; saep.cl &bull; Información confidencial de uso interno &bull; &copy; {{ date('Y') }} SAEP — Todos los derechos reservados</span>
         </div>
         <div class="ff-cell ff-right">
             <span class="ff-legal">Generado por: {{ auth()->user()->nombre_completo ?? 'Sistema' }}</span>
