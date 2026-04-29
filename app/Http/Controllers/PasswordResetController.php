@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Mail\PasswordResetMail;
+use App\Models\MailLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
@@ -44,7 +46,12 @@ class PasswordResetController extends Controller
         ]);
 
         // Enviar correo
-        Mail::to($user->email)->send(new PasswordResetMail($user, $token));
+        try {
+            Mail::to($user->email)->send(new PasswordResetMail($user, $token));
+        } catch (\Throwable $e) {
+            MailLog::recordFailed($user->email, 'Restablecer contraseña', $e->getMessage(), 'PasswordResetMail');
+            Log::error('Error enviando PasswordResetMail', ['email' => $user->email, 'error' => $e->getMessage()]);
+        }
 
         return back()->with('status', 'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.');
     }

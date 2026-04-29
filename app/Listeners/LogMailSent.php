@@ -18,14 +18,9 @@ class LogMailSent
             $toEmail = !empty($to) ? $to[0]->getAddress() : 'desconocido';
             $toName  = !empty($to) ? ($to[0]->getName() ?: null) : null;
 
-            // Intentar obtener el nombre corto de la clase Mailable
-            $mailable = null;
-            foreach ($event->data as $value) {
-                if (is_object($value) && $value instanceof \Illuminate\Mail\Mailable) {
-                    $mailable = class_basename($value);
-                    break;
-                }
-            }
+            // Obtener el nombre corto del Mailable desde la clave que Laravel inyecta automáticamente
+            $mailableClass = $event->data['__laravel_mailable'] ?? null;
+            $mailable = $mailableClass ? class_basename($mailableClass) : null;
 
             MailLog::create([
                 'mailable'  => $mailable,

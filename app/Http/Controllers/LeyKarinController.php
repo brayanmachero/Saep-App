@@ -6,9 +6,11 @@ use App\Mail\LeyKarinDenunciaMail;
 use App\Mail\LeyKarinResolucionMail;
 use App\Models\LeyKarin;
 use App\Models\CentroCosto;
+use App\Models\MailLog;
 use App\Models\User;
 use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class LeyKarinController extends Controller
@@ -226,7 +228,12 @@ class LeyKarinController extends Controller
             ->get();
 
         foreach ($admins as $admin) {
-            Mail::to($admin->email)->send(new LeyKarinDenunciaMail($caso));
+            try {
+                Mail::to($admin->email)->send(new LeyKarinDenunciaMail($caso));
+            } catch (\Throwable $e) {
+                MailLog::recordFailed($admin->email, 'Nueva denuncia Ley Karin - Folio ' . $caso->folio, $e->getMessage(), 'LeyKarinDenunciaMail');
+                Log::error('Error enviando LeyKarinDenunciaMail', ['email' => $admin->email, 'folio' => $caso->folio, 'error' => $e->getMessage()]);
+            }
             $admin->notify(new AppNotification(
                 'Nueva denuncia Ley Karin',
                 'Folio ' . $caso->folio,
@@ -249,7 +256,12 @@ class LeyKarinController extends Controller
 
         if ($email) {
             $leyKarin->load('centroCosto');
-            Mail::to($email)->send(new LeyKarinResolucionMail($leyKarin));
+            try {
+                Mail::to($email)->send(new LeyKarinResolucionMail($leyKarin));
+            } catch (\Throwable $e) {
+                MailLog::recordFailed($email, 'Resolución denuncia - Folio ' . $leyKarin->folio, $e->getMessage(), 'LeyKarinResolucionMail');
+                Log::error('Error enviando LeyKarinResolucionMail', ['email' => $email, 'folio' => $leyKarin->folio, 'error' => $e->getMessage()]);
+            }
             $leyKarin->denunciante?->notify(new AppNotification(
                 'Resolución de denuncia',
                 'Tu denuncia ' . $leyKarin->folio . ' tiene resolución',

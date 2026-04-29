@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\ContratacionAcuseReciboMail;
 use App\Mail\ContratacionNuevoPostulanteMail;
 use App\Models\Configuracion;
+use App\Models\MailLog;
 use App\Models\PostulanteContratacion;
 use App\Services\OneDriveService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -144,7 +145,10 @@ class ContratacionPublicoController extends Controller
             // Acuse al postulante
             try {
                 Mail::to($postulante->email)->send(new ContratacionAcuseReciboMail($postulante));
-            } catch (\Exception) {}
+            } catch (\Throwable $e) {
+                MailLog::recordFailed($postulante->email, 'Acuse recibo postulación - Folio ' . $postulante->folio, $e->getMessage(), 'ContratacionAcuseReciboMail');
+                Log::error('Error enviando ContratacionAcuseReciboMail', ['email' => $postulante->email, 'folio' => $postulante->folio, 'error' => $e->getMessage()]);
+            }
 
             // Notificación a destinatarios configurados
             $this->notificarRrhh($postulante);
@@ -508,7 +512,10 @@ class ContratacionPublicoController extends Controller
             if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 try {
                     Mail::to($email)->send(new ContratacionNuevoPostulanteMail($postulante));
-                } catch (\Exception) {}
+                } catch (\Throwable $e) {
+                    MailLog::recordFailed($email, 'Nuevo postulante - Folio ' . $postulante->folio, $e->getMessage(), 'ContratacionNuevoPostulanteMail');
+                    Log::error('Error enviando ContratacionNuevoPostulanteMail', ['email' => $email, 'folio' => $postulante->folio, 'error' => $e->getMessage()]);
+                }
             }
         }
     }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\RespuestaAprobadaMail;
 use App\Mail\RespuestaCreadaMail;
 use App\Mail\RespuestaFormularioMail;
+use App\Models\MailLog;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\FormularioCampoOpcion;
 use App\Models\Formulario;
@@ -12,6 +13,7 @@ use App\Models\Respuesta;
 use App\Models\User;
 use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -122,7 +124,12 @@ class RespuestaController extends Controller
         if ($respuesta->estado === 'Pendiente' && $formulario->requiere_aprobacion && $formulario->aprobador_rol_id) {
             $aprobadores = User::where('rol_id', $formulario->aprobador_rol_id)->where('activo', true)->get();
             foreach ($aprobadores as $ap) {
-                Mail::to($ap->email)->send(new RespuestaCreadaMail($respuesta));
+                try {
+                    Mail::to($ap->email)->send(new RespuestaCreadaMail($respuesta));
+                } catch (\Throwable $e) {
+                    MailLog::recordFailed($ap->email, 'Nuevo formulario pendiente: ' . $formulario->nombre, $e->getMessage(), 'RespuestaCreadaMail');
+                    Log::error('Error enviando RespuestaCreadaMail', ['email' => $ap->email, 'respuesta_id' => $respuesta->id, 'error' => $e->getMessage()]);
+                }
                 $ap->notify(new AppNotification(
                     'Nuevo formulario pendiente',
                     auth()->user()->name . ' envió ' . $formulario->nombre,
@@ -163,7 +170,12 @@ class RespuestaController extends Controller
             }
 
             foreach (array_unique($emailsDestinatarios) as $email) {
-                Mail::to($email)->send(new RespuestaFormularioMail($respuesta, $pdfContent, $pdfFilename));
+                try {
+                    Mail::to($email)->send(new RespuestaFormularioMail($respuesta, $pdfContent, $pdfFilename));
+                } catch (\Throwable $e) {
+                    MailLog::recordFailed($email, 'Confirmación formulario: ' . $formulario->nombre, $e->getMessage(), 'RespuestaFormularioMail');
+                    Log::error('Error enviando RespuestaFormularioMail (store)', ['email' => $email, 'respuesta_id' => $respuesta->id, 'error' => $e->getMessage()]);
+                }
             }
         }
 
@@ -208,7 +220,12 @@ class RespuestaController extends Controller
         }
 
         foreach (array_unique($emailsDestinatarios) as $email) {
-            Mail::to($email)->send(new RespuestaFormularioMail($respuesta, $pdfContent, $pdfFilename));
+            try {
+                Mail::to($email)->send(new RespuestaFormularioMail($respuesta, $pdfContent, $pdfFilename));
+            } catch (\Throwable $e) {
+                MailLog::recordFailed($email, 'Reenvío formulario: ' . $formulario->nombre, $e->getMessage(), 'RespuestaFormularioMail');
+                Log::error('Error enviando RespuestaFormularioMail (reenviar)', ['email' => $email, 'respuesta_id' => $respuesta->id, 'error' => $e->getMessage()]);
+            }
         }
 
         return back()->with('success', 'Correo reenviado correctamente a ' . implode(', ', array_unique($emailsDestinatarios)) . '.');
@@ -331,7 +348,12 @@ class RespuestaController extends Controller
 
         // Notify requester when approved or rejected
         if (in_array($request->estado, ['Aprobado', 'Rechazado']) && $respuesta->usuario?->email) {
-            Mail::to($respuesta->usuario->email)->send(new RespuestaAprobadaMail($respuesta->fresh(['formulario', 'aprobaciones.aprobador'])));
+            try {
+                Mail::to($respuesta->usuario->email)->send(new RespuestaAprobadaMail($respuesta->fresh(['formulario', 'aprobaciones.aprobador'])));
+            } catch (\Throwable $e) {
+                MailLog::recordFailed($respuesta->usuario->email, 'Solicitud ' . $request->estado . ': ' . $respuesta->formulario->nombre, $e->getMessage(), 'RespuestaAprobadaMail');
+                Log::error('Error enviando RespuestaAprobadaMail (cambiarEstado)', ['email' => $respuesta->usuario->email, 'respuesta_id' => $respuesta->id, 'error' => $e->getMessage()]);
+            }
             $respuesta->usuario->notify(new AppNotification(
                 'Solicitud ' . strtolower($request->estado),
                 $respuesta->formulario->nombre . ' fue ' . strtolower($request->estado),
@@ -373,9 +395,14 @@ class RespuestaController extends Controller
             ]);
 
             if ($resp->usuario?->email) {
-                Mail::to($resp->usuario->email)->send(
-                    new RespuestaAprobadaMail($resp->fresh(['formulario', 'aprobaciones.aprobador']))
-                );
+                try {
+                    Mail::to($resp->usuario->email)->send(
+                        new RespuestaAprobadaMail($resp->fresh(['formulario', 'aprobaciones.aprobador']))
+                    );
+                } catch (\Throwable $e) {
+                    MailLog::recordFailed($resp->usuario->email, 'Solicitud ' . $request->estado . ': ' . $resp->formulario->nombre, $e->getMessage(), 'RespuestaAprobadaMail');
+                    Log::error('Error enviando RespuestaAprobadaMail (bulkEstado)', ['email' => $resp->usuario->email, 'respuesta_id' => $resp->id, 'error' => $e->getMessage()]);
+                }
                 $resp->usuario->notify(new AppNotification(
                     'Solicitud ' . strtolower($request->estado),
                     $resp->formulario->nombre . ' fue ' . strtolower($request->estado),

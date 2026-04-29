@@ -8,9 +8,11 @@ use App\Models\ArchivoAdjunto;
 use App\Models\CentroCosto;
 use App\Models\LeyKarin;
 use App\Models\LeyKarinLog;
+use App\Models\MailLog;
 use App\Models\User;
 use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
@@ -167,8 +169,9 @@ class LeyKarinPublicoController extends Controller
         // Acuse de recibo al denunciante
         try {
             Mail::to($googleUser['email'])->send(new LeyKarinAcuseReciboMail($caso));
-        } catch (\Exception $e) {
-            // No bloquear el flujo si falla el email
+        } catch (\Throwable $e) {
+            MailLog::recordFailed($googleUser['email'], 'Acuse recibo denuncia - Folio ' . $caso->folio, $e->getMessage(), 'LeyKarinAcuseReciboMail');
+            Log::error('Error enviando LeyKarinAcuseReciboMail', ['email' => $googleUser['email'], 'folio' => $caso->folio, 'error' => $e->getMessage()]);
         }
 
         // Limpiar sesión de Google después de enviar
@@ -203,7 +206,12 @@ class LeyKarinPublicoController extends Controller
             ->get();
 
         foreach ($admins as $admin) {
-            Mail::to($admin->email)->send(new LeyKarinDenunciaMail($caso));
+            try {
+                Mail::to($admin->email)->send(new LeyKarinDenunciaMail($caso));
+            } catch (\Throwable $e) {
+                MailLog::recordFailed($admin->email, 'Nueva denuncia Ley Karin - Folio ' . $caso->folio, $e->getMessage(), 'LeyKarinDenunciaMail');
+                Log::error('Error enviando LeyKarinDenunciaMail (público)', ['email' => $admin->email, 'folio' => $caso->folio, 'error' => $e->getMessage()]);
+            }
             $admin->notify(new AppNotification(
                 'Nueva denuncia Ley Karin',
                 'Folio ' . $caso->folio,
