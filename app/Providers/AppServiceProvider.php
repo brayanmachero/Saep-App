@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 use App\Listeners\LogMailSent;
+use App\Mail\Transport\GraphTransport;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
 use League\Flysystem\AzureBlobStorage\AzureBlobStorageAdapter;
@@ -29,6 +31,16 @@ class AppServiceProvider extends ServiceProvider
     {
         // ── Listener global: loguear todos los mails enviados ─────
         Event::listen(MessageSent::class, LogMailSent::class);
+
+        // ── Transporte Microsoft Graph (Mail.Send via Azure AD) ───
+        Mail::extend('graph', function () {
+            return new GraphTransport(
+                tenantId:     config('services.msgraph.tenant_id'),
+                clientId:     config('services.msgraph.client_id'),
+                clientSecret: config('services.msgraph.client_secret'),
+                fromEmail:    config('mail.from.address'),
+            );
+        });
 
         Storage::extend('azure', function ($app, $config) {
             $connectionString = sprintf(
