@@ -174,9 +174,29 @@ class KizeoSyncCharlaTracking extends Command
                 }
             }
 
+            // === Eliminar registros huérfanos (existen en BD pero ya no en Kizeo) ===
+            // Kizeo puede eliminar o reasignar registros; sin este paso los datos quedan
+            // "fantasma" en SAEP aunque el usuario ya no los vea en Kizeo.
+            $kizeoIds = array_map(fn($r) => (string) ($r['_id'] ?? ''), $records);
+            $kizeoIds = array_filter($kizeoIds); // quitar vacíos
+
+            $deleted = KizeoCharlaTracking::where('kizeo_form_id', $formId)
+                ->where('fecha_creacion', '>=', $desde)
+                ->whereNotIn('kizeo_data_id', $kizeoIds)
+                ->delete();
+
+            if ($deleted > 0) {
+                $this->warn("  Eliminados (ya no existen en Kizeo): {$deleted}");
+                Log::info('kizeo:sync-charla-tracking — registros huérfanos eliminados', [
+                    'form_id' => $formId,
+                    'deleted' => $deleted,
+                ]);
+            }
+
             $this->info("Sincronización completada:");
             $this->info("  Nuevos:       {$created}");
             $this->info("  Actualizados: {$updated}");
+            $this->info("  Eliminados:   {$deleted}");
             $this->info("  Completados:  {$completed}");
             $this->info("  Transferidos: {$transferred}");
             $this->info("  Pendientes:   {$pending}");
