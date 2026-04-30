@@ -113,6 +113,11 @@ class KizeoWebhookController extends Controller
                 return $this->handleDeclaracionIncidente($formId, $dataId, $payload, $request->ip());
             }
 
+            $cphsFormId = config('services.kizeo.cphs_form_id');
+            if ($cphsFormId && $formId == $cphsFormId) {
+                return $this->handleReunionCphs($formId, $dataId, $payload, $request->ip());
+            }
+
             Log::info("Webhook recibido para formulario no registrado", ['formId' => $formId]);
             WebhookLog::logIgnored(['origen' => 'kizeo', 'form_id' => $formId, 'data_id' => $dataId, 'tipo' => 'no_registrado', 'resumen' => "FormId {$formId} sin handler configurado", 'ip' => $request->ip()]);
             return response()->json(['status' => 'ignored', 'message' => "FormId {$formId} no tiene handler configurado"], 200);
@@ -1279,6 +1284,154 @@ class KizeoWebhookController extends Controller
                 'data_id'       => $dataId,
                 'tipo'          => 'declaracion_incidente',
                 'resumen'       => 'Error al procesar Declaración de Incidente',
+                'error_message' => $e->getMessage(),
+                'ip'            => $ip,
+            ]);
+            return response()->json(['status' => 'error', 'message' => 'Internal processing error'], 500);
+        }
+    }
+
+    /**
+     * Handler para formulario PDR Reunión CPHS (Form 1121217).
+     * Descarga el PDF generado por Kizeo y lo sube a SharePoint.
+     *
+     * Campos clave: fecha_y_hora_reunion, mes_de_reunion, centro_de_trabajo,
+     * duracion_de_reunion, asistentes (tabla), temas_tratados_en_reunion_act,
+     * compromisos_proxima_reunion, nombre_presidente, nombre_secretario.
+     */
+    private function handleReunionCphs(string $formId, string $dataId, array $payload, ?string $ip = null)
+    {
+        try {
+            $record     = $this->kizeo->getRecord($formId, $dataId);
+            $fields     = $record['fields'] ?? [];
+            $recordMeta = $record ?? [];
+
+            $getVal = function (string $key) use ($fields) {
+                if (!isset($fields[$key])) return '-';
+                $field = $fields[$key];
+                $res = $field['result'] ?? $field['value'] ?? $field;
+                if ($res === null) return '-';
+                if (is_string($res)) return $res;
+                if (isset($res['value'])) {
+                    $val = $res['value'];
+                    if (is_array($val) && isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
+                    if (is_array($val) && isset($val['date'])) return $val['date'];
+                    if (is_string($val)) return $val;
+                    if (is_bool($val)) return $val ? 'Sí' : 'No';
+                }
+                return is_string($res) ? $res : '-';
+            };
+
+            // Extraer campos principales
+            $fechaHora   = $getVal('fecha_y_hora_reunion');
+            $mes         = $getVal('mes_de_reunion');
+            $centro      = $getVal('centro_de_trabajo');
+            $duracion    = $getVal('duracion_de_reunion');
+            $presidente  = $getVal('nombre_presidente');
+            $secretario  = $getVal('nombre_secretario');
+            $temas       = $getVal('temas_tratados_en_reunion_act');
+
+            // Fallback de fecha desde metadatos del registro
+            if ($fechaHora === '-') {
+                $fechaHora = $recordMeta['answer_time'] ?? $recordMeta['_answer_time'] ?? date('Y-m-d');
+            }
+            if ($presidente === '-') {
+                $presidente = trim(($recordMeta['first_name'] ?? '') . ' ' . ($recordMeta['last_name'] ?? ''));
+                if (!$presidente || trim($presidente) === '') {
+                    $presidente = $recordMeta['user_name'] ?? 'Desconocido';
+                }
+            }
+            if ($centro === '-') $centro = 'Sin Centro';
+            if ($mes === '-')    $mes    = date('m');
+
+            // Slug de fecha limpio (YYYY-MM-DD)
+            $fechaSlug = preg_replace('/[^0-9-]/', '', substr($fechaHora, 0, 10));
+            if (!$fechaSlug) $fechaSlug = date('Y-m-d');
+
+            // Componentes de fecha para estructura de carpetas
+            $ts = strtotime($fechaSlug) ?: time();
+            $anio   = date('Y', $ts);
+            $mesNum = date('m', $ts);
+            $meses  = ['01'=>'Enero','02'=>'Febrero','03'=>'Marzo','04'=>'Abril','05'=>'Mayo','06'=>'Junio',
+                       '07'=>'Julio','08'=>'Agosto','09'=>'Septiembre','10'=>'Octubre','11'=>'Noviembre','12'=>'Diciembre'];
+            $mesNombre = "{$mesNum} - " . ($meses[$mesNum] ?? $mesNum);
+
+            $sanitize = fn($v) => trim(preg_replace('/[\\\\\/\:*?"<>|]/u', '', $v)) ?: 'Sin especificar';
+
+            $centroFolder = $sanitize($centro);
+
+            Log::info("Procesando Reunión CPHS", [
+                'formId'     => $formId,
+                'dataId'     => $dataId,
+                'fecha'      => $fechaHora,
+                'mes'        => $mes,
+                'centro'     => $centro,
+                'presidente' => $presidente,
+            ]);
+
+            // Descargar PDF generado por Kizeo
+            $pdfContent = $this->kizeo->downloadPdf($formId, $dataId);
+
+            if (!$pdfContent || strlen($pdfContent) < 100) {
+                Log::warning('PDF de Reunión CPHS vacío o inválido', ['size' => strlen($pdfContent ?? '')]);
+                return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
+            }
+
+            // Nombre: 2026-04-30 - Reunión CPHS - Centro Santiago (Abril).pdf
+            $centroClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $centro);
+            $mesLabel    = $meses[$mesNum] ?? $mesNum;
+            $filename    = "{$fechaSlug} - Reunion CPHS - " . substr(trim($centroClean), 0, 50) . " ({$mesLabel}).pdf";
+
+            // Estructura SharePoint: Reuniones CPHS / 2026 / 04 - Abril / Centro Santiago / archivo.pdf
+            $sharepointPath = null;
+            try {
+                $oneDrive = app(OneDriveService::class);
+                if ($oneDrive->isConfigured()) {
+                    $rootFolder = config('services.kizeo.cphs_sharepoint_folder', 'Reuniones CPHS');
+                    $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$centroFolder}/{$filename}";
+                    $oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', true);
+                    $sharepointPath = $remotePath;
+                    Log::info("Reunión CPHS subida a SharePoint", ['path' => $remotePath]);
+                } else {
+                    Log::warning('SharePoint no configurado, PDF de Reunión CPHS no se pudo subir');
+                }
+            } catch (\Throwable $e) {
+                Log::warning('SharePoint upload de Reunión CPHS falló (no crítico): ' . $e->getMessage());
+            }
+
+            // Registrar en webhook_logs
+            WebhookLog::logSuccess([
+                'origen'          => 'kizeo',
+                'form_id'         => $formId,
+                'data_id'         => $dataId,
+                'tipo'            => 'reunion_cphs',
+                'resumen'         => "Reunión CPHS - {$centro} ({$mesLabel} {$anio})",
+                'archivo'         => $filename,
+                'sharepoint_path' => $sharepointPath,
+                'email_enviado'   => false,
+                'destinatarios'   => [],
+                'metadata'        => [
+                    'centro'      => $centro,
+                    'mes'         => $mes,
+                    'fecha'       => $fechaHora,
+                    'duracion'    => $duracion,
+                    'presidente'  => $presidente,
+                    'secretario'  => $secretario,
+                    'temas'       => substr($temas, 0, 200),
+                ],
+                'ip' => $ip,
+            ]);
+
+            return response()->json(['status' => 'success', 'message' => 'Reunión CPHS procesada correctamente']);
+
+        } catch (\Throwable $e) {
+            Log::error('Error en Kizeo Webhook (Reunión CPHS): ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            WebhookLog::logError([
+                'origen'        => 'kizeo',
+                'form_id'       => $formId,
+                'data_id'       => $dataId,
+                'tipo'          => 'reunion_cphs',
+                'resumen'       => 'Error al procesar Reunión CPHS',
                 'error_message' => $e->getMessage(),
                 'ip'            => $ip,
             ]);
