@@ -184,7 +184,7 @@ class OneDriveService
         $url = "https://graph.microsoft.com/v1.0/sites/{$siteId}/drive/root:/{$fullPath}:/createUploadSession";
 
         $session = Http::withToken($token)->post($url, [
-            'item' => ['@microsoft.graph.conflictBehavior' => 'rename'],
+            'item' => ['@microsoft.graph.conflictBehavior' => 'replace'],
         ]);
 
         if ($session->failed()) {
