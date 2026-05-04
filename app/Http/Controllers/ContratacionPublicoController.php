@@ -85,27 +85,38 @@ class ContratacionPublicoController extends Controller
                 ->with('error', 'Sesión expirada. Inicia sesión con Google nuevamente.');
         }
 
-        $request->validate([
+        // Buscar postulación existente ANTES de validar para aplicar reglas condicionales
+        $postulante = PostulanteContratacion::where('google_id', $googleUser['id'])->first();
+        $esNuevo    = !$postulante;
+
+        // Documentos obligatorios: required si no existe registro previo O si aún no han sido subidos
+        $requeridosObligatorios = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa'];
+        $docRules = [];
+        foreach ($requeridosObligatorios as $campo) {
+            $yaTiene = $postulante && !empty($postulante->$campo);
+            $docRules[$campo] = ($yaTiene ? 'nullable' : 'required') . '|file|mimes:jpg,jpeg,png,pdf|max:5120';
+        }
+        $docRules['licencia_conducir'] = 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120';
+
+        $request->validate(array_merge([
             'nombre' => 'required|string|max:200',
             'rut'    => ['required', 'string', 'max:20', function ($attr, $val, $fail) {
                 if (!PostulanteContratacion::validarRut($val)) {
                     $fail('El RUT ingresado no es válido.');
                 }
             }],
-            'carnet_frontal'     => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
-            'carnet_reverso'     => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
-            'certificado_afp'    => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
-            'certificado_fonasa' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
-            'licencia_conducir'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
+        ], $docRules), [
+            'carnet_frontal.required'     => 'El Carnet de Identidad (Frontal) es obligatorio.',
+            'carnet_reverso.required'     => 'El Carnet de Identidad (Reverso) es obligatorio.',
+            'certificado_afp.required'    => 'El Certificado AFP es obligatorio.',
+            'certificado_fonasa.required' => 'El Certificado FONASA es obligatorio.',
+            '*.mimes'                     => 'Solo se permiten archivos JPG, PNG o PDF.',
+            '*.max'                       => 'El archivo no puede superar los 5 MB.',
         ]);
 
         $rutLimpio = preg_replace('/[^0-9kK]/', '', strtoupper($request->rut));
         $rutFormateado = PostulanteContratacion::formatearRut($rutLimpio);
         $rutCarpeta    = strtolower(preg_replace('/\./', '', $rutLimpio));
-
-        // Buscar postulación existente de este Google user
-        $postulante = PostulanteContratacion::where('google_id', $googleUser['id'])->first();
-        $esNuevo    = !$postulante;
 
         $datos = [
             'nombre'      => $request->nombre,
