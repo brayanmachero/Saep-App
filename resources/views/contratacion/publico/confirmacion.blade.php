@@ -107,11 +107,12 @@
         <h3><i class="bi bi-folder2-open"></i> Estado de tus Documentos</h3>
         @php
             $docsLabels = [
-                'carnet_frontal'     => 'Carnet (Frontal)',
-                'carnet_reverso'     => 'Carnet (Reverso)',
-                'certificado_afp'    => 'Certificado AFP',
-                'certificado_fonasa' => 'Certificado FONASA',
-                'licencia_conducir'  => 'Licencia de Conducir',
+                'carnet_frontal'            => 'Carnet (Frontal)',
+                'carnet_reverso'            => 'Carnet (Reverso)',
+                'certificado_afp'           => 'Certificado AFP',
+                'certificado_fonasa'        => 'Certificado FONASA',
+                'licencia_conducir_frontal' => 'Lic. Conducir (Frontal)',
+                'licencia_conducir_reverso' => 'Lic. Conducir (Reverso)',
             ];
         @endphp
         @foreach($docsLabels as $campo => $label)
@@ -121,7 +122,7 @@
             <span>{{ $label }}</span>
         </div>
         @else
-        @if($campo !== 'licencia_conducir')
+        @if($campo !== 'licencia_conducir_frontal' && $campo !== 'licencia_conducir_reverso')
         <div class="doc-item missing">
             <i class="bi bi-clock-history"></i>
             <span>{{ $label }} — Pendiente de subir</span>

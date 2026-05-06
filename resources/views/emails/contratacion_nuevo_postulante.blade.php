@@ -64,11 +64,12 @@
 
             @php
             $docsLabels = [
-                'carnet_frontal'     => ['label' => 'Carnet (Frontal)',  'required' => true],
-                'carnet_reverso'     => ['label' => 'Carnet (Reverso)',  'required' => true],
-                'certificado_afp'    => ['label' => 'AFP',               'required' => true],
-                'certificado_fonasa' => ['label' => 'FONASA',            'required' => true],
-                'licencia_conducir'  => ['label' => 'Lic. Conducir',     'required' => false],
+                'carnet_frontal'            => ['label' => 'Carnet (Frontal)',          'required' => true],
+                'carnet_reverso'            => ['label' => 'Carnet (Reverso)',          'required' => true],
+                'certificado_afp'           => ['label' => 'AFP',                       'required' => true],
+                'certificado_fonasa'        => ['label' => 'FONASA',                    'required' => true],
+                'licencia_conducir_frontal' => ['label' => 'Lic. Conducir (Frontal)',   'required' => false],
+                'licencia_conducir_reverso' => ['label' => 'Lic. Conducir (Reverso)',   'required' => false],
             ];
             @endphp
             @foreach($docsLabels as $campo => $info)

@@ -55,11 +55,12 @@
             <p style="font-size:13px;font-weight:700;color:#374151;margin:0 0 12px;">Estado de documentos:</p>
             @php
             $docsLabels = [
-                'carnet_frontal'     => 'Carnet (Frontal)',
-                'carnet_reverso'     => 'Carnet (Reverso)',
-                'certificado_afp'    => 'Certificado AFP',
-                'certificado_fonasa' => 'Certificado FONASA',
-                'licencia_conducir'  => 'Licencia de Conducir',
+                'carnet_frontal'            => 'Carnet (Frontal)',
+                'carnet_reverso'            => 'Carnet (Reverso)',
+                'certificado_afp'           => 'Certificado AFP',
+                'certificado_fonasa'        => 'Certificado FONASA',
+                'licencia_conducir_frontal' => 'Lic. Conducir (Frontal)',
+                'licencia_conducir_reverso' => 'Lic. Conducir (Reverso)',
             ];
             @endphp
             @foreach($docsLabels as $campo => $label)
@@ -69,7 +70,7 @@
                     <td style="text-align:right;">
                         @if($postulante->$campo)
                         <span style="font-size:11px;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:4px;font-weight:700;">✓ Subido</span>
-                        @elseif($campo !== 'licencia_conducir')
+                        @elseif($campo !== 'licencia_conducir_frontal' && $campo !== 'licencia_conducir_reverso')
                         <span style="font-size:11px;background:#fefce8;color:#854d0e;padding:2px 8px;border-radius:4px;font-weight:700;">Pendiente</span>
                         @else
                         <span style="font-size:11px;background:#f3f4f6;color:#9ca3af;padding:2px 8px;border-radius:4px;">No aplica</span>

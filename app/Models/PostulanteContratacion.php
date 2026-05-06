@@ -12,7 +12,8 @@ class PostulanteContratacion extends Model
         'folio', 'nombre', 'rut', 'email',
         'google_id', 'google_name', 'google_avatar',
         'carnet_frontal', 'carnet_reverso',
-        'certificado_afp', 'certificado_fonasa', 'licencia_conducir',
+        'certificado_afp', 'certificado_fonasa',
+        'licencia_conducir_frontal', 'licencia_conducir_reverso',
         'estado', 'observaciones',
     ];
 
@@ -57,11 +58,12 @@ class PostulanteContratacion extends Model
     {
         $docs = [];
         $campos = [
-            'carnet_frontal'    => 'Carnet (Frontal)',
-            'carnet_reverso'    => 'Carnet (Reverso)',
-            'certificado_afp'   => 'Certificado AFP',
-            'certificado_fonasa'=> 'Certificado FONASA',
-            'licencia_conducir' => 'Licencia de Conducir',
+            'carnet_frontal'             => 'Carnet (Frontal)',
+            'carnet_reverso'             => 'Carnet (Reverso)',
+            'certificado_afp'            => 'Certificado AFP',
+            'certificado_fonasa'         => 'Certificado FONASA',
+            'licencia_conducir_frontal'  => 'Licencia de Conducir (Frontal)',
+            'licencia_conducir_reverso'  => 'Licencia de Conducir (Reverso)',
         ];
         foreach ($campos as $campo => $label) {
             if ($this->$campo) {

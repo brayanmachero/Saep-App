@@ -112,11 +112,12 @@
 
                     @php
                     $documentos = [
-                        'carnet_frontal'     => ['label' => 'Carnet de Identidad (Frontal)', 'icon' => 'bi-credit-card-fill', 'color' => '#0ea5e9'],
-                        'carnet_reverso'     => ['label' => 'Carnet de Identidad (Reverso)', 'icon' => 'bi-credit-card-2-back-fill', 'color' => '#0ea5e9'],
-                        'certificado_afp'    => ['label' => 'Certificado de AFP',             'icon' => 'bi-file-earmark-text-fill', 'color' => '#8b5cf6'],
-                        'certificado_fonasa' => ['label' => 'Certificado FONASA',             'icon' => 'bi-heart-pulse-fill', 'color' => '#22c55e'],
-                        'licencia_conducir'  => ['label' => 'Licencia de Conducir',           'icon' => 'bi-car-front-fill', 'color' => '#f59e0b'],
+                        'carnet_frontal'            => ['label' => 'Carnet de Identidad (Frontal)', 'icon' => 'bi-credit-card-fill',        'color' => '#0ea5e9'],
+                        'carnet_reverso'            => ['label' => 'Carnet de Identidad (Reverso)', 'icon' => 'bi-credit-card-2-back-fill', 'color' => '#0ea5e9'],
+                        'certificado_afp'           => ['label' => 'Certificado de AFP',             'icon' => 'bi-file-earmark-text-fill',  'color' => '#8b5cf6'],
+                        'certificado_fonasa'        => ['label' => 'Certificado FONASA',             'icon' => 'bi-heart-pulse-fill',        'color' => '#22c55e'],
+                        'licencia_conducir_frontal' => ['label' => 'Licencia de Conducir (Frontal)', 'icon' => 'bi-car-front-fill',          'color' => '#f59e0b'],
+                        'licencia_conducir_reverso' => ['label' => 'Licencia de Conducir (Reverso)', 'icon' => 'bi-car-front-fill',          'color' => '#f59e0b'],
                     ];
                     @endphp
 

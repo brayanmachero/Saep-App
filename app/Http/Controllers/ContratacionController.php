@@ -73,11 +73,12 @@ class ContratacionController extends Controller
                 }
             }],
             'email'              => 'required|email|max:200',
-            'carnet_frontal'     => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'carnet_reverso'     => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'certificado_afp'    => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'certificado_fonasa' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'licencia_conducir'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'carnet_frontal'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'carnet_reverso'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'certificado_afp'            => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'certificado_fonasa'         => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'licencia_conducir_frontal'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'licencia_conducir_reverso'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
         ]);
 
         $rutLimpio     = preg_replace('/[^0-9kK]/', '', strtoupper($request->rut));
@@ -90,7 +91,7 @@ class ContratacionController extends Controller
             'email'  => $request->email,
         ];
 
-        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir'];
+        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
         foreach ($camposDocs as $campo) {
             if ($request->hasFile($campo)) {
                 $ext  = $request->file($campo)->getClientOriginalExtension();
@@ -184,17 +185,18 @@ class ContratacionController extends Controller
     public function updateDocumentos(Request $request, PostulanteContratacion $postulante)
     {
         $request->validate([
-            'carnet_frontal'     => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'carnet_reverso'     => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'certificado_afp'    => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'certificado_fonasa' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'licencia_conducir'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'carnet_frontal'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'carnet_reverso'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'certificado_afp'            => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'certificado_fonasa'         => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'licencia_conducir_frontal'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'licencia_conducir_reverso'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
         ]);
 
         $rutLimpio  = preg_replace('/[^0-9kK]/', '', strtoupper($postulante->rut));
         $rutCarpeta = strtolower(preg_replace('/\./', '', $rutLimpio));
 
-        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir'];
+        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
         $actualizado = false;
         foreach ($camposDocs as $campo) {
             if ($request->hasFile($campo)) {
@@ -232,7 +234,7 @@ class ContratacionController extends Controller
     // ─── Descargar un documento ───────────────────────────────────
     public function descargarDocumento(PostulanteContratacion $postulante, string $campo)
     {
-        $camposPermitidos = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir'];
+        $camposPermitidos = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
         if (!in_array($campo, $camposPermitidos)) {
             abort(404);
         }
@@ -288,7 +290,7 @@ class ContratacionController extends Controller
         $sheet->setTitle('Postulantes');
 
         // Encabezados
-        $headers = ['Folio', 'Nombre', 'RUT', 'Email', 'Estado', 'Carnet F.', 'Carnet R.', 'AFP', 'FONASA', 'Licencia', 'Fecha'];
+        $headers = ['Folio', 'Nombre', 'RUT', 'Email', 'Estado', 'Carnet F.', 'Carnet R.', 'AFP', 'FONASA', 'Lic. Frontal', 'Lic. Reverso', 'Fecha'];
         foreach ($headers as $i => $h) {
             $sheet->setCellValue([$i + 1, 1], $h);
         }
@@ -301,16 +303,17 @@ class ContratacionController extends Controller
             $sheet->setCellValue([3,  $row], $p->rut);
             $sheet->setCellValue([4,  $row], $p->email);
             $sheet->setCellValue([5,  $row], $p->estado_label);
-            $sheet->setCellValue([6,  $row], $p->carnet_frontal     ? 'Sí' : 'No');
-            $sheet->setCellValue([7,  $row], $p->carnet_reverso     ? 'Sí' : 'No');
-            $sheet->setCellValue([8,  $row], $p->certificado_afp    ? 'Sí' : 'No');
-            $sheet->setCellValue([9,  $row], $p->certificado_fonasa ? 'Sí' : 'No');
-            $sheet->setCellValue([10, $row], $p->licencia_conducir  ? 'Sí' : 'No');
-            $sheet->setCellValue([11, $row], $p->created_at->format('d/m/Y H:i'));
+            $sheet->setCellValue([6,  $row], $p->carnet_frontal              ? 'Sí' : 'No');
+            $sheet->setCellValue([7,  $row], $p->carnet_reverso              ? 'Sí' : 'No');
+            $sheet->setCellValue([8,  $row], $p->certificado_afp             ? 'Sí' : 'No');
+            $sheet->setCellValue([9,  $row], $p->certificado_fonasa          ? 'Sí' : 'No');
+            $sheet->setCellValue([10, $row], $p->licencia_conducir_frontal   ? 'Sí' : 'No');
+            $sheet->setCellValue([11, $row], $p->licencia_conducir_reverso   ? 'Sí' : 'No');
+            $sheet->setCellValue([12, $row], $p->created_at->format('d/m/Y H:i'));
         }
 
         // Autowidth
-        foreach (range(1, 11) as $col) {
+        foreach (range(1, 12) as $col) {
             $sheet->getColumnDimensionByColumn($col)->setAutoSize(true);
         }
 
@@ -330,7 +333,7 @@ class ContratacionController extends Controller
         }
 
         // Eliminar archivos del storage
-        $campos = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir'];
+        $campos = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
         foreach ($campos as $campo) {
             if (!empty($postulante->$campo)) {
                 Storage::disk('public')->delete($postulante->$campo);
@@ -427,11 +430,12 @@ class ContratacionController extends Controller
     private function generarFichaBytes(PostulanteContratacion $postulante): string
     {
         $camposLabels = [
-            'carnet_frontal'     => 'Carnet de Identidad (Frontal)',
-            'carnet_reverso'     => 'Carnet de Identidad (Reverso)',
-            'certificado_afp'    => 'Certificado AFP',
-            'certificado_fonasa' => 'Certificado FONASA',
-            'licencia_conducir'  => 'Licencia de Conducir',
+            'carnet_frontal'            => 'Carnet de Identidad (Frontal)',
+            'carnet_reverso'            => 'Carnet de Identidad (Reverso)',
+            'certificado_afp'           => 'Certificado AFP',
+            'certificado_fonasa'        => 'Certificado FONASA',
+            'licencia_conducir_frontal' => 'Licencia de Conducir (Frontal)',
+            'licencia_conducir_reverso' => 'Licencia de Conducir (Reverso)',
         ];
 
         $documentos  = [];

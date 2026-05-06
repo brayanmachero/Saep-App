@@ -339,34 +339,50 @@
                 @endforeach
             </div>
 
-            <!-- Licencia (opcional, full width) -->
-            <div class="file-group">
-                <div class="file-label">
+            <!-- Licencia de Conducir: Frontal + Reverso (opcional, pero ambos si se sube uno) -->
+            <div style="grid-column:1/-1;">
+                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem;">
+                    <i class="bi bi-car-front-fill" style="color:#f59e0b;"></i>
                     Licencia de Conducir
                     <span class="badge-opt">Opcional</span>
+                    <span style="font-size:.72rem;color:#6b7280;font-weight:400;margin-left:.25rem;">— Si subes uno de los dos lados, debes subir el otro también.</span>
                 </div>
-                <div class="file-drop" id="drop-licencia_conducir">
-                    <input type="file" name="licencia_conducir" id="licencia_conducir"
-                        accept=".jpg,.jpeg,.png,.pdf"
-                        data-campo="licencia_conducir"
-                        onchange="mostrarArchivo(this)">
-                    <div class="file-drop__icon"><i class="bi bi-cloud-upload"></i></div>
-                    <div class="file-drop__text">
-                        <strong>Seleccionar archivo</strong> o arrastrar aquí<br>
-                        <span>JPG, PNG, PDF · Máx. 5 MB</span>
+                <div class="row-2">
+                    @foreach([
+                        ['campo' => 'licencia_conducir_frontal', 'label' => 'Licencia (Frontal)'],
+                        ['campo' => 'licencia_conducir_reverso', 'label' => 'Licencia (Reverso)'],
+                    ] as $lic)
+                    <div class="file-group" style="margin-bottom:0;">
+                        <div class="file-label" id="label-{{ $lic['campo'] }}">
+                            {{ $lic['label'] }}
+                            <span class="badge-opt" id="badge-{{ $lic['campo'] }}">Opcional</span>
+                        </div>
+                        <div class="file-drop" id="drop-{{ $lic['campo'] }}">
+                            <input type="file" name="{{ $lic['campo'] }}" id="{{ $lic['campo'] }}"
+                                accept=".jpg,.jpeg,.png,.pdf"
+                                data-campo="{{ $lic['campo'] }}"
+                                onchange="mostrarArchivo(this); actualizarBadgeLicencia();">
+                            <div class="file-drop__icon"><i class="bi bi-cloud-upload"></i></div>
+                            <div class="file-drop__text">
+                                <strong>Seleccionar archivo</strong> o arrastrar aquí<br>
+                                <span>JPG, PNG, PDF · Máx. 5 MB</span>
+                            </div>
+                        </div>
+                        @if($postulante && $postulante->{$lic['campo']})
+                        <div class="file-preview existing" id="preview-existing-{{ $lic['campo'] }}">
+                            <div class="name"><i class="bi bi-check-circle-fill"></i> Documento ya subido</div>
+                            <small>Se reemplazará si subes uno nuevo</small>
+                        </div>
+                        @endif
+                        <div id="preview-{{ $lic['campo'] }}" style="display:none;" class="file-preview">
+                            <div class="name"><i class="bi bi-file-earmark-check"></i> <span></span></div>
+                            <button type="button" class="remove" onclick="quitarArchivo('{{ $lic['campo'] }}'); actualizarBadgeLicencia();">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </div>
+                        @error($lic['campo']) <div class="invalid-feedback" style="display:block;">{{ $message }}</div> @enderror
                     </div>
-                </div>
-                @if($postulante && $postulante->licencia_conducir)
-                <div class="file-preview existing">
-                    <div class="name"><i class="bi bi-check-circle-fill"></i> Licencia ya subida</div>
-                    <small>Se reemplazará si subes una nueva</small>
-                </div>
-                @endif
-                <div id="preview-licencia_conducir" style="display:none;" class="file-preview">
-                    <div class="name"><i class="bi bi-file-earmark-check"></i> <span></span></div>
-                    <button type="button" class="remove" onclick="quitarArchivo('licencia_conducir')">
-                        <i class="bi bi-x-circle"></i>
-                    </button>
+                    @endforeach
                 </div>
             </div>
         </div>
@@ -413,6 +429,39 @@ function quitarArchivo(campo) {
     input.value   = '';
     preview.style.display = 'none';
 }
+
+// ─── Licencia: badge opcional/requerido dinámico ─────────────────
+const licCampos = ['licencia_conducir_frontal', 'licencia_conducir_reverso'];
+
+function tieneValorLicencia(campo) {
+    // Hay archivo seleccionado en el input O ya existía en BD (preview existing visible)
+    const input     = document.getElementById(campo);
+    const existing  = document.getElementById('preview-existing-' + campo);
+    return (input && input.files && input.files.length > 0)
+        || (existing && existing.style.display !== 'none');
+}
+
+function actualizarBadgeLicencia() {
+    const tieneFrontal = tieneValorLicencia('licencia_conducir_frontal');
+    const tieneReverso = tieneValorLicencia('licencia_conducir_reverso');
+
+    licCampos.forEach(function (campo) {
+        const badge = document.getElementById('badge-' + campo);
+        if (!badge) return;
+        const otroTiene = campo === 'licencia_conducir_frontal' ? tieneReverso : tieneFrontal;
+        const esteTiene = tieneValorLicencia(campo);
+        if (otroTiene && !esteTiene) {
+            badge.textContent = 'Requerido';
+            badge.className   = 'badge-req';
+        } else {
+            badge.textContent = 'Opcional';
+            badge.className   = 'badge-opt';
+        }
+    });
+}
+
+// Inicializar al cargar la página (por si hay documentos preexistentes)
+document.addEventListener('DOMContentLoaded', actualizarBadgeLicencia);
 
 // ─── Drag & drop visual ──────────────────────────────────────────
 document.querySelectorAll('.file-drop').forEach(function (zone) {

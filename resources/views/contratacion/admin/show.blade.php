@@ -96,11 +96,12 @@
 
                 @php
                 $docsCampos = [
-                    'carnet_frontal'     => ['label' => 'Carnet de Identidad (Frontal)',  'req' => true],
-                    'carnet_reverso'     => ['label' => 'Carnet de Identidad (Reverso)',  'req' => true],
-                    'certificado_afp'    => ['label' => 'Certificado AFP',                'req' => true],
-                    'certificado_fonasa' => ['label' => 'Certificado FONASA',             'req' => true],
-                    'licencia_conducir'  => ['label' => 'Licencia de Conducir',           'req' => false],
+                    'carnet_frontal'            => ['label' => 'Carnet de Identidad (Frontal)',  'req' => true],
+                    'carnet_reverso'            => ['label' => 'Carnet de Identidad (Reverso)',  'req' => true],
+                    'certificado_afp'           => ['label' => 'Certificado AFP',                'req' => true],
+                    'certificado_fonasa'        => ['label' => 'Certificado FONASA',             'req' => true],
+                    'licencia_conducir_frontal' => ['label' => 'Licencia de Conducir (Frontal)', 'req' => false],
+                    'licencia_conducir_reverso' => ['label' => 'Licencia de Conducir (Reverso)', 'req' => false],
                 ];
                 @endphp
 

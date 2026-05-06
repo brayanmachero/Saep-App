@@ -96,7 +96,12 @@ class ContratacionPublicoController extends Controller
             $yaTiene = $postulante && !empty($postulante->$campo);
             $docRules[$campo] = ($yaTiene ? 'nullable' : 'required') . '|file|mimes:jpg,jpeg,png,pdf|max:5120';
         }
-        $docRules['licencia_conducir'] = 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120';
+
+        // Licencia: opcional, pero si se tiene/sube uno de los dos el otro se vuelve obligatorio
+        $tendraLicF = ($postulante && !empty($postulante->licencia_conducir_frontal)) || $request->hasFile('licencia_conducir_frontal');
+        $tendraLicR = ($postulante && !empty($postulante->licencia_conducir_reverso)) || $request->hasFile('licencia_conducir_reverso');
+        $docRules['licencia_conducir_frontal'] = ($tendraLicR && !$tendraLicF ? 'required' : 'nullable') . '|file|mimes:jpg,jpeg,png,pdf|max:5120';
+        $docRules['licencia_conducir_reverso'] = ($tendraLicF && !$tendraLicR ? 'required' : 'nullable') . '|file|mimes:jpg,jpeg,png,pdf|max:5120';
 
         $request->validate(array_merge([
             'nombre' => 'required|string|max:200',
@@ -106,12 +111,14 @@ class ContratacionPublicoController extends Controller
                 }
             }],
         ], $docRules), [
-            'carnet_frontal.required'     => 'El Carnet de Identidad (Frontal) es obligatorio.',
-            'carnet_reverso.required'     => 'El Carnet de Identidad (Reverso) es obligatorio.',
-            'certificado_afp.required'    => 'El Certificado AFP es obligatorio.',
-            'certificado_fonasa.required' => 'El Certificado FONASA es obligatorio.',
-            '*.mimes'                     => 'Solo se permiten archivos JPG, PNG o PDF.',
-            '*.max'                       => 'El archivo no puede superar los 5 MB.',
+            'carnet_frontal.required'              => 'El Carnet de Identidad (Frontal) es obligatorio.',
+            'carnet_reverso.required'              => 'El Carnet de Identidad (Reverso) es obligatorio.',
+            'certificado_afp.required'             => 'El Certificado AFP es obligatorio.',
+            'certificado_fonasa.required'          => 'El Certificado FONASA es obligatorio.',
+            'licencia_conducir_frontal.required'   => 'Debes subir el frontal de la Licencia de Conducir (ya tienes el reverso).',
+            'licencia_conducir_reverso.required'   => 'Debes subir el reverso de la Licencia de Conducir (ya tienes el frontal).',
+            '*.mimes'                              => 'Solo se permiten archivos JPG, PNG o PDF.',
+            '*.max'                                => 'El archivo no puede superar los 5 MB.',
         ]);
 
         $rutLimpio = preg_replace('/[^0-9kK]/', '', strtoupper($request->rut));
@@ -128,7 +135,7 @@ class ContratacionPublicoController extends Controller
         ];
 
         // Subir documentos que lleguen en este request
-        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir'];
+        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
         foreach ($camposDocs as $campo) {
             if ($request->hasFile($campo)) {
                 // Borrar el anterior si existe
@@ -212,11 +219,12 @@ class ContratacionPublicoController extends Controller
             $documentos   = [];
             $pdfDocRutas  = []; // rutas de documentos PDF a mergear después
             $camposLabels = [
-                'carnet_frontal'     => 'Carnet de Identidad (Frontal)',
-                'carnet_reverso'     => 'Carnet de Identidad (Reverso)',
-                'certificado_afp'    => 'Certificado AFP',
-                'certificado_fonasa' => 'Certificado FONASA',
-                'licencia_conducir'  => 'Licencia de Conducir',
+                'carnet_frontal'            => 'Carnet de Identidad (Frontal)',
+                'carnet_reverso'            => 'Carnet de Identidad (Reverso)',
+                'certificado_afp'           => 'Certificado AFP',
+                'certificado_fonasa'        => 'Certificado FONASA',
+                'licencia_conducir_frontal' => 'Licencia de Conducir (Frontal)',
+                'licencia_conducir_reverso' => 'Licencia de Conducir (Reverso)',
             ];
             foreach ($camposLabels as $campo => $label) {
                 if (empty($postulante->$campo)) continue;
