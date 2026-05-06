@@ -118,9 +118,9 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     $otrosImagen   = [];
     foreach ($documentos as $doc) {
         $ll = strtolower($doc['label']);
-        if (str_contains($ll, 'frontal')) {
+        if (str_contains($ll, 'carnet') && str_contains($ll, 'frontal')) {
             $carnetFrontal = $doc;
-        } elseif (str_contains($ll, 'reverso')) {
+        } elseif (str_contains($ll, 'carnet') && str_contains($ll, 'reverso')) {
             $carnetReverso = $doc;
         } elseif ($doc['tipo'] === 'imagen') {
             $otrosImagen[] = $doc;
