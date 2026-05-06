@@ -172,6 +172,10 @@ class ContratacionPublicoController extends Controller
             $this->notificarRrhh($postulante);
         }
 
+        // Refrescar desde BD para garantizar que subirASharePoint tenga TODOS los documentos
+        // (incluyendo los que ya existían y no se actualizaron en este request)
+        $postulante->refresh();
+
         // Subir documentos + ficha PDF a SharePoint (no crítico)
         try {
             $this->subirASharePoint($postulante);
