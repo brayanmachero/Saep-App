@@ -671,7 +671,7 @@ class ContratacionController extends Controller
     {
         $seq = (int) substr(strrchr($postulante->folio, '-'), 1);
         $num = str_pad($seq, 3, '0', STR_PAD_LEFT);
-        return $postulante->rut . ' - FICHA ' . $num . '.pdf';
+        return $postulante->rut . ' - FICHA ' . $num . ' - ' . $postulante->nombre . '.pdf';
     }
 
     // ─── Helper: encontrar ruta de Ghostscript ────────────────────────────────

@@ -505,7 +505,7 @@ class ContratacionPublicoController extends Controller
 
             $seq          = (int) substr(strrchr($postulante->folio, '-'), 1);
             $fichaNum     = str_pad($seq, 3, '0', STR_PAD_LEFT);
-            $fichaFilename = $postulante->rut . ' - FICHA ' . $fichaNum . '.pdf';
+            $fichaFilename = $postulante->rut . ' - FICHA ' . $fichaNum . ' - ' . $postulante->nombre . '.pdf';
 
             $oneDrive->uploadFileToSite(
                 $site,
