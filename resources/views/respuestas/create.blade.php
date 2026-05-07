@@ -169,7 +169,7 @@
                         @elseif($field['type'] === 'file')
                             @if(!empty($field['multiple']))
                                 {{-- Multi-file: uploader interactivo --}}
-                                <div class="multi-file-upload" data-field-id="{{ $field['id'] }}" data-required="{{ !empty($field['required']) ? '1' : '0' }}">
+                                <div class="multi-file-upload" data-field-id="{{ $field['id'] }}" data-required="{{ !empty($field['required']) ? '1' : '0' }}" data-max-files="{{ $field['maxFiles'] ?? 0 }}">
                                     <div class="mfu-dropzone" style="border:2px dashed var(--surface-border);border-radius:10px;padding:1.5rem;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface-hover);">
                                         <i class="bi bi-cloud-arrow-up" style="font-size:1.5rem;color:var(--accent-color);"></i>
                                         <p style="margin:.5rem 0 0;font-size:.85rem;color:var(--text-muted);">
@@ -484,6 +484,7 @@ document.querySelectorAll('.dynamic-select-wrap').forEach(wrap => {
 document.querySelectorAll('.multi-file-upload').forEach(container => {
     const fieldId = container.dataset.fieldId;
     const isRequired = container.dataset.required === '1';
+    const maxFiles = parseInt(container.dataset.maxFiles || '0', 10);
     const dropzone = container.querySelector('.mfu-dropzone');
     const fileInput = container.querySelector('.mfu-input');
     const listEl = container.querySelector('.mfu-list');
@@ -533,6 +534,10 @@ document.querySelectorAll('.multi-file-upload').forEach(container => {
 
     function addFiles(files) {
         for (const f of files) {
+            if (maxFiles > 0 && fileStore.length >= maxFiles) {
+                alert(`Máximo ${maxFiles} archivo${maxFiles > 1 ? 's' : ''} permitido${maxFiles > 1 ? 's' : ''}.`);
+                break;
+            }
             // Evitar duplicados por nombre+tamaño
             const exists = fileStore.some(s => s.name === f.name && s.size === f.size);
             if (!exists) fileStore.push(f);

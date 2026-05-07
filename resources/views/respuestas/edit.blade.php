@@ -144,7 +144,7 @@
                             @endphp
                             @if(!empty($field['multiple']))
                                 {{-- Multi-file uploader --}}
-                                <div class="multi-file-upload" data-field-id="{{ $field['id'] }}" data-required="0">
+                                <div class="multi-file-upload" data-field-id="{{ $field['id'] }}" data-required="0" data-max-files="{{ $field['maxFiles'] ?? 0 }}">
                                     @if(count($existingFiles))
                                         <div style="margin-bottom:.5rem;">
                                             <small style="color:var(--text-muted);font-size:.72rem">Archivos actuales (se mantienen si no subes nuevos):</small>
@@ -277,6 +277,7 @@ window.clearSignature = function(id) {
 // ── Multi-file upload (acumulativo) ──
 document.querySelectorAll('.multi-file-upload').forEach(container => {
     const fieldId = container.dataset.fieldId;
+    const maxFiles = parseInt(container.dataset.maxFiles || '0', 10);
     const dropzone = container.querySelector('.mfu-dropzone');
     const fileInput = container.querySelector('.mfu-input');
     const listEl = container.querySelector('.mfu-list');
@@ -315,6 +316,10 @@ document.querySelectorAll('.multi-file-upload').forEach(container => {
 
     function addFiles(files) {
         for (const f of files) {
+            if (maxFiles > 0 && fileStore.length >= maxFiles) {
+                alert(`Máximo ${maxFiles} archivo${maxFiles > 1 ? 's' : ''} permitido${maxFiles > 1 ? 's' : ''}.`);
+                break;
+            }
             if (!fileStore.some(s => s.name === f.name && s.size === f.size)) fileStore.push(f);
         }
         renderList();

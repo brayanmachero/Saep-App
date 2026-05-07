@@ -570,10 +570,16 @@
             <div class="form-group">
                 <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
                     <input type="checkbox" id="m-multiple" ${f.multiple ? 'checked' : ''}
-                        style="width:16px;height:16px;accent-color:var(--primary-color);">
+                        style="width:16px;height:16px;accent-color:var(--primary-color);"
+                        onchange="document.getElementById('m-maxfiles-wrap').style.display=this.checked?'':'none'">
                     Permitir múltiples archivos
                 </label>
                 <small style="color:var(--text-muted);font-size:.72rem">El usuario podrá subir varias fotos o documentos en un solo campo</small>
+            </div>
+            <div class="form-group" id="m-maxfiles-wrap" style="${f.multiple ? '' : 'display:none'}">
+                <label>Máximo de archivos</label>
+                <input type="number" id="m-maxfiles" class="form-input" min="1" max="50" value="${f.maxFiles || 10}" placeholder="10">
+                <small style="color:var(--text-muted);font-size:.72rem">Límite de archivos que puede subir el usuario (0 = sin límite)</small>
             </div>` : ''}
             ${type === 'select_tabla' ? `
             <div class="form-group">
@@ -664,6 +670,12 @@
         }
         if (type === 'file') {
             field.multiple = document.getElementById('m-multiple')?.checked || false;
+            if (field.multiple) {
+                const mf = parseInt(document.getElementById('m-maxfiles')?.value || '0', 10);
+                field.maxFiles = mf > 0 ? mf : 0;
+            } else {
+                delete field.maxFiles;
+            }
         }
         if (type === 'select_tabla') {
             field.tabla = document.getElementById('m-tabla').value;
