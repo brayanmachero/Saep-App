@@ -949,6 +949,15 @@ let _trabajadorTimer = null;
 function debouncedTrabajadorSubmit() {
     if (_trabajadorTimer) clearTimeout(_trabajadorTimer);
     _trabajadorTimer = setTimeout(function () {
+        var input = document.getElementById('filter-trabajador');
+        // Cuando el usuario busca un trabajador, ampliamos a todo el histórico
+        // (las fechas, mes y año son mutuamente excluyentes con la búsqueda libre)
+        if (input && input.value.trim() !== '') {
+            clearDateFilters();
+            clearMesFilter();
+            var anio = document.querySelector('select[name="anio"]');
+            if (anio) anio.value = '';
+        }
         var f = document.getElementById('filter-form');
         if (f) f.submit();
     }, 450);
