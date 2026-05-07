@@ -106,7 +106,7 @@ class StopDashboardController extends Controller
 
             return back()->with('success', 'Datos sincronizados exitosamente desde Google Sheets. ' . trim($output));
         } catch (\Exception $e) {
-            return back()->with('success', 'Error durante sincronización: ' . $e->getMessage());
+            return back()->with('error', 'Error durante sincronización: ' . $e->getMessage());
         }
     }
 

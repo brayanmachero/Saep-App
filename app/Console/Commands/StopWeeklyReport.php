@@ -32,11 +32,6 @@ class StopWeeklyReport extends Command
 
         $drive = new GoogleDriveService();
 
-        if (!$drive->isConfigured()) {
-            $this->error('Google Drive no está configurado.');
-            return self::FAILURE;
-        }
-
         // --- Empresa filter (option > config > none) ---
         $empresa = $this->option('empresa')
             ?: Configuracion::get('stop_report_empresa', '');
@@ -71,6 +66,11 @@ class StopWeeklyReport extends Command
         // Usar SQL si hay datos sincronizados, sino Google Drive
         $sql = new \App\Services\StopAnalyticsService();
         $useSql = $sql->hasSyncedData();
+
+        if (!$useSql && !$drive->isConfigured()) {
+            $this->error('Google Drive no está configurado y no hay datos sincronizados en la base de datos.');
+            return self::FAILURE;
+        }
 
         if ($useSql) {
             $analytics = $sql->getFilteredAnalytics($filters);
@@ -134,17 +134,18 @@ class StopWeeklyReport extends Command
 
         $frecLabel = $esMensual ? 'Mensual' : 'Semanal';
 
-        foreach ($destinatarios as $dest) {
-            try {
-                $mailable = new StopReporteMail(
-                    analytics: $analytics,
-                    periodo: $periodo,
-                    mesLabel: $mesLabel,
-                    frecuencia: $frecLabel,
-                    comparison: $comparison,
-                    evalDetail: $evalDetail,
-                );
-                Mail::to($dest)->send($mailable);
+        try {
+            $mailable = new StopReporteMail(
+                analytics: $analytics,
+                periodo: $periodo,
+                mesLabel: $mesLabel,
+                frecuencia: $frecLabel,
+                comparison: $comparison,
+                evalDetail: $evalDetail,
+            );
+            $first = array_shift($destinatarios);
+            Mail::to($first)->cc($destinatarios)->send($mailable);
+            foreach (array_merge([$first], $destinatarios) as $dest) {
                 User::where('email', $dest)->first()?->notify(new AppNotification(
                     'Reporte STOP disponible',
                     "Reporte {$frecLabel} generado",
@@ -152,13 +153,12 @@ class StopWeeklyReport extends Command
                     route('stop-dashboard')
                 ));
                 $this->info("Reporte enviado a: {$dest}");
-            } catch (\Exception $e) {
-                $this->error("Error enviando a {$dest}: {$e->getMessage()}");
-                Log::error("stop:weekly-report ({$frecuencia}): error enviando email", [
-                    'email' => $dest,
-                    'error' => $e->getMessage(),
-                ]);
             }
+        } catch (\Exception $e) {
+            $this->error("Error enviando reporte: {$e->getMessage()}");
+            Log::error("stop:weekly-report ({$frecuencia}): error enviando email", [
+                'error' => $e->getMessage(),
+            ]);
         }
 
         $this->info("Reporte STO CCU ({$frecLabel}) — Total: {$analytics['totalRows']} | Pos: {$positivas} | Neg: {$negativas}");

@@ -14,6 +14,8 @@ class StopExcelExport
 {
     private Spreadsheet $spreadsheet;
     private string $periodo;
+    private string $frecuencia;
+    private array $comparison;
     private array $evalDetail;
 
     // CCU brand colors

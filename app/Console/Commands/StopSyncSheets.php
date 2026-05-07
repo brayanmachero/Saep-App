@@ -105,13 +105,15 @@ class StopSyncSheets extends Command
 
             // Truncar tabla antes de importar
             $this->info('Limpiando datos anteriores...');
-            StopObservacion::truncate();
+            DB::beginTransaction();
+            DB::table('stop_observaciones')->delete();
 
             // Leer e importar en batches de 3000 filas
             $batchSize = 3000;
             $startRow = 2;
             $totalImported = 0;
             $skipped = 0;
+            $empresaFiltro = \App\Models\Configuracion::get('stop_report_empresa', 'SAEP');
 
             $bar = $this->output->createProgressBar();
             $bar->start();
@@ -141,7 +143,6 @@ class StopSyncSheets extends Command
                     }
 
                     // Solo importar registros de la empresa configurada (SAEP por defecto)
-                    $empresaFiltro = \App\Models\Configuracion::get('stop_report_empresa', 'SAEP');
                     if ($empresaFiltro && mb_strtoupper(trim($empresaObservado)) !== mb_strtoupper(trim($empresaFiltro))) {
                         $skipped++;
                         continue;
@@ -218,6 +219,8 @@ class StopSyncSheets extends Command
             $bar->finish();
             $this->newLine();
 
+            DB::commit();
+
             // Limpiar caché de Google Drive
             $drive->clearCache();
 
@@ -231,6 +234,9 @@ class StopSyncSheets extends Command
             return self::SUCCESS;
 
         } catch (\Exception $e) {
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
             $this->error("Error durante sincronización: {$e->getMessage()}");
             Log::error('stop:sync-sheets error', [
                 'error' => $e->getMessage(),
