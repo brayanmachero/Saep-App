@@ -142,6 +142,11 @@
                     <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">Fecha Hasta</label>
                     <input type="date" name="fecha_hasta" id="filter-fecha-hasta" class="filter-select" value="{{ $filters['fecha_hasta'] ?? '' }}" onchange="clearMesFilter(); this.form.submit()">
                 </div>
+                {{-- Buscar trabajador (observador u observado) --}}
+                <div style="grid-column:span 2">
+                    <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">Buscar Trabajador</label>
+                    <input type="search" name="trabajador" id="filter-trabajador" class="filter-select" autocomplete="off" placeholder="Nombre observador u observado..." value="{{ $filters['trabajador'] ?? '' }}" oninput="debouncedTrabajadorSubmit()">
+                </div>
             </div>
             <div style="display:flex;gap:.5rem">
                 @if($activeCount > 0)
@@ -940,6 +945,14 @@ function clearMesFilter() {
     var m = document.getElementById('filter-mes');
     if (m) m.value = '';
 }
+let _trabajadorTimer = null;
+function debouncedTrabajadorSubmit() {
+    if (_trabajadorTimer) clearTimeout(_trabajadorTimer);
+    _trabajadorTimer = setTimeout(function () {
+        var f = document.getElementById('filter-form');
+        if (f) f.submit();
+    }, 450);
+}
 function showLoading() {
     var o = document.getElementById('loading-overlay');
     if (o) o.style.display = 'flex';
@@ -958,6 +971,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const filterForm = document.getElementById('filter-form');
     if (filterForm) {
         filterForm.addEventListener('submit', function() { showLoading(); });
+    }
+
+    // Mantener foco en buscador de trabajador tras recarga (UX live-search)
+    const trabajadorInput = document.getElementById('filter-trabajador');
+    if (trabajadorInput && trabajadorInput.value !== '') {
+        trabajadorInput.focus();
+        const len = trabajadorInput.value.length;
+        try { trabajadorInput.setSelectionRange(len, len); } catch (e) {}
     }
 
     const syncForm = document.getElementById('sync-form');

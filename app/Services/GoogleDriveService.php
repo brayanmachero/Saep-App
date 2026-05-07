@@ -275,6 +275,12 @@ class GoogleDriveService
                     $monthKey = $this->extractMonthKey($fecha2);
                     if (!$monthKey || substr($monthKey, 0, 4) !== $filters['anio']) continue;
                 }
+                if (!empty($filters['trabajador'])) {
+                    $needle = mb_strtolower($filters['trabajador']);
+                    $hayObs = mb_strtolower($nombreObs);
+                    $hayObsdo = mb_strtolower($nombreObsdo);
+                    if (mb_strpos($hayObs, $needle) === false && mb_strpos($hayObsdo, $needle) === false) continue;
+                }
             }
 
             // Agregar (fila pasó filtros)
@@ -955,6 +961,12 @@ class GoogleDriveService
                     if (!empty($filters['anio'])) {
                         $monthKey = $this->extractMonthKey($fechaTarjeta ?: $marcaTemporal);
                         if (!$monthKey || substr($monthKey, 0, 4) !== $filters['anio']) continue;
+                    }
+                    if (!empty($filters['trabajador'])) {
+                        $needle = mb_strtolower($filters['trabajador']);
+                        $hayObs = mb_strtolower($nombreObs);
+                        $hayObsdo = mb_strtolower($nombreObsdo);
+                        if (mb_strpos($hayObs, $needle) === false && mb_strpos($hayObsdo, $needle) === false) continue;
                     }
                 }
 

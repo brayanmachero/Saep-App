@@ -36,7 +36,7 @@ class StopDashboardController extends Controller
         }
 
         // Filtros activos — por defecto mes en curso + empresa SAEP
-        $isClean = !$request->hasAny(['empresa_observador','empresa_observado','tipo_observacion','centro','clasificacion','fecha_desde','fecha_hasta','mes','anio','all']);
+        $isClean = !$request->hasAny(['empresa_observador','empresa_observado','tipo_observacion','centro','clasificacion','fecha_desde','fecha_hasta','mes','anio','trabajador','all']);
         $defaultEmpresa = \App\Models\Configuracion::get('stop_report_empresa', 'SAEP');
         $filters = array_filter([
             'empresa_observador' => $request->input('empresa_observador'),
@@ -48,6 +48,7 @@ class StopDashboardController extends Controller
             'fecha_hasta'        => $request->input('fecha_hasta', $isClean && !$request->input('mes') && !$request->input('anio') ? now()->endOfMonth()->format('Y-m-d') : null),
             'mes'                => $request->input('mes'),
             'anio'               => $request->input('anio'),
+            'trabajador'         => trim((string) $request->input('trabajador', '')) ?: null,
         ]);
 
         // Obtener analíticas — SQL si hay datos sincronizados, Google Sheets si no
@@ -127,6 +128,7 @@ class StopDashboardController extends Controller
             'fecha_hasta'        => $request->input('fecha_hasta'),
             'mes'                => $request->input('mes'),
             'anio'               => $request->input('anio'),
+            'trabajador'         => trim((string) $request->input('trabajador', '')) ?: null,
         ]);
 
         if ($useSql) {
@@ -254,6 +256,7 @@ class StopDashboardController extends Controller
             'fecha_hasta'        => $request->input('fecha_hasta'),
             'mes'                => $request->input('mes'),
             'anio'               => $request->input('anio'),
+            'trabajador'         => trim((string) $request->input('trabajador', '')) ?: null,
         ]);
 
         // Obtener analíticas con los filtros activos

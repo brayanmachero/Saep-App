@@ -359,6 +359,13 @@ class StopAnalyticsService
         if (!empty($filters['anio'])) {
             $query->whereRaw("YEAR(COALESCE(fecha_tarjeta, marca_temporal)) = ?", [$filters['anio']]);
         }
+        if (!empty($filters['trabajador'])) {
+            $term = '%' . $filters['trabajador'] . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('nombre_observador', 'LIKE', $term)
+                  ->orWhere('nombre_observado', 'LIKE', $term);
+            });
+        }
     }
 
     private function buildWhereClause(array $filters): array
@@ -401,6 +408,12 @@ class StopAnalyticsService
         if (!empty($filters['anio'])) {
             $conditions[] = "YEAR(COALESCE(fecha_tarjeta, marca_temporal)) = ?";
             $bindings[] = $filters['anio'];
+        }
+        if (!empty($filters['trabajador'])) {
+            $conditions[] = "(nombre_observador LIKE ? OR nombre_observado LIKE ?)";
+            $term = '%' . $filters['trabajador'] . '%';
+            $bindings[] = $term;
+            $bindings[] = $term;
         }
 
         return [
