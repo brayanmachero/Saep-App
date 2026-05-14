@@ -172,8 +172,18 @@ class LeyKarinController extends Controller
             'descripcion_hechos' => 'required|string',
             'centro_costo_id'   => 'required|exists:centros_costo,id',
             'denunciado_nombre' => 'nullable|string|max:200',
-            'denunciado_cargo'  => 'nullable|string|max:200',
             'anonima'           => 'nullable|boolean',
+            'denunciante_rango_etario' => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::rangosEtariosMap())),
+            'denunciante_sexo'         => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::sexosMap())),
+            'denunciante_cargo_tipo'   => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::cargosTipoMap())),
+            'denunciante_cargo_otro'   => 'nullable|string|max:200',
+            'denunciante_empresa'      => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::empresasDenuncianteMap())),
+            'denunciante_jerarquia'    => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::jerarquiasMap())),
+            'denunciado_rango_etario'  => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::rangosEtariosMap())),
+            'denunciado_sexo'          => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::sexosMap())),
+            'denunciado_cargo_tipo'    => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::cargosTipoMap())),
+            'denunciado_cargo_otro'    => 'nullable|string|max:200',
+            'denunciado_empresa'       => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::empresasDenunciadoMap())),
         ]);
 
         $user = auth()->user();

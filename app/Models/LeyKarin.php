@@ -14,14 +14,20 @@ class LeyKarin extends Model
     protected $fillable = [
         'folio', 'tipo', 'denunciante_id', 'denunciante_nombre', 'denunciante_rut',
         'denunciante_email', 'denunciante_latitud', 'denunciante_longitud',
-        'denunciado_nombre', 'denunciado_cargo', 'centro_costo_id', 'canal',
+        'denunciante_rango_etario', 'denunciante_sexo',
+        'denunciante_cargo_tipo', 'denunciante_cargo_otro',
+        'denunciante_empresa', 'denunciante_jerarquia',
+        'denunciado_nombre', 'denunciado_cargo',
+        'denunciado_rango_etario', 'denunciado_sexo',
+        'denunciado_cargo_tipo', 'denunciado_cargo_otro', 'denunciado_empresa',
+        'centro_costo_id', 'canal',
         'fecha_denuncia', 'descripcion_hechos', 'medidas_cautelares',
         'resultado_investigacion', 'medidas_adoptadas',
         'fecha_resolucion', 'fecha_plazo_investigacion',
         'estado', 'anonima', 'confidencial',
         'consentimiento_datos', 'consentimiento_geolocalizacion',
-        'metodo_contacto',
-        'investigador_id',
+        'metodo_contacto', 'investigador_id',
+        'es_tercero', 'tercero_nombre', 'tercero_rut',
     ];
 
     protected $casts = [
@@ -30,6 +36,7 @@ class LeyKarin extends Model
         'fecha_plazo_investigacion'  => 'date',
         'anonima'                    => 'boolean',
         'confidencial'               => 'boolean',
+        'es_tercero'                 => 'boolean',
         'consentimiento_datos'       => 'boolean',
         'consentimiento_geolocalizacion' => 'boolean',
         'denunciante_latitud'        => 'decimal:7',
@@ -94,6 +101,63 @@ class LeyKarin extends Model
             'FORMULARIO_WEB'     => 'Formulario Web',
             'TELEFONO'           => 'Teléfono',
             'ANONIMO'            => 'Anónimo',
+        ];
+    }
+
+    public static function rangosEtariosMap(): array
+    {
+        return [
+            '18_25'  => '18 a 25 años',
+            '26_50'  => '26 a 50 años',
+            '51_MAS' => '51 o más años',
+        ];
+    }
+
+    public static function sexosMap(): array
+    {
+        return [
+            'MASCULINO' => 'Masculino',
+            'FEMENINO'  => 'Femenino',
+            'OTRO'      => 'Otro',
+        ];
+    }
+
+    public static function cargosTipoMap(): array
+    {
+        return [
+            'OPERADOR_BODEGA'   => 'Operador de bodega',
+            'MAQUINISTA'        => 'Maquinista',
+            'ADMINISTRATIVO'    => 'Administrativo',
+            'LIDER_SUPERVISOR'  => 'Líder/Supervisor',
+            'OTRO'              => 'Otro',
+        ];
+    }
+
+    public static function empresasDenuncianteMap(): array
+    {
+        return [
+            'SAEP_EST' => 'Saep EST',
+            'SAEP_SUB' => 'Saep SUB',
+        ];
+    }
+
+    public static function empresasDenunciadoMap(): array
+    {
+        return [
+            'SAEP_EST' => 'SAEP EST',
+            'SAEP_SUB' => 'SAEP SUB',
+            'CLIENTE'  => 'Cliente',
+            'OTRO'     => 'Otro',
+        ];
+    }
+
+    public static function jerarquiasMap(): array
+    {
+        return [
+            'COMPANERO'  => 'Compañero de trabajo',
+            'JEFATURA'   => 'Jefatura',
+            'BAJO_CARGO' => 'Personal bajo su cargo',
+            'EXTERNO'    => 'Personal Externo',
         ];
     }
 

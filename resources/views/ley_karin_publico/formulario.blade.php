@@ -391,7 +391,7 @@
                 <h3 class="form-card__title"><i class="bi bi-person-lines-fill"></i> Datos del Caso</h3>
                 <p class="form-card__desc">Completa la información sobre la denuncia. Los campos con <span style="color:#dc2626;">*</span> son obligatorios.</p>
 
-                <!-- Denunciante info -->
+                <!-- Google badge -->
                 <div class="google-badge">
                     <div class="google-badge__icon">
                         <i class="bi bi-google" style="color:#fff;font-size:1rem;"></i>
@@ -402,20 +402,60 @@
                     </div>
                 </div>
 
-                <!-- Opción de denuncia anónima -->
-                <div class="consent-box" style="border-color:#6366f1;background:#eef2ff;margin-bottom:1.5rem;">
+                <!-- Opción: tercero que denuncia por la víctima -->
+                <div class="consent-box" style="border-color:#f59e0b;background:#fffbeb;margin-bottom:1rem;">
                     <label>
-                        <input type="checkbox" name="anonima" value="1" id="anonima-check" {{ old('anonima') ? 'checked' : '' }} onchange="toggleAnonima(this)">
+                        <input type="checkbox" name="es_tercero" value="1" id="tercero-check" {{ old('es_tercero') ? 'checked' : '' }} onchange="toggleTercero(this)">
                         <div>
-                            <strong><i class="bi bi-incognito"></i> Deseo que mi denuncia sea anónima</strong><br>
+                            <strong><i class="bi bi-person-plus-fill" style="color:#d97706;"></i> Estoy levantando esta denuncia en nombre de otra persona</strong><br>
                             <span style="font-size:.8rem;color:#64748b;">
-                                Tu nombre y RUT no serán visibles para los investigadores.
-                                Tu correo electrónico se mantiene registrado internamente como medida de seguridad
-                                para evitar denuncias falsas, pero <strong>no será compartido</strong> con el equipo investigador.
+                                Marca esta opción si eres un tercero que denuncia por la víctima.
+                                Se registrarán tus datos como denunciante externo y los datos de la víctima por separado.
                             </span>
                         </div>
                     </label>
                 </div>
+
+                <!-- Sección datos del tercero (visible solo si es_tercero) -->
+                <div id="tercero-section" style="{{ old('es_tercero') ? '' : 'display:none;' }}">
+                    <div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:12px;padding:1.25rem;margin-bottom:1.25rem;">
+                        <p style="font-size:.82rem;font-weight:700;color:#92400e;margin-bottom:1rem;"><i class="bi bi-person-check-fill"></i> Tus Datos (Tercero que Denuncia)</p>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Tu nombre completo <span class="req">*</span></label>
+                                <input type="text" name="tercero_nombre" id="tercero_nombre" class="form-input" value="{{ old('tercero_nombre', $googleUser['name']) }}" placeholder="Nombre y apellidos">
+                                @error('tercero_nombre') <div class="field-error">{{ $message }}</div> @enderror
+                            </div>
+                            <div class="form-group">
+                                <label>Tu RUT <span style="color:#6b7280;font-weight:400;">(opcional)</span></label>
+                                <input type="text" name="tercero_rut" class="form-input" value="{{ old('tercero_rut') }}" placeholder="12.345.678-9">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Opción anónima (solo cuando NO es tercero) -->
+                <div id="anonima-box" style="{{ old('es_tercero') ? 'display:none;' : '' }}">
+                    <div class="consent-box" style="border-color:#6366f1;background:#eef2ff;margin-bottom:1.5rem;">
+                        <label>
+                            <input type="checkbox" name="anonima" value="1" id="anonima-check" {{ old('anonima') ? 'checked' : '' }} onchange="toggleAnonima(this)">
+                            <div>
+                                <strong><i class="bi bi-incognito"></i> Deseo que mi denuncia sea anónima</strong><br>
+                                <span style="font-size:.8rem;color:#64748b;">
+                                    Tu nombre y RUT no serán visibles para los investigadores.
+                                    Tu correo electrónico se mantiene registrado internamente como medida de seguridad
+                                    para evitar denuncias falsas, pero <strong>no será compartido</strong> con el equipo investigador.
+                                </span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- ── Datos del denunciante / víctima ── -->
+                <hr style="border:none;border-top:1px solid #f1f5f9;margin:1rem 0 1.25rem;">
+                <p style="font-size:.82rem;font-weight:700;color:#0f1b4c;margin-bottom:1rem;">
+                    <i class="bi bi-person-fill"></i> <span id="label-denunciante-text">Tus Datos</span>
+                </p>
 
                 <div id="datos-denunciante" style="{{ old('anonima') ? 'display:none;' : '' }}">
                     <div class="form-row">
@@ -425,9 +465,63 @@
                             @error('denunciante_nombre') <div class="field-error">{{ $message }}</div> @enderror
                         </div>
                         <div class="form-group">
-                            <label>RUT (opcional)</label>
-                            <input type="text" name="denunciante_rut" data-rut class="form-input" value="{{ old('denunciante_rut') }}">
-                            <span class="hint">Formato: 12.345.678-9</span>
+                            <label>RUT <span style="color:#6b7280;font-weight:400;">(opcional)</span></label>
+                            <input type="text" name="denunciante_rut" data-rut class="form-input" value="{{ old('denunciante_rut') }}" placeholder="12.345.678-9">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Rango etario</label>
+                            <select name="denunciante_rango_etario" class="form-select">
+                                <option value="">— Selecciona —</option>
+                                @foreach(\App\Models\LeyKarin::rangosEtariosMap() as $val => $lbl)
+                                <option value="{{ $val }}" {{ old('denunciante_rango_etario') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Sexo</label>
+                            <select name="denunciante_sexo" class="form-select">
+                                <option value="">— Selecciona —</option>
+                                @foreach(\App\Models\LeyKarin::sexosMap() as $val => $lbl)
+                                <option value="{{ $val }}" {{ old('denunciante_sexo') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Cargo</label>
+                            <select name="denunciante_cargo_tipo" id="denunciante_cargo_tipo" class="form-select" onchange="toggleOtro(this,'denunciante_cargo_otro_wrap')">
+                                <option value="">— Selecciona —</option>
+                                @foreach(\App\Models\LeyKarin::cargosTipoMap() as $val => $lbl)
+                                <option value="{{ $val }}" {{ old('denunciante_cargo_tipo') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group" id="denunciante_cargo_otro_wrap" style="{{ old('denunciante_cargo_tipo')==='OTRO' ? '' : 'visibility:hidden;' }}">
+                            <label>Especifica el cargo</label>
+                            <input type="text" name="denunciante_cargo_otro" class="form-input" value="{{ old('denunciante_cargo_otro') }}" placeholder="Indica tu cargo">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Empresa</label>
+                            <select name="denunciante_empresa" class="form-select">
+                                <option value="">— Selecciona —</option>
+                                @foreach(\App\Models\LeyKarin::empresasDenuncianteMap() as $val => $lbl)
+                                <option value="{{ $val }}" {{ old('denunciante_empresa') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Jerarquía del denunciado respecto a ti</label>
+                            <select name="denunciante_jerarquia" class="form-select">
+                                <option value="">— Selecciona —</option>
+                                @foreach(\App\Models\LeyKarin::jerarquiasMap() as $val => $lbl)
+                                <option value="{{ $val }}" {{ old('denunciante_jerarquia') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -439,7 +533,7 @@
                         <span class="hint">Detectado automáticamente desde tu cuenta de Google</span>
                     </div>
                     <div class="form-group">
-                        <label>Centro de costo / Sucursal <span class="req">*</span></label>
+                        <label>Centro de costo / CD <span class="req">*</span></label>
                         <select name="centro_costo_id" class="form-select" required>
                             <option value="">— Selecciona —</option>
                             @foreach($centros as $cc)
@@ -450,8 +544,11 @@
                     </div>
                 </div>
 
+                <!-- ── Datos del denunciado ── -->
                 <hr style="border:none;border-top:1px solid #f1f5f9;margin:1.5rem 0;">
-                <p style="font-size:.82rem;font-weight:600;color:#64748b;margin-bottom:1rem;"><i class="bi bi-person-x"></i> Datos del Denunciado (si se conocen)</p>
+                <p style="font-size:.82rem;font-weight:700;color:#0f1b4c;margin-bottom:1rem;">
+                    <i class="bi bi-person-x-fill"></i> Datos del Denunciado <span style="font-weight:400;color:#94a3b8;">(si se conocen)</span>
+                </p>
 
                 <div class="form-row">
                     <div class="form-group">
@@ -460,11 +557,52 @@
                     </div>
                     <div class="form-group">
                         <label>Cargo del denunciado</label>
-                        <input type="text" name="denunciado_cargo" class="form-input" value="{{ old('denunciado_cargo') }}" placeholder="Cargo o función">
+                        <select name="denunciado_cargo_tipo" id="denunciado_cargo_tipo" class="form-select" onchange="toggleOtro(this,'denunciado_cargo_otro_wrap')">
+                            <option value="">— Selecciona —</option>
+                            @foreach(\App\Models\LeyKarin::cargosTipoMap() as $val => $lbl)
+                            <option value="{{ $val }}" {{ old('denunciado_cargo_tipo') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group" id="denunciado_cargo_otro_wrap" style="{{ old('denunciado_cargo_tipo')==='OTRO' ? '' : 'visibility:hidden;' }}">
+                        <label>Especifica el cargo del denunciado</label>
+                        <input type="text" name="denunciado_cargo_otro" class="form-input" value="{{ old('denunciado_cargo_otro') }}" placeholder="Cargo del denunciado">
+                    </div>
+                    <div class="form-group">
+                        <label>Empresa del denunciado</label>
+                        <select name="denunciado_empresa" class="form-select">
+                            <option value="">— Selecciona —</option>
+                            @foreach(\App\Models\LeyKarin::empresasDenunciadoMap() as $val => $lbl)
+                            <option value="{{ $val }}" {{ old('denunciado_empresa') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Rango etario del denunciado</label>
+                        <select name="denunciado_rango_etario" class="form-select">
+                            <option value="">— Selecciona —</option>
+                            @foreach(\App\Models\LeyKarin::rangosEtariosMap() as $val => $lbl)
+                            <option value="{{ $val }}" {{ old('denunciado_rango_etario') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Sexo del denunciado</label>
+                        <select name="denunciado_sexo" class="form-select">
+                            <option value="">— Selecciona —</option>
+                            @foreach(\App\Models\LeyKarin::sexosMap() as $val => $lbl)
+                            <option value="{{ $val }}" {{ old('denunciado_sexo') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                            @endforeach
+                        </select>
                     </div>
                 </div>
 
-                <div class="form-row full">
+                <!-- ── Descripción ── -->
+                <div class="form-row full" style="margin-top:.5rem;">
                     <div class="form-group">
                         <label>Descripción de los hechos <span class="req">*</span></label>
                         <textarea name="descripcion_hechos" class="form-textarea" required placeholder="Describe de forma detallada los hechos ocurridos, incluyendo fechas, lugares y personas involucradas...">{{ old('descripcion_hechos') }}</textarea>
@@ -523,11 +661,18 @@
                 <div id="review-summary" class="review-summary">
                     <div class="review-grid">
                         <div><strong>Tipo:</strong> <span id="rev-tipo">—</span></div>
-                        <div><strong>Denunciante:</strong> <span id="rev-nombre">—</span></div>
-                        <div><strong>Correo:</strong> <span style="word-break:break-all;">{{ $googleUser['email'] }}</span></div>
-                        <div><strong>Centro:</strong> <span id="rev-centro">—</span></div>
-                        <div><strong>Denunciado:</strong> <span id="rev-denunciado">—</span></div>
                         <div><strong>Modo:</strong> <span id="rev-anonima">Identificada</span></div>
+                        <div id="rev-tercero-row" style="display:none;grid-column:1/-1;"><strong>Tercero denunciante:</strong> <span id="rev-tercero">—</span></div>
+                        <div><strong>Denunciante / Víctima:</strong> <span id="rev-nombre">—</span></div>
+                        <div><strong>Correo:</strong> <span style="word-break:break-all;">{{ $googleUser['email'] }}</span></div>
+                        <div><strong>Rango etario:</strong> <span id="rev-rango-etario">—</span></div>
+                        <div><strong>Sexo:</strong> <span id="rev-sexo">—</span></div>
+                        <div><strong>Cargo:</strong> <span id="rev-cargo">—</span></div>
+                        <div><strong>Empresa:</strong> <span id="rev-empresa">—</span></div>
+                        <div><strong>Jerarquía del denunciado:</strong> <span id="rev-jerarquia">—</span></div>
+                        <div><strong>Centro / CD:</strong> <span id="rev-centro">—</span></div>
+                        <div><strong>Denunciado:</strong> <span id="rev-denunciado">—</span></div>
+                        <div><strong>Empresa denunciado:</strong> <span id="rev-empresa-denunciado">—</span></div>
                         <div><strong>Contacto:</strong> <span id="rev-contacto">—</span></div>
                         <div><strong>Evidencias:</strong> <span id="rev-evidencias">Sin archivos</span></div>
                         <div><strong>Ubicación:</strong> <span id="rev-geo" class="geo-status skipped"><i class="bi bi-geo-alt"></i> No compartida</span></div>
@@ -621,6 +766,18 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleAnonima(anonimaCheck);
     }
 
+    // Initialize tercero toggle
+    const terceroCheck = document.getElementById('tercero-check');
+    if (terceroCheck && terceroCheck.checked) {
+        toggleTercero(terceroCheck);
+    }
+
+    // Initialize cargo "Otro" wrappers
+    const dcTipo = document.getElementById('denunciante_cargo_tipo');
+    if (dcTipo) toggleOtro(dcTipo, 'denunciante_cargo_otro_wrap');
+    const ddTipo = document.getElementById('denunciado_cargo_tipo');
+    if (ddTipo) toggleOtro(ddTipo, 'denunciado_cargo_otro_wrap');
+
     // File input preview
     document.getElementById('evidencias-input').addEventListener('change', function() {
         const list = document.getElementById('evidencias-list');
@@ -656,6 +813,35 @@ function toggleAnonima(checkbox) {
     }
 }
 
+function toggleTercero(checkbox) {
+    const terceroSection = document.getElementById('tercero-section');
+    const anonimaBox     = document.getElementById('anonima-box');
+    const labelText      = document.getElementById('label-denunciante-text');
+    if (checkbox.checked) {
+        terceroSection.style.display = '';
+        anonimaBox.style.display = 'none';
+        // Uncheck anonymous when switching to tercero mode
+        const anonimaCheck = document.getElementById('anonima-check');
+        if (anonimaCheck.checked) {
+            anonimaCheck.checked = false;
+            toggleAnonima(anonimaCheck);
+        }
+        labelText.textContent = 'Datos de la Víctima';
+        const nombreInput = document.getElementById('denunciante_nombre');
+        if (nombreInput) nombreInput.setAttribute('required', '');
+    } else {
+        terceroSection.style.display = 'none';
+        anonimaBox.style.display = '';
+        labelText.textContent = 'Tus Datos';
+    }
+}
+
+function toggleOtro(select, wrapId) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    wrap.style.visibility = select.value === 'OTRO' ? '' : 'hidden';
+}
+
 function goStep(step) {
     // Validate before moving forward
     if (step > currentStep) {
@@ -667,14 +853,23 @@ function goStep(step) {
             }
         }
         if (currentStep === 2) {
+            const esTercero = document.getElementById('tercero-check').checked;
             const esAnonima = document.getElementById('anonima-check').checked;
+
+            if (esTercero) {
+                const terceroNombre = document.querySelector('input[name="tercero_nombre"]').value.trim();
+                if (!terceroNombre) { alert('Ingresa tu nombre completo como tercero denunciante.'); return; }
+            }
+
             const nombre = document.querySelector('input[name="denunciante_nombre"]').value.trim();
             const centro = document.querySelector('select[name="centro_costo_id"]').value;
-            const desc = document.querySelector('textarea[name="descripcion_hechos"]').value.trim();
-            if (!esAnonima && !nombre) { alert('Ingresa tu nombre completo o marca la denuncia como anónima.'); return; }
-            if (!centro) { alert('Selecciona un centro de costo.'); return; }
+            const desc   = document.querySelector('textarea[name="descripcion_hechos"]').value.trim();
+
+            if (!esAnonima && !esTercero && !nombre) { alert('Ingresa tu nombre completo o marca la denuncia como anónima.'); return; }
+            if (esTercero && !nombre) { alert('Ingresa el nombre completo de la víctima.'); return; }
+            if (!centro) { alert('Selecciona un centro de costo / CD.'); return; }
             if (!desc || desc.length < 20) { alert('La descripción debe tener al menos 20 caracteres.'); return; }
-            // Validate file count and size
+
             const files = document.getElementById('evidencias-input').files;
             if (files.length > 5) { alert('Máximo 5 archivos permitidos.'); return; }
             for (let i = 0; i < files.length; i++) {
@@ -715,20 +910,60 @@ function updateReview() {
     const tipoEl = document.querySelector('input[name="tipo"]:checked');
     document.getElementById('rev-tipo').textContent = tipoEl ? (tipoLabels[tipoEl.value] || tipoEl.value) : '—';
 
+    const esTercero = document.getElementById('tercero-check').checked;
     const esAnonima = document.getElementById('anonima-check').checked;
+
+    // Denunciante / víctima
     if (esAnonima) {
         document.getElementById('rev-nombre').innerHTML = '<span style="color:#6366f1;font-weight:600;"><i class="bi bi-incognito"></i> Anónima</span>';
     } else {
         document.getElementById('rev-nombre').textContent = document.querySelector('input[name="denunciante_nombre"]').value || '—';
     }
-    document.getElementById('rev-anonima').textContent = esAnonima ? 'Denuncia Anónima' : 'Identificada';
+    document.getElementById('rev-anonima').textContent = esAnonima ? 'Denuncia Anónima' : (esTercero ? 'Tercero denunciante' : 'Identificada');
 
+    // Tercero
+    const terceroRow = document.getElementById('rev-tercero-row');
+    if (esTercero) {
+        terceroRow.style.display = '';
+        document.getElementById('rev-tercero').textContent = document.querySelector('input[name="tercero_nombre"]').value || '—';
+    } else {
+        terceroRow.style.display = 'none';
+    }
+
+    // Centro / CD
     const centroSelect = document.querySelector('select[name="centro_costo_id"]');
     document.getElementById('rev-centro').textContent = centroSelect.selectedIndex > 0 ? centroSelect.options[centroSelect.selectedIndex].text : '—';
 
+    // Denunciado
     const denunciado = document.querySelector('input[name="denunciado_nombre"]').value;
-    const cargo = document.querySelector('input[name="denunciado_cargo"]').value;
-    document.getElementById('rev-denunciado').textContent = denunciado ? (denunciado + (cargo ? ' (' + cargo + ')' : '')) : 'No indicado';
+    const cargoDSelect = document.querySelector('select[name="denunciado_cargo_tipo"]');
+    const cargoDLabel  = cargoDSelect.selectedIndex > 0 ? cargoDSelect.options[cargoDSelect.selectedIndex].text : '';
+    document.getElementById('rev-denunciado').textContent = denunciado ? (denunciado + (cargoDLabel ? ' · ' + cargoDLabel : '')) : 'No indicado';
+
+    // Empresa denunciado
+    const empDSelect = document.querySelector('select[name="denunciado_empresa"]');
+    document.getElementById('rev-empresa-denunciado').textContent = empDSelect.selectedIndex > 0 ? empDSelect.options[empDSelect.selectedIndex].text : '—';
+
+    // Datos extendidos denunciante
+    const rangoSelect = document.querySelector('select[name="denunciante_rango_etario"]');
+    document.getElementById('rev-rango-etario').textContent = rangoSelect.selectedIndex > 0 ? rangoSelect.options[rangoSelect.selectedIndex].text : '—';
+
+    const sexoSelect = document.querySelector('select[name="denunciante_sexo"]');
+    document.getElementById('rev-sexo').textContent = sexoSelect.selectedIndex > 0 ? sexoSelect.options[sexoSelect.selectedIndex].text : '—';
+
+    const cargoSelect = document.querySelector('select[name="denunciante_cargo_tipo"]');
+    let cargoLabel = cargoSelect.selectedIndex > 0 ? cargoSelect.options[cargoSelect.selectedIndex].text : '—';
+    if (cargoSelect.value === 'OTRO') {
+        const cargoOtro = document.querySelector('input[name="denunciante_cargo_otro"]').value;
+        if (cargoOtro) cargoLabel = 'Otro: ' + cargoOtro;
+    }
+    document.getElementById('rev-cargo').textContent = cargoLabel;
+
+    const empDenSelect = document.querySelector('select[name="denunciante_empresa"]');
+    document.getElementById('rev-empresa').textContent = empDenSelect.selectedIndex > 0 ? empDenSelect.options[empDenSelect.selectedIndex].text : '—';
+
+    const jerarquiaSelect = document.querySelector('select[name="denunciante_jerarquia"]');
+    document.getElementById('rev-jerarquia').textContent = jerarquiaSelect.selectedIndex > 0 ? jerarquiaSelect.options[jerarquiaSelect.selectedIndex].text : '—';
 
     // Contacto
     const contactoSelect = document.querySelector('select[name="metodo_contacto"]');

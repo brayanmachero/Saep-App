@@ -73,11 +73,28 @@
         @endif
     </div>
 
+    {{-- Tercero (si aplica) --}}
+    @if($leyKarin->es_tercero)
+    <div class="glass-card" style="margin-bottom:1.25rem;border-left:4px solid #f59e0b;">
+        <h3 style="font-size:0.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1rem;font-weight:700;">
+            <i class="bi bi-person-check-fill" style="color:#d97706;"></i> Tercero Denunciante
+        </h3>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:.4rem .75rem;">
+            <span style="font-size:.85rem;color:var(--text-muted);font-weight:500;">Nombre</span>
+            <span style="font-size:.9rem;">{{ $leyKarin->tercero_nombre ?? '—' }}</span>
+            @if($leyKarin->tercero_rut)
+            <span style="font-size:.85rem;color:var(--text-muted);font-weight:500;">RUT</span>
+            <span style="font-size:.9rem;">{{ $leyKarin->tercero_rut }}</span>
+            @endif
+        </div>
+    </div>
+    @endif
+
     {{-- Denunciante y Denunciado --}}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem;">
         <div class="glass-card">
             <h3 style="font-size:0.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1rem;font-weight:700;">
-                <i class="bi bi-person-fill"></i> Denunciante
+                <i class="bi bi-person-fill"></i> {{ $leyKarin->es_tercero ? 'Víctima' : 'Denunciante' }}
             </h3>
             @if($leyKarin->anonima)
                 <div style="display:flex;align-items:center;gap:.5rem;color:var(--text-muted);font-style:italic;">
@@ -91,6 +108,31 @@
                     <span style="font-size:.85rem;color:var(--text-muted);font-weight:500;">RUT</span>
                     <span style="font-size:.9rem;">{{ $leyKarin->denunciante_rut }}</span>
                     @endif
+                    @if($leyKarin->denunciante_rango_etario)
+                    <span style="font-size:.85rem;color:var(--text-muted);font-weight:500;">Rango etario</span>
+                    <span style="font-size:.9rem;">{{ \App\Models\LeyKarin::rangosEtariosMap()[$leyKarin->denunciante_rango_etario] ?? $leyKarin->denunciante_rango_etario }}</span>
+                    @endif
+                    @if($leyKarin->denunciante_sexo)
+                    <span style="font-size:.85rem;color:var(--text-muted);font-weight:500;">Sexo</span>
+                    <span style="font-size:.9rem;">{{ \App\Models\LeyKarin::sexosMap()[$leyKarin->denunciante_sexo] ?? $leyKarin->denunciante_sexo }}</span>
+                    @endif
+                    @if($leyKarin->denunciante_cargo_tipo)
+                    <span style="font-size:.85rem;color:var(--text-muted);font-weight:500;">Cargo</span>
+                    <span style="font-size:.9rem;">
+                        {{ \App\Models\LeyKarin::cargosTipoMap()[$leyKarin->denunciante_cargo_tipo] ?? $leyKarin->denunciante_cargo_tipo }}
+                        @if($leyKarin->denunciante_cargo_tipo === 'OTRO' && $leyKarin->denunciante_cargo_otro)
+                            — {{ $leyKarin->denunciante_cargo_otro }}
+                        @endif
+                    </span>
+                    @endif
+                    @if($leyKarin->denunciante_empresa)
+                    <span style="font-size:.85rem;color:var(--text-muted);font-weight:500;">Empresa</span>
+                    <span style="font-size:.9rem;">{{ \App\Models\LeyKarin::empresasDenuncianteMap()[$leyKarin->denunciante_empresa] ?? $leyKarin->denunciante_empresa }}</span>
+                    @endif
+                    @if($leyKarin->denunciante_jerarquia)
+                    <span style="font-size:.85rem;color:var(--text-muted);font-weight:500;">Jerarquía denunciado</span>
+                    <span style="font-size:.9rem;">{{ \App\Models\LeyKarin::jerarquiasMap()[$leyKarin->denunciante_jerarquia] ?? $leyKarin->denunciante_jerarquia }}</span>
+                    @endif
                 </div>
             @endif
         </div>
@@ -103,7 +145,28 @@
                 <span style="font-size:.85rem;color:var(--text-muted);font-weight:500;">Nombre</span>
                 <span style="font-size:.9rem;">{{ $leyKarin->denunciado_nombre ?? '—' }}</span>
                 <span style="font-size:.85rem;color:var(--text-muted);font-weight:500;">Cargo</span>
-                <span style="font-size:.9rem;">{{ $leyKarin->denunciado_cargo ?? '—' }}</span>
+                <span style="font-size:.9rem;">
+                    @if($leyKarin->denunciado_cargo_tipo)
+                        {{ \App\Models\LeyKarin::cargosTipoMap()[$leyKarin->denunciado_cargo_tipo] ?? $leyKarin->denunciado_cargo_tipo }}
+                        @if($leyKarin->denunciado_cargo_tipo === 'OTRO' && $leyKarin->denunciado_cargo_otro)
+                            — {{ $leyKarin->denunciado_cargo_otro }}
+                        @endif
+                    @else
+                        {{ $leyKarin->denunciado_cargo ?? '—' }}
+                    @endif
+                </span>
+                @if($leyKarin->denunciado_empresa)
+                <span style="font-size:.85rem;color:var(--text-muted);font-weight:500;">Empresa</span>
+                <span style="font-size:.9rem;">{{ \App\Models\LeyKarin::empresasDenunciadoMap()[$leyKarin->denunciado_empresa] ?? $leyKarin->denunciado_empresa }}</span>
+                @endif
+                @if($leyKarin->denunciado_rango_etario)
+                <span style="font-size:.85rem;color:var(--text-muted);font-weight:500;">Rango etario</span>
+                <span style="font-size:.9rem;">{{ \App\Models\LeyKarin::rangosEtariosMap()[$leyKarin->denunciado_rango_etario] ?? $leyKarin->denunciado_rango_etario }}</span>
+                @endif
+                @if($leyKarin->denunciado_sexo)
+                <span style="font-size:.85rem;color:var(--text-muted);font-weight:500;">Sexo</span>
+                <span style="font-size:.9rem;">{{ \App\Models\LeyKarin::sexosMap()[$leyKarin->denunciado_sexo] ?? $leyKarin->denunciado_sexo }}</span>
+                @endif
             </div>
         </div>
     </div>

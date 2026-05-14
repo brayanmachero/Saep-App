@@ -92,13 +92,13 @@ class LeyKarinPublicoController extends Controller
         }
 
         $esAnonima = $request->boolean('anonima');
+        $esTercero = $request->boolean('es_tercero');
 
         $rules = [
             'tipo'               => 'required|string|in:' . implode(',', array_keys(LeyKarin::tiposMap())),
             'descripcion_hechos' => 'required|string|min:20|max:10000',
             'centro_costo_id'    => 'required|exists:centros_costo,id',
             'denunciado_nombre'  => 'nullable|string|max:200',
-            'denunciado_cargo'   => 'nullable|string|max:200',
             'metodo_contacto'    => 'nullable|string|in:EMAIL,TELEFONO,NO_CONTACTAR',
             'latitud'            => 'nullable|numeric|between:-90,90',
             'longitud'           => 'nullable|numeric|between:-180,180',
@@ -107,12 +107,31 @@ class LeyKarinPublicoController extends Controller
             'evidencias'         => 'nullable|array|max:5',
             'evidencias.*'       => 'file|max:10240|mimes:pdf,jpg,jpeg,png,gif,mp3,mp4,wav,doc,docx',
             'anonima'            => 'nullable|boolean',
+            'es_tercero'         => 'nullable|boolean',
+            'tercero_nombre'     => 'nullable|string|max:200',
+            'tercero_rut'        => 'nullable|string|max:20',
+            'denunciante_rango_etario' => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::rangosEtariosMap())),
+            'denunciante_sexo'         => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::sexosMap())),
+            'denunciante_cargo_tipo'   => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::cargosTipoMap())),
+            'denunciante_cargo_otro'   => 'nullable|string|max:200',
+            'denunciante_empresa'      => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::empresasDenuncianteMap())),
+            'denunciante_jerarquia'    => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::jerarquiasMap())),
+            'denunciado_rango_etario'  => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::rangosEtariosMap())),
+            'denunciado_sexo'          => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::sexosMap())),
+            'denunciado_cargo_tipo'    => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::cargosTipoMap())),
+            'denunciado_cargo_otro'    => 'nullable|string|max:200',
+            'denunciado_empresa'       => 'nullable|string|in:' . implode(',', array_keys(LeyKarin::empresasDenunciadoMap())),
         ];
 
-        // Si NO es anónima, nombre es obligatorio
-        if (!$esAnonima) {
+        // Si NO es anónima y NO es tercero, nombre del denunciante es obligatorio
+        if (!$esAnonima && !$esTercero) {
             $rules['denunciante_nombre'] = 'required|string|max:200';
             $rules['denunciante_rut']    = 'nullable|string|max:20';
+        }
+        // Si es tercero: nombre del tercero y de la víctima obligatorios
+        if ($esTercero) {
+            $rules['tercero_nombre']     = 'required|string|max:200';
+            $rules['denunciante_nombre'] = 'required|string|max:200';
         }
 
         $data = $request->validate($rules);
@@ -121,20 +140,33 @@ class LeyKarinPublicoController extends Controller
             'tipo'                => $data['tipo'],
             'descripcion_hechos'  => $data['descripcion_hechos'],
             'centro_costo_id'     => $data['centro_costo_id'],
-            'denunciante_nombre'  => $esAnonima ? null : ($data['denunciante_nombre'] ?? null),
-            'denunciante_rut'     => $esAnonima ? null : ($data['denunciante_rut'] ?? null),
+            'denunciante_nombre'  => ($esAnonima && !$esTercero) ? null : ($data['denunciante_nombre'] ?? null),
+            'denunciante_rut'     => ($esAnonima && !$esTercero) ? null : ($data['denunciante_rut'] ?? null),
             'denunciante_email'   => $googleUser['email'],  // SIEMPRE se guarda el email (anti-fraude)
             'denunciado_nombre'   => $data['denunciado_nombre'] ?? null,
-            'denunciado_cargo'    => $data['denunciado_cargo'] ?? null,
             'denunciante_latitud' => $data['latitud'] ?? null,
             'denunciante_longitud' => $data['longitud'] ?? null,
             'metodo_contacto'     => $data['metodo_contacto'] ?? 'EMAIL',
             'fecha_denuncia'      => now()->toDateString(),
             'canal'               => 'FORMULARIO_WEB',
             'confidencial'        => true,
-            'anonima'             => $esAnonima,
+            'anonima'             => ($esAnonima && !$esTercero),
             'consentimiento_datos' => true,
             'consentimiento_geolocalizacion' => $request->boolean('consentimiento_geolocalizacion'),
+            'denunciante_rango_etario' => $data['denunciante_rango_etario'] ?? null,
+            'denunciante_sexo'         => $data['denunciante_sexo'] ?? null,
+            'denunciante_cargo_tipo'   => $data['denunciante_cargo_tipo'] ?? null,
+            'denunciante_cargo_otro'   => $data['denunciante_cargo_otro'] ?? null,
+            'denunciante_empresa'      => $data['denunciante_empresa'] ?? null,
+            'denunciante_jerarquia'    => $data['denunciante_jerarquia'] ?? null,
+            'denunciado_rango_etario'  => $data['denunciado_rango_etario'] ?? null,
+            'denunciado_sexo'          => $data['denunciado_sexo'] ?? null,
+            'denunciado_cargo_tipo'    => $data['denunciado_cargo_tipo'] ?? null,
+            'denunciado_cargo_otro'    => $data['denunciado_cargo_otro'] ?? null,
+            'denunciado_empresa'       => $data['denunciado_empresa'] ?? null,
+            'es_tercero'               => $esTercero,
+            'tercero_nombre'           => $esTercero ? ($data['tercero_nombre'] ?? null) : null,
+            'tercero_rut'              => $esTercero ? ($data['tercero_rut'] ?? null) : null,
         ]);
 
         // Subir evidencias (almacenamiento privado)

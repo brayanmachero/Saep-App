@@ -72,6 +72,65 @@
                         <i class="bi bi-info-circle"></i> Estos datos se completan automáticamente desde tu perfil.
                     </p>
                 </div>
+
+                {{-- Datos adicionales del denunciante --}}
+                <div style="margin-top:1.25rem;">
+                    <div class="form-grid-2" style="margin-bottom:.75rem;">
+                        <div class="form-group">
+                            <label>Rango etario</label>
+                            <select name="denunciante_rango_etario" class="form-input">
+                                <option value="">— Selecciona —</option>
+                                @foreach(\App\Models\LeyKarin::rangosEtariosMap() as $val => $lbl)
+                                <option value="{{ $val }}" {{ old('denunciante_rango_etario') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Sexo</label>
+                            <select name="denunciante_sexo" class="form-input">
+                                <option value="">— Selecciona —</option>
+                                @foreach(\App\Models\LeyKarin::sexosMap() as $val => $lbl)
+                                <option value="{{ $val }}" {{ old('denunciante_sexo') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-grid-2" style="margin-bottom:.75rem;">
+                        <div class="form-group">
+                            <label>Cargo</label>
+                            <select name="denunciante_cargo_tipo" id="denunciante_cargo_tipo" class="form-input" onchange="toggleOtroCargo(this,'denunciante_cargo_otro_wrap')">
+                                <option value="">— Selecciona —</option>
+                                @foreach(\App\Models\LeyKarin::cargosTipoMap() as $val => $lbl)
+                                <option value="{{ $val }}" {{ old('denunciante_cargo_tipo') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group" id="denunciante_cargo_otro_wrap" style="{{ old('denunciante_cargo_tipo')==='OTRO' ? '' : 'visibility:hidden;' }}">
+                            <label>Especifica el cargo</label>
+                            <input type="text" name="denunciante_cargo_otro" class="form-input" value="{{ old('denunciante_cargo_otro') }}" placeholder="Indica tu cargo">
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label>Empresa</label>
+                            <select name="denunciante_empresa" class="form-input">
+                                <option value="">— Selecciona —</option>
+                                @foreach(\App\Models\LeyKarin::empresasDenuncianteMap() as $val => $lbl)
+                                <option value="{{ $val }}" {{ old('denunciante_empresa') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Jerarquía del denunciado respecto a ti</label>
+                            <select name="denunciante_jerarquia" class="form-input">
+                                <option value="">— Selecciona —</option>
+                                @foreach(\App\Models\LeyKarin::jerarquiasMap() as $val => $lbl)
+                                <option value="{{ $val }}" {{ old('denunciante_jerarquia') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -112,7 +171,7 @@
             <p style="font-size:.88rem;color:var(--text-muted);margin-bottom:1rem;">
                 Si conoces los datos de la persona denunciada, completa lo siguiente. Estos campos son opcionales.
             </p>
-            <div class="form-grid-2">
+            <div class="form-grid-2" style="margin-bottom:.75rem;">
                 <div class="form-group">
                     <label>Nombre del Denunciado</label>
                     <input type="text" name="denunciado_nombre" value="{{ old('denunciado_nombre') }}"
@@ -120,8 +179,47 @@
                 </div>
                 <div class="form-group">
                     <label>Cargo del Denunciado</label>
-                    <input type="text" name="denunciado_cargo" value="{{ old('denunciado_cargo') }}"
-                           class="form-input" placeholder="Ej: Supervisor, Jefatura">
+                    <select name="denunciado_cargo_tipo" id="denunciado_cargo_tipo" class="form-input" onchange="toggleOtroCargo(this,'denunciado_cargo_otro_wrap')">
+                        <option value="">— Selecciona —</option>
+                        @foreach(\App\Models\LeyKarin::cargosTipoMap() as $val => $lbl)
+                        <option value="{{ $val }}" {{ old('denunciado_cargo_tipo') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            <div class="form-grid-2" style="margin-bottom:.75rem;">
+                <div class="form-group" id="denunciado_cargo_otro_wrap" style="{{ old('denunciado_cargo_tipo')==='OTRO' ? '' : 'visibility:hidden;' }}">
+                    <label>Especifica el cargo del denunciado</label>
+                    <input type="text" name="denunciado_cargo_otro" class="form-input" value="{{ old('denunciado_cargo_otro') }}" placeholder="Cargo del denunciado">
+                </div>
+                <div class="form-group">
+                    <label>Empresa del Denunciado</label>
+                    <select name="denunciado_empresa" class="form-input">
+                        <option value="">— Selecciona —</option>
+                        @foreach(\App\Models\LeyKarin::empresasDenunciadoMap() as $val => $lbl)
+                        <option value="{{ $val }}" {{ old('denunciado_empresa') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label>Rango Etario del Denunciado</label>
+                    <select name="denunciado_rango_etario" class="form-input">
+                        <option value="">— Selecciona —</option>
+                        @foreach(\App\Models\LeyKarin::rangosEtariosMap() as $val => $lbl)
+                        <option value="{{ $val }}" {{ old('denunciado_rango_etario') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Sexo del Denunciado</label>
+                    <select name="denunciado_sexo" class="form-input">
+                        <option value="">— Selecciona —</option>
+                        @foreach(\App\Models\LeyKarin::sexosMap() as $val => $lbl)
+                        <option value="{{ $val }}" {{ old('denunciado_sexo') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                        @endforeach
+                    </select>
                 </div>
             </div>
         </div>
@@ -174,7 +272,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     anonima.addEventListener('change', toggleAnonima);
     toggleAnonima();
+
+    // Initialize cargo "Otro" toggles
+    const dcTipo = document.getElementById('denunciante_cargo_tipo');
+    if (dcTipo) toggleOtroCargo(dcTipo, 'denunciante_cargo_otro_wrap');
+    const ddTipo = document.getElementById('denunciado_cargo_tipo');
+    if (ddTipo) toggleOtroCargo(ddTipo, 'denunciado_cargo_otro_wrap');
 });
+
+function toggleOtroCargo(select, wrapId) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    wrap.style.visibility = select.value === 'OTRO' ? '' : 'hidden';
+}
 </script>
 @endpush
 @endsection
