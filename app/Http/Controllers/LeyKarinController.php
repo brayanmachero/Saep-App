@@ -17,6 +17,101 @@ class LeyKarinController extends Controller
     // ADMIN / PREVENCIONISTA: GESTIÓN COMPLETA
     // =====================================================
 
+    public function dashboard(Request $request)
+    {
+        $q = LeyKarin::query();
+
+        // --- Filtros dinámicos ---
+        if ($request->filled('desde'))                    $q->where('fecha_denuncia', '>=', $request->desde);
+        if ($request->filled('hasta'))                    $q->where('fecha_denuncia', '<=', $request->hasta);
+        if ($request->filled('tipo'))                     $q->whereIn('tipo', (array)$request->tipo);
+        if ($request->filled('estado'))                   $q->whereIn('estado', (array)$request->estado);
+        if ($request->filled('canal'))                    $q->whereIn('canal', (array)$request->canal);
+        if ($request->filled('centro_costo_id'))          $q->whereIn('centro_costo_id', (array)$request->centro_costo_id);
+        if ($request->filled('denunciante_empresa'))      $q->whereIn('denunciante_empresa', (array)$request->denunciante_empresa);
+        if ($request->filled('denunciante_sexo'))         $q->whereIn('denunciante_sexo', (array)$request->denunciante_sexo);
+        if ($request->filled('denunciante_rango_etario')) $q->whereIn('denunciante_rango_etario', (array)$request->denunciante_rango_etario);
+        if ($request->filled('denunciado_empresa'))       $q->whereIn('denunciado_empresa', (array)$request->denunciado_empresa);
+        if ($request->filled('denunciado_sexo'))          $q->whereIn('denunciado_sexo', (array)$request->denunciado_sexo);
+        if ($request->filled('denunciado_rango_etario'))  $q->whereIn('denunciado_rango_etario', (array)$request->denunciado_rango_etario);
+        if ($request->filled('anonima') && $request->anonima !== '') {
+            $q->where('anonima', (bool)(int)$request->anonima);
+        }
+
+        // --- KPIs ---
+        $kpis = [
+            'total'            => (clone $q)->count(),
+            'recibidas'        => (clone $q)->where('estado', 'RECIBIDA')->count(),
+            'en_investigacion' => (clone $q)->where('estado', 'EN_INVESTIGACION')->count(),
+            'resueltas'        => (clone $q)->where('estado', 'RESUELTA')->count(),
+            'derivadas'        => (clone $q)->where('estado', 'DERIVADA_DT')->count(),
+            'archivadas'       => (clone $q)->where('estado', 'ARCHIVADA')->count(),
+            'anonimas'         => (clone $q)->where('anonima', true)->count(),
+            'terceros'         => (clone $q)->where('es_tercero', true)->count(),
+            'con_medidas'      => (clone $q)->whereNotNull('medidas_cautelares')
+                                             ->where('medidas_cautelares', '!=', '')->count(),
+        ];
+        $dias = (clone $q)->whereNotNull('fecha_resolucion')
+            ->selectRaw('AVG(DATEDIFF(fecha_resolucion, fecha_denuncia)) as avg_dias')
+            ->value('avg_dias');
+        $kpis['promedio_dias'] = $dias ? round($dias, 1) : null;
+
+        // --- Tendencia mensual ---
+        $trend = (clone $q)
+            ->selectRaw("DATE_FORMAT(fecha_denuncia, '%Y-%m') as mes, COUNT(*) as total")
+            ->groupBy('mes')->orderBy('mes')
+            ->pluck('total', 'mes');
+
+        // --- Distribuciones generales ---
+        $byTipo = (clone $q)->selectRaw('tipo as k, COUNT(*) as total')
+            ->whereNotNull('tipo')->groupBy('k')->pluck('total', 'k');
+
+        $byEstado = (clone $q)->selectRaw('estado as k, COUNT(*) as total')
+            ->groupBy('k')->pluck('total', 'k');
+
+        $byCanal = (clone $q)->selectRaw('canal as k, COUNT(*) as total')
+            ->whereNotNull('canal')->groupBy('k')->pluck('total', 'k');
+
+        $byCentro = (clone $q)
+            ->join('centros_costo', 'ley_karin.centro_costo_id', '=', 'centros_costo.id')
+            ->selectRaw('centros_costo.nombre as k, COUNT(*) as total')
+            ->groupBy('k')->orderByDesc('total')->limit(10)
+            ->pluck('total', 'k');
+
+        // --- Denunciante ---
+        $byDenuncianteSexo     = (clone $q)->selectRaw('denunciante_sexo as k, COUNT(*) as total')
+            ->whereNotNull('denunciante_sexo')->groupBy('k')->pluck('total', 'k');
+        $byDenuncianteRango    = (clone $q)->selectRaw('denunciante_rango_etario as k, COUNT(*) as total')
+            ->whereNotNull('denunciante_rango_etario')->groupBy('k')->pluck('total', 'k');
+        $byDenuncianteCargo    = (clone $q)->selectRaw('denunciante_cargo_tipo as k, COUNT(*) as total')
+            ->whereNotNull('denunciante_cargo_tipo')->groupBy('k')->pluck('total', 'k');
+        $byDenuncianteEmpresa  = (clone $q)->selectRaw('denunciante_empresa as k, COUNT(*) as total')
+            ->whereNotNull('denunciante_empresa')->groupBy('k')->pluck('total', 'k');
+        $byDenuncianteJerarquia = (clone $q)->selectRaw('denunciante_jerarquia as k, COUNT(*) as total')
+            ->whereNotNull('denunciante_jerarquia')->groupBy('k')->pluck('total', 'k');
+
+        // --- Denunciado ---
+        $byDenunciadoSexo    = (clone $q)->selectRaw('denunciado_sexo as k, COUNT(*) as total')
+            ->whereNotNull('denunciado_sexo')->groupBy('k')->pluck('total', 'k');
+        $byDenunciadoRango   = (clone $q)->selectRaw('denunciado_rango_etario as k, COUNT(*) as total')
+            ->whereNotNull('denunciado_rango_etario')->groupBy('k')->pluck('total', 'k');
+        $byDenunciadoCargo   = (clone $q)->selectRaw('denunciado_cargo_tipo as k, COUNT(*) as total')
+            ->whereNotNull('denunciado_cargo_tipo')->groupBy('k')->pluck('total', 'k');
+        $byDenunciadoEmpresa = (clone $q)->selectRaw('denunciado_empresa as k, COUNT(*) as total')
+            ->whereNotNull('denunciado_empresa')->groupBy('k')->pluck('total', 'k');
+
+        $centros = CentroCosto::orderBy('nombre')->get();
+
+        return view('ley_karin.dashboard', compact(
+            'kpis', 'trend',
+            'byTipo', 'byEstado', 'byCanal', 'byCentro',
+            'byDenuncianteSexo', 'byDenuncianteRango', 'byDenuncianteCargo',
+            'byDenuncianteEmpresa', 'byDenuncianteJerarquia',
+            'byDenunciadoSexo', 'byDenunciadoRango', 'byDenunciadoCargo',
+            'byDenunciadoEmpresa', 'centros'
+        ));
+    }
+
     public function index(Request $request)
     {
         $query = LeyKarin::with(['centroCosto', 'investigador', 'denunciante']);

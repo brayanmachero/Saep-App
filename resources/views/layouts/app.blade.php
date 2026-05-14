@@ -117,9 +117,13 @@
             </a>
             @endif
             @if(auth()->user()->tieneAcceso('ley_karin'))
-            <a href="{{ route('ley-karin.index') }}" class="nav-item {{ request()->routeIs('ley-karin.*') ? 'active' : '' }}">
+            <a href="{{ route('ley-karin.index') }}" class="nav-item {{ request()->routeIs('ley-karin.index') || request()->routeIs('ley-karin.show') || request()->routeIs('ley-karin.create') || request()->routeIs('ley-karin.edit') ? 'active' : '' }}">
                 <i class="bi bi-shield-fill-exclamation"></i>
                 <span>Ley Karin</span>
+            </a>
+            <a href="{{ route('ley-karin.dashboard') }}" class="nav-item {{ request()->routeIs('ley-karin.dashboard') ? 'active' : '' }}" style="padding-left:2.25rem;">
+                <i class="bi bi-bar-chart-line-fill"></i>
+                <span>Dashboard LK</span>
             </a>
             @elseif(auth()->user()->tieneAcceso('ley_karin_denuncia'))
             <a href="{{ route('ley-karin.denuncia') }}" class="nav-item {{ request()->routeIs('ley-karin.denuncia*') || request()->routeIs('ley-karin.confirmacion') ? 'active' : '' }}">

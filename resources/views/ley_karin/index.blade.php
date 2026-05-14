@@ -32,6 +32,9 @@
                 <i class="bi bi-box-arrow-up-right"></i> Formulario Público
             </a>
             @if(auth()->user()->tieneAcceso('ley_karin', 'puede_crear'))
+            <a href="{{ route('ley-karin.dashboard') }}" class="btn-ghost">
+                <i class="bi bi-bar-chart-line-fill"></i> Dashboard
+            </a>
             <a href="{{ route('ley-karin.create') }}" class="btn-premium">
                 <i class="bi bi-plus-circle-fill"></i> Nueva Denuncia
             </a>

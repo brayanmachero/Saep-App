@@ -313,6 +313,7 @@ Route::middleware('auth')->group(function () {
 
     // Admin / Prevencionista: gestión completa
     Route::middleware('modulo:ley_karin')->group(function () {
+        Route::get('ley-karin/dashboard', [LeyKarinController::class, 'dashboard'])->name('ley-karin.dashboard');
         Route::resource('ley-karin', LeyKarinController::class);
     });
 
