@@ -77,6 +77,14 @@ return [
         'key' => env('OPENAI_API_KEY'),
     ],
 
+    'talana' => [
+        'base_url'    => env('TALANA_API_BASE_URL', 'https://talana.com/es/api'),
+        'auth_scheme' => env('TALANA_API_AUTH_SCHEME', 'token'),
+        'token'       => env('TALANA_API_TOKEN'),
+        'alerta_email' => env('TALANA_ALERTA_EMAIL'),
+        'alerta_dias'  => (int) env('TALANA_ALERTA_DIAS', 30),
+    ],
+
     'google_drive' => [
         'credentials_path' => env('GOOGLE_DRIVE_CREDENTIALS_PATH', 'google-credentials.json'),
         'folder_id'        => env('GOOGLE_DRIVE_FOLDER_ID'),
