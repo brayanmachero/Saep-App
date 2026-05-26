@@ -189,6 +189,13 @@
                 <span>Webhooks Log</span>
             </a>
             @endif
+            @if(auth()->user()->rol && auth()->user()->rol->codigo === 'SUPER_ADMIN')
+            <a href="{{ route('grafana.index') }}" class="nav-item {{ request()->routeIs('grafana.*') ? 'active' : '' }}"
+               title="Analytics Talana — Beta">
+                <i class="bi bi-bar-chart-line-fill"></i>
+                <span>Analytics Talana <span style="font-size:.65rem;background:#f97316;color:#fff;padding:1px 5px;border-radius:4px;margin-left:4px;vertical-align:middle;">BETA</span></span>
+            </a>
+            @endif
             @endif
 
             {{-- PROTECCIÓN DE DATOS (Ley 21.719) --}}

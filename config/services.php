@@ -90,4 +90,9 @@ return [
         'folder_id'        => env('GOOGLE_DRIVE_FOLDER_ID'),
     ],
 
+    'grafana' => [
+        'url'           => env('GRAFANA_URL', ''),
+        'dashboard_uid' => env('GRAFANA_DASHBOARD_UID', 'talana-saep'),
+    ],
+
 ];

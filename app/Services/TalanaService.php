@@ -204,4 +204,29 @@ class TalanaService
 
         return $resultado;
     }
+
+    // ─── Asistencia ───────────────────────────────────────────────────────────
+
+    /**
+     * Obtiene marcas de asistencia (entradas/salidas) para un rango de fechas.
+     * Requiere parámetros desde/hasta obligatorios para evitar consultar todo el histórico.
+     *
+     * @param string $desde  Fecha inicio YYYY-MM-DD
+     * @param string $hasta  Fecha fin   YYYY-MM-DD
+     */
+    public function marcasAsistencia(string $desde, string $hasta, int $timeout = 60): array
+    {
+        return $this->fetchAll('mark/', [
+            'desde' => $desde,
+            'hasta' => $hasta,
+        ], 200, $timeout);
+    }
+
+    /**
+     * Obtiene los días de rotación de turnos (rotativeDay-paginado).
+     */
+    public function rotativeDays(array $query = []): array
+    {
+        return $this->fetchAll('rotativeDay-paginado/', $query);
+    }
 }

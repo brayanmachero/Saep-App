@@ -34,6 +34,7 @@ use App\Http\Controllers\LeyKarinPublicoController;
 use App\Http\Controllers\StopDashboardController;
 use App\Http\Controllers\CampoOpcionController;
 use App\Http\Controllers\MisFormulariosController;
+use App\Http\Controllers\GrafanaController;
 use Illuminate\Support\Facades\Route;
 
 // --- WEBHOOK KIZEO (público, sin auth ni CSRF) ---
@@ -439,6 +440,15 @@ Route::middleware('auth')->group(function () {
         Route::get('kanban/{kanban}/actividad', [\App\Http\Controllers\KanbanController::class, 'actividad'])->name('kanban.actividad');
         // Calendario API
         Route::get('kanban/{kanban}/calendar-data', [\App\Http\Controllers\KanbanController::class, 'calendarData'])->name('kanban.calendar-data');
+    });
+
+    // --- GRAFANA: ANALYTICS TALANA (solo SUPER_ADMIN — beta) ---
+    Route::middleware('role:SUPER_ADMIN')->prefix('grafana')->name('grafana.')->group(function () {
+        Route::get('/',             [GrafanaController::class, 'index'])->name('index');
+        Route::get('/stats',        [GrafanaController::class, 'stats'])->name('stats');
+        Route::get('/sync-status',  [GrafanaController::class, 'syncStatus'])->name('sync-status');
+        Route::get('/charts',       [GrafanaController::class, 'charts'])->name('charts');
+        Route::post('/sync',        [GrafanaController::class, 'sync'])->name('sync')->middleware('throttle:4,5');
     });
 
     }); // fin middleware consentimiento
