@@ -180,7 +180,7 @@ class TalanaSyncDbCommand extends Command
                     'finiquitado'         => (bool) ($c['finiquitado'] ?? false),
                     'sucursal_nombre'     => $this->str($c['sucursal']['nombre'] ?? null),
                     'centro_costo_nombre' => $this->str($c['centroCosto']['nombre'] ?? null),
-                    'cargo_nombre'        => $this->str($c['cargo']['nombre'] ?? $c['cargoDetails']['nombre'] ?? null),
+                    'cargo_nombre'        => $this->str(is_string($c['cargo'] ?? null) ? ($c['cargo'] ?? null) : ($c['cargo']['nombre'] ?? $c['cargoDetails']['nombre'] ?? null)),
                     'horas_jornada'       => isset($c['jornada']['horasDeLaJornada']) ? (float) $c['jornada']['horasDeLaJornada'] : null,
                     'jefe_nombre'         => $this->nombreCompleto($jef),
                     'synced_at'           => $now,

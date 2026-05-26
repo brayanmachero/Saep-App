@@ -1272,7 +1272,7 @@ function renderTable(data) {
     if (count) count.textContent = `${data.length} contrato${data.length !== 1 ? 's' : ''}`;
     const today = new Date(); today.setHours(0,0,0,0);
     tbody.innerHTML = data.map(row => {
-        const vence = new Date(row.hasta + 'T00:00:00');
+        const vence = new Date((row.hasta || '').substring(0, 10) + 'T00:00:00');
         const dias  = Math.ceil((vence - today) / 86400000);
         const cls   = dias <= 7 ? 'urgent' : dias <= 30 ? 'warning' : 'ok';
         const fecha = vence.toLocaleDateString('es-CL', { day:'2-digit', month:'short', year:'numeric' });
