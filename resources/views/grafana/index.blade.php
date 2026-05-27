@@ -460,6 +460,76 @@
         .chart-card.chart-wide { grid-column: span 1; }
         .filters-bar { flex-direction: column; align-items: flex-start; }
     }
+
+    /* ── Calendario de Renovaciones ──────────────────────────────────────────── */
+    .cal-section {
+        background: rgba(255,255,255,.04);
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 12px;
+        overflow: hidden;
+        backdrop-filter: blur(8px);
+    }
+    .cal-section-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: .7rem 1.1rem;
+        border-bottom: 1px solid rgba(255,255,255,.06);
+        background: rgba(0,0,0,.12);
+        font-size: .81rem; font-weight: 600; color: rgba(255,255,255,.8);
+        flex-wrap: wrap; gap: .5rem;
+    }
+    .cal-months-wrapper {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        padding: 1.25rem;
+    }
+    .cal-month-title {
+        font-size: .84rem; font-weight: 700; color: rgba(255,255,255,.75);
+        margin-bottom: .6rem; text-align: center; text-transform: capitalize;
+    }
+    .cal-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 2px;
+    }
+    .cal-dow {
+        font-size: .62rem; font-weight: 700; color: rgba(255,255,255,.3);
+        text-align: center; padding: .25rem 0;
+    }
+    .cal-cell {
+        border-radius: 4px;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        padding: .25rem 0; min-height: 34px;
+        transition: background .15s;
+    }
+    .cal-cell:not(.cal-empty):not(.cal-past):hover { background: rgba(255,255,255,.07); cursor: default; }
+    .cal-cell.cal-empty { pointer-events: none; }
+    .cal-cell.cal-past .cal-day { opacity: .3; }
+    .cal-cell.cal-today { background: rgba(249,115,22,.15); border: 1px solid rgba(249,115,22,.35); border-radius: 4px; }
+    .cal-cell.cal-warm { background: rgba(251,146,60,.12); }
+    .cal-cell.cal-hot  { background: rgba(239,68,68,.15); }
+    .cal-day { font-size: .73rem; color: rgba(255,255,255,.65); line-height: 1; }
+    .cal-badge {
+        font-size: .58rem; font-weight: 800;
+        padding: 1px 4px; border-radius: 8px; line-height: 1.4; margin-top: 1px;
+    }
+    .cal-warm .cal-badge { background: rgba(251,146,60,.3); color: #fb923c; }
+    .cal-hot  .cal-badge { background: rgba(239,68,68,.25); color: #f87171; }
+    .cal-legend {
+        display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;
+        font-size: .72rem; color: rgba(255,255,255,.4);
+    }
+    .cal-legend-dot {
+        width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0;
+    }
+    @media (max-width: 900px) {
+        .cal-months-wrapper { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 600px) {
+        .cal-months-wrapper { grid-template-columns: 1fr; }
+        .cal-cell { min-height: 28px; }
+    }
 </style>
 @endpush
 
@@ -524,6 +594,16 @@
             <div class="kpi-label">Marcas este mes</div>
             <div class="kpi-value">{{ number_format($stats['marcas_mes_actual']) }}</div>
             <div class="kpi-sub">{{ $stats['entradas_hoy'] }} entradas hoy</div>
+        </div>
+        <div class="kpi-card kpi-success">
+            <div class="kpi-label">Asistencia 30 días</div>
+            <div class="kpi-value">{{ number_format($stats['activos_con_marca_30d']) }}</div>
+            <div class="kpi-sub">personas con marcas recientes</div>
+        </div>
+        <div class="kpi-card {{ $stats['proximos_vencer_90'] > 20 ? 'kpi-warning' : '' }}">
+            <div class="kpi-label">Vencen en 90 días</div>
+            <div class="kpi-value">{{ number_format($stats['proximos_vencer_90']) }}</div>
+            <div class="kpi-sub">contratos plazo fijo</div>
         </div>
     </div>
 
@@ -698,6 +778,34 @@
             </div>
         </div>
 
+        {{-- Barras H: Vencimientos por Centro de Costo (90d) --}}
+        <div class="chart-card chart-wide">
+            <div class="chart-card-header">
+                <span><i class="bi bi-building-fill-exclamation" style="color:#f87171;margin-right:.4rem;"></i>Renovaciones por Centro de Costo — Próximos 90 Días</span>
+            </div>
+            <div class="chart-body" id="body-venc-centro" style="min-height:280px;">
+                <canvas id="chart-venc-centro"></canvas>
+                <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
+            </div>
+        </div>
+
+    </div>
+
+    {{-- ── Calendario de Renovaciones ────────────────────────────────────────── --}}
+    <div class="cal-section">
+        <div class="cal-section-header">
+            <span><i class="bi bi-calendar3" style="color:#60a5fa;margin-right:.4rem;"></i>Calendario de Renovaciones — Próximos 3 Meses</span>
+            <div class="cal-legend">
+                <div style="display:flex;align-items:center;gap:.35rem;"><div class="cal-legend-dot" style="background:rgba(251,146,60,.3);border:1px solid rgba(251,146,60,.5);"></div>1–9 contratos</div>
+                <div style="display:flex;align-items:center;gap:.35rem;"><div class="cal-legend-dot" style="background:rgba(239,68,68,.25);border:1px solid rgba(239,68,68,.5);"></div>10+ contratos</div>
+                <div style="display:flex;align-items:center;gap:.35rem;"><div class="cal-legend-dot" style="background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.4);"></div>Hoy</div>
+            </div>
+        </div>
+        <div class="cal-months-wrapper" id="cal-container">
+            <div style="grid-column:1/-1;text-align:center;padding:2rem;color:rgba(255,255,255,.3);font-size:.82rem;">
+                <i class="bi bi-arrow-repeat spin"></i> Cargando calendario...
+            </div>
+        </div>
     </div>
 
     {{-- ── Tabla: Contratos por vencer ──────────────────────────────────────── --}}
@@ -1003,7 +1111,7 @@ function loadCharts() {
     if (tipo)   params.append('tipo_contrato', tipo);
 
     loader.style.display = 'flex';
-    ['tipo','centros','venc','marcas','cargos'].forEach(id => showLoader(id, true));
+    ['tipo','centros','venc','marcas','cargos','venc-centro'].forEach(id => showLoader(id, true));
 
     fetch(`${CHARTS_URL}?${params}`, {
         headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
@@ -1011,19 +1119,21 @@ function loadCharts() {
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(data => {
         loader.style.display = 'none';
-        ['tipo','centros','venc','marcas','cargos'].forEach(id => showLoader(id, false));
+        ['tipo','centros','venc','marcas','cargos','venc-centro'].forEach(id => showLoader(id, false));
         populateFilters(data.filters);
         renderTipo(data.contratos_por_tipo);
         renderCentros(data.por_centro_costo);
         renderVencimientos(data.vencimientos_por_mes);
-        renderMarcas(data.marcas_por_dia);
+        renderMarcas(data.marcas_por_dia, data.asistencia_diaria);
         renderCargos(data.cargos_top);
         renderSummary(data.contratos_por_tipo);
         renderTable(data.proximos_vencer);
+        renderVencCentro(data.vencimientos_por_centro);
+        renderCalendario(data.calendario_vencimientos);
     })
     .catch(err => {
         loader.style.display = 'none';
-        ['tipo','centros','venc','marcas','cargos'].forEach(id => showLoader(id, false));
+        ['tipo','centros','venc','marcas','cargos','venc-centro'].forEach(id => showLoader(id, false));
         console.error('Error cargando gráficos:', err);
         showToast('Error al cargar los gráficos', 'danger');
     });
@@ -1161,8 +1271,8 @@ function renderVencimientos(data) {
     });
 }
 
-// ── Línea: Marcas por día ────────────────────────────────────────────────
-function renderMarcas(data) {
+// ── Línea: Marcas por día (+ personas únicas) ────────────────────────────
+function renderMarcas(data, asistData) {
     destroyChart('marcas');
     const body = document.getElementById('body-marcas');
     if (!data || !data.length) {
@@ -1170,33 +1280,46 @@ function renderMarcas(data) {
         return;
     }
     body.innerHTML = '<canvas id="chart-marcas"></canvas>';
+    const labels = data.map(d => new Date(d.label + 'T00:00:00').toLocaleDateString('es', { day: '2-digit', month: 'short' }));
+    const asistMap = {};
+    (asistData || []).forEach(d => { asistMap[d.label] = Number(d.total); });
+    const personasVals = data.map(d => asistMap[d.label] ?? null);
     charts['marcas'] = new Chart(document.getElementById('chart-marcas'), {
         type: 'line',
         data: {
-            labels: data.map(d => {
-                const dt = new Date(d.label + 'T00:00:00');
-                return dt.toLocaleDateString('es', { day: '2-digit', month: 'short' });
-            }),
-            datasets: [{
-                label: 'Marcas',
-                data: data.map(d => d.total),
-                borderColor: '#4ade80',
-                backgroundColor: 'rgba(74,222,128,0.1)',
-                borderWidth: 2,
-                tension: 0.35,
-                fill: true,
-                pointRadius: 3,
-                pointHoverRadius: 5,
-                pointBackgroundColor: '#4ade80',
-            }]
+            labels,
+            datasets: [
+                {
+                    label: 'Total marcas',
+                    data: data.map(d => d.total),
+                    borderColor: '#4ade80',
+                    backgroundColor: 'rgba(74,222,128,0.08)',
+                    borderWidth: 2, tension: 0.35, fill: true,
+                    pointRadius: 2, pointHoverRadius: 5, pointBackgroundColor: '#4ade80',
+                    yAxisID: 'y',
+                },
+                {
+                    label: 'Personas únicas',
+                    data: personasVals,
+                    borderColor: '#60a5fa',
+                    backgroundColor: 'rgba(96,165,250,0)',
+                    borderWidth: 2, borderDash: [5,3],
+                    tension: 0.35, fill: false,
+                    pointRadius: 2, pointHoverRadius: 5, pointBackgroundColor: '#60a5fa',
+                    yAxisID: 'y2',
+                }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: {
+                legend: { display: true, labels: { boxWidth: 10, padding: 12, font: { size: 11 } } }
+            },
             scales: {
                 x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: 'rgba(255,255,255,.5)', maxTicksLimit: 16 } },
-                y: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: 'rgba(255,255,255,.5)' }, beginAtZero: true }
+                y:  { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: '#4ade80' }, beginAtZero: true, position: 'left' },
+                y2: { grid: { display: false }, ticks: { color: '#60a5fa' }, beginAtZero: true, position: 'right' }
             }
         }
     });
@@ -1291,6 +1414,86 @@ function renderTable(data) {
 // ── Helper ───────────────────────────────────────────────────────────────
 function truncate(str, len) {
     return str && str.length > len ? str.slice(0, len) + '…' : (str || '');
+}
+
+// ── Barras H: Renovaciones por Centro de Costo (90d) ─────────────────────
+function renderVencCentro(data) {
+    destroyChart('venc-centro');
+    const body = document.getElementById('body-venc-centro');
+    if (!body) return;
+    if (!data || !data.length) {
+        body.innerHTML = '<div class="chart-empty">Sin contratos por vencer en los próximos 90 días</div>';
+        return;
+    }
+    body.innerHTML = '<canvas id="chart-venc-centro" style="max-height:360px;"></canvas>';
+    const height = Math.max(240, data.length * 30);
+    body.style.minHeight = height + 'px';
+    charts['venc-centro'] = new Chart(document.getElementById('chart-venc-centro'), {
+        type: 'bar',
+        data: {
+            labels: data.map(d => truncate(d.label || 'Sin centro', 30)),
+            datasets: [{
+                label: 'Contratos por vencer',
+                data: data.map(d => d.total),
+                backgroundColor: 'rgba(248,113,113,0.6)',
+                borderColor: '#f87171',
+                borderWidth: 1,
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: 'rgba(255,255,255,.5)' } },
+                y: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,.72)', font: { size: 10.5 } } }
+            }
+        }
+    });
+}
+
+// ── Calendario de renovaciones ────────────────────────────────────────────
+function renderCalendario(data) {
+    const el = document.getElementById('cal-container');
+    if (!el) return;
+    const lookup = {};
+    (data || []).forEach(d => { lookup[d.fecha] = Number(d.total); });
+    const today = new Date(); today.setHours(0,0,0,0);
+    let html = '';
+    for (let mo = 0; mo < 3; mo++) {
+        const ref   = new Date(today.getFullYear(), today.getMonth() + mo, 1);
+        const year  = ref.getFullYear(), month = ref.getMonth();
+        const label = ref.toLocaleString('es', { month: 'long', year: 'numeric' });
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const firstDay    = (new Date(year, month, 1).getDay() + 6) % 7; // Mon=0
+        const dowHeader   = ['Lu','Ma','Mi','Ju','Vi','Sá','Do'].map(d =>
+            `<div class="cal-dow">${d}</div>`).join('');
+        const emptyCells  = Array(firstDay).fill('<div class="cal-cell cal-empty"></div>').join('');
+        const dayCells    = Array.from({length: daysInMonth}, (_, i) => {
+            const day     = i + 1;
+            const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+            const count   = lookup[dateStr] || 0;
+            const dt      = new Date(year, month, day);
+            const isToday = dt.getTime() === today.getTime();
+            const isPast  = dt < today;
+            const cls     = ['cal-cell',
+                isPast  ? 'cal-past' : '',
+                isToday ? 'cal-today' : '',
+                !isPast && count >= 10 ? 'cal-hot'  : '',
+                !isPast && count > 0 && count < 10 ? 'cal-warm' : '',
+            ].filter(Boolean).join(' ');
+            const tip   = count > 0 ? `: ${count} contrato${count > 1 ? 's' : ''} vence${count > 1 ? 'n' : ''}` : '';
+            const badge = count > 0 ? `<span class="cal-badge">${count}</span>` : '';
+            return `<div class="${cls}" title="${dateStr}${tip}"><span class="cal-day">${day}</span>${badge}</div>`;
+        }).join('');
+        html += `<div class="cal-month">
+            <div class="cal-month-title">${label.charAt(0).toUpperCase() + label.slice(1)}</div>
+            <div class="cal-grid">${dowHeader}${emptyCells}${dayCells}</div>
+        </div>`;
+    }
+    el.innerHTML = html;
 }
 
 // ── Carga inicial de gráficos ─────────────────────────────────────────────

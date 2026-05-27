@@ -247,17 +247,55 @@ class GrafanaController extends Controller
             ->orderBy('tipo_contrato_nombre')
             ->pluck('tipo_contrato_nombre');
 
+        // 7. Asistencia diaria — personas únicas (últimos 30 días)
+        $asistenciaDiaria = TalanaMarca::whereBetween('fecha', [$ini30, $hoy])
+            ->select('fecha as label', DB::raw('COUNT(DISTINCT persona_talana_id) as total'))
+            ->groupBy('fecha')
+            ->orderBy('fecha')
+            ->get();
+
+        // 8. Vencimientos por centro de costo — próximos 90 días
+        $en90 = now()->addDays(90)->toDateString();
+        $vencPorCentroQ = TalanaContrato::where('finiquitado', false)
+            ->whereNotNull('hasta')
+            ->whereBetween('hasta', [$hoy, $en90])
+            ->whereNotNull('centro_costo_nombre');
+        if ($centroCosto)  $vencPorCentroQ->where('centro_costo_nombre', $centroCosto);
+        if ($tipoContrato) $vencPorCentroQ->where('tipo_contrato_nombre', $tipoContrato);
+        $vencPorCentro = $vencPorCentroQ
+            ->select('centro_costo_nombre as label', DB::raw('COUNT(*) as total'))
+            ->groupBy('centro_costo_nombre')
+            ->orderByDesc('total')
+            ->limit(12)
+            ->get();
+
+        // 9. Calendario de vencimientos — próximos 6 meses, por día
+        $en6m = now()->addMonths(6)->toDateString();
+        $calendarioQ = TalanaContrato::where('finiquitado', false)
+            ->whereNotNull('hasta')
+            ->whereBetween('hasta', [$hoy, $en6m]);
+        if ($centroCosto)  $calendarioQ->where('centro_costo_nombre', $centroCosto);
+        if ($tipoContrato) $calendarioQ->where('tipo_contrato_nombre', $tipoContrato);
+        $calendarioVenc = $calendarioQ
+            ->select(DB::raw("DATE_FORMAT(hasta,'%Y-%m-%d') as fecha"), DB::raw('COUNT(*) as total'))
+            ->groupBy('fecha')
+            ->orderBy('fecha')
+            ->get();
+
         return response()->json([
             'filters' => [
                 'centros_costo'  => $filtrosCentros,
                 'tipos_contrato' => $filtrosTipos,
             ],
-            'contratos_por_tipo'   => $contratosPorTipo,
-            'por_centro_costo'     => $porCentro,
-            'vencimientos_por_mes' => $vencimientosPorMes,
-            'marcas_por_dia'       => $marcasPorDia,
-            'cargos_top'           => $cargos,
-            'proximos_vencer'      => $proximosVencer,
+            'contratos_por_tipo'      => $contratosPorTipo,
+            'por_centro_costo'        => $porCentro,
+            'vencimientos_por_mes'    => $vencimientosPorMes,
+            'marcas_por_dia'          => $marcasPorDia,
+            'cargos_top'              => $cargos,
+            'proximos_vencer'         => $proximosVencer,
+            'asistencia_diaria'       => $asistenciaDiaria,
+            'vencimientos_por_centro' => $vencPorCentro,
+            'calendario_vencimientos' => $calendarioVenc,
         ]);
     }
 
@@ -300,6 +338,14 @@ class GrafanaController extends Controller
             'marcas_mes_actual' => TalanaMarca::where('fecha', '>=', $mesIni)->count(),
 
             'entradas_hoy' => TalanaMarca::where('fecha', $hoy)->where('tipo', 'E')->count(),
+
+            'activos_con_marca_30d' => TalanaMarca::where('fecha', '>=', now()->subDays(29)->toDateString())
+                ->distinct('persona_talana_id')
+                ->count('persona_talana_id'),
+
+            'proximos_vencer_90' => TalanaContrato::where('finiquitado', false)
+                ->whereBetween('hasta', [$hoy, now()->addDays(90)->toDateString()])
+                ->count(),
         ];
     }
 }
