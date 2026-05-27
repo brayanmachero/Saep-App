@@ -422,7 +422,7 @@
                         <p style="font-size:.82rem;font-weight:700;color:#92400e;margin-bottom:1rem;"><i class="bi bi-person-check-fill"></i> Tus Datos (Tercero que Denuncia)</p>
                         <div class="form-row">
                             <div class="form-group">
-                                <label>Tu nombre completo <span class="req">*</span></label>
+                                <label>Tu nombre completo <span class="req">*</span></label>    
                                 <input type="text" name="tercero_nombre" id="tercero_nombre" class="form-input" value="{{ old('tercero_nombre', $googleUser['name']) }}" placeholder="Nombre y apellidos">
                                 @error('tercero_nombre') <div class="field-error">{{ $message }}</div> @enderror
                             </div>

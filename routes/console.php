@@ -35,6 +35,12 @@ Schedule::command('kanban:alertas-vencimiento')->dailyAt('08:15')->withoutOverla
 // Kanban: crear instancias de tareas recurrentes (cada día a las 07:00 AM)
 Schedule::command('kanban:tareas-recurrentes')->dailyAt('07:00')->withoutOverlapping();
 
+// Talana: sync completo de personas + contratos + marcas del mes actual (diario a las 06:00 AM)
+Schedule::command('talana:sync-db')
+    ->dailyAt('06:00')
+    ->withoutOverlapping()
+    ->skip(fn() => ! config('services.talana.token'));
+
 // Talana: contratos próximos a vencer (lunes, miércoles y viernes a las 07:30 AM)
 Schedule::command('talana:alertas-contratos --dias=' . config('services.talana.alerta_dias', 7))
     ->cron('30 7 * * 1,3,5')

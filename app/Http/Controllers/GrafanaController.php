@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\TalanaSyncJob;
+use App\Models\TalanaAusencia;
 use App\Models\TalanaContrato;
 use App\Models\TalanaMarca;
 use App\Models\TalanaPersona;
+use App\Models\TalanaSaldoVacaciones;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -143,6 +145,12 @@ class GrafanaController extends Controller
             'last_marcas_human'  => $lastSyncMarcas
                 ? Carbon::parse($lastSyncMarcas)->diffForHumans()
                 : null,
+            // ── RRHH ──────────────────────────────────────────────────────────
+            'rrhh_running'           => (bool) Cache::get('talana_rrhh_sync_running', false),
+            'rrhh_error'             => Cache::get('talana_rrhh_sync_error'),
+            'rrhh_finished_at'       => Cache::get('talana_rrhh_sync_finished_at'),
+            'total_ausencias'        => TalanaAusencia::count(),
+            'total_saldo_vacaciones' => TalanaSaldoVacaciones::count(),
         ];
     }
 
@@ -296,7 +304,47 @@ class GrafanaController extends Controller
             'asistencia_diaria'       => $asistenciaDiaria,
             'vencimientos_por_centro' => $vencPorCentro,
             'calendario_vencimientos' => $calendarioVenc,
+            // ── RRHH ──────────────────────────────────────────────────────────
+            'ausencias_por_tipo'      => $this->ausenciasPorTipo(),
+            'ausencias_por_mes'       => $this->ausenciasPorMes(),
+            'distribucion_vacaciones' => $this->distribucionVacaciones(),
         ]);
+    }
+
+    private function ausenciasPorTipo(): \Illuminate\Support\Collection
+    {
+        $desde12m = now()->subMonths(12)->startOfMonth()->toDateString();
+        return TalanaAusencia::where('fecha_desde', '>=', $desde12m)
+            ->where('aprobada', true)
+            ->select('tipo_ausencia as label', DB::raw('COUNT(*) as total'))
+            ->whereNotNull('tipo_ausencia')
+            ->groupBy('tipo_ausencia')
+            ->orderByDesc('total')
+            ->get();
+    }
+
+    private function ausenciasPorMes(): \Illuminate\Support\Collection
+    {
+        $desde12m = now()->subMonths(11)->startOfMonth()->toDateString();
+        return TalanaAusencia::where('fecha_desde', '>=', $desde12m)
+            ->where('aprobada', true)
+            ->select(DB::raw("DATE_FORMAT(fecha_desde,'%Y-%m') as label"), DB::raw('COUNT(*) as total'))
+            ->groupBy('label')
+            ->orderBy('label')
+            ->get();
+    }
+
+    private function distribucionVacaciones(): array
+    {
+        $buckets = [
+            'Sin días'  => TalanaSaldoVacaciones::where('dias_restantes', '<=', 0)->count(),
+            '1–5 días'  => TalanaSaldoVacaciones::whereBetween('dias_restantes', [0.001, 5])->count(),
+            '6–10 días' => TalanaSaldoVacaciones::whereBetween('dias_restantes', [5.001, 10])->count(),
+            '11–15 días'=> TalanaSaldoVacaciones::whereBetween('dias_restantes', [10.001, 15])->count(),
+            '16+ días'  => TalanaSaldoVacaciones::where('dias_restantes', '>', 15)->count(),
+        ];
+
+        return collect($buckets)->map(fn($total, $label) => ['label' => $label, 'total' => $total])->values()->all();
     }
 
     private function getStats(): array
@@ -345,6 +393,26 @@ class GrafanaController extends Controller
 
             'proximos_vencer_90' => TalanaContrato::where('finiquitado', false)
                 ->whereBetween('hasta', [$hoy, now()->addDays(90)->toDateString()])
+                ->count(),
+
+            // ── RRHH: Vacaciones ──────────────────────────────────────────────
+            'total_vacaciones_dias' => round((float) TalanaSaldoVacaciones::sum('dias_restantes'), 1),
+
+            'personas_sin_vacaciones' => TalanaSaldoVacaciones::where('dias_restantes', '<=', 0)->count(),
+
+            // ── RRHH: Ausencias ───────────────────────────────────────────────
+            'ausencias_mes_actual' => TalanaAusencia::whereYear('fecha_desde', now()->year)
+                ->whereMonth('fecha_desde', now()->month)
+                ->where('aprobada', true)
+                ->count(),
+
+            'licencias_medicas_activas' => TalanaAusencia::where('tipo_ausencia', 'licencia medica')
+                ->where('aprobada', true)
+                ->where('fecha_hasta', '>=', $hoy)
+                ->count(),
+
+            'faltas_injustificadas_30d' => TalanaAusencia::where('tipo_ausencia', 'falta injustificada')
+                ->where('fecha_desde', '>=', now()->subDays(30)->toDateString())
                 ->count(),
         ];
     }

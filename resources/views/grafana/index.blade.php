@@ -605,6 +605,36 @@
             <div class="kpi-value">{{ number_format($stats['proximos_vencer_90']) }}</div>
             <div class="kpi-sub">contratos plazo fijo</div>
         </div>
+
+        {{-- ── RRHH: Vacaciones ──────────────────────────────────────── --}}
+        @if($stats['total_vacaciones_dias'] > 0 || $stats['personas_sin_vacaciones'] >= 0)
+        <div class="kpi-card kpi-info">
+            <div class="kpi-label">Días vacaciones pendientes</div>
+            <div class="kpi-value">{{ number_format($stats['total_vacaciones_dias']) }}</div>
+            <div class="kpi-sub">{{ number_format($stats['personas_sin_vacaciones']) }} sin saldo acumulado</div>
+        </div>
+        @endif
+
+        {{-- ── RRHH: Ausencias ──────────────────────────────────────── --}}
+        @if($stats['ausencias_mes_actual'] > 0 || $stats['licencias_medicas_activas'] >= 0)
+        <div class="kpi-card {{ $stats['ausencias_mes_actual'] > 10 ? 'kpi-warning' : '' }}">
+            <div class="kpi-label">Ausencias este mes</div>
+            <div class="kpi-value">{{ number_format($stats['ausencias_mes_actual']) }}</div>
+            <div class="kpi-sub">aprobadas este mes</div>
+        </div>
+        <div class="kpi-card {{ $stats['licencias_medicas_activas'] > 5 ? 'kpi-warning' : '' }}">
+            <div class="kpi-label">Licencias médicas activas</div>
+            <div class="kpi-value">{{ number_format($stats['licencias_medicas_activas']) }}</div>
+            <div class="kpi-sub">vigentes hoy</div>
+        </div>
+        @if($stats['faltas_injustificadas_30d'] > 0)
+        <div class="kpi-card kpi-danger">
+            <div class="kpi-label">Faltas injustificadas</div>
+            <div class="kpi-value">{{ number_format($stats['faltas_injustificadas_30d']) }}</div>
+            <div class="kpi-sub">últimos 30 días</div>
+        </div>
+        @endif
+        @endif
     </div>
 
     {{-- ── Estado de sincronización ─────────────────────────────────────────── --}}
@@ -684,6 +714,21 @@
                     {{ number_format($si['total_personas']) }} personas ·
                     {{ number_format($si['total_contratos']) }} contratos ·
                     {{ number_format($si['total_marcas']) }} marcas
+                </div>
+            </div>
+            <div class="sync-row">
+                <div class="sync-row-label">RRHH (ausencias / vacaciones)</div>
+                <div class="sync-row-value {{ $si['rrhh_error'] ? 'danger' : ($si['total_ausencias'] > 0 ? 'success' : 'warn') }}" id="sync-rrhh-totals">
+                    @if($si['rrhh_error'])
+                        <span class="danger">⚠ {{ $si['rrhh_error'] }}</span>
+                    @elseif($si['total_ausencias'] > 0)
+                        {{ number_format($si['total_ausencias']) }} ausencias · {{ number_format($si['total_saldo_vacaciones']) }} saldos vacac.
+                        @if($si['rrhh_finished_at'])
+                            &nbsp;<small style="opacity:.6;">({{ \Carbon\Carbon::parse($si['rrhh_finished_at'])->diffForHumans() }})</small>
+                        @endif
+                    @else
+                        <span class="warn">Sin sincronizar — ejecutar <code>php artisan talana:sync-rrhh</code></span>
+                    @endif
                 </div>
             </div>
         </div>
@@ -785,6 +830,39 @@
             </div>
             <div class="chart-body" id="body-venc-centro" style="min-height:280px;">
                 <canvas id="chart-venc-centro"></canvas>
+                <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
+            </div>
+        </div>
+
+        {{-- Donut: Ausencias por tipo --}}
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <span><i class="bi bi-clipboard2-pulse-fill" style="color:#f472b6;margin-right:.4rem;"></i>Ausencias por Tipo — Últimos 12 Meses</span>
+            </div>
+            <div class="chart-body" id="body-ausencias-tipo">
+                <canvas id="chart-ausencias-tipo"></canvas>
+                <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
+            </div>
+        </div>
+
+        {{-- Barras V: Ausencias por mes --}}
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <span><i class="bi bi-calendar2-week-fill" style="color:#fbbf24;margin-right:.4rem;"></i>Ausentismo Mensual — Últimos 12 Meses</span>
+            </div>
+            <div class="chart-body" id="body-ausencias-mes" style="min-height:240px;">
+                <canvas id="chart-ausencias-mes"></canvas>
+                <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
+            </div>
+        </div>
+
+        {{-- Barras V: Distribución de vacaciones --}}
+        <div class="chart-card chart-wide">
+            <div class="chart-card-header">
+                <span><i class="bi bi-umbrella-fill" style="color:#34d399;margin-right:.4rem;"></i>Distribución de Saldo de Vacaciones</span>
+            </div>
+            <div class="chart-body" id="body-vacaciones-dist" style="min-height:220px;">
+                <canvas id="chart-vacaciones-dist"></canvas>
                 <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
             </div>
         </div>
@@ -1111,7 +1189,7 @@ function loadCharts() {
     if (tipo)   params.append('tipo_contrato', tipo);
 
     loader.style.display = 'flex';
-    ['tipo','centros','venc','marcas','cargos','venc-centro'].forEach(id => showLoader(id, true));
+    ['tipo','centros','venc','marcas','cargos','venc-centro','ausencias-tipo','ausencias-mes','vacaciones-dist'].forEach(id => showLoader(id, true));
 
     fetch(`${CHARTS_URL}?${params}`, {
         headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
@@ -1119,7 +1197,7 @@ function loadCharts() {
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(data => {
         loader.style.display = 'none';
-        ['tipo','centros','venc','marcas','cargos','venc-centro'].forEach(id => showLoader(id, false));
+        ['tipo','centros','venc','marcas','cargos','venc-centro','ausencias-tipo','ausencias-mes','vacaciones-dist'].forEach(id => showLoader(id, false));
         populateFilters(data.filters);
         renderTipo(data.contratos_por_tipo);
         renderCentros(data.por_centro_costo);
@@ -1130,10 +1208,13 @@ function loadCharts() {
         renderTable(data.proximos_vencer);
         renderVencCentro(data.vencimientos_por_centro);
         renderCalendario(data.calendario_vencimientos);
+        renderAusenciasTipo(data.ausencias_por_tipo);
+        renderAusenciasMes(data.ausencias_por_mes);
+        renderVacacionesDist(data.distribucion_vacaciones);
     })
     .catch(err => {
         loader.style.display = 'none';
-        ['tipo','centros','venc','marcas','cargos','venc-centro'].forEach(id => showLoader(id, false));
+        ['tipo','centros','venc','marcas','cargos','venc-centro','ausencias-tipo','ausencias-mes','vacaciones-dist'].forEach(id => showLoader(id, false));
         console.error('Error cargando gráficos:', err);
         showToast('Error al cargar los gráficos', 'danger');
     });
@@ -1494,6 +1575,122 @@ function renderCalendario(data) {
         </div>`;
     }
     el.innerHTML = html;
+}
+
+// ── Donut: Ausencias por tipo ─────────────────────────────────────────────
+function renderAusenciasTipo(data) {
+    destroyChart('ausencias-tipo');
+    const body = document.getElementById('body-ausencias-tipo');
+    if (!body) return;
+    if (!data || !data.length) {
+        body.innerHTML = '<div class="chart-empty">Sin datos de ausencias — ejecutar sync RRHH</div>';
+        return;
+    }
+    body.innerHTML = '<canvas id="chart-ausencias-tipo"></canvas>';
+    const total = data.reduce((a, d) => a + Number(d.total), 0);
+    charts['ausencias-tipo'] = new Chart(document.getElementById('chart-ausencias-tipo'), {
+        type: 'doughnut',
+        data: {
+            labels: data.map(d => d.label || 'Sin tipo'),
+            datasets: [{
+                data: data.map(d => d.total),
+                backgroundColor: ['#f472b6','#f87171','#fb923c','#fbbf24','#a78bfa','#60a5fa'],
+                borderWidth: 2,
+                borderColor: 'rgba(0,0,0,.35)',
+                hoverOffset: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '58%',
+            plugins: {
+                legend: { position: 'right', labels: { boxWidth: 11, padding: 10, font: { size: 11 } } },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ` ${ctx.label}: ${ctx.raw} (${((Number(ctx.raw)/total)*100).toFixed(1)}%)`
+                    }
+                }
+            }
+        }
+    });
+}
+
+// ── Barras V: Ausentismo mensual ──────────────────────────────────────────
+function renderAusenciasMes(data) {
+    destroyChart('ausencias-mes');
+    const body = document.getElementById('body-ausencias-mes');
+    if (!body) return;
+    body.innerHTML = '<canvas id="chart-ausencias-mes"></canvas>';
+    const labels = [], counts = [];
+    for (let i = 11; i >= 0; i--) {
+        const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+        const key   = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        const label = d.toLocaleString('es', { month: 'short', year: '2-digit' });
+        labels.push(label);
+        const found = data ? data.find(r => r.label === key) : null;
+        counts.push(found ? Number(found.total) : 0);
+    }
+    charts['ausencias-mes'] = new Chart(document.getElementById('chart-ausencias-mes'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Ausencias aprobadas',
+                data: counts,
+                backgroundColor: 'rgba(251,191,36,0.55)',
+                borderColor: '#fbbf24',
+                borderWidth: 1,
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: 'rgba(255,255,255,.6)' } },
+                y: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: 'rgba(255,255,255,.5)', stepSize: 1 }, beginAtZero: true }
+            }
+        }
+    });
+}
+
+// ── Barras V: Distribución de vacaciones ─────────────────────────────────
+function renderVacacionesDist(data) {
+    destroyChart('vacaciones-dist');
+    const body = document.getElementById('body-vacaciones-dist');
+    if (!body) return;
+    if (!data || !data.length || data.every(d => d.total === 0)) {
+        body.innerHTML = '<div class="chart-empty">Sin datos de vacaciones — ejecutar sync RRHH</div>';
+        return;
+    }
+    body.innerHTML = '<canvas id="chart-vacaciones-dist"></canvas>';
+    const bgColors = ['rgba(248,113,113,.6)','rgba(251,146,60,.6)','rgba(251,191,36,.6)','rgba(74,222,128,.5)','rgba(52,211,153,.7)'];
+    const bdColors = ['#f87171','#fb923c','#fbbf24','#4ade80','#34d399'];
+    charts['vacaciones-dist'] = new Chart(document.getElementById('chart-vacaciones-dist'), {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.label),
+            datasets: [{
+                label: 'Empleados',
+                data: data.map(d => d.total),
+                backgroundColor: bgColors.slice(0, data.length),
+                borderColor: bdColors.slice(0, data.length),
+                borderWidth: 1,
+                borderRadius: 5,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: 'rgba(255,255,255,.65)' } },
+                y: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: 'rgba(255,255,255,.5)', stepSize: 1 }, beginAtZero: true }
+            }
+        }
+    });
 }
 
 // ── Carga inicial de gráficos ─────────────────────────────────────────────

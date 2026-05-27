@@ -229,4 +229,35 @@ class TalanaService
     {
         return $this->fetchAll('rotativeDay-paginado/', $query);
     }
+
+    // ─── RRHH ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Obtiene el saldo de vacaciones actual por empleado (snapshot).
+     * Endpoint: saldo-vacaciones-empresa/ (~862 registros).
+     */
+    public function saldoVacaciones(): array
+    {
+        return $this->fetchAll('saldo-vacaciones-empresa/', [], 200, 60);
+    }
+
+    /**
+     * Obtiene ausencias/licencias/permisos paginados.
+     * Filtros opcionales: fechaDesde, fechaHasta (formato YYYY-MM-DD).
+     *
+     * @param string|null $desde  Filtrar desde esta fecha (YYYY-MM-DD)
+     * @param string|null $hasta  Filtrar hasta esta fecha (YYYY-MM-DD)
+     */
+    public function ausencias(?string $desde = null, ?string $hasta = null): array
+    {
+        $query = [];
+        if ($desde) {
+            $query['fechaDesde'] = $desde;
+        }
+        if ($hasta) {
+            $query['fechaHasta'] = $hasta;
+        }
+
+        return $this->fetchAll('personaAusencia-paginado/', $query, 200, 120);
+    }
 }

@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(composer require:*)",
-      "Bash(composer install:*)"
+      "Bash(composer install:*)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(php artisan *)"
     ]
   }
 }

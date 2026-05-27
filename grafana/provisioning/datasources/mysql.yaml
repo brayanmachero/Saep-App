@@ -1,0 +1,18 @@
+apiVersion: 1
+
+datasources:
+  - name: MySQL-SAEP
+    type: mysql
+    uid: mysql-saep
+    url: 127.0.0.1:3306
+    database: saep
+    user: ${GRAFANA_DB_USER}
+    secureJsonData:
+      password: "${GRAFANA_DB_PASSWORD}"
+    jsonData:
+      maxOpenConns: 5
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+      timeInterval: "1h"
+    isDefault: true
+    editable: false

@@ -1,0 +1,876 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "datasource", "id": "mysql", "name": "MySQL", "version": "1.0.0" }
+  ],
+  "uid": "talana-saep",
+  "title": "Talana SAEP — RR.HH. Analytics",
+  "description": "Dashboard completo de datos RR.HH. sincronizados desde Talana: contratos, asistencia, jornadas y alertas.",
+  "tags": ["talana", "rrhh", "saep", "contratos", "asistencia"],
+  "timezone": "America/Santiago",
+  "fiscalYearStartMonth": 0,
+  "refresh": "5m",
+  "schemaVersion": 38,
+  "version": 1,
+  "time": { "from": "now-30d", "to": "now" },
+  "timepicker": {},
+  "templating": {
+    "list": [
+      {
+        "name": "centro_costo",
+        "label": "Centro de Costo",
+        "type": "query",
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "query": "SELECT DISTINCT COALESCE(centro_costo_nombre, sucursal_nombre, 'Sin CC') AS cc FROM talana_contratos WHERE finiquitado = 0 ORDER BY cc",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false,
+        "sort": 1,
+        "hide": 0
+      },
+      {
+        "name": "tipo_contrato",
+        "label": "Tipo Contrato",
+        "type": "query",
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "query": "SELECT DISTINCT tipo_contrato_nombre FROM talana_contratos WHERE tipo_contrato_nombre IS NOT NULL ORDER BY tipo_contrato_nombre",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false,
+        "sort": 1,
+        "hide": 0
+      },
+      {
+        "name": "umbral_dias",
+        "label": "Alerta vencimiento (días)",
+        "type": "custom",
+        "query": "7,15,30,60,90",
+        "current": { "text": "30", "value": "30" },
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+
+    {
+      "id": 1,
+      "type": "row",
+      "title": "📊 KPIs Generales",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Trabajadores Activos",
+      "description": "Total de personas activas sincronizadas desde Talana",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COUNT(*) AS value FROM talana_personas WHERE activo = 1",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Contratos Vigentes",
+      "description": "Contratos activos (no finiquitados), incluyendo indefinidos",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "green" },
+          "unit": "short"
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COUNT(*) AS value FROM talana_contratos WHERE finiquitado = 0 AND (hasta IS NULL OR hasta >= CURDATE())",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Contratos Indefinidos",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "semi-dark-green" },
+          "unit": "short"
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COUNT(*) AS value FROM talana_contratos WHERE finiquitado = 0 AND hasta IS NULL",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "⚠ Próximos a Vencer",
+      "description": "Contratos que vencen en los próximos ${umbral_dias} días",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "orange", "value": 5 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COUNT(*) AS value FROM talana_contratos WHERE finiquitado = 0 AND hasta IS NOT NULL AND hasta BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ${umbral_dias} DAY)",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "🚨 Vencidos Activos",
+      "description": "Contratos ya vencidos pero trabajador no finiquitado (anomalías)",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COUNT(*) AS value FROM talana_contratos WHERE finiquitado = 0 AND hasta IS NOT NULL AND hasta < CURDATE()",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Marcas Mes Actual",
+      "description": "Total de marcas de asistencia (E+S) en el mes en curso",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "purple" },
+          "unit": "short"
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COUNT(*) AS value FROM talana_marcas WHERE fecha >= DATE_FORMAT(CURDATE(), '%Y-%m-01')",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 10,
+      "type": "row",
+      "title": "📋 Distribución de Contratos",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }
+    },
+
+    {
+      "id": 11,
+      "type": "piechart",
+      "title": "Contratos por Tipo",
+      "description": "Distribución de contratos vigentes por modalidad contractual",
+      "gridPos": { "h": 9, "w": 8, "x": 0, "y": 6 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "pieType": "donut",
+        "strokeWidth": 1,
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" } }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COALESCE(tipo_contrato_nombre, 'Sin tipo') AS tipo, COUNT(*) AS total FROM talana_contratos WHERE finiquitado = 0 AND (hasta IS NULL OR hasta >= CURDATE()) GROUP BY tipo ORDER BY total DESC",
+        "refId": "A"
+      }],
+      "transformations": [{ "id": "organize", "options": { "renameByName": { "tipo": "Tipo", "total": "Contratos" }, "excludeByName": {}, "indexByName": {} } }]
+    },
+
+    {
+      "id": 12,
+      "type": "barchart",
+      "title": "Contratos por Centro de Costo",
+      "description": "Contratos vigentes agrupados por unidad organizacional",
+      "gridPos": { "h": 9, "w": 16, "x": 8, "y": 6 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "legend": { "displayMode": "hidden" },
+        "tooltip": { "mode": "single" },
+        "xField": "cc"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "orange" },
+          "custom": { "fillOpacity": 80, "gradientMode": "none", "lineWidth": 0 }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COALESCE(centro_costo_nombre, sucursal_nombre, 'Sin CC') AS cc, COUNT(*) AS contratos FROM talana_contratos WHERE finiquitado = 0 AND (hasta IS NULL OR hasta >= CURDATE()) GROUP BY cc ORDER BY contratos DESC LIMIT 20",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 13,
+      "type": "barchart",
+      "title": "Distribución Jornada Laboral (hrs/semana)",
+      "description": "Cuántos trabajadores tienen cada tipo de jornada semanal",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 15 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "orientation": "vertical",
+        "xTickLabelRotation": 0,
+        "legend": { "displayMode": "hidden" },
+        "tooltip": { "mode": "single" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "custom": { "fillOpacity": 80 }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT CASE WHEN horas_jornada = 45 THEN '45 hrs (max legal)' WHEN horas_jornada = 44 THEN '44 hrs' WHEN horas_jornada = 40 THEN '40 hrs' WHEN horas_jornada BETWEEN 30 AND 39 THEN '30-39 hrs' WHEN horas_jornada < 30 THEN 'Part-time (<30h)' WHEN horas_jornada IS NULL THEN 'Sin datos' ELSE CONCAT(ROUND(horas_jornada), ' hrs') END AS jornada, COUNT(*) AS trabajadores FROM talana_contratos WHERE finiquitado = 0 AND (hasta IS NULL OR hasta >= CURDATE()) GROUP BY jornada ORDER BY trabajadores DESC",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 14,
+      "type": "piechart",
+      "title": "Contratos por Tipo de Jornada",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 15 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "pieType": "pie",
+        "strokeWidth": 1,
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" } }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT CASE WHEN hasta IS NULL THEN 'Indefinido' ELSE 'Plazo Fijo' END AS modalidad, COUNT(*) AS total FROM talana_contratos WHERE finiquitado = 0 AND (hasta IS NULL OR hasta >= CURDATE()) GROUP BY modalidad",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 20,
+      "type": "row",
+      "title": "📅 Vencimientos y Alertas",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 }
+    },
+
+    {
+      "id": 21,
+      "type": "barchart",
+      "title": "Contratos que Vencen — Próximos 12 Meses",
+      "description": "Cantidad de contratos con vencimiento por mes",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 25 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "orientation": "vertical",
+        "xTickLabelRotation": -30,
+        "legend": { "displayMode": "hidden" },
+        "tooltip": { "mode": "single" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "custom": { "fillOpacity": 80 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3 },
+              { "color": "orange", "value": 6 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT DATE_FORMAT(hasta, '%Y-%m') AS mes, COUNT(*) AS contratos FROM talana_contratos WHERE finiquitado = 0 AND hasta IS NOT NULL AND hasta BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 12 MONTH) GROUP BY mes ORDER BY mes ASC",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 22,
+      "type": "table",
+      "title": "🚨 Contratos Próximos a Vencer (${umbral_dias} días)",
+      "description": "Lista completa con días restantes, ordenada por urgencia",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 33 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "sortBy": [{ "displayName": "Días Rest.", "desc": false }],
+        "footer": { "show": true, "reducer": ["count"], "fields": ["persona_nombre"] }
+      },
+      "fieldConfig": {
+        "defaults": { "custom": { "filterable": true } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Días Rest." },
+            "properties": [
+              { "id": "custom.width", "value": 90 },
+              { "id": "thresholds", "value": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "orange", "value": 8 },
+                  { "color": "yellow", "value": 16 },
+                  { "color": "green", "value": 30 }
+                ]
+              }},
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          },
+          { "matcher": { "id": "byName", "options": "Tipo" }, "properties": [{ "id": "custom.width", "value": 140 }] },
+          { "matcher": { "id": "byName", "options": "RUT" }, "properties": [{ "id": "custom.width", "value": 120 }] }
+        ]
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT persona_nombre AS Trabajador, persona_rut AS RUT, tipo_contrato_nombre AS Tipo, COALESCE(sucursal_nombre, centro_costo_nombre, '—') AS `Centro de Costo`, cargo_nombre AS Cargo, hasta AS `Vence`, DATEDIFF(hasta, CURDATE()) AS `Días Rest.`, COALESCE(jefe_nombre, '—') AS Jefe FROM talana_contratos WHERE finiquitado = 0 AND hasta IS NOT NULL AND hasta BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ${umbral_dias} DAY) ORDER BY hasta ASC",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 23,
+      "type": "table",
+      "title": "🔴 Contratos Vencidos con Trabajador Activo",
+      "description": "Anomalías: contrato fecha hasta pasada pero persona no finiquitada",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 45 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "sortBy": [{ "displayName": "Días Vencido", "desc": true }]
+      },
+      "fieldConfig": {
+        "defaults": { "custom": { "filterable": true } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Días Vencido" },
+            "properties": [
+              { "id": "custom.width", "value": 110 },
+              { "id": "thresholds", "value": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "yellow", "value": null },
+                  { "color": "orange", "value": 7 },
+                  { "color": "red", "value": 30 }
+                ]
+              }},
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          }
+        ]
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT persona_nombre AS Trabajador, persona_rut AS RUT, tipo_contrato_nombre AS Tipo, COALESCE(sucursal_nombre, centro_costo_nombre, '—') AS `Centro de Costo`, cargo_nombre AS Cargo, hasta AS `Venció`, DATEDIFF(CURDATE(), hasta) AS `Días Vencido` FROM talana_contratos WHERE finiquitado = 0 AND hasta IS NOT NULL AND hasta < CURDATE() ORDER BY hasta ASC LIMIT 100",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 30,
+      "type": "row",
+      "title": "🕐 Asistencia y Marcas",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 55 }
+    },
+
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Marcas Diarias (Entradas y Salidas)",
+      "description": "Cantidad de marcas E/S por día en el rango seleccionado",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 56 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum", "mean", "max"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "spanNulls": false,
+            "pointSize": 4,
+            "showPoints": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Entradas" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Salidas" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }]
+          }
+        ]
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "time_series",
+        "rawSql": "SELECT UNIX_TIMESTAMP(fecha) * 1000 AS time, SUM(CASE WHEN tipo = 'E' THEN 1 ELSE 0 END) AS Entradas, SUM(CASE WHEN tipo = 'S' THEN 1 ELSE 0 END) AS Salidas FROM talana_marcas WHERE $__timeFilter(fecha) GROUP BY fecha ORDER BY fecha ASC",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 32,
+      "type": "barchart",
+      "title": "Marcas por Día de la Semana",
+      "description": "Distribución de asistencia según día de la semana (mes actual)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 66 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "orientation": "vertical",
+        "legend": { "displayMode": "hidden" },
+        "tooltip": { "mode": "single" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "purple" },
+          "custom": { "fillOpacity": 70 }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT ELT(DAYOFWEEK(fecha), 'Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb') AS dia, COUNT(*) AS marcas FROM talana_marcas WHERE tipo = 'E' AND fecha >= DATE_FORMAT(CURDATE(), '%Y-%m-01') GROUP BY DAYOFWEEK(fecha) ORDER BY DAYOFWEEK(fecha)",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 33,
+      "type": "barchart",
+      "title": "Top 15 Trabajadores — Más Marcas (Mes Actual)",
+      "description": "Trabajadores con mayor cantidad de marcas registradas este mes",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 66 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "orientation": "horizontal",
+        "legend": { "displayMode": "hidden" },
+        "tooltip": { "mode": "single" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "semi-dark-orange" },
+          "custom": { "fillOpacity": 80 }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COALESCE(persona_nombre, CONCAT('ID:', persona_talana_id)) AS trabajador, COUNT(*) AS marcas FROM talana_marcas WHERE fecha >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND tipo = 'E' GROUP BY persona_talana_id, persona_nombre ORDER BY marcas DESC LIMIT 15",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 34,
+      "type": "stat",
+      "title": "Entradas Hoy",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 74 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "green" },
+          "unit": "short"
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COUNT(*) AS value FROM talana_marcas WHERE fecha = CURDATE() AND tipo = 'E'",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 35,
+      "type": "stat",
+      "title": "Salidas Hoy",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 74 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "unit": "short"
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COUNT(*) AS value FROM talana_marcas WHERE fecha = CURDATE() AND tipo = 'S'",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 36,
+      "type": "stat",
+      "title": "Promedio Diario Entradas",
+      "description": "Promedio de entradas por día en el mes actual",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 74 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "orange" },
+          "unit": "short",
+          "decimals": 1
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT ROUND(COUNT(*) / COUNT(DISTINCT fecha), 1) AS value FROM talana_marcas WHERE tipo = 'E' AND fecha >= DATE_FORMAT(CURDATE(), '%Y-%m-01')",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 37,
+      "type": "stat",
+      "title": "Días con Asistencia (mes)",
+      "description": "Días únicos con al menos una marca registrada este mes",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 74 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "semi-dark-purple" },
+          "unit": "short"
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COUNT(DISTINCT fecha) AS value FROM talana_marcas WHERE fecha >= DATE_FORMAT(CURDATE(), '%Y-%m-01')",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 38,
+      "type": "table",
+      "title": "Marcas del Día de Hoy",
+      "description": "Detalle de entradas y salidas registradas hoy",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 78 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "sortBy": [{ "displayName": "Hora", "desc": false }],
+        "footer": { "show": true, "reducer": ["count"], "fields": ["persona_nombre"] }
+      },
+      "fieldConfig": {
+        "defaults": { "custom": { "filterable": true } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Tipo" },
+            "properties": [
+              { "id": "custom.width", "value": 80 },
+              { "id": "mappings", "value": [
+                { "type": "value", "options": { "E": { "text": "↳ Entrada", "color": "green", "index": 0 }, "S": { "text": "↰ Salida", "color": "blue", "index": 1 } } }
+              ]},
+              { "id": "custom.displayMode", "value": "color-background-solid" }
+            ]
+          },
+          { "matcher": { "id": "byName", "options": "Hora" }, "properties": [{ "id": "custom.width", "value": 90 }] }
+        ]
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT persona_nombre AS Trabajador, persona_rut AS RUT, tipo AS Tipo, hora AS Hora, COALESCE(centro_costo_nombre, '—') AS `Centro de Costo` FROM talana_marcas WHERE fecha = CURDATE() ORDER BY hora ASC LIMIT 200",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 40,
+      "type": "row",
+      "title": "🏢 Por Centro de Costo",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 88 }
+    },
+
+    {
+      "id": 41,
+      "type": "barchart",
+      "title": "Contratos Vigentes por CC · Desglose Tipo",
+      "description": "Stacked bar con tipos de contrato por cada centro de costo",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 89 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "orientation": "horizontal",
+        "stacking": "normal",
+        "legend": { "displayMode": "table", "placement": "right" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "fillOpacity": 80 },
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "mysql", "uid": "mysql-saep" },
+          "format": "table",
+          "rawSql": "SELECT COALESCE(centro_costo_nombre, sucursal_nombre, 'Sin CC') AS cc, SUM(CASE WHEN hasta IS NULL THEN 1 ELSE 0 END) AS Indefinido, SUM(CASE WHEN hasta IS NOT NULL AND hasta >= CURDATE() THEN 1 ELSE 0 END) AS `Plazo Fijo`, SUM(CASE WHEN hasta IS NOT NULL AND hasta < CURDATE() THEN 1 ELSE 0 END) AS Vencido FROM talana_contratos WHERE finiquitado = 0 GROUP BY cc ORDER BY (Indefinido + `Plazo Fijo`) DESC LIMIT 20",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 42,
+      "type": "barchart",
+      "title": "Asistencia por CC — Mes Actual",
+      "description": "Total de entradas registradas por centro de costo en el mes actual",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 99 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "orientation": "horizontal",
+        "legend": { "displayMode": "hidden" },
+        "tooltip": { "mode": "single" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "semi-dark-green" },
+          "custom": { "fillOpacity": 75 }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COALESCE(centro_costo_nombre, 'Sin CC') AS cc, COUNT(*) AS entradas FROM talana_marcas WHERE tipo = 'E' AND fecha >= DATE_FORMAT(CURDATE(), '%Y-%m-01') GROUP BY centro_costo_nombre ORDER BY entradas DESC LIMIT 20",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 50,
+      "type": "row",
+      "title": "⚙ Cargos y Estructura",
+      "collapsed": true,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 108 }
+    },
+
+    {
+      "id": 51,
+      "type": "barchart",
+      "title": "Top 20 Cargos más Frecuentes",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 109 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "orientation": "horizontal",
+        "legend": { "displayMode": "hidden" },
+        "tooltip": { "mode": "single" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "custom": { "fillOpacity": 70 }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT COALESCE(cargo_nombre, 'Sin cargo') AS cargo, COUNT(*) AS total FROM talana_contratos WHERE finiquitado = 0 AND (hasta IS NULL OR hasta >= CURDATE()) GROUP BY cargo ORDER BY total DESC LIMIT 20",
+        "refId": "A"
+      }]
+    },
+
+    {
+      "id": 60,
+      "type": "row",
+      "title": "📄 Directorio Completo",
+      "collapsed": true,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 119 }
+    },
+
+    {
+      "id": 61,
+      "type": "table",
+      "title": "Todos los Contratos Vigentes",
+      "description": "Listado completo exportable de contratos activos. Filtrar por CC o tipo de contrato con los selectores superiores.",
+      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 120 },
+      "datasource": { "type": "mysql", "uid": "mysql-saep" },
+      "options": {
+        "sortBy": [{ "displayName": "Trabajador", "desc": false }],
+        "footer": { "show": true, "reducer": ["count"], "fields": ["persona_nombre"] }
+      },
+      "fieldConfig": {
+        "defaults": { "custom": { "filterable": true } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Vence" }, "properties": [{ "id": "custom.width", "value": 100 }] },
+          { "matcher": { "id": "byName", "options": "RUT" }, "properties": [{ "id": "custom.width", "value": 110 }] },
+          { "matcher": { "id": "byName", "options": "Tipo" }, "properties": [{ "id": "custom.width", "value": 130 }] }
+        ]
+      },
+      "targets": [{
+        "datasource": { "type": "mysql", "uid": "mysql-saep" },
+        "format": "table",
+        "rawSql": "SELECT persona_nombre AS Trabajador, persona_rut AS RUT, tipo_contrato_nombre AS Tipo, COALESCE(sucursal_nombre, centro_costo_nombre, '—') AS `Centro de Costo`, cargo_nombre AS Cargo, horas_jornada AS `Hrs/Sem`, desde AS `Inicio`, hasta AS Vence, CASE WHEN hasta IS NULL THEN 'Indefinido' WHEN hasta < CURDATE() THEN '🔴 Vencido' WHEN hasta <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN '🟡 Por vencer' ELSE '🟢 Vigente' END AS Estado, COALESCE(jefe_nombre, '—') AS Jefe FROM talana_contratos WHERE finiquitado = 0 AND (hasta IS NULL OR hasta >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)) ORDER BY persona_nombre ASC",
+        "refId": "A"
+      }]
+    }
+
+  ],
+
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "datasource", "uid": "grafana" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0,211,255,1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}
