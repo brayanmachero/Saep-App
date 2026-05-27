@@ -376,7 +376,7 @@
     .chart-body {
         padding: .75rem 1rem 1rem;
         position: relative;
-        min-height: 220px;
+        min-height: 190px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -481,8 +481,8 @@
     }
 
     /* ── Mini chart (altura reducida para mayor densidad) ─────────────── */
-    .chart-body.chart-mini { min-height: 180px; }
-    .chart-body.chart-xs   { min-height: 140px; }
+    .chart-body.chart-mini { min-height: 170px; max-height: 210px; }
+    .chart-body.chart-xs   { min-height: 130px; max-height: 165px; }
 
     /* ── Sección separadora ───────────────────────────────────────────── */
     .section-divider {
@@ -822,7 +822,7 @@
             <div class="chart-card-header">
                 <span><i class="bi bi-pie-chart-fill" style="color:#f97316;margin-right:.4rem;"></i>Contratos por Tipo</span>
             </div>
-            <div class="chart-body" id="body-tipo">
+            <div class="chart-body" id="body-tipo" style="max-height:240px;min-height:200px;">
                 <canvas id="chart-tipo"></canvas>
                 <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
             </div>
@@ -833,7 +833,7 @@
             <div class="chart-card-header">
                 <span><i class="bi bi-bar-chart-horizontal-fill" style="color:#60a5fa;margin-right:.4rem;"></i>Top Centros de Costo</span>
             </div>
-            <div class="chart-body" id="body-centros" style="min-height:260px;">
+            <div class="chart-body" id="body-centros" style="min-height:200px;max-height:240px;">
                 <canvas id="chart-centros"></canvas>
                 <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
             </div>
@@ -844,7 +844,7 @@
             <div class="chart-card-header">
                 <span><i class="bi bi-calendar-x-fill" style="color:#f87171;margin-right:.4rem;"></i>Vencimientos — Próximos 12 Meses</span>
             </div>
-            <div class="chart-body" id="body-venc" style="min-height:240px;">
+            <div class="chart-body" id="body-venc" style="min-height:180px;max-height:220px;">
                 <canvas id="chart-venc"></canvas>
                 <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
             </div>
@@ -855,7 +855,7 @@
             <div class="chart-card-header">
                 <span><i class="bi bi-activity" style="color:#4ade80;margin-right:.4rem;"></i>Marcas de Asistencia — Últimos 30 Días</span>
             </div>
-            <div class="chart-body" id="body-marcas" style="min-height:240px;">
+            <div class="chart-body" id="body-marcas" style="min-height:180px;max-height:220px;">
                 <canvas id="chart-marcas"></canvas>
                 <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
             </div>
@@ -866,7 +866,7 @@
             <div class="chart-card-header">
                 <span><i class="bi bi-briefcase-fill" style="color:#a78bfa;margin-right:.4rem;"></i>Top Cargos</span>
             </div>
-            <div class="chart-body" id="body-cargos" style="min-height:260px;">
+            <div class="chart-body" id="body-cargos" style="min-height:200px;max-height:240px;">
                 <canvas id="chart-cargos"></canvas>
                 <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
             </div>
@@ -889,7 +889,7 @@
             <div class="chart-card-header">
                 <span><i class="bi bi-building-fill-exclamation" style="color:#f87171;margin-right:.4rem;"></i>Renovaciones por Centro de Costo — Próximos 90 Días</span>
             </div>
-            <div class="chart-body" id="body-venc-centro" style="min-height:280px;">
+            <div class="chart-body" id="body-venc-centro" style="min-height:200px;max-height:240px;">
                 <canvas id="chart-venc-centro"></canvas>
                 <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
             </div>
@@ -900,7 +900,7 @@
             <div class="chart-card-header">
                 <span><i class="bi bi-clipboard2-pulse-fill" style="color:#f472b6;margin-right:.4rem;"></i>Ausencias por Tipo — Últimos 12 Meses</span>
             </div>
-            <div class="chart-body" id="body-ausencias-tipo">
+            <div class="chart-body" id="body-ausencias-tipo" style="max-height:240px;min-height:200px;">
                 <canvas id="chart-ausencias-tipo"></canvas>
                 <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
             </div>
@@ -911,7 +911,7 @@
             <div class="chart-card-header">
                 <span><i class="bi bi-calendar2-week-fill" style="color:#fbbf24;margin-right:.4rem;"></i>Ausentismo Mensual — Últimos 12 Meses</span>
             </div>
-            <div class="chart-body" id="body-ausencias-mes" style="min-height:240px;">
+            <div class="chart-body" id="body-ausencias-mes" style="min-height:180px;max-height:210px;">
                 <canvas id="chart-ausencias-mes"></canvas>
                 <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
             </div>
@@ -922,7 +922,7 @@
             <div class="chart-card-header">
                 <span><i class="bi bi-umbrella-fill" style="color:#34d399;margin-right:.4rem;"></i>Distribución de Saldo de Vacaciones</span>
             </div>
-            <div class="chart-body" id="body-vacaciones-dist" style="min-height:220px;">
+            <div class="chart-body" id="body-vacaciones-dist" style="min-height:180px;max-height:210px;">
                 <canvas id="chart-vacaciones-dist"></canvas>
                 <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
             </div>
@@ -1422,7 +1422,7 @@ function renderTipo(data) {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             cutout: '60%',
             plugins: {
                 legend: { position: 'right', labels: { boxWidth: 11, padding: 10, font: { size: 11 } } },
@@ -1763,7 +1763,7 @@ function renderAusenciasTipo(data) {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             cutout: '58%',
             plugins: {
                 legend: { position: 'right', labels: { boxWidth: 11, padding: 10, font: { size: 11 } } },
