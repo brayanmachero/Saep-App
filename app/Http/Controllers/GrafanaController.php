@@ -308,6 +308,13 @@ class GrafanaController extends Controller
             'ausencias_por_tipo'      => $this->ausenciasPorTipo(),
             'ausencias_por_mes'       => $this->ausenciasPorMes(),
             'distribucion_vacaciones' => $this->distribucionVacaciones(),
+            // ── ANALYTICS CRUZADOS ────────────────────────────────────────────
+            'ausencias_por_centro'    => $this->ausenciasPorCentro(),
+            'vacaciones_por_centro'   => $this->vacacionesPorCentro(),
+            'top_ausentes'            => $this->topAusentes(),
+            'marcas_dia_semana'       => $this->marcasPorDiaSemana(),
+            'correlacion_mensual'     => $this->correlacionMensual(),
+            'headcount_centro_tipo'   => $this->headcountCentroTipo(),
         ]);
     }
 
@@ -345,6 +352,135 @@ class GrafanaController extends Controller
         ];
 
         return collect($buckets)->map(fn($total, $label) => ['label' => $label, 'total' => $total])->values()->all();
+    }
+
+    // ── ANALYTICS CRUZADOS ────────────────────────────────────────────────────
+
+    /** Ausentismo por centro de costo (JOIN ausencias → contratos) últimos 12m */
+    private function ausenciasPorCentro(): \Illuminate\Support\Collection
+    {
+        $desde = now()->subMonths(12)->startOfMonth()->toDateString();
+        return DB::table('talana_ausencias as a')
+            ->join('talana_contratos as c', 'a.empleado_id', '=', 'c.persona_talana_id')
+            ->where('a.fecha_desde', '>=', $desde)
+            ->where('a.aprobada', true)
+            ->whereNotNull('c.centro_costo_nombre')
+            ->where('c.finiquitado', false)
+            ->select('c.centro_costo_nombre as label',
+                     DB::raw('COUNT(a.id) as total'),
+                     DB::raw('SUM(a.numero_dias) as dias_total'))
+            ->groupBy('c.centro_costo_nombre')
+            ->orderByDesc('dias_total')
+            ->limit(12)
+            ->get();
+    }
+
+    /** Vacaciones pendientes por centro de costo (JOIN saldo_vacaciones → contratos) */
+    private function vacacionesPorCentro(): \Illuminate\Support\Collection
+    {
+        return DB::table('talana_saldo_vacaciones as v')
+            ->join('talana_contratos as c', 'v.empleado_id', '=', 'c.persona_talana_id')
+            ->where('c.finiquitado', false)
+            ->whereNotNull('c.centro_costo_nombre')
+            ->where('v.dias_restantes', '>', 0)
+            ->select('c.centro_costo_nombre as label',
+                     DB::raw('COUNT(v.id) as personas'),
+                     DB::raw('ROUND(SUM(v.dias_restantes), 1) as dias_total'))
+            ->groupBy('c.centro_costo_nombre')
+            ->orderByDesc('dias_total')
+            ->limit(12)
+            ->get();
+    }
+
+    /** Top 10 personas con más días de ausencia (últimos 12 meses) */
+    private function topAusentes(): \Illuminate\Support\Collection
+    {
+        $desde = now()->subMonths(12)->startOfMonth()->toDateString();
+        return TalanaAusencia::where('fecha_desde', '>=', $desde)
+            ->where('aprobada', true)
+            ->select('persona_nombre as label',
+                     DB::raw('COUNT(*) as eventos'),
+                     DB::raw('SUM(numero_dias) as dias_total'))
+            ->whereNotNull('persona_nombre')
+            ->groupBy('persona_nombre')
+            ->orderByDesc('dias_total')
+            ->limit(10)
+            ->get();
+    }
+
+    /** Marcas por día de la semana (últimos 90 días) — patrón de asistencia */
+    private function marcasPorDiaSemana(): \Illuminate\Support\Collection
+    {
+        $desde = now()->subDays(89)->toDateString();
+        $labels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        $rows = DB::table('talana_marcas')
+            ->where('fecha', '>=', $desde)
+            ->where('tipo', 'E')
+            ->select(DB::raw('DAYOFWEEK(fecha) as dow'), DB::raw('COUNT(DISTINCT persona_talana_id) as total'))
+            ->groupBy('dow')
+            ->orderBy('dow')
+            ->get()
+            ->keyBy('dow');
+
+        return collect(range(1, 7))->map(fn($d) => [
+            'label' => $labels[$d - 1],
+            'total' => $rows->get($d)?->total ?? 0,
+        ]);
+    }
+
+    /** Correlación mensual: asistencia única vs ausencias (últimos 12 meses) */
+    private function correlacionMensual(): array
+    {
+        $desde = now()->subMonths(11)->startOfMonth()->toDateString();
+
+        $asistencia = DB::table('talana_marcas')
+            ->where('fecha', '>=', $desde)
+            ->where('tipo', 'E')
+            ->select(DB::raw("DATE_FORMAT(fecha,'%Y-%m') as mes"), DB::raw('COUNT(DISTINCT persona_talana_id) as total'))
+            ->groupBy('mes')
+            ->orderBy('mes')
+            ->get()
+            ->keyBy('mes');
+
+        $ausencias = DB::table('talana_ausencias')
+            ->where('fecha_desde', '>=', $desde)
+            ->where('aprobada', true)
+            ->select(DB::raw("DATE_FORMAT(fecha_desde,'%Y-%m') as mes"), DB::raw('COUNT(*) as total'))
+            ->groupBy('mes')
+            ->orderBy('mes')
+            ->get()
+            ->keyBy('mes');
+
+        $meses = collect();
+        $cursor = now()->subMonths(11)->startOfMonth()->copy();
+        $fin    = now()->startOfMonth();
+        while ($cursor->lte($fin)) {
+            $key = $cursor->format('Y-m');
+            $meses->push([
+                'label'      => $cursor->translatedFormat('M y'),
+                'asistencia' => $asistencia->get($key)?->total ?? 0,
+                'ausencias'  => $ausencias->get($key)?->total ?? 0,
+            ]);
+            $cursor->addMonth();
+        }
+        return $meses->all();
+    }
+
+    /** Headcount por tipo de contrato vs centro de costo — stacked bar */
+    private function headcountCentroTipo(): \Illuminate\Support\Collection
+    {
+        $hoy = now()->toDateString();
+        return DB::table('talana_contratos')
+            ->where('finiquitado', false)
+            ->where(fn($q) => $q->whereNull('hasta')->orWhere('hasta', '>=', $hoy))
+            ->whereNotNull('centro_costo_nombre')
+            ->whereNotNull('tipo_contrato_nombre')
+            ->select('centro_costo_nombre as centro',
+                     'tipo_contrato_nombre as tipo',
+                     DB::raw('COUNT(*) as total'))
+            ->groupBy('centro_costo_nombre', 'tipo_contrato_nombre')
+            ->orderByDesc('total')
+            ->get();
     }
 
     private function getStats(): array

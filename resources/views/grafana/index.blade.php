@@ -461,6 +461,67 @@
         .filters-bar { flex-direction: column; align-items: flex-start; }
     }
 
+    /* ── Grid 3 columnas para analytics compacto ─────────────────────── */
+    .charts-grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: .85rem;
+    }
+    .charts-grid-3 .chart-card.span-2 { grid-column: span 2; }
+    .charts-grid-3 .chart-card.span-3 { grid-column: span 3; }
+    @media (max-width: 900px) {
+        .charts-grid-3 { grid-template-columns: repeat(2, 1fr); }
+        .charts-grid-3 .chart-card.span-2 { grid-column: span 2; }
+        .charts-grid-3 .chart-card.span-3 { grid-column: span 2; }
+    }
+    @media (max-width: 600px) {
+        .charts-grid-3 { grid-template-columns: 1fr; }
+        .charts-grid-3 .chart-card.span-2,
+        .charts-grid-3 .chart-card.span-3 { grid-column: span 1; }
+    }
+
+    /* ── Mini chart (altura reducida para mayor densidad) ─────────────── */
+    .chart-body.chart-mini { min-height: 180px; }
+    .chart-body.chart-xs   { min-height: 140px; }
+
+    /* ── Sección separadora ───────────────────────────────────────────── */
+    .section-divider {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        padding: .25rem 0;
+    }
+    .section-divider-label {
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: rgba(255,255,255,.35);
+        white-space: nowrap;
+    }
+    .section-divider-line {
+        flex: 1;
+        height: 1px;
+        background: rgba(255,255,255,.07);
+    }
+
+    /* ── Mini tabla top ausentes ──────────────────────────────────────── */
+    .mini-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+    .mini-table tr { border-bottom: 1px solid rgba(255,255,255,.05); }
+    .mini-table tr:last-child { border-bottom: none; }
+    .mini-table td { padding: .38rem .6rem; color: rgba(255,255,255,.8); vertical-align: middle; }
+    .mini-table td:first-child { color: rgba(255,255,255,.4); font-size: .68rem; font-weight: 700; width: 22px; }
+    .mini-table td:last-child { text-align: right; color: #fb923c; font-weight: 700; }
+    .mini-bar {
+        display: inline-block;
+        height: 6px;
+        border-radius: 3px;
+        background: linear-gradient(90deg,#f97316,#ea580c);
+        vertical-align: middle;
+        margin-left: .4rem;
+        opacity: .6;
+    }
+
     /* ── Calendario de Renovaciones ──────────────────────────────────────────── */
     .cal-section {
         background: rgba(255,255,255,.04);
@@ -869,7 +930,94 @@
 
     </div>
 
+    {{-- ── ANALYTICS CRUZADO ─────────────────────────────────────────────────── --}}
+    <div class="section-divider">
+        <div class="section-divider-label"><i class="bi bi-diagram-3" style="margin-right:.35rem;"></i>Analytics Cruzado</div>
+        <div class="section-divider-line"></div>
+        <div style="font-size:.68rem;color:rgba(255,255,255,.25);">Relaciones entre tablas · JOIN personas × contratos × ausencias × vacaciones</div>
+    </div>
+
+    <div class="charts-grid-3">
+
+        {{-- Correlación mensual: asistencia vs ausencias --}}
+        <div class="chart-card span-2">
+            <div class="chart-card-header">
+                <span><i class="bi bi-graph-up-arrow" style="color:#a78bfa;margin-right:.4rem;"></i>Asistencia vs Ausentismo — Últimos 12 Meses</span>
+                <span style="font-size:.7rem;color:rgba(255,255,255,.3);">personas únicas c/ marca × eventos de ausencia</span>
+            </div>
+            <div class="chart-body chart-mini" id="body-correlacion">
+                <canvas id="chart-correlacion"></canvas>
+                <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
+            </div>
+        </div>
+
+        {{-- Marcas por día de semana --}}
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <span><i class="bi bi-calendar-week" style="color:#60a5fa;margin-right:.4rem;"></i>Patrón Semanal de Asistencia</span>
+            </div>
+            <div class="chart-body chart-mini" id="body-dia-semana">
+                <canvas id="chart-dia-semana"></canvas>
+                <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
+            </div>
+        </div>
+
+        {{-- Ausentismo días por centro de costo --}}
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <span><i class="bi bi-building-x" style="color:#f87171;margin-right:.4rem;"></i>Ausentismo por Centro de Costo</span>
+                <span style="font-size:.7rem;color:rgba(255,255,255,.3);">días totales · 12m</span>
+            </div>
+            <div class="chart-body chart-mini" id="body-ausencias-centro">
+                <canvas id="chart-ausencias-centro"></canvas>
+                <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
+            </div>
+        </div>
+
+        {{-- Vacaciones pendientes por centro de costo --}}
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <span><i class="bi bi-suitcase2" style="color:#34d399;margin-right:.4rem;"></i>Vacaciones Pendientes por Área</span>
+                <span style="font-size:.7rem;color:rgba(255,255,255,.3);">días acumulados</span>
+            </div>
+            <div class="chart-body chart-mini" id="body-vac-centro">
+                <canvas id="chart-vac-centro"></canvas>
+                <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
+            </div>
+        </div>
+
+        {{-- Headcount por tipo de contrato × centro de costo (stacked) --}}
+        <div class="chart-card span-2">
+            <div class="chart-card-header">
+                <span><i class="bi bi-people-fill" style="color:#fbbf24;margin-right:.4rem;"></i>Headcount por Área y Tipo de Contrato</span>
+                <span style="font-size:.7rem;color:rgba(255,255,255,.3);">solo contratos vigentes</span>
+            </div>
+            <div class="chart-body chart-mini" id="body-headcount">
+                <canvas id="chart-headcount"></canvas>
+                <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
+            </div>
+        </div>
+
+        {{-- Top 10 ausentes --}}
+        <div class="chart-card">
+            <div class="chart-card-header">
+                <span><i class="bi bi-person-x-fill" style="color:#fb923c;margin-right:.4rem;"></i>Top 10 Ausentes</span>
+                <span style="font-size:.7rem;color:rgba(255,255,255,.3);">últimos 12m · días totales</span>
+            </div>
+            <div class="chart-body chart-mini" id="body-top-ausentes" style="padding:.5rem .75rem;align-items:flex-start;">
+                <div class="chart-loading"><i class="bi bi-arrow-repeat spin"></i>&nbsp;Cargando</div>
+                <table class="mini-table" id="table-top-ausentes" style="display:none;"></table>
+            </div>
+        </div>
+
+    </div>
+
     {{-- ── Calendario de Renovaciones ────────────────────────────────────────── --}}
+    <div class="section-divider">
+        <div class="section-divider-label"><i class="bi bi-calendar3" style="margin-right:.35rem;"></i>Contratos</div>
+        <div class="section-divider-line"></div>
+    </div>
+
     <div class="cal-section">
         <div class="cal-section-header">
             <span><i class="bi bi-calendar3" style="color:#60a5fa;margin-right:.4rem;"></i>Calendario de Renovaciones — Próximos 3 Meses</span>
@@ -1188,8 +1336,14 @@ function loadCharts() {
     if (centro) params.append('centro_costo', centro);
     if (tipo)   params.append('tipo_contrato', tipo);
 
+    const allChartIds = [
+        'tipo','centros','venc','marcas','cargos','venc-centro',
+        'ausencias-tipo','ausencias-mes','vacaciones-dist',
+        'correlacion','dia-semana','ausencias-centro','vac-centro','headcount',
+    ];
+
     loader.style.display = 'flex';
-    ['tipo','centros','venc','marcas','cargos','venc-centro','ausencias-tipo','ausencias-mes','vacaciones-dist'].forEach(id => showLoader(id, true));
+    allChartIds.forEach(id => showLoader(id, true));
 
     fetch(`${CHARTS_URL}?${params}`, {
         headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
@@ -1197,7 +1351,7 @@ function loadCharts() {
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(data => {
         loader.style.display = 'none';
-        ['tipo','centros','venc','marcas','cargos','venc-centro','ausencias-tipo','ausencias-mes','vacaciones-dist'].forEach(id => showLoader(id, false));
+        allChartIds.forEach(id => showLoader(id, false));
         populateFilters(data.filters);
         renderTipo(data.contratos_por_tipo);
         renderCentros(data.por_centro_costo);
@@ -1211,10 +1365,17 @@ function loadCharts() {
         renderAusenciasTipo(data.ausencias_por_tipo);
         renderAusenciasMes(data.ausencias_por_mes);
         renderVacacionesDist(data.distribucion_vacaciones);
+        // Analytics cruzados
+        renderCorrelacion(data.correlacion_mensual);
+        renderDiaSemana(data.marcas_dia_semana);
+        renderAusenciasCentro(data.ausencias_por_centro);
+        renderVacacionesCentro(data.vacaciones_por_centro);
+        renderHeadcount(data.headcount_centro_tipo);
+        renderTopAusentes(data.top_ausentes);
     })
     .catch(err => {
         loader.style.display = 'none';
-        ['tipo','centros','venc','marcas','cargos','venc-centro','ausencias-tipo','ausencias-mes','vacaciones-dist'].forEach(id => showLoader(id, false));
+        allChartIds.forEach(id => showLoader(id, false));
         console.error('Error cargando gráficos:', err);
         showToast('Error al cargar los gráficos', 'danger');
     });
@@ -1691,6 +1852,236 @@ function renderVacacionesDist(data) {
             }
         }
     });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ANALYTICS CRUZADOS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Línea doble: Correlación asistencia vs ausencias mensual ─────────────
+function renderCorrelacion(data) {
+    destroyChart('correlacion');
+    const body = document.getElementById('body-correlacion');
+    if (!body) return;
+    if (!data || !data.length) {
+        body.innerHTML = '<div class="chart-empty">Sin datos cruzados</div>'; return;
+    }
+    body.innerHTML = '<canvas id="chart-correlacion"></canvas>';
+    charts['correlacion'] = new Chart(document.getElementById('chart-correlacion'), {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.label),
+            datasets: [
+                {
+                    label: 'Personas c/ asistencia',
+                    data: data.map(d => d.asistencia),
+                    type: 'line',
+                    borderColor: '#60a5fa',
+                    backgroundColor: 'rgba(96,165,250,.12)',
+                    fill: true,
+                    tension: .35,
+                    pointRadius: 3,
+                    borderWidth: 2,
+                    yAxisID: 'yLeft',
+                },
+                {
+                    label: 'Eventos de ausencia',
+                    data: data.map(d => d.ausencias),
+                    backgroundColor: 'rgba(248,113,113,.45)',
+                    borderColor: '#f87171',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                    yAxisID: 'yRight',
+                },
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { labels: { color: 'rgba(255,255,255,.65)', boxWidth: 12, font: { size: 11 } } } },
+            scales: {
+                x: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: 'rgba(255,255,255,.55)', font: { size: 10 } } },
+                yLeft: { position: 'left', grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: '#60a5fa', font: { size: 10 } }, beginAtZero: true },
+                yRight: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#f87171', font: { size: 10 } }, beginAtZero: true },
+            }
+        }
+    });
+}
+
+// ── Barras H: Patrón semanal de asistencia ───────────────────────────────
+function renderDiaSemana(data) {
+    destroyChart('dia-semana');
+    const body = document.getElementById('body-dia-semana');
+    if (!body) return;
+    if (!data || !data.length) { body.innerHTML = '<div class="chart-empty">Sin datos</div>'; return; }
+    body.innerHTML = '<canvas id="chart-dia-semana"></canvas>';
+    const max = Math.max(...data.map(d => d.total)) || 1;
+    charts['dia-semana'] = new Chart(document.getElementById('chart-dia-semana'), {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.label),
+            datasets: [{
+                data: data.map(d => d.total),
+                backgroundColor: data.map(d =>
+                    d.label === 'Lun' ? 'rgba(96,165,250,.7)' :
+                    d.label === 'Vie' ? 'rgba(251,146,60,.65)' :
+                    d.total === max   ? 'rgba(74,222,128,.6)' :
+                    'rgba(255,255,255,.2)'),
+                borderRadius: 4,
+                borderWidth: 0,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: {
+                callbacks: { label: ctx => ` ${ctx.raw.toLocaleString('es-CL')} entradas` }
+            }},
+            scales: {
+                x: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: 'rgba(255,255,255,.6)', font: { size: 11 } } },
+                y: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: 'rgba(255,255,255,.4)', font: { size: 10 } }, beginAtZero: true },
+            }
+        }
+    });
+}
+
+// ── Barras H: Ausentismo por centro de costo ─────────────────────────────
+function renderAusenciasCentro(data) {
+    destroyChart('ausencias-centro');
+    const body = document.getElementById('body-ausencias-centro');
+    if (!body) return;
+    if (!data || !data.length) { body.innerHTML = '<div class="chart-empty">Sin datos — sync RRHH pendiente</div>'; return; }
+    body.innerHTML = '<canvas id="chart-ausencias-centro"></canvas>';
+    charts['ausencias-centro'] = new Chart(document.getElementById('chart-ausencias-centro'), {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.label.length > 20 ? d.label.slice(0,18)+'…' : d.label),
+            datasets: [{
+                label: 'Días de ausencia',
+                data: data.map(d => d.dias_total),
+                backgroundColor: 'rgba(248,113,113,.5)',
+                borderColor: '#f87171',
+                borderWidth: 1,
+                borderRadius: 3,
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: 'rgba(255,255,255,.4)', font: { size: 10 } }, beginAtZero: true },
+                y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: 'rgba(255,255,255,.65)', font: { size: 10 } } },
+            }
+        }
+    });
+}
+
+// ── Barras H: Vacaciones pendientes por área ─────────────────────────────
+function renderVacacionesCentro(data) {
+    destroyChart('vac-centro');
+    const body = document.getElementById('body-vac-centro');
+    if (!body) return;
+    if (!data || !data.length) { body.innerHTML = '<div class="chart-empty">Sin datos — sync RRHH pendiente</div>'; return; }
+    body.innerHTML = '<canvas id="chart-vac-centro"></canvas>';
+    charts['vac-centro'] = new Chart(document.getElementById('chart-vac-centro'), {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.label.length > 20 ? d.label.slice(0,18)+'…' : d.label),
+            datasets: [
+                {
+                    label: 'Días pendientes',
+                    data: data.map(d => d.dias_total),
+                    backgroundColor: 'rgba(52,211,153,.55)',
+                    borderColor: '#34d399',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                },
+                {
+                    label: 'Personas',
+                    data: data.map(d => d.personas),
+                    backgroundColor: 'rgba(251,191,36,.35)',
+                    borderColor: '#fbbf24',
+                    borderWidth: 1,
+                    borderRadius: 3,
+                },
+            ]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { labels: { color: 'rgba(255,255,255,.6)', boxWidth: 10, font: { size: 10 } } } },
+            scales: {
+                x: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: 'rgba(255,255,255,.4)', font: { size: 10 } }, beginAtZero: true },
+                y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: 'rgba(255,255,255,.65)', font: { size: 10 } } },
+            }
+        }
+    });
+}
+
+// ── Barras apiladas: Headcount por área × tipo contrato ──────────────────
+function renderHeadcount(data) {
+    destroyChart('headcount');
+    const body = document.getElementById('body-headcount');
+    if (!body) return;
+    if (!data || !data.length) { body.innerHTML = '<div class="chart-empty">Sin datos</div>'; return; }
+    body.innerHTML = '<canvas id="chart-headcount"></canvas>';
+
+    const centros = [...new Set(data.map(d => d.centro))].slice(0, 12);
+    const tipos   = [...new Set(data.map(d => d.tipo))];
+    const palette = ['rgba(96,165,250,.7)','rgba(52,211,153,.7)','rgba(251,191,36,.7)','rgba(248,113,113,.7)','rgba(167,139,250,.7)','rgba(251,146,60,.7)'];
+
+    const datasets = tipos.map((tipo, i) => ({
+        label: tipo,
+        data: centros.map(c => {
+            const row = data.find(d => d.centro === c && d.tipo === tipo);
+            return row ? row.total : 0;
+        }),
+        backgroundColor: palette[i % palette.length],
+        borderRadius: 3,
+        borderWidth: 0,
+    }));
+
+    charts['headcount'] = new Chart(document.getElementById('chart-headcount'), {
+        type: 'bar',
+        data: { labels: centros.map(c => c.length > 18 ? c.slice(0,16)+'…' : c), datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: 'rgba(255,255,255,.6)', boxWidth: 10, font: { size: 10 } } },
+                tooltip: { mode: 'index', intersect: false }
+            },
+            scales: {
+                x: { stacked: true, grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: 'rgba(255,255,255,.6)', font: { size: 10 } } },
+                y: { stacked: true, grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: 'rgba(255,255,255,.4)', font: { size: 10 } }, beginAtZero: true },
+            }
+        }
+    });
+}
+
+// ── Mini tabla: Top 10 ausentes ──────────────────────────────────────────
+function renderTopAusentes(data) {
+    const loader = document.querySelector('#body-top-ausentes .chart-loading');
+    const table  = document.getElementById('table-top-ausentes');
+    if (!table) return;
+    if (loader) loader.style.display = 'none';
+    if (!data || !data.length) {
+        table.style.display = 'none';
+        const body = document.getElementById('body-top-ausentes');
+        if (body) body.insertAdjacentHTML('beforeend', '<div class="chart-empty">Sin datos — sync RRHH pendiente</div>');
+        return;
+    }
+    const max = Math.max(...data.map(d => d.dias_total)) || 1;
+    table.style.display = 'table';
+    table.innerHTML = data.map((d, i) => {
+        const bar = Math.round((d.dias_total / max) * 60);
+        const nombre = d.label.split(' ').slice(0, 3).join(' ');
+        return `<tr>
+            <td>${i + 1}</td>
+            <td>${nombre}<span class="mini-bar" style="width:${bar}px"></span></td>
+            <td>${d.dias_total}d <span style="color:rgba(255,255,255,.35);font-size:.68rem;">(${d.eventos})</span></td>
+        </tr>`;
+    }).join('');
 }
 
 // ── Carga inicial de gráficos ─────────────────────────────────────────────
