@@ -27,7 +27,7 @@ class TalanaSyncRRHHCommand extends Command
     protected $signature = 'talana:sync-rrhh
                             {--solo-vacaciones : Sincroniza solo saldo de vacaciones}
                             {--solo-ausencias  : Sincroniza solo ausencias}
-                            {--meses=12        : Meses hacia atrás para sincronizar ausencias (default: 12)}
+                            {--meses=3         : Meses hacia atrás para sincronizar ausencias (default: 3)}
                             {--dry-run         : Consulta la API y muestra totales, sin persistir}';
 
     protected $description = 'Sincroniza saldo de vacaciones y ausencias de Talana a MySQL';
@@ -155,7 +155,15 @@ class TalanaSyncRRHHCommand extends Command
             $this->line("   Rango: {$desde} → {$hasta}");
 
             $ausencias = $this->talana->ausencias($desde, $hasta);
-            $this->line("   API: {$this->count($ausencias)} registros obtenidos");
+            $totalApi  = count($ausencias);
+
+            // La API ignora los filtros de fecha — filtramos del lado del cliente
+            $ausencias = array_values(array_filter(
+                $ausencias,
+                fn ($a) => isset($a['fechaDesde']) && $a['fechaDesde'] >= $desde
+            ));
+
+            $this->line("   API: {$totalApi} registros obtenidos (en rango: {$this->count($ausencias)})");
 
             if ($isDry) {
                 $tipos = array_count_values(

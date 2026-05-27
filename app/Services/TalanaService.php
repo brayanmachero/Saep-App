@@ -55,10 +55,11 @@ class TalanaService
         string $endpoint,
         array $query = [],
         int $pageSize = 200,
-        int $timeout = 30
+        int $timeout = 30,
+        int $startPage = 1
     ): array {
         $all  = [];
-        $page = 1;
+        $page = $startPage;
 
         do {
             $data    = $this->get($endpoint, array_merge($query, ['page' => $page, 'page_size' => $pageSize]), $timeout);
@@ -258,6 +259,23 @@ class TalanaService
             $query['fechaHasta'] = $hasta;
         }
 
-        return $this->fetchAll('personaAusencia-paginado/', $query, 200, 120);
+        // La API ignora los filtros de fecha y devuelve todos los registros ordenados
+        // por ID ascendente (más antiguos primero). Hacemos una probe para obtener el
+        // total y saltamos directamente a las páginas recientes, evitando años de historia.
+        $startPage = 1;
+        if ($desde) {
+            try {
+                $probe     = $this->get('personaAusencia-paginado/', ['page_size' => 1, 'page' => 1], 60);
+                $total     = (int) ($probe['count'] ?? 0);
+                if ($total > 400) {
+                    $totalPages = (int) ceil($total / 200);
+                    $startPage  = max(1, $totalPages - 50); // Buffer: ~50 páginas = ~10.000 registros
+                }
+            } catch (\Exception) {
+                // Fallback: comenzar desde página 1
+            }
+        }
+
+        return $this->fetchAll('personaAusencia-paginado/', $query, 200, 120, $startPage);
     }
 }
