@@ -104,7 +104,7 @@
                     <h3 style="margin:0;font-size:1rem;font-weight:700;display:flex;align-items:center;gap:.5rem;">
                         <i class="bi bi-folder-fill" style="color:#f59e0b;"></i> Documentos
                     </h3>
-                    <span style="font-size:.75rem;color:var(--text-muted);">JPG, PNG o PDF · máx. 10 MB por archivo · todos opcionales</span>
+                    <span style="font-size:.75rem;color:var(--text-muted);">JPG, PNG o PDF · máx. 20 MB por archivo · todos opcionales</span>
                 </div>
             </div>
             <div style="padding:0 1.5rem 1.5rem;">

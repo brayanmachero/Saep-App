@@ -43,7 +43,6 @@ class ContratacionPublicoController extends Controller
         try {
             $googleUser = Socialite::driver('google')
                 ->redirectUrl(route('contratacion-publico.callback'))
-                ->stateless()
                 ->user();
 
             Session::put('contratacion_google_user', [
@@ -117,35 +116,47 @@ class ContratacionPublicoController extends Controller
             'licencia_conducir_frontal.required'   => 'Debes subir el frontal de la Licencia de Conducir (ya tienes el reverso).',
             'licencia_conducir_reverso.required'   => 'Debes subir el reverso de la Licencia de Conducir (ya tienes el frontal).',
             '*.mimes'                              => 'Solo se permiten archivos JPG, PNG o PDF.',
-            '*.max'                                => 'El archivo no puede superar los 5 MB.',
+            '*.max'                                => 'El archivo no puede superar los 20 MB.',
         ]);
 
         $rutLimpio = preg_replace('/[^0-9kK]/', '', strtoupper($request->rut));
         $rutFormateado = PostulanteContratacion::formatearRut($rutLimpio);
         $rutCarpeta    = strtolower(preg_replace('/\./', '', $rutLimpio));
 
-        $datos = [
-            'nombre'      => $request->nombre,
-            'rut'         => $rutFormateado,
-            'email'       => $googleUser['email'],
-            'google_id'   => $googleUser['id'],
-            'google_name' => $googleUser['name'],
-            'google_avatar'=> $googleUser['avatar'],
-        ];
+        // En registro NUEVO se aceptan nombre/rut del request.
+        // En re-postulación se preservan los datos originales del primer envío
+        // (no permitimos al postulante cambiar su identidad por la UI).
+        if ($esNuevo) {
+            $datos = [
+                'nombre'        => $request->nombre,
+                'rut'           => $rutFormateado,
+                'email'         => $googleUser['email'],
+                'google_id'     => $googleUser['id'],
+                'google_name'   => $googleUser['name'],
+                'google_avatar' => $googleUser['avatar'],
+            ];
+        } else {
+            $datos = [
+                'email'         => $googleUser['email'],
+                'google_name'   => $googleUser['name'],
+                'google_avatar' => $googleUser['avatar'],
+            ];
+            $rutCarpeta = strtolower(preg_replace('/\./', '', preg_replace('/[^0-9kK]/', '', strtoupper($postulante->rut))));
+        }
 
-        // Subir documentos que lleguen en este request
+        // Subir documentos que lleguen en este request (disco PRIVADO: storage/app/private)
         $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
         foreach ($camposDocs as $campo) {
             if ($request->hasFile($campo)) {
                 // Borrar el anterior si existe
                 if ($postulante && $postulante->$campo) {
-                    Storage::disk('public')->delete($postulante->$campo);
+                    Storage::disk('local')->delete($postulante->$campo);
                 }
                 $ext  = $request->file($campo)->getClientOriginalExtension();
                 $path = $request->file($campo)->storeAs(
                     "contratacion/{$rutCarpeta}",
                     "{$campo}.{$ext}",
-                    'public'
+                    'local'
                 );
                 $datos[$campo] = $path;
             }
@@ -233,13 +244,13 @@ class ContratacionPublicoController extends Controller
                 $ruta = $postulante->$campo;
                 $ext  = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
 
-                if (!Storage::disk('public')->exists($ruta)) {
+                if (!Storage::disk('local')->exists($ruta)) {
                     $documentos[] = ['label' => $label, 'tipo' => 'ausente', 'data' => null, 'ext' => $ext];
                     continue;
                 }
 
                 if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
-                    $contenido    = Storage::disk('public')->get($ruta);
+                    $contenido    = Storage::disk('local')->get($ruta);
                     $mime         = match($ext) {
                         'png'  => 'image/png',
                         'gif'  => 'image/gif',
@@ -302,7 +313,7 @@ class ContratacionPublicoController extends Controller
                 // ── Descargar todos los PDFs a archivos temporales ───────────────
                 $docTempPaths = []; // label => path
                 foreach ($pdfDocRutas as $docInfo) {
-                    $pdfBytes = Storage::disk('public')->get($docInfo['ruta']);
+                    $pdfBytes = Storage::disk('local')->get($docInfo['ruta']);
                     $tempDoc  = tempnam($tmpDir, 'doc_') . '.pdf';
                     file_put_contents($tempDoc, $pdfBytes ?? '');
                     $tempFiles[]                     = $tempDoc;
@@ -331,8 +342,9 @@ class ContratacionPublicoController extends Controller
 
                     $allInputs = array_merge([$tempFicha], array_values($docTempPaths));
                     $inputArgs = implode(' ', array_map('escapeshellarg', $allInputs));
+                    // -dSAFER: input no confiable (PDFs del público). NUNCA usar -dNOSAFER aquí.
                     $cmd = sprintf(
-                        '%s -dBATCH -dNOPAUSE -dNOSAFER -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -sOutputFile=%s %s 2>&1',
+                        '%s -dBATCH -dNOPAUSE -dSAFER -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -sOutputFile=%s %s 2>&1',
                         escapeshellarg($gsPath),
                         escapeshellarg($tempMerged),
                         $inputArgs
@@ -438,7 +450,7 @@ class ContratacionPublicoController extends Controller
                                 $pngDir = $tmpDir . '/gs_' . uniqid();
                                 @mkdir($pngDir, 0755);
                                 $cmd = sprintf(
-                                    '%s -dBATCH -dNOPAUSE -dNOSAFER -sDEVICE=png16m -r150 -sOutputFile=%s %s 2>&1',
+                                    '%s -dBATCH -dNOPAUSE -dSAFER -sDEVICE=png16m -r150 -sOutputFile=%s %s 2>&1',
                                     escapeshellarg($gsPath),
                                     escapeshellarg($pngDir . '/page_%04d.png'),
                                     escapeshellarg($tempDoc)

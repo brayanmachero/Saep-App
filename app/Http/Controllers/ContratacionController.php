@@ -73,12 +73,12 @@ class ContratacionController extends Controller
                 }
             }],
             'email'              => 'required|email|max:200',
-            'carnet_frontal'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'carnet_reverso'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'certificado_afp'            => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'certificado_fonasa'         => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'licencia_conducir_frontal'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'licencia_conducir_reverso'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'carnet_frontal'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
+            'carnet_reverso'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
+            'certificado_afp'            => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
+            'certificado_fonasa'         => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
+            'licencia_conducir_frontal'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
+            'licencia_conducir_reverso'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
         ]);
 
         $rutLimpio     = preg_replace('/[^0-9kK]/', '', strtoupper($request->rut));
@@ -98,7 +98,7 @@ class ContratacionController extends Controller
                 $path = $request->file($campo)->storeAs(
                     "contratacion/{$rutCarpeta}",
                     "{$campo}.{$ext}",
-                    'public'
+                    'local'
                 );
                 $datos[$campo] = $path;
             }
@@ -184,12 +184,12 @@ class ContratacionController extends Controller
     public function updateDocumentos(Request $request, PostulanteContratacion $postulante)
     {
         $request->validate([
-            'carnet_frontal'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'carnet_reverso'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'certificado_afp'            => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'certificado_fonasa'         => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'licencia_conducir_frontal'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'licencia_conducir_reverso'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'carnet_frontal'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
+            'carnet_reverso'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
+            'certificado_afp'            => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
+            'certificado_fonasa'         => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
+            'licencia_conducir_frontal'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
+            'licencia_conducir_reverso'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
         ]);
 
         $rutLimpio  = preg_replace('/[^0-9kK]/', '', strtoupper($postulante->rut));
@@ -199,15 +199,15 @@ class ContratacionController extends Controller
         $actualizado = false;
         foreach ($camposDocs as $campo) {
             if ($request->hasFile($campo)) {
-                // Eliminar archivo anterior si existe
+                // Eliminar archivo anterior si existe (disco privado)
                 if ($postulante->$campo) {
-                    Storage::disk('public')->delete($postulante->$campo);
+                    Storage::disk('local')->delete($postulante->$campo);
                 }
                 $ext  = $request->file($campo)->getClientOriginalExtension();
                 $path = $request->file($campo)->storeAs(
                     "contratacion/{$rutCarpeta}",
                     "{$campo}.{$ext}",
-                    'public'
+                    'local'
                 );
                 $postulante->$campo = $path;
                 $actualizado = true;
@@ -239,7 +239,7 @@ class ContratacionController extends Controller
         }
 
         $ruta = $postulante->$campo;
-        if (!$ruta || !Storage::disk('public')->exists($ruta)) {
+        if (!$ruta || !Storage::disk('local')->exists($ruta)) {
             abort(404, 'Documento no encontrado.');
         }
 
@@ -247,7 +247,7 @@ class ContratacionController extends Controller
         $nombreDescarga = $postulante->folio . '_' . $campo . '.' . $extension;
 
         return response()->streamDownload(function () use ($ruta) {
-            echo Storage::disk('public')->get($ruta);
+            echo Storage::disk('local')->get($ruta);
         }, $nombreDescarga);
     }
 
@@ -267,8 +267,8 @@ class ContratacionController extends Controller
         }
 
         foreach ($docs as $doc) {
-            if (Storage::disk('public')->exists($doc['ruta'])) {
-                $contenido = Storage::disk('public')->get($doc['ruta']);
+            if (Storage::disk('local')->exists($doc['ruta'])) {
+                $contenido = Storage::disk('local')->get($doc['ruta']);
                 $ext       = pathinfo($doc['ruta'], PATHINFO_EXTENSION);
                 $zip->addFromString($doc['campo'] . '.' . $ext, $contenido);
             }
@@ -331,11 +331,11 @@ class ContratacionController extends Controller
             abort(403, 'No tienes permiso para eliminar registros.');
         }
 
-        // Eliminar archivos del storage
+        // Eliminar archivos del storage (disco privado)
         $campos = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
         foreach ($campos as $campo) {
             if (!empty($postulante->$campo)) {
-                Storage::disk('public')->delete($postulante->$campo);
+                Storage::disk('local')->delete($postulante->$campo);
             }
         }
 
@@ -446,13 +446,13 @@ class ContratacionController extends Controller
             $ruta = $postulante->$campo;
             $ext  = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
 
-            if (!Storage::disk('public')->exists($ruta)) {
+            if (!Storage::disk('local')->exists($ruta)) {
                 $documentos[] = ['label' => $label, 'tipo' => 'ausente', 'data' => null, 'ext' => $ext];
                 continue;
             }
 
             if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
-                $contenido    = Storage::disk('public')->get($ruta);
+                $contenido    = Storage::disk('local')->get($ruta);
                 $mime         = match($ext) {
                     'png'  => 'image/png',
                     'gif'  => 'image/gif',
@@ -499,7 +499,7 @@ class ContratacionController extends Controller
             // ── Descargar todos los PDFs a archivos temporales ───────────────
             $docTempPaths = []; // label => path
             foreach ($pdfDocRutas as $docInfo) {
-                $pdfBytes = Storage::disk('public')->get($docInfo['ruta']);
+                $pdfBytes = Storage::disk('local')->get($docInfo['ruta']);
                 $tempDoc  = tempnam($tmpDir, 'doc_') . '.pdf';
                 file_put_contents($tempDoc, $pdfBytes ?? '');
                 $tempFiles[]                     = $tempDoc;
@@ -527,8 +527,9 @@ class ContratacionController extends Controller
 
                 $allInputs = array_merge([$tempFicha], array_values($docTempPaths));
                 $inputArgs = implode(' ', array_map('escapeshellarg', $allInputs));
+                // -dSAFER: input no confiable (PDFs del público). NUNCA usar -dNOSAFER aquí.
                 $cmd = sprintf(
-                    '%s -dBATCH -dNOPAUSE -dNOSAFER -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -sOutputFile=%s %s 2>&1',
+                    '%s -dBATCH -dNOPAUSE -dSAFER -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -sOutputFile=%s %s 2>&1',
                     escapeshellarg($gsPath),
                     escapeshellarg($tempMerged),
                     $inputArgs
@@ -618,7 +619,7 @@ class ContratacionController extends Controller
                             $pngDir = $tmpDir . '/gs_' . uniqid();
                             @mkdir($pngDir, 0755);
                             $cmd = sprintf(
-                                '%s -dBATCH -dNOPAUSE -dNOSAFER -sDEVICE=png16m -r150 -sOutputFile=%s %s 2>&1',
+                                '%s -dBATCH -dNOPAUSE -dSAFER -sDEVICE=png16m -r150 -sOutputFile=%s %s 2>&1',
                                 escapeshellarg($gsPath),
                                 escapeshellarg($pngDir . '/page_%04d.png'),
                                 escapeshellarg($tempDoc)
