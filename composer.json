@@ -14,7 +14,7 @@
         "laravel/tinker": "^2.9",
         "phpoffice/phpspreadsheet": "^5.5",
         "resend/resend-laravel": "*",
-        "setasign/fpdf": "1.8",
+        "setasign/fpdf": "^1.8.6",
         "setasign/fpdi": "^2.6"
     },
     "require-dev": {
