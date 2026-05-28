@@ -65,12 +65,14 @@ return [
     ],
 
     'microsoft_graph' => [
-        'tenant_id'        => env('MSGRAPH_TENANT_ID'),
-        'client_id'        => env('MSGRAPH_CLIENT_ID'),
-        'client_secret'    => env('MSGRAPH_CLIENT_SECRET'),
-        'sharepoint_host'  => env('MSGRAPH_SHAREPOINT_HOST', 'saepcl.sharepoint.com'),
-        'sharepoint_site'  => env('MSGRAPH_SHAREPOINT_SITE', 'PDR'),
-        'root_folder'      => env('MSGRAPH_ROOT_FOLDER', 'Actas Vehiculos'),
+        'tenant_id'           => env('MSGRAPH_TENANT_ID'),
+        'client_id'           => env('MSGRAPH_CLIENT_ID'),
+        'client_secret'       => env('MSGRAPH_CLIENT_SECRET'),
+        'sharepoint_host'     => env('MSGRAPH_SHAREPOINT_HOST', 'saepcl.sharepoint.com'),
+        'sharepoint_site'     => env('MSGRAPH_SHAREPOINT_SITE', 'PDR'),
+        'root_folder'         => env('MSGRAPH_ROOT_FOLDER', 'Actas Vehiculos'),
+        'contratacion_site'   => env('CONTRATACION_SHAREPOINT_SITE', 'RRH'),
+        'contratacion_folder' => env('CONTRATACION_SHAREPOINT_FOLDER', 'Postulantes Documents'),
     ],
 
     'openai' => [

@@ -1,0 +1,739 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Mail\ContratacionAcuseReciboMail;
+use App\Mail\ContratacionNuevoPostulanteMail;
+use App\Models\Configuracion;
+use App\Models\PostulanteContratacion;
+use App\Services\OneDriveService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use setasign\Fpdi\Fpdi;
+use ZipArchive;
+
+class ContratacionController extends Controller
+{
+    // ─── Listado ─────────────────────────────────────────────────
+    public function index(Request $request)
+    {
+        $query = PostulanteContratacion::query();
+
+        if ($request->filled('buscar')) {
+            $b = str_replace(['%', '_'], ['\%', '\_'], $request->buscar);
+            $query->where(function ($q) use ($b) {
+                $q->where('folio', 'like', "%{$b}%")
+                  ->orWhere('nombre', 'like', "%{$b}%")
+                  ->orWhere('rut', 'like', "%{$b}%")
+                  ->orWhere('email', 'like', "%{$b}%");
+            });
+        }
+        if ($request->filled('estado')) {
+            $query->where('estado', $request->estado);
+        }
+
+        $postulantes = $query->orderByDesc('created_at')->paginate(25)->withQueryString();
+
+        $stats = [
+            'total'       => PostulanteContratacion::count(),
+            'pendiente'   => PostulanteContratacion::where('estado', 'pendiente')->count(),
+            'en_revision' => PostulanteContratacion::where('estado', 'en_revision')->count(),
+            'aprobado'    => PostulanteContratacion::where('estado', 'aprobado')->count(),
+            'rechazado'   => PostulanteContratacion::where('estado', 'rechazado')->count(),
+        ];
+
+        return view('contratacion.admin.index', compact('postulantes', 'stats'));
+    }
+
+    // ─── Detalle ─────────────────────────────────────────────────
+    public function show(PostulanteContratacion $postulante)
+    {
+        return view('contratacion.admin.show', compact('postulante'));
+    }
+
+    // ─── Ingreso manual (form) ────────────────────────────────────
+    public function create()
+    {
+        return view('contratacion.admin.create');
+    }
+
+    // ─── Ingreso manual (guardar) ─────────────────────────────────
+    public function storeManual(Request $request)
+    {
+        $request->validate([
+            'nombre'             => 'required|string|max:200',
+            'rut'                => ['required', 'string', 'max:20', function ($attr, $val, $fail) {
+                if (!PostulanteContratacion::validarRut($val)) {
+                    $fail('El RUT ingresado no es válido.');
+                }
+            }],
+            'email'              => 'required|email|max:200',
+            'carnet_frontal'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'carnet_reverso'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'certificado_afp'            => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'certificado_fonasa'         => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'licencia_conducir_frontal'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'licencia_conducir_reverso'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+        ]);
+
+        $rutLimpio     = preg_replace('/[^0-9kK]/', '', strtoupper($request->rut));
+        $rutFormateado = PostulanteContratacion::formatearRut($rutLimpio);
+        $rutCarpeta    = strtolower(preg_replace('/\./', '', $rutLimpio));
+
+        $datos = [
+            'nombre' => $request->nombre,
+            'rut'    => $rutFormateado,
+            'email'  => $request->email,
+        ];
+
+        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
+        foreach ($camposDocs as $campo) {
+            if ($request->hasFile($campo)) {
+                $ext  = $request->file($campo)->getClientOriginalExtension();
+                $path = $request->file($campo)->storeAs(
+                    "contratacion/{$rutCarpeta}",
+                    "{$campo}.{$ext}",
+                    'public'
+                );
+                $datos[$campo] = $path;
+            }
+        }
+
+        $postulante = PostulanteContratacion::create($datos);
+
+        // Acuse al postulante
+        try {
+            Mail::to($postulante->email)->send(new ContratacionAcuseReciboMail($postulante));
+        } catch (\Exception $e) {
+            Log::warning('Contratacion manual: no se pudo enviar acuse recibo', ['email' => $postulante->email, 'folio' => $postulante->folio, 'error' => $e->getMessage()]);
+        }
+
+        // Notificación RRHH
+        $this->notificarRrhh($postulante);
+
+        // Subir ficha consolidada a SharePoint (no crítico)
+        try {
+            $this->subirFichaSharePoint($postulante);
+        } catch (\Throwable $e) {
+            Log::warning('Contratacion manual: SharePoint upload falló: ' . $e->getMessage());
+        }
+
+        return redirect()->route('contratacion.show', $postulante)
+            ->with('success', "Postulante {$postulante->folio} ingresado correctamente.");
+    }
+
+    // ─── Helper: notificar RRHH ───────────────────────────────────
+    private function notificarRrhh(PostulanteContratacion $postulante): void
+    {
+        $destinatarios = Configuracion::get('contratacion_emails_notificacion', '');
+        if (empty(trim($destinatarios))) return;
+
+        $emails = array_filter(array_map('trim', explode(',', $destinatarios)));
+        foreach ($emails as $email) {
+            if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                try {
+                    Mail::to($email)->send(new ContratacionNuevoPostulanteMail($postulante));
+                } catch (\Exception $e) {
+                    Log::warning('Contratacion: no se pudo notificar RRHH', ['email' => $email, 'folio' => $postulante->folio, 'error' => $e->getMessage()]);
+                }
+            }
+        }
+    }
+
+    // ─── Helper: subir ficha PDF a SharePoint ─────────────────────
+    private function subirFichaSharePoint(PostulanteContratacion $postulante): void
+    {
+        $oneDrive = app(OneDriveService::class);
+        if (!$oneDrive->isConfigured()) return;
+
+        $graphConfig = config('services.microsoft_graph');
+        $site        = $graphConfig['contratacion_site']   ?? 'RRHH';
+        $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
+        $carpeta     = $postulante->rut . ' - ' . $postulante->nombre;
+
+        $fichaBytes = $this->generarFichaBytes($postulante);
+        $oneDrive->uploadFileToSite(
+            $site,
+            $fichaBytes,
+            "{$folder}/{$carpeta}/" . $this->fichaFilename($postulante)
+        );
+    }
+
+    // ─── Actualizar estado ────────────────────────────────────────
+    public function update(Request $request, PostulanteContratacion $postulante)
+    {
+        $request->validate([
+            'estado'        => 'required|in:pendiente,en_revision,aprobado,rechazado',
+            'observaciones' => 'nullable|string|max:2000',
+        ]);
+
+        $postulante->update([
+            'estado'        => $request->estado,
+            'observaciones' => $request->observaciones,
+        ]);
+
+        return back()->with('success', 'Estado actualizado correctamente.');
+    }
+
+    // ─── Actualizar documentos desde admin ───────────────────────
+    public function updateDocumentos(Request $request, PostulanteContratacion $postulante)
+    {
+        $request->validate([
+            'carnet_frontal'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'carnet_reverso'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'certificado_afp'            => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'certificado_fonasa'         => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'licencia_conducir_frontal'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'licencia_conducir_reverso'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+        ]);
+
+        $rutLimpio  = preg_replace('/[^0-9kK]/', '', strtoupper($postulante->rut));
+        $rutCarpeta = strtolower(preg_replace('/\./', '', $rutLimpio));
+
+        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
+        $actualizado = false;
+        foreach ($camposDocs as $campo) {
+            if ($request->hasFile($campo)) {
+                // Eliminar archivo anterior si existe
+                if ($postulante->$campo) {
+                    Storage::disk('public')->delete($postulante->$campo);
+                }
+                $ext  = $request->file($campo)->getClientOriginalExtension();
+                $path = $request->file($campo)->storeAs(
+                    "contratacion/{$rutCarpeta}",
+                    "{$campo}.{$ext}",
+                    'public'
+                );
+                $postulante->$campo = $path;
+                $actualizado = true;
+            }
+        }
+
+        if (!$actualizado) {
+            return back()->with('error', 'No se seleccionó ningún documento para subir.');
+        }
+
+        $postulante->save();
+
+        // Re-sincronizar ficha en SharePoint
+        try {
+            $this->subirFichaSharePoint($postulante);
+        } catch (\Throwable $e) {
+            Log::warning('Contratacion admin: SharePoint upload tras actualizar docs falló: ' . $e->getMessage());
+        }
+
+        return back()->with('success', 'Documentos actualizados y ficha PDF sincronizada en SharePoint.');
+    }
+
+    // ─── Descargar un documento ───────────────────────────────────
+    public function descargarDocumento(PostulanteContratacion $postulante, string $campo)
+    {
+        $camposPermitidos = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
+        if (!in_array($campo, $camposPermitidos)) {
+            abort(404);
+        }
+
+        $ruta = $postulante->$campo;
+        if (!$ruta || !Storage::disk('public')->exists($ruta)) {
+            abort(404, 'Documento no encontrado.');
+        }
+
+        $extension = pathinfo($ruta, PATHINFO_EXTENSION);
+        $nombreDescarga = $postulante->folio . '_' . $campo . '.' . $extension;
+
+        return response()->streamDownload(function () use ($ruta) {
+            echo Storage::disk('public')->get($ruta);
+        }, $nombreDescarga);
+    }
+
+    // ─── Descargar ZIP con todos los documentos ───────────────────
+    public function descargarZip(PostulanteContratacion $postulante)
+    {
+        $docs = $postulante->documentosSubidos();
+        if (empty($docs)) {
+            return back()->with('error', 'Este postulante no tiene documentos subidos.');
+        }
+
+        $zipPath = sys_get_temp_dir() . '/' . $postulante->folio . '_documentos.zip';
+        $zip     = new ZipArchive();
+
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            return back()->with('error', 'No se pudo generar el ZIP.');
+        }
+
+        foreach ($docs as $doc) {
+            if (Storage::disk('public')->exists($doc['ruta'])) {
+                $contenido = Storage::disk('public')->get($doc['ruta']);
+                $ext       = pathinfo($doc['ruta'], PATHINFO_EXTENSION);
+                $zip->addFromString($doc['campo'] . '.' . $ext, $contenido);
+            }
+        }
+        $zip->close();
+
+        return response()->download($zipPath, $postulante->folio . '_documentos.zip')
+            ->deleteFileAfterSend(true);
+    }
+
+    // ─── Exportar Excel ──────────────────────────────────────────
+    public function exportarExcel()
+    {
+        $postulantes = PostulanteContratacion::orderByDesc('created_at')->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet       = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Postulantes');
+
+        // Encabezados
+        $headers = ['Folio', 'Nombre', 'RUT', 'Email', 'Estado', 'Carnet F.', 'Carnet R.', 'AFP', 'FONASA', 'Lic. Frontal', 'Lic. Reverso', 'Fecha'];
+        foreach ($headers as $i => $h) {
+            $sheet->setCellValue([$i + 1, 1], $h);
+        }
+
+        // Datos
+        foreach ($postulantes as $idx => $p) {
+            $row = $idx + 2;
+            $sheet->setCellValue([1,  $row], $p->folio);
+            $sheet->setCellValue([2,  $row], $p->nombre);
+            $sheet->setCellValue([3,  $row], $p->rut);
+            $sheet->setCellValue([4,  $row], $p->email);
+            $sheet->setCellValue([5,  $row], $p->estado_label);
+            $sheet->setCellValue([6,  $row], $p->carnet_frontal              ? 'Sí' : 'No');
+            $sheet->setCellValue([7,  $row], $p->carnet_reverso              ? 'Sí' : 'No');
+            $sheet->setCellValue([8,  $row], $p->certificado_afp             ? 'Sí' : 'No');
+            $sheet->setCellValue([9,  $row], $p->certificado_fonasa          ? 'Sí' : 'No');
+            $sheet->setCellValue([10, $row], $p->licencia_conducir_frontal   ? 'Sí' : 'No');
+            $sheet->setCellValue([11, $row], $p->licencia_conducir_reverso   ? 'Sí' : 'No');
+            $sheet->setCellValue([12, $row], $p->created_at->format('d/m/Y H:i'));
+        }
+
+        // Autowidth
+        foreach (range(1, 12) as $col) {
+            $sheet->getColumnDimensionByColumn($col)->setAutoSize(true);
+        }
+
+        $writer  = new Xlsx($spreadsheet);
+        $tmpFile = sys_get_temp_dir() . '/contratacion_' . date('Ymd_His') . '.xlsx';
+        $writer->save($tmpFile);
+
+        return response()->download($tmpFile, 'Postulantes_Contratacion_' . date('Ymd') . '.xlsx')
+            ->deleteFileAfterSend(true);
+    }
+
+    // ─── Eliminar postulante (permanente) ────────────────────────
+    public function destroy(PostulanteContratacion $postulante)
+    {
+        if (!auth()->user()->tieneAcceso('contratacion', 'puede_eliminar')) {
+            abort(403, 'No tienes permiso para eliminar registros.');
+        }
+
+        // Eliminar archivos del storage
+        $campos = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
+        foreach ($campos as $campo) {
+            if (!empty($postulante->$campo)) {
+                Storage::disk('public')->delete($postulante->$campo);
+            }
+        }
+
+        $folio = $postulante->folio;
+        $postulante->delete();
+
+        Log::info('Contratacion: postulante eliminado', [
+            'folio'      => $folio,
+            'deleted_by' => auth()->id(),
+        ]);
+
+        return redirect()->route('contratacion.index')
+            ->with('success', "Registro {$folio} eliminado permanentemente.");
+    }
+
+    // ─── Configuración (emails notificación) ─────────────────────
+    public function configuracion()
+    {
+        $emails = Configuracion::get('contratacion_emails_notificacion', '');
+        return view('contratacion.admin.configuracion', compact('emails'));
+    }
+
+    public function guardarConfiguracion(Request $request)
+    {
+        $request->validate([
+            'emails' => 'nullable|string|max:1000',
+        ]);
+
+        // Validar cada email individualmente
+        if ($request->filled('emails')) {
+            $lista = array_map('trim', explode(',', $request->emails));
+            foreach ($lista as $email) {
+                if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    return back()->withErrors(['emails' => "El correo '{$email}' no es válido."])->withInput();
+                }
+            }
+            Configuracion::set('contratacion_emails_notificacion', implode(', ', $lista));
+        } else {
+            Configuracion::set('contratacion_emails_notificacion', '');
+        }
+
+        return back()->with('success', 'Configuración guardada.');
+    }
+
+    // ─── Ficha PDF del postulante ─────────────────────────────────
+    public function fichaPdf(PostulanteContratacion $postulante)
+    {
+        $fichaBytes = $this->generarFichaBytes($postulante);
+        $filename   = $this->fichaFilename($postulante);
+
+        return response($fichaBytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    // ─── Re-sincronizar ficha en SharePoint ───────────────────────
+    public function resincronizarSharePoint(PostulanteContratacion $postulante)
+    {
+        $oneDrive = app(OneDriveService::class);
+        if (!$oneDrive->isConfigured()) {
+            return back()->with('error', 'Microsoft Graph no está configurado.');
+        }
+
+        try {
+            $graphConfig = config('services.microsoft_graph');
+            $site        = $graphConfig['contratacion_site']   ?? 'RRH';
+            $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
+            $carpeta     = $postulante->rut . ' - ' . $postulante->nombre;
+
+            // Re-generar y subir ficha PDF consolidada
+            $fichaBytes = $this->generarFichaBytes($postulante);
+            $oneDrive->uploadFileToSite(
+                $site,
+                $fichaBytes,
+                "{$folder}/{$carpeta}/" . $this->fichaFilename($postulante)
+            );
+
+            Log::info('Contratacion admin: resincronizacion SharePoint completada', ['folio' => $postulante->folio]);
+            return back()->with('success', 'Ficha consolidada sincronizada en SharePoint correctamente.');
+        } catch (\Throwable $e) {
+            Log::error('Contratacion admin: fallo resincronizacion SharePoint', [
+                'folio' => $postulante->folio,
+                'error' => $e->getMessage(),
+            ]);
+            return back()->with('error', 'Error al sincronizar con SharePoint: ' . $e->getMessage());
+        }
+    }
+
+    // ─── Generar bytes de la ficha PDF (DomPDF + FPDI merge) ─────
+    private function generarFichaBytes(PostulanteContratacion $postulante): string
+    {
+        $camposLabels = [
+            'carnet_frontal'            => 'Carnet de Identidad (Frontal)',
+            'carnet_reverso'            => 'Carnet de Identidad (Reverso)',
+            'certificado_afp'           => 'Certificado AFP',
+            'certificado_fonasa'        => 'Certificado FONASA',
+            'licencia_conducir_frontal' => 'Licencia de Conducir (Frontal)',
+            'licencia_conducir_reverso' => 'Licencia de Conducir (Reverso)',
+        ];
+
+        $documentos  = [];
+        $pdfDocRutas = [];
+
+        foreach ($camposLabels as $campo => $label) {
+            if (empty($postulante->$campo)) continue;
+
+            $ruta = $postulante->$campo;
+            $ext  = strtolower(pathinfo($ruta, PATHINFO_EXTENSION));
+
+            if (!Storage::disk('public')->exists($ruta)) {
+                $documentos[] = ['label' => $label, 'tipo' => 'ausente', 'data' => null, 'ext' => $ext];
+                continue;
+            }
+
+            if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                $contenido    = Storage::disk('public')->get($ruta);
+                $mime         = match($ext) {
+                    'png'  => 'image/png',
+                    'gif'  => 'image/gif',
+                    'webp' => 'image/webp',
+                    default => 'image/jpeg',
+                };
+                $documentos[] = [
+                    'label' => $label,
+                    'tipo'  => 'imagen',
+                    'data'  => 'data:' . $mime . ';base64,' . base64_encode($contenido),
+                    'ext'   => $ext,
+                ];
+            } else {
+                $documentos[]  = ['label' => $label, 'tipo' => 'pdf', 'data' => null, 'ext' => $ext];
+                $pdfDocRutas[] = ['label' => $label, 'ruta' => $ruta];
+            }
+        }
+
+        $tmpDir  = sys_get_temp_dir();
+        $fontDir = storage_path('fonts');
+        if (!is_dir($fontDir)) {
+            @mkdir($fontDir, 0755, true);
+        }
+
+        $memPrev    = ini_get('memory_limit');
+        ini_set('memory_limit', '384M');
+
+        $fichaBytes = Pdf::loadView('pdf.contratacion_ficha', compact('postulante', 'documentos'))
+            ->setPaper('a4', 'portrait')
+            ->setOption('isRemoteEnabled', false)
+            ->setOption('tempDir', $tmpDir)
+            ->setOption('fontDir', $fontDir)
+            ->setOption('fontCache', $tmpDir)
+            ->output();
+
+        $tempFiles = [];
+
+        if (!empty($pdfDocRutas)) {
+            // ── Guardar ficha como archivo temporal ──────────────────────────
+            $tempFicha = tempnam($tmpDir, 'ficha_') . '.pdf';
+            file_put_contents($tempFicha, $fichaBytes);
+            $tempFiles[] = $tempFicha;
+
+            // ── Descargar todos los PDFs a archivos temporales ───────────────
+            $docTempPaths = []; // label => path
+            foreach ($pdfDocRutas as $docInfo) {
+                $pdfBytes = Storage::disk('public')->get($docInfo['ruta']);
+                $tempDoc  = tempnam($tmpDir, 'doc_') . '.pdf';
+                file_put_contents($tempDoc, $pdfBytes ?? '');
+                $tempFiles[]                     = $tempDoc;
+                $docTempPaths[$docInfo['label']] = $tempDoc;
+            }
+
+            $gsPath = $this->gsPath();
+            Log::info('PDF merge: diagnóstico', [
+                'gs_path'   => $gsPath ?: 'N/A',
+                'exec'      => function_exists('exec')      ? 'sí' : 'no',
+                'proc_open' => function_exists('proc_open') ? 'sí' : 'no',
+                'imagick'   => class_exists('Imagick')       ? 'sí' : 'no',
+                'docs'      => count($pdfDocRutas),
+            ]);
+
+            $fichaFinalizada = false;
+
+            // ══════════════════════════════════════════════════════════════════
+            // Estrategia 1: GS merge directo de TODOS los PDFs (maneja PDF 1.5+)
+            // ══════════════════════════════════════════════════════════════════
+            if ($gsPath) {
+                $tempMerged = tempnam($tmpDir, 'merged_') . '.pdf';
+                @unlink($tempMerged);
+                $tempFiles[] = $tempMerged;
+
+                $allInputs = array_merge([$tempFicha], array_values($docTempPaths));
+                $inputArgs = implode(' ', array_map('escapeshellarg', $allInputs));
+                $cmd = sprintf(
+                    '%s -dBATCH -dNOPAUSE -dNOSAFER -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -sOutputFile=%s %s 2>&1',
+                    escapeshellarg($gsPath),
+                    escapeshellarg($tempMerged),
+                    $inputArgs
+                );
+                $gsOut = []; $gsRet = -1;
+                $this->runShell($cmd, $gsOut, $gsRet);
+
+                if ($gsRet === 0 && file_exists($tempMerged) && filesize($tempMerged) > 1000) {
+                    $fichaBytes      = file_get_contents($tempMerged);
+                    $fichaFinalizada = true;
+                    Log::info('PDF merge: exitoso via GS pdfwrite directo');
+                } else {
+                    Log::warning('PDF merge: GS pdfwrite falló', [
+                        'ret' => $gsRet,
+                        'out' => implode("\n", array_slice($gsOut, 0, 10)),
+                    ]);
+                }
+            }
+
+            // ══════════════════════════════════════════════════════════════════
+            // Estrategia 2: FPDI por documento + Imagick / GS-a-PNG fallback
+            // ══════════════════════════════════════════════════════════════════
+            if (!$fichaFinalizada) {
+                $fpdi = null;
+                try {
+                    $fpdi = new Fpdi();
+                    $n = $fpdi->setSourceFile($tempFicha);
+                    for ($i = 1; $i <= $n; $i++) {
+                        $tpl = $fpdi->importPage($i);
+                        [$w, $h] = array_values($fpdi->getTemplateSize($tpl));
+                        $fpdi->AddPage($h > $w ? 'P' : 'L', [$w, $h]);
+                        $fpdi->useTemplate($tpl, 0, 0, $w, $h, true);
+                    }
+                } catch (\Throwable) {
+                    $fpdi = null;
+                }
+
+                if ($fpdi !== null) {
+                    foreach ($pdfDocRutas as $docInfo) {
+                        $tempDoc   = $docTempPaths[$docInfo['label']];
+                        $docMerged = false;
+
+                        // 2a: FPDI directo
+                        try {
+                            $n = $fpdi->setSourceFile($tempDoc);
+                            for ($i = 1; $i <= $n; $i++) {
+                                $tpl = $fpdi->importPage($i);
+                                [$w, $h] = array_values($fpdi->getTemplateSize($tpl));
+                                $fpdi->AddPage($h > $w ? 'P' : 'L', [$w, $h]);
+                                $fpdi->useTemplate($tpl, 0, 0, $w, $h, true);
+                            }
+                            $docMerged = true;
+                        } catch (\Throwable $ex) {
+                            Log::warning('FPDI falló: ' . $docInfo['label'] . ' — ' . $ex->getMessage());
+                        }
+
+                        // 2b: Imagick
+                        if (!$docMerged && class_exists('Imagick')) {
+                            try {
+                                $imagick = new \Imagick();
+                                $imagick->setResolution(150, 150);
+                                $imagick->readImage($tempDoc);
+                                foreach ($imagick as $pageImg) {
+                                    $pageImg->setImageFormat('png');
+                                    $pageImg->setImageColorspace(\Imagick::COLORSPACE_SRGB);
+                                    $imgW    = $pageImg->getImageWidth();
+                                    $imgH    = $pageImg->getImageHeight();
+                                    $pxMm    = 25.4 / 150;
+                                    $wMm     = round($imgW * $pxMm, 2);
+                                    $hMm     = round($imgH * $pxMm, 2);
+                                    $tempPng = tempnam($tmpDir, 'pg_') . '.png';
+                                    file_put_contents($tempPng, $pageImg->getImageBlob());
+                                    $tempFiles[] = $tempPng;
+                                    $fpdi->AddPage($hMm > $wMm ? 'P' : 'L', [$wMm, $hMm]);
+                                    $fpdi->Image($tempPng, 0, 0, $wMm, $hMm, 'PNG');
+                                }
+                                $imagick->destroy();
+                                $docMerged = true;
+                                Log::info('Imagick: doc convertido: ' . $docInfo['label']);
+                            } catch (\Throwable $ex2) {
+                                Log::warning('Imagick falló: ' . $docInfo['label'] . ' — ' . $ex2->getMessage());
+                            }
+                        }
+
+                        // 2c: GS a PNG
+                        if (!$docMerged && $gsPath) {
+                            $pngDir = $tmpDir . '/gs_' . uniqid();
+                            @mkdir($pngDir, 0755);
+                            $cmd = sprintf(
+                                '%s -dBATCH -dNOPAUSE -dNOSAFER -sDEVICE=png16m -r150 -sOutputFile=%s %s 2>&1',
+                                escapeshellarg($gsPath),
+                                escapeshellarg($pngDir . '/page_%04d.png'),
+                                escapeshellarg($tempDoc)
+                            );
+                            $gsOut = []; $gsRet = -1;
+                            $this->runShell($cmd, $gsOut, $gsRet);
+                            if ($gsRet === 0) {
+                                $pngPages = glob($pngDir . '/page_*.png') ?: [];
+                                natsort($pngPages);
+                                foreach ($pngPages as $pngFile) {
+                                    [$imgW, $imgH] = @getimagesize($pngFile) ?: [595, 842];
+                                    $pxMm = 25.4 / 150;
+                                    $wMm  = round($imgW * $pxMm, 2);
+                                    $hMm  = round($imgH * $pxMm, 2);
+                                    $tempFiles[] = $pngFile;
+                                    $fpdi->AddPage($hMm > $wMm ? 'P' : 'L', [$wMm, $hMm]);
+                                    $fpdi->Image($pngFile, 0, 0, $wMm, $hMm, 'PNG');
+                                }
+                                $docMerged = true;
+                                Log::info('GS PNG: doc convertido: ' . $docInfo['label']);
+                            } else {
+                                Log::warning('GS PNG falló: ' . $docInfo['label'], [
+                                    'ret' => $gsRet,
+                                    'out' => implode("\n", array_slice($gsOut, 0, 5)),
+                                ]);
+                            }
+                        }
+
+                        if (!$docMerged) {
+                            Log::warning('PDF merge: todos los métodos fallaron para: ' . $docInfo['label']);
+                        }
+                    }
+                    $fichaBytes = $fpdi->Output('S');
+                }
+            }
+        }
+
+        foreach ($tempFiles as $tf) {
+            @unlink($tf);
+        }
+
+        ini_set('memory_limit', $memPrev);
+
+        return $fichaBytes;
+    }
+
+    // ─── Helper: nombre estándar del PDF consolidado ─────────────────────────
+    private function fichaFilename(PostulanteContratacion $postulante): string
+    {
+        $seq = (int) substr(strrchr($postulante->folio, '-'), 1);
+        $num = str_pad($seq, 3, '0', STR_PAD_LEFT);
+        return $postulante->rut . ' - FICHA ' . $num . ' - ' . $postulante->nombre . '.pdf';
+    }
+
+    // ─── Helper: encontrar ruta de Ghostscript ────────────────────────────────
+    private function gsPath(): string
+    {
+        // Primero buscar directamente (no requiere exec/shell_exec)
+        foreach (['/usr/bin/gs', '/usr/local/bin/gs', '/bin/gs'] as $p) {
+            if (@is_executable($p)) {
+                return $p;
+            }
+        }
+        // Fallback via shell
+        if (function_exists('shell_exec')) {
+            $p = trim((string)(@shell_exec('which gs 2>/dev/null') ?? ''));
+            if ($p && @is_executable($p)) {
+                return $p;
+            }
+        }
+        if (function_exists('exec')) {
+            $out = []; $ret = -1;
+            @exec('which gs 2>/dev/null', $out, $ret);
+            if ($ret === 0 && !empty($out[0])) {
+                $p = trim($out[0]);
+                if (@is_executable($p)) {
+                    return $p;
+                }
+            }
+        }
+        return '';
+    }
+
+    // ─── Helper: ejecutar comando en shell con múltiples fallbacks ────────────
+    private function runShell(string $cmd, array &$output, int &$retVal): bool
+    {
+        if (function_exists('exec')) {
+            exec($cmd, $output, $retVal);
+            return true;
+        }
+        if (function_exists('proc_open')) {
+            $desc = [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ];
+            $proc = @proc_open($cmd, $desc, $pipes);
+            if (is_resource($proc)) {
+                fclose($pipes[0]);
+                $stdout = stream_get_contents($pipes[1]);
+                $stderr = stream_get_contents($pipes[2]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                $retVal = proc_close($proc);
+                $output = array_values(array_filter(explode("\n", trim($stdout . "\n" . $stderr))));
+                return true;
+            }
+        }
+        if (function_exists('passthru')) {
+            ob_start();
+            passthru($cmd, $retVal);
+            $output = array_values(array_filter(explode("\n", ob_get_clean())));
+            return true;
+        }
+        $retVal = -1;
+        return false;
+    }
+}

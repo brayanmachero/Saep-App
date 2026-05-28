@@ -133,6 +133,15 @@
             @endif
             @endif
 
+            {{-- RRHH --}}
+            @if(auth()->user()->tieneAcceso('contratacion'))
+            <div class="nav-section-label">RRHH</div>
+            <a href="{{ route('contratacion.index') }}" class="nav-item {{ request()->routeIs('contratacion.*') ? 'active' : '' }}">
+                <i class="bi bi-person-badge-fill"></i>
+                <span>Contratación</span>
+            </a>
+            @endif
+
             {{-- ADMINISTRACIÓN --}}
             @if(auth()->user()->tieneAcceso('usuarios') || auth()->user()->tieneAcceso('departamentos') || auth()->user()->tieneAcceso('cargos') || auth()->user()->tieneAcceso('centros_costo'))
             <div class="nav-section-label">Administración</div>
