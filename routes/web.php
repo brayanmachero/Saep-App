@@ -460,17 +460,17 @@ Route::middleware('auth')->group(function () {
     Route::middleware('modulo:contratacion')->prefix('contratacion')->name('contratacion.')->group(function () {
         Route::get('/',                              [ContratacionController::class, 'index'])->name('index');
         Route::get('/crear',                         [ContratacionController::class, 'create'])->name('crear');
-        Route::post('/crear',                        [ContratacionController::class, 'storeManual'])->name('store');
+        Route::post('/crear',                        [ContratacionController::class, 'storeManual'])->name('store-manual');
         Route::get('/exportar/excel',                [ContratacionController::class, 'exportarExcel'])->name('exportar.excel');
         Route::get('/configuracion/emails',          [ContratacionController::class, 'configuracion'])->name('configuracion');
-        Route::patch('/configuracion/emails',        [ContratacionController::class, 'guardarConfiguracion'])->name('configuracion.update');
+        Route::patch('/configuracion/emails',        [ContratacionController::class, 'guardarConfiguracion'])->name('guardar-configuracion');
         Route::get('/{postulante}',                  [ContratacionController::class, 'show'])->name('show');
         Route::patch('/{postulante}',                [ContratacionController::class, 'update'])->name('update');
         Route::delete('/{postulante}',               [ContratacionController::class, 'destroy'])->name('destroy');
         Route::get('/{postulante}/zip',              [ContratacionController::class, 'descargarZip'])->name('zip');
-        Route::get('/{postulante}/doc/{campo}',      [ContratacionController::class, 'descargarDocumento'])->name('doc');
+        Route::get('/{postulante}/doc/{campo}',      [ContratacionController::class, 'descargarDocumento'])->name('documento');
         Route::get('/{postulante}/ficha-pdf',        [ContratacionController::class, 'fichaPdf'])->name('ficha-pdf');
-        Route::post('/{postulante}/documentos',      [ContratacionController::class, 'updateDocumentos'])->name('documentos');
+        Route::post('/{postulante}/documentos',      [ContratacionController::class, 'updateDocumentos'])->name('update-documentos');
         Route::post('/{postulante}/resincronizar',   [ContratacionController::class, 'resincronizarSharePoint'])->name('resincronizar');
     });
 

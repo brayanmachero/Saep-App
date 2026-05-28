@@ -18,13 +18,13 @@
             <a href="{{ route('contratacion-publico.inicio') }}" target="_blank" class="btn-ghost">
                 <i class="bi bi-box-arrow-up-right"></i> Formulario Público
             </a>
-            <a href="{{ route('contratacion.export-excel') }}" class="btn-ghost">
+            <a href="{{ route('contratacion.exportar.excel') }}" class="btn-ghost">
                 <i class="bi bi-file-earmark-excel-fill" style="color:#22c55e"></i> Exportar Excel
             </a>
             <a href="{{ route('contratacion.configuracion') }}" class="btn-ghost">
                 <i class="bi bi-gear-fill"></i> Configuración
             </a>
-            <a href="{{ route('contratacion.create') }}" class="btn-premium">
+            <a href="{{ route('contratacion.crear') }}" class="btn-premium">
                 <i class="bi bi-person-plus-fill"></i> Ingresar manual
             </a>
         </div>
