@@ -169,6 +169,74 @@
                     </form>
                 </div>
             </div>
+
+            <!-- Historial de sincronización SharePoint -->
+            <div class="glass-card" style="padding:1.5rem;margin-top:1.5rem;">
+                <h5 style="font-size:.9rem;font-weight:700;margin-bottom:1rem;color:var(--text-main);display:flex;align-items:center;gap:.5rem;justify-content:space-between;">
+                    <span style="display:flex;align-items:center;gap:.5rem;">
+                        <i class="bi bi-cloud-check" style="color:#0ea5e9;"></i> Historial Sincronización SharePoint
+                    </span>
+                    @php $logs = $postulante->syncLogs()->limit(20)->get(); @endphp
+                    <span style="font-size:.7rem;font-weight:600;color:var(--text-muted);">{{ $logs->count() }} intento(s)</span>
+                </h5>
+
+                @if($logs->isEmpty())
+                <p style="font-size:.82rem;color:var(--text-muted);margin:0;">Aún no hay intentos de sincronización registrados.</p>
+                @else
+                <div style="overflow-x:auto;">
+                    <table class="data-table" style="margin:0;font-size:.78rem;">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Acción</th>
+                                <th>Origen</th>
+                                <th style="text-align:center;">Intento</th>
+                                <th>Estado</th>
+                                <th>Archivo / Detalle</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($logs as $log)
+                            <tr>
+                                <td style="white-space:nowrap;">
+                                    {{ ($log->finished_at ?? $log->started_at ?? $log->created_at)->format('d/m/Y H:i:s') }}
+                                    @if($log->duracion_segundos !== null)
+                                    <div style="font-size:.68rem;color:var(--text-muted);">{{ $log->duracion_segundos }}s</div>
+                                    @endif
+                                </td>
+                                <td>{{ str_replace('_', ' ', $log->accion) }}</td>
+                                <td style="font-size:.72rem;color:var(--text-muted);">{{ $log->origen ?? '—' }}</td>
+                                <td style="text-align:center;font-weight:700;">{{ $log->intento }}</td>
+                                <td>
+                                    <span style="padding:.2rem .55rem;border-radius:6px;font-size:.7rem;font-weight:700;background:{{ $log->status_color }}20;color:{{ $log->status_color }};">
+                                        {{ $log->status_label }}
+                                    </span>
+                                </td>
+                                <td style="font-size:.72rem;">
+                                    @if($log->status === 'exitoso')
+                                        <div style="color:var(--text-main);font-weight:600;">{{ $log->archivo_nombre ?? '—' }}</div>
+                                        @if($log->archivo_tamano)
+                                        <div style="color:var(--text-muted);">{{ number_format($log->archivo_tamano / 1024, 1) }} KB</div>
+                                        @endif
+                                        @if($log->sharepoint_item_id)
+                                        <div style="color:var(--text-muted);font-family:monospace;font-size:.65rem;">ID: {{ Str::limit($log->sharepoint_item_id, 22) }}</div>
+                                        @endif
+                                    @elseif($log->status === 'fallido')
+                                        <div style="color:#991b1b;font-weight:600;">{{ Str::limit($log->error_mensaje, 200) }}</div>
+                                        @if($log->sharepoint_path)
+                                        <div style="color:var(--text-muted);font-family:monospace;font-size:.65rem;">{{ Str::limit($log->sharepoint_path, 60) }}</div>
+                                        @endif
+                                    @else
+                                        <span style="color:var(--text-muted);">En proceso…</span>
+                                    @endif
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @endif
+            </div>
         </div>
 
         <!-- Columna derecha: estado + notas -->

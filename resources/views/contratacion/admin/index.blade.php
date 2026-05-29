@@ -117,6 +117,7 @@
                         <th>RUT</th>
                         <th>Correo</th>
                         <th style="text-align:center;">Docs</th>
+                        <th style="text-align:center;" title="Sincronización con SharePoint">SP</th>
                         <th>Estado</th>
                         <th>Fecha</th>
                         <th style="text-align:center;">Acciones</th>
@@ -143,6 +144,24 @@
                                 background:{{ $p->documentosCompletos() ? '#dcfce7' : '#fefce8' }};
                                 color:{{ $p->documentosCompletos() ? '#166534' : '#854d0e' }};
                             ">{{ $subidos }}/4</span>
+                        </td>
+                        <td style="text-align:center;">
+                            @php $us = $p->ultimoSync; @endphp
+                            @if(!$us)
+                                <span title="Sin intentos registrados" style="padding:.2rem .55rem;border-radius:6px;font-size:.7rem;font-weight:700;background:#f1f5f9;color:#64748b;">—</span>
+                            @elseif($us->status === 'exitoso')
+                                <span title="Última sync: {{ $us->finished_at?->format('d/m/Y H:i') }} (intento {{ $us->intento }})" style="padding:.2rem .55rem;border-radius:6px;font-size:.7rem;font-weight:700;background:#dcfce7;color:#166534;">
+                                    <i class="bi bi-check-circle-fill"></i> OK
+                                </span>
+                            @elseif($us->status === 'en_proceso')
+                                <span title="En proceso desde {{ $us->started_at?->format('d/m/Y H:i') }}" style="padding:.2rem .55rem;border-radius:6px;font-size:.7rem;font-weight:700;background:#fef9c3;color:#854d0e;">
+                                    <i class="bi bi-hourglass-split"></i>
+                                </span>
+                            @else
+                                <span title="Falló: {{ Str::limit($us->error_mensaje, 120) }}" style="padding:.2rem .55rem;border-radius:6px;font-size:.7rem;font-weight:700;background:#fee2e2;color:#991b1b;">
+                                    <i class="bi bi-exclamation-triangle-fill"></i> ERROR
+                                </span>
+                            @endif
                         </td>
                         <td>
                             <span style="

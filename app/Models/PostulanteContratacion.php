@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class PostulanteContratacion extends Model
 {
@@ -88,6 +90,17 @@ class PostulanteContratacion extends Model
     public function documentosCompletos(): bool
     {
         return count($this->documentosFaltantes()) === 0;
+    }
+
+    // ── Relaciones ────────────────────────────────────────────────
+    public function syncLogs(): HasMany
+    {
+        return $this->hasMany(ContratacionSyncLog::class, 'postulante_id')->latest('id');
+    }
+
+    public function ultimoSync(): HasOne
+    {
+        return $this->hasOne(ContratacionSyncLog::class, 'postulante_id')->latestOfMany();
     }
 
     // ── Formato RUT chileno ───────────────────────────────────────

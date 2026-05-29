@@ -15,6 +15,11 @@ class OneDriveService
     private string $sharepointSite;
     private string $rootFolder;
 
+    /**
+     * Detalle del último upload: ['ok' => bool, 'item_id' => ?string, 'status' => ?int, 'error' => ?string, 'path' => ?string]
+     */
+    public array $lastUploadResult = [];
+
     public function __construct()
     {
         $config = config('services.microsoft_graph');
@@ -189,12 +194,15 @@ class OneDriveService
 
         if ($session->failed()) {
             Log::error('SharePoint: Error creando upload session', ['body' => $session->body()]);
+            $this->lastUploadResult['status'] = $session->status();
+            $this->lastUploadResult['error'] = 'Error creando upload session: HTTP ' . $session->status() . ' ' . substr($session->body(), 0, 500);
             return false;
         }
 
         $uploadUrl = $session->json('uploadUrl');
         $fileSize = strlen($content);
         $chunkSize = 3276800; // 3.125 MB por chunk
+        $finalItemId = null;
 
         for ($offset = 0; $offset < $fileSize; $offset += $chunkSize) {
             $chunk = substr($content, $offset, $chunkSize);
@@ -210,11 +218,19 @@ class OneDriveService
                     'offset' => $offset,
                     'status' => $response->status(),
                 ]);
+                $this->lastUploadResult['status'] = $response->status();
+                $this->lastUploadResult['error'] = 'Error chunk offset=' . $offset . ': HTTP ' . $response->status();
                 return false;
             }
+            // Último chunk devuelve el item creado/actualizado
+            $maybeId = $response->json('id');
+            if ($maybeId) $finalItemId = $maybeId;
         }
 
         Log::info('SharePoint: Archivo grande subido exitosamente', ['path' => $fullPath, 'size' => $fileSize]);
+        $this->lastUploadResult['ok']      = true;
+        $this->lastUploadResult['item_id'] = $finalItemId;
+        $this->lastUploadResult['status']  = 200;
         return true;
     }
 
@@ -255,22 +271,28 @@ class OneDriveService
      */
     public function uploadFileToSite(string $site, string $content, string $remotePath, string $contentType = 'application/pdf'): bool
     {
+        $this->lastUploadResult = ['ok' => false, 'item_id' => null, 'status' => null, 'error' => null, 'path' => $remotePath];
+
         if (!$this->isConfigured()) {
             Log::warning('SharePoint: Servicio no configurado, se omite subida');
+            $this->lastUploadResult['error'] = 'Servicio Microsoft Graph no configurado';
             return false;
         }
 
         $token = $this->getAccessToken();
         if (!$token) {
+            $this->lastUploadResult['error'] = 'No se pudo obtener token de acceso';
             return false;
         }
 
         $siteId = $this->getSiteIdForSite($site);
         if (!$siteId) {
+            $this->lastUploadResult['error'] = "No se pudo resolver el sitio SharePoint '{$site}'";
             return false;
         }
 
         $fullPath = $this->sanitizePath($remotePath);
+        $this->lastUploadResult['path'] = $fullPath;
         $url      = "https://graph.microsoft.com/v1.0/sites/{$siteId}/drive/root:/{$fullPath}:/content";
         $fileSize = strlen($content);
 
@@ -283,14 +305,21 @@ class OneDriveService
             ->withBody($content, $contentType)
             ->put($url);
 
+        $this->lastUploadResult['status'] = $response->status();
+
         if ($response->successful()) {
+            $itemId = $response->json('id');
             Log::info('SharePoint: Archivo subido a ' . $site . ' exitosamente', [
                 'path'   => $fullPath,
                 'size'   => $fileSize,
-                'itemId' => $response->json('id'),
+                'itemId' => $itemId,
             ]);
+            $this->lastUploadResult['ok']      = true;
+            $this->lastUploadResult['item_id'] = $itemId;
             return true;
         }
+
+        $this->lastUploadResult['error'] = 'HTTP ' . $response->status() . ': ' . substr($response->body(), 0, 500);
 
         Log::error('SharePoint: Error subiendo archivo a ' . $site, [
             'path'   => $fullPath,
@@ -306,10 +335,15 @@ class OneDriveService
                     ->withHeaders(['Content-Type' => $contentType])
                     ->withBody($content, $contentType)
                     ->put($url);
+                $this->lastUploadResult['status'] = $retry->status();
                 if ($retry->successful()) {
                     Log::info('SharePoint: Archivo subido a ' . $site . ' en reintento', ['path' => $fullPath]);
+                    $this->lastUploadResult['ok']      = true;
+                    $this->lastUploadResult['item_id'] = $retry->json('id');
+                    $this->lastUploadResult['error']   = null;
                     return true;
                 }
+                $this->lastUploadResult['error'] = 'HTTP ' . $retry->status() . ': ' . substr($retry->body(), 0, 500);
             }
         }
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\ContratacionAcuseReciboMail;
 use App\Mail\ContratacionNuevoPostulanteMail;
 use App\Models\Configuracion;
+use App\Models\ContratacionSyncLog;
 use App\Models\PostulanteContratacion;
 use App\Services\OneDriveService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -37,7 +38,7 @@ class ContratacionController extends Controller
             $query->where('estado', $request->estado);
         }
 
-        $postulantes = $query->orderByDesc('created_at')->paginate(25)->withQueryString();
+        $postulantes = $query->with('ultimoSync')->orderByDesc('created_at')->paginate(25)->withQueryString();
 
         $stats = [
             'total'       => PostulanteContratacion::count(),
@@ -149,19 +150,60 @@ class ContratacionController extends Controller
     private function subirFichaSharePoint(PostulanteContratacion $postulante): void
     {
         $oneDrive = app(OneDriveService::class);
-        if (!$oneDrive->isConfigured()) return;
 
         $graphConfig = config('services.microsoft_graph');
-        $site        = $graphConfig['contratacion_site']   ?? 'RRHH';
+        $site        = $graphConfig['contratacion_site']   ?? 'RRH';
         $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
         $carpeta     = $postulante->rut . ' - ' . $postulante->nombre;
 
-        $fichaBytes = $this->generarFichaBytes($postulante);
-        $oneDrive->uploadFileToSite(
-            $site,
-            $fichaBytes,
-            "{$folder}/{$carpeta}/" . $this->fichaFilename($postulante)
-        );
+        $intentoPrev = ContratacionSyncLog::where('postulante_id', $postulante->id)
+            ->where('accion', ContratacionSyncLog::ACCION_SUBIDA_FICHA)
+            ->max('intento');
+        $syncLog = ContratacionSyncLog::create([
+            'postulante_id'   => $postulante->id,
+            'accion'          => ContratacionSyncLog::ACCION_SUBIDA_FICHA,
+            'status'          => ContratacionSyncLog::STATUS_EN_PROCESO,
+            'intento'         => (int) ($intentoPrev ?? 0) + 1,
+            'sharepoint_site' => $site,
+            'origen'          => 'ingreso_manual',
+            'started_at'      => now(),
+        ]);
+
+        if (!$oneDrive->isConfigured()) {
+            $syncLog->update([
+                'status'        => ContratacionSyncLog::STATUS_FALLIDO,
+                'error_mensaje' => 'Microsoft Graph no configurado',
+                'finished_at'   => now(),
+            ]);
+            return;
+        }
+
+        try {
+            $fichaBytes = $this->generarFichaBytes($postulante);
+            $filename   = $this->fichaFilename($postulante);
+            $ok = $oneDrive->uploadFileToSite(
+                $site,
+                $fichaBytes,
+                "{$folder}/{$carpeta}/{$filename}"
+            );
+            $up = $oneDrive->lastUploadResult;
+            $syncLog->update([
+                'status'             => $ok ? ContratacionSyncLog::STATUS_EXITOSO : ContratacionSyncLog::STATUS_FALLIDO,
+                'archivo_nombre'     => $filename,
+                'archivo_tamano'     => strlen($fichaBytes),
+                'sharepoint_path'    => $up['path'] ?? "{$folder}/{$carpeta}/{$filename}",
+                'sharepoint_item_id' => $up['item_id'] ?? null,
+                'error_mensaje'      => $ok ? null : ($up['error'] ?? 'Subida falló'),
+                'finished_at'        => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Contratacion manual: fallo subida ficha SharePoint', ['folio' => $postulante->folio, 'error' => $e->getMessage()]);
+            $syncLog->update([
+                'status'        => ContratacionSyncLog::STATUS_FALLIDO,
+                'error_mensaje' => substr($e->getMessage(), 0, 1000),
+                'finished_at'   => now(),
+            ]);
+        }
     }
 
     // ─── Actualizar estado ────────────────────────────────────────
@@ -396,23 +438,56 @@ class ContratacionController extends Controller
     public function resincronizarSharePoint(PostulanteContratacion $postulante)
     {
         $oneDrive = app(OneDriveService::class);
+
+        $graphConfig = config('services.microsoft_graph');
+        $site        = $graphConfig['contratacion_site']   ?? 'RRH';
+        $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
+        $carpeta     = $postulante->rut . ' - ' . $postulante->nombre;
+
+        $intentoPrev = ContratacionSyncLog::where('postulante_id', $postulante->id)
+            ->where('accion', ContratacionSyncLog::ACCION_RESINCRONIZACION)
+            ->max('intento');
+        $syncLog = ContratacionSyncLog::create([
+            'postulante_id'   => $postulante->id,
+            'accion'          => ContratacionSyncLog::ACCION_RESINCRONIZACION,
+            'status'          => ContratacionSyncLog::STATUS_EN_PROCESO,
+            'intento'         => (int) ($intentoPrev ?? 0) + 1,
+            'sharepoint_site' => $site,
+            'origen'          => 'manual_admin',
+            'started_at'      => now(),
+        ]);
+
         if (!$oneDrive->isConfigured()) {
+            $syncLog->update([
+                'status'        => ContratacionSyncLog::STATUS_FALLIDO,
+                'error_mensaje' => 'Microsoft Graph no configurado',
+                'finished_at'   => now(),
+            ]);
             return back()->with('error', 'Microsoft Graph no está configurado.');
         }
 
         try {
-            $graphConfig = config('services.microsoft_graph');
-            $site        = $graphConfig['contratacion_site']   ?? 'RRH';
-            $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
-            $carpeta     = $postulante->rut . ' - ' . $postulante->nombre;
-
-            // Re-generar y subir ficha PDF consolidada
             $fichaBytes = $this->generarFichaBytes($postulante);
-            $oneDrive->uploadFileToSite(
+            $filename   = $this->fichaFilename($postulante);
+            $ok = $oneDrive->uploadFileToSite(
                 $site,
                 $fichaBytes,
-                "{$folder}/{$carpeta}/" . $this->fichaFilename($postulante)
+                "{$folder}/{$carpeta}/{$filename}"
             );
+            $up = $oneDrive->lastUploadResult;
+            $syncLog->update([
+                'status'             => $ok ? ContratacionSyncLog::STATUS_EXITOSO : ContratacionSyncLog::STATUS_FALLIDO,
+                'archivo_nombre'     => $filename,
+                'archivo_tamano'     => strlen($fichaBytes),
+                'sharepoint_path'    => $up['path'] ?? "{$folder}/{$carpeta}/{$filename}",
+                'sharepoint_item_id' => $up['item_id'] ?? null,
+                'error_mensaje'      => $ok ? null : ($up['error'] ?? 'Subida falló'),
+                'finished_at'        => now(),
+            ]);
+
+            if (!$ok) {
+                return back()->with('error', 'No se pudo subir a SharePoint: ' . ($up['error'] ?? 'error desconocido'));
+            }
 
             Log::info('Contratacion admin: resincronizacion SharePoint completada', ['folio' => $postulante->folio]);
             return back()->with('success', 'Ficha consolidada sincronizada en SharePoint correctamente.');
@@ -420,6 +495,11 @@ class ContratacionController extends Controller
             Log::error('Contratacion admin: fallo resincronizacion SharePoint', [
                 'folio' => $postulante->folio,
                 'error' => $e->getMessage(),
+            ]);
+            $syncLog->update([
+                'status'        => ContratacionSyncLog::STATUS_FALLIDO,
+                'error_mensaje' => substr($e->getMessage(), 0, 1000),
+                'finished_at'   => now(),
             ]);
             return back()->with('error', 'Error al sincronizar con SharePoint: ' . $e->getMessage());
         }

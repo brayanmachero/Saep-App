@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\ContratacionAcuseReciboMail;
 use App\Mail\ContratacionNuevoPostulanteMail;
 use App\Models\Configuracion;
+use App\Models\ContratacionSyncLog;
 use App\Models\PostulanteContratacion;
 use App\Services\OneDriveService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -218,7 +219,27 @@ class ContratacionPublicoController extends Controller
         $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
 
         $oneDrive = app(OneDriveService::class);
+
+        // Registro inicial de sincronización (visible al admin)
+        $intentoPrev = ContratacionSyncLog::where('postulante_id', $postulante->id)
+            ->where('accion', ContratacionSyncLog::ACCION_SUBIDA_FICHA)
+            ->max('intento');
+        $syncLog = ContratacionSyncLog::create([
+            'postulante_id'   => $postulante->id,
+            'accion'          => ContratacionSyncLog::ACCION_SUBIDA_FICHA,
+            'status'          => ContratacionSyncLog::STATUS_EN_PROCESO,
+            'intento'         => (int) ($intentoPrev ?? 0) + 1,
+            'sharepoint_site' => $site,
+            'origen'          => 'portal_publico',
+            'started_at'      => now(),
+        ]);
+
         if (!$oneDrive->isConfigured()) {
+            $syncLog->update([
+                'status'        => ContratacionSyncLog::STATUS_FALLIDO,
+                'error_mensaje' => 'Microsoft Graph no configurado',
+                'finished_at'   => now(),
+            ]);
             return;
         }
 
@@ -517,11 +538,22 @@ class ContratacionPublicoController extends Controller
             $fichaNum     = str_pad($seq, 3, '0', STR_PAD_LEFT);
             $fichaFilename = $postulante->rut . ' - FICHA ' . $fichaNum . ' - ' . $postulante->nombre . '.pdf';
 
-            $oneDrive->uploadFileToSite(
+            $ok = $oneDrive->uploadFileToSite(
                 $site,
                 $fichaBytes,
                 "{$folder}/{$carpeta}/{$fichaFilename}"
             );
+
+            $up = $oneDrive->lastUploadResult;
+            $syncLog->update([
+                'status'             => $ok ? ContratacionSyncLog::STATUS_EXITOSO : ContratacionSyncLog::STATUS_FALLIDO,
+                'archivo_nombre'     => $fichaFilename,
+                'archivo_tamano'     => strlen($fichaBytes),
+                'sharepoint_path'    => $up['path'] ?? "{$folder}/{$carpeta}/{$fichaFilename}",
+                'sharepoint_item_id' => $up['item_id'] ?? null,
+                'error_mensaje'      => $ok ? null : ($up['error'] ?? 'Subida falló'),
+                'finished_at'        => now(),
+            ]);
 
             Log::info('SharePoint contratacion: ficha PDF subida exitosamente', ['folio' => $postulante->folio]);
         } catch (\Throwable $e) {
@@ -530,6 +562,11 @@ class ContratacionPublicoController extends Controller
                 'error'   => $e->getMessage(),
                 'file'    => $e->getFile() . ':' . $e->getLine(),
                 'trace'   => substr($e->getTraceAsString(), 0, 2000),
+            ]);
+            $syncLog->update([
+                'status'        => ContratacionSyncLog::STATUS_FALLIDO,
+                'error_mensaje' => substr($e->getMessage(), 0, 1000),
+                'finished_at'   => now(),
             ]);
         }
     }
