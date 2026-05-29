@@ -171,7 +171,7 @@ class TalanaReporteAsistencia extends Command
 
         // Ordenar marcas por hora y categorizar
         foreach ($mapa as $pid => &$data) {
-            usort($data['marcas'], fn($a, $b) => $a['ts']->compare($b['ts']));
+            usort($data['marcas'], fn($a, $b) => $a['ts']->getTimestamp() <=> $b['ts']->getTimestamp());
             $data['categoria'] = $this->categorizarMarcas($data['marcas']);
         }
         unset($data);
