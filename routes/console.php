@@ -52,3 +52,10 @@ Schedule::command('talana:alertas-vencidos-activos')
     ->cron('45 7 * * 1-5')
     ->withoutOverlapping()
     ->skip(fn() => ! config('services.talana.alerta_email'));
+
+// Talana: reporte diario de asistencia (lunes–sábado a las 08:15 AM — después del sync-db de las 06:00)
+// Detecta: marcación incompleta, personal sin marcación y probables nuevos sin enrolar/turno
+Schedule::command('talana:reporte-asistencia')
+    ->cron('15 8 * * 1-6')
+    ->withoutOverlapping()
+    ->skip(fn() => ! config('services.talana.alerta_email') || ! config('services.talana.token'));
