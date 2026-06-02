@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Mail\TalanaAsistenciaReporteMail;
-use App\Models\TalanaAssignationSummary;
 use App\Models\TalanaContrato;
 use App\Models\TalanaMarca;
 use App\Services\TalanaService;
@@ -95,32 +94,38 @@ class TalanaReporteAsistencia extends Command
 
         $this->line("   ✓ {$this->cnt($contratosActivos->toArray())} contratos activos para {$fecha}");
 
-        // ─── 4. Cargar mapa de jornada calculada (workingDay) desde DB local ──────
-        // Permite distinguir días de descanso (workingDay=false) de ausencias reales.
-        // Si la tabla aún no ha sido sincronizada, $jornadaPorPersona estará vacío
-        // y el reporte recae en el comportamiento anterior (sin filtro por descanso).
-        $jornadaPorPersona = [];
+        // ─── 4. Obtener jornada calculada del día directamente desde la API Talana ──
+        // Se consulta en tiempo real (no depende de talana:sync-turnos) para garantizar
+        // que los datos de ayer estén disponibles cuando se genera el reporte a las 08:15.
+        // Permite distinguir días de descanso (workingDay=false) y detectar horas anómalas.
+        $this->line('');
+        $this->line('📡 Obteniendo jornada calculada (assignationSummary) de la API...');
+
+        $jornadaPorPersona = []; // pid → bool (true=día laboral, false=día de descanso)
+        $horasAsignacion   = []; // pid → working_seconds (int)
+
         try {
-            $jornadaPorPersona = TalanaAssignationSummary::mapaJornadaPorFecha($fecha);
-            if (empty($jornadaPorPersona)) {
-                $this->warn('   ⚠ Sin datos de jornada en DB para ' . $fecha . '. Ejecuta talana:sync-turnos para activar el filtro de días de descanso.');
+            $assignSummaries = $this->talana->assignationSummary($fecha, $fecha, 120);
+
+            if (empty($assignSummaries)) {
+                $this->warn('   ⚠ Sin datos de jornada en API para ' . $fecha . '. El filtro de días de descanso y horas no estará disponible.');
             } else {
-                $this->line('   ✓ Jornada calculada: ' . count($jornadaPorPersona) . ' registros cargados desde DB');
+                foreach ($assignSummaries as $rec) {
+                    $person   = $rec['person'] ?? [];
+                    $personId = is_array($person) ? ($person['id'] ?? null) : $person;
+                    if (! $personId) {
+                        continue;
+                    }
+                    $jornadaPorPersona[$personId] = (bool) ($rec['workingDay'] ?? true);
+                    if (isset($rec['workingSeconds']) && $rec['workingSeconds'] !== null) {
+                        $horasAsignacion[$personId] = (int) $rec['workingSeconds'];
+                    }
+                }
+                $totalDescansos = count(array_filter($jornadaPorPersona, fn($v) => $v === false));
+                $this->line('   ✓ ' . count($assignSummaries) . " jornadas cargadas ({$totalDescansos} días de descanso)");
             }
         } catch (\Throwable $e) {
             $this->warn('   ⚠ No se pudo cargar jornada calculada: ' . $e->getMessage());
-        }
-
-        // ─── 4b. Cargar mapa de segundos trabajados (assignation_summary) ────────
-        // Usado para detectar horas excesivas o insuficientes en el día.
-        $horasAsignacion = [];
-        try {
-            $horasAsignacion = TalanaAssignationSummary::mapaSegundosTrabajadasPorFecha($fecha);
-            if (! empty($horasAsignacion)) {
-                $this->line('   ✓ Segundos trabajados (Talana): ' . count($horasAsignacion) . ' registros cargados desde DB');
-            }
-        } catch (\Throwable $e) {
-            $this->warn('   ⚠ No se pudo cargar segundos trabajados: ' . $e->getMessage());
         }
 
         // ─── 5. Analizar cada trabajador activo ───────────────────────────
@@ -481,6 +486,27 @@ class TalanaReporteAsistencia extends Command
         $this->line("  🆕 Probables nuevos/sin enrolar:{$r['total_sin_enrolar']}");
         $this->line("  😴 Día de descanso (turno):    {$r['total_descanso']}");
         $this->line("  🔍 Revisión (anomalías):        {$r['total_revision']}");
+
+        // Breakdown por empresa
+        $empBreakdown = [];
+        $grupos = ['completos', 'incompletas', 'sin_marcacion', 'sin_enrolar', 'descanso', 'revision'];
+        foreach ($grupos as $g) {
+            foreach ($r[$g] as $t) {
+                $emp = $t['empresa'] ?? 'Sin empresa';
+                if (! isset($empBreakdown[$emp])) {
+                    $empBreakdown[$emp] = ['completos' => 0, 'incompletas' => 0, 'sin_marcacion' => 0, 'sin_enrolar' => 0, 'descanso' => 0, 'revision' => 0];
+                }
+                $empBreakdown[$emp][$g]++;
+            }
+        }
+        if (count($empBreakdown) > 0) {
+            $this->line('');
+            $this->line('  ─── Por empresa ───────────────────────────');
+            foreach ($empBreakdown as $emp => $c) {
+                $total = array_sum($c);
+                $this->line("  {$emp} ({$total}): ✅ {$c['completos']} | ⚠️ {$c['incompletas']} | ❌ {$c['sin_marcacion']} | 😴 {$c['descanso']} | 🔍 {$c['revision']}");
+            }
+        }
 
         if (! empty($r['revision'])) {
             $this->line('');
