@@ -129,7 +129,7 @@ class TalanaAsistenciaReporteMail extends Mailable
             ['❌ Sin marcación (activos)',                   $r['total_sin_marcacion']],
             ['🆕 Probable nuevo sin enrolar',               $r['total_sin_enrolar']],
             ['😴 Día de descanso (turno)',                  $r['total_descanso'] ?? 0],
-            ['🔍 Marcó en día de descanso (revisión)',      $r['total_revision'] ?? 0],
+            ['🔍 Revisión (anomalías detectadas)',           $r['total_revision'] ?? 0],
         ];
 
         $row = 4;
@@ -163,11 +163,11 @@ class TalanaAsistenciaReporteMail extends Mailable
             $this->escribirHojaPersonas($ws, $filas, "Probables Nuevos Sin Enrolar — {$empresa}", false);
         }
 
-        // ── Hojas: Revisión descanso (por empresa) ───────────────────────────
+        // ── Hojas: Revisión (descanso + horas anómalas, por empresa) ───────
         foreach ($this->porEmpresa($r['revision'] ?? []) as $empresa => $filas) {
             $ws = $spreadsheet->createSheet();
             $ws->setTitle(mb_substr("Revisión {$empresa}", 0, 31));
-            $this->escribirHojaPersonas($ws, $filas, "Marcó en Día de Descanso — {$empresa}", true);
+            $this->escribirHojaPersonas($ws, $filas, "Requieren Revisión — {$empresa}", true, true);
         }
 
         // ── Hojas: Completos (por empresa) ───────────────────────────────────
@@ -187,15 +187,19 @@ class TalanaAsistenciaReporteMail extends Mailable
         return $content;
     }
 
-    private function escribirHojaPersonas(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, array $filas, string $titulo, bool $mostrarMarcas): void
+    private function escribirHojaPersonas(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, array $filas, string $titulo, bool $mostrarMarcas, bool $mostrarMotivo = false): void
     {
         $this->setCellBold($ws, 'A1', $titulo, 12);
 
         $headers = ['Nombre', 'RUT', 'Centro Costo / Sucursal', 'Cargo', 'Tipo Contrato', 'Desde', 'Hasta'];
+        if ($mostrarMotivo) {
+            $headers[] = 'Motivo';
+        }
         if ($mostrarMarcas) {
             $headers[] = 'Marcas del día';
             $headers[] = '1ra Entrada';
             $headers[] = 'Última Salida';
+            $headers[] = 'Horas trabajadas';
         }
 
         $col = 'A';
@@ -218,10 +222,16 @@ class TalanaAsistenciaReporteMail extends Mailable
                 $f['desde']         ?? '—',
                 $f['hasta']         ?? '—',
             ];
+            if ($mostrarMotivo) {
+                $cols[] = $f['motivo'] ?? '—';
+            }
             if ($mostrarMarcas) {
                 $cols[] = $f['marcas']          ?? '—';
                 $cols[] = $f['primera_entrada'] ?? '—';
                 $cols[] = $f['ultima_salida']   ?? '—';
+                $cols[] = isset($f['horas_trabajadas']) && $f['horas_trabajadas'] !== null
+                    ? number_format((float) $f['horas_trabajadas'], 1) . 'h'
+                    : '—';
             }
             $col = 'A';
             foreach ($cols as $val) {

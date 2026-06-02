@@ -25,10 +25,12 @@ use Illuminate\Support\Facades\Mail;
 class TalanaReporteAsistencia extends Command
 {
     protected $signature = 'talana:reporte-asistencia
-                            {--fecha=        : Fecha YYYY-MM-DD a analizar (default: ayer)}
-                            {--email=        : Email destinatario (default: TALANA_ALERTA_EMAIL)}
-                            {--dias-nuevo=60 : Días de antigüedad máxima para marcar como "nuevo"}
-                            {--dry-run       : Muestra resumen por consola sin enviar email}';
+                            {--fecha=           : Fecha YYYY-MM-DD a analizar (default: ayer)}
+                            {--email=           : Email destinatario (default: TALANA_ALERTA_EMAIL)}
+                            {--dias-nuevo=60    : Días de antigüedad máxima para marcar como "nuevo"}
+                            {--jornada-normal=9 : Horas de jornada normal para calcular exceso (default: 9)}
+                            {--horas-extras-max=7 : Horas extras sobre la jornada normal que disparan revisión (default: 7)}
+                            {--dry-run          : Muestra resumen por consola sin enviar email}';
 
     protected $description = 'Genera el reporte diario de asistencia Talana y lo envía por email';
 
@@ -39,10 +41,15 @@ class TalanaReporteAsistencia extends Command
 
     public function handle(): int
     {
-        $fecha    = $this->option('fecha') ?: Carbon::yesterday()->toDateString();
-        $isDry    = $this->option('dry-run');
+        $fecha     = $this->option('fecha') ?: Carbon::yesterday()->toDateString();
+        $isDry     = $this->option('dry-run');
         $diasNuevo = (int) ($this->option('dias-nuevo') ?? 60);
-        $email    = $this->option('email') ?: config('services.talana.alerta_email');
+        $email     = $this->option('email') ?: config('services.talana.alerta_email');
+
+        $jornadaNormal  = (float) ($this->option('jornada-normal')   ?? 9);
+        $horasExtrasMax = (float) ($this->option('horas-extras-max') ?? 7);
+        $umbralAltoH    = $jornadaNormal + $horasExtrasMax; // ej. 9+7 = 16h → sospechoso
+        $umbralBajoH    = 7.0;                             // < 7h trabajadas → sospechoso
 
         if (! $email) {
             $this->error('No hay email configurado. Usa --email= o define TALANA_ALERTA_EMAIL en .env');
@@ -104,13 +111,28 @@ class TalanaReporteAsistencia extends Command
             $this->warn('   ⚠ No se pudo cargar jornada calculada: ' . $e->getMessage());
         }
 
+        // ─── 4b. Cargar mapa de segundos trabajados (assignation_summary) ────────
+        // Usado para detectar horas excesivas o insuficientes en el día.
+        $horasAsignacion = [];
+        try {
+            $horasAsignacion = TalanaAssignationSummary::mapaSegundosTrabajadasPorFecha($fecha);
+            if (! empty($horasAsignacion)) {
+                $this->line('   ✓ Segundos trabajados (Talana): ' . count($horasAsignacion) . ' registros cargados desde DB');
+            }
+        } catch (\Throwable $e) {
+            $this->warn('   ⚠ No se pudo cargar segundos trabajados: ' . $e->getMessage());
+        }
+
         // ─── 5. Analizar cada trabajador activo ───────────────────────────
         $resultado = $this->analizarTrabajadores(
             $contratosActivos,
             $marcasPorPersona,
             $jornadaPorPersona,
             $fecha,
-            $diasNuevo
+            $diasNuevo,
+            $horasAsignacion,
+            $umbralAltoH,
+            $umbralBajoH
         );
 
         // ─── 6. Mostrar resumen por consola ───────────────────────────────────
@@ -241,20 +263,18 @@ class TalanaReporteAsistencia extends Command
         array $marcasPorPersona,
         array $jornadaPorPersona,
         string $fecha,
-        int $diasNuevo
+        int $diasNuevo,
+        array $horasAsignacion = [],
+        float $umbralAltoH = 16.0,
+        float $umbralBajoH = 7.0
     ): array {
         $completos        = [];
         $incompletas      = [];
         $sinMarcacion     = [];
         $probablesNuevos  = [];
         $descanso         = []; // Día de descanso según turno (workingDay = false)
-        $revision         = []; // Marcó en día de descanso — requiere revisión
+        $revision         = []; // Anomalías que requieren revisión manual
 
-        // IDs de personas con contrato activo que ya marcaron (o aparecen en marcas)
-        $personasConMarca = array_keys($marcasPorPersona);
-
-        // Personas que marcaron ese día agrupadas por persona_talana_id
-        // (los contratos usan persona_talana_id = person.id en Talana)
         foreach ($contratosActivos as $contrato) {
             $pid = $contrato->persona_talana_id;
 
@@ -266,12 +286,37 @@ class TalanaReporteAsistencia extends Command
                 $esDescansoConMarca = isset($jornadaPorPersona[$pid]) && $jornadaPorPersona[$pid] === false;
 
                 if ($esDescansoConMarca) {
-                    $revision[] = array_merge($fila, ['categoria' => 'revision']);
+                    $revision[] = array_merge($fila, [
+                        'categoria' => 'revision',
+                        'motivo'    => 'Marcó en día de descanso',
+                    ]);
                 } else {
                     switch ($data['categoria']) {
                         case 'completo':
                         case 'multiple':
-                            $completos[] = $fila;
+                            // ── Detección de horas anómalas ──────────────────────
+                            $horas = $this->resolverHorasTrabajadas($pid, $horasAsignacion, $fila);
+                            if ($horas !== null && $horas > $umbralAltoH) {
+                                $revision[] = array_merge($fila, [
+                                    'categoria' => 'revision',
+                                    'motivo'    => sprintf(
+                                        'Horas excesivas: %.1fh trabajadas (máx. %.0fh por día)',
+                                        $horas, $umbralAltoH
+                                    ),
+                                    'horas_trabajadas' => $horas,
+                                ]);
+                            } elseif ($horas !== null && $horas < $umbralBajoH) {
+                                $revision[] = array_merge($fila, [
+                                    'categoria' => 'revision',
+                                    'motivo'    => sprintf(
+                                        'Horas insuficientes: %.1fh trabajadas (mín. %.0fh esperado)',
+                                        $horas, $umbralBajoH
+                                    ),
+                                    'horas_trabajadas' => $horas,
+                                ]);
+                            } else {
+                                $completos[] = $fila;
+                            }
                             break;
                         default:
                             $incompletas[] = $fila;
@@ -283,10 +328,8 @@ class TalanaReporteAsistencia extends Command
                 $esDescanso = isset($jornadaPorPersona[$pid]) && $jornadaPorPersona[$pid] === false;
 
                 if ($esDescanso) {
-                    // Día de descanso según turno rotativo — no es anomalía
                     $descanso[] = $this->buildFilaTrabajador($contrato, [], 'descanso');
                 } else {
-                    // Día laborable (o sin datos de jornada) y sin marcación
                     $fila         = $this->buildFilaTrabajador($contrato, [], 'sin_marcacion');
                     $esSinEnrolar = $this->esProbableNuevoSinEnrolar($contrato, $fecha, $diasNuevo);
 
@@ -324,6 +367,37 @@ class TalanaReporteAsistencia extends Command
             'descanso'             => $descanso,
             'revision'             => $revision,
         ];
+    }
+
+    /**
+     * Resuelve las horas trabajadas para una persona en el día.
+     * Prioridad:
+     *  1. working_seconds desde talana_assignation_summaries (dato oficial de Talana)
+     *  2. Diferencia entre primera_entrada y ultima_salida (desde las marcas)
+     * Devuelve null si no se puede calcular.
+     */
+    private function resolverHorasTrabajadas(int $pid, array $horasAsignacion, array $fila): ?float
+    {
+        // Prioridad 1: dato oficial calculado por Talana
+        if (isset($horasAsignacion[$pid]) && $horasAsignacion[$pid] > 0) {
+            return round($horasAsignacion[$pid] / 3600, 2);
+        }
+
+        // Prioridad 2: calcular desde primera_entrada / ultima_salida
+        if ($fila['primera_entrada'] && $fila['ultima_salida']) {
+            try {
+                $tsE = Carbon::createFromFormat('H:i:s', $fila['primera_entrada']);
+                $tsS = Carbon::createFromFormat('H:i:s', $fila['ultima_salida']);
+                if ($tsS->lte($tsE)) {
+                    $tsS->addDay(); // turno nocturno que cruza medianoche
+                }
+                return round($tsS->diffInSeconds($tsE) / 3600, 2);
+            } catch (\Exception) {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -387,6 +461,8 @@ class TalanaReporteAsistencia extends Command
             'marcas'           => implode(' / ', $marcasStr),
             'total_marcas'     => count($marcas),
             'categoria'        => $categoria,
+            'horas_trabajadas' => null, // se rellena opcionalmente vía resolverHorasTrabajadas
+            'motivo'           => null, // se rellena opcionalmente para revisión
         ];
     }
 
@@ -404,13 +480,14 @@ class TalanaReporteAsistencia extends Command
         $this->line("  ❌ Sin marcación:               {$r['total_sin_marcacion']}");
         $this->line("  🆕 Probables nuevos/sin enrolar:{$r['total_sin_enrolar']}");
         $this->line("  😴 Día de descanso (turno):    {$r['total_descanso']}");
-        $this->line("  🔍 Marcó en día de descanso:    {$r['total_revision']}");
+        $this->line("  🔍 Revisión (anomalías):        {$r['total_revision']}");
 
         if (! empty($r['revision'])) {
             $this->line('');
-            $this->warn('  Marcó en día de descanso (revisar):');
+            $this->warn('  Revisión (requieren atención):');
             foreach ($r['revision'] as $t) {
-                $this->line("    - {$t['nombre']} ({$t['rut']}) | {$t['marcas']}");
+                $motivo = $t['motivo'] ?? 'Sin motivo';
+                $this->line("    - {$t['nombre']} ({$t['rut']}) | {$motivo} | Marcas: {$t['marcas']}");
             }
         }
 

@@ -50,4 +50,19 @@ class TalanaAssignationSummary extends Model
             ->map(fn($v) => (bool) $v)
             ->toArray();
     }
+
+    /**
+     * Devuelve un mapa persona_talana_id → working_seconds (int) para una fecha dada.
+     * Útil para calcular horas trabajadas según el dato calculado por Talana.
+     * Solo incluye registros donde working_seconds no es null.
+     */
+    public static function mapaSegundosTrabajadasPorFecha(string $fecha): array
+    {
+        return static::where('fecha', $fecha)
+            ->whereNotNull('working_seconds')
+            ->select('persona_talana_id', 'working_seconds')
+            ->get()
+            ->pluck('working_seconds', 'persona_talana_id')
+            ->toArray();
+    }
 }

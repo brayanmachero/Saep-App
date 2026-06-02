@@ -253,15 +253,15 @@
     </div>
     @endif
 
-    {{-- SECCIÓN: MARCÓ EN DÍA DE DESCANSO --}}
+    {{-- SECCIÓN: REVISIÓN (descanso + horas anómalas) --}}
     @if(($reporte['total_revision'] ?? 0) > 0)
     <div class="section">
         <div class="section-title">
-            🔍 Marcó en día de descanso
+            🔍 Requieren revisión
             <span style="background:#f5f3ff;color:#6b21a8;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;">{{ $reporte['total_revision'] }} trabajador(es)</span>
         </div>
         <p style="font-size:12px;color:#6b21a8;margin-bottom:12px;">
-            Tenían turno de descanso asignado pero <strong>registraron marcas</strong> ese día. Requiere revisión manual.
+            Anomalías detectadas: marcas en día de descanso, horas excesivas o horas insuficientes. Requieren revisión manual.
         </p>
 
         @foreach($revisionPorEmpresaCC as $empresa => $ccGroups)
@@ -278,6 +278,7 @@
                             <th>Nombre</th>
                             <th>RUT</th>
                             <th>Cargo</th>
+                            <th>Motivo</th>
                             <th>Marca(s) del día</th>
                         </tr>
                     </thead>
@@ -287,6 +288,7 @@
                             <td>{{ $t['nombre'] }}</td>
                             <td>{{ $t['rut'] }}</td>
                             <td style="font-size:12px;color:#64748b;">{{ $t['cargo'] }}</td>
+                            <td style="font-size:12px;color:#6b21a8;font-weight:600;">{{ $t['motivo'] ?? '—' }}</td>
                             <td class="marca-hora">{{ $t['marcas'] ?: '—' }}</td>
                         </tr>
                         @endforeach
