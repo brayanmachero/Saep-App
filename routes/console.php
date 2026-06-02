@@ -53,6 +53,13 @@ Schedule::command('talana:alertas-vencidos-activos')
     ->withoutOverlapping()
     ->skip(fn() => ! config('services.talana.alerta_email'));
 
+// Talana: sync asignación persona↔turno + jornada calculada (diario 06:30 AM — tras sync-db de 06:00)
+// Permite al reporte de asistencia distinguir días de descanso de ausencias reales (workingDay flag)
+Schedule::command('talana:sync-turnos --dias=30')
+    ->dailyAt('06:30')
+    ->withoutOverlapping()
+    ->skip(fn() => ! config('services.talana.token'));
+
 // Talana: reporte diario de asistencia (lunes–sábado a las 08:15 AM — después del sync-db de las 06:00)
 // Detecta: marcación incompleta, personal sin marcación y probables nuevos sin enrolar/turno
 Schedule::command('talana:reporte-asistencia')

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Mail\TalanaAsistenciaReporteMail;
+use App\Models\TalanaAssignationSummary;
 use App\Models\TalanaContrato;
 use App\Models\TalanaMarca;
 use App\Services\TalanaService;
@@ -83,22 +84,39 @@ class TalanaReporteAsistencia extends Command
             ->where('desde', '<=', $fecha)
             ->get(['talana_id', 'persona_talana_id', 'persona_nombre', 'persona_rut',
                    'centro_costo_nombre', 'sucursal_nombre', 'tipo_contrato_nombre',
-                   'cargo_nombre', 'desde', 'hasta']);
+                   'cargo_nombre', 'desde', 'hasta', 'empresa_id', 'empresa_nombre']);
 
         $this->line("   ✓ {$this->cnt($contratosActivos->toArray())} contratos activos para {$fecha}");
 
-        // ─── 4. Analizar cada trabajador activo ───────────────────────────────
+        // ─── 4. Cargar mapa de jornada calculada (workingDay) desde DB local ──────
+        // Permite distinguir días de descanso (workingDay=false) de ausencias reales.
+        // Si la tabla aún no ha sido sincronizada, $jornadaPorPersona estará vacío
+        // y el reporte recae en el comportamiento anterior (sin filtro por descanso).
+        $jornadaPorPersona = [];
+        try {
+            $jornadaPorPersona = TalanaAssignationSummary::mapaJornadaPorFecha($fecha);
+            if (empty($jornadaPorPersona)) {
+                $this->warn('   ⚠ Sin datos de jornada en DB para ' . $fecha . '. Ejecuta talana:sync-turnos para activar el filtro de días de descanso.');
+            } else {
+                $this->line('   ✓ Jornada calculada: ' . count($jornadaPorPersona) . ' registros cargados desde DB');
+            }
+        } catch (\Throwable $e) {
+            $this->warn('   ⚠ No se pudo cargar jornada calculada: ' . $e->getMessage());
+        }
+
+        // ─── 5. Analizar cada trabajador activo ───────────────────────────
         $resultado = $this->analizarTrabajadores(
             $contratosActivos,
             $marcasPorPersona,
+            $jornadaPorPersona,
             $fecha,
             $diasNuevo
         );
 
-        // ─── 5. Mostrar resumen por consola ───────────────────────────────────
+        // ─── 6. Mostrar resumen por consola ───────────────────────────────────
         $this->mostrarResumen($resultado, $fecha);
 
-        // ─── 6. Enviar email (salvo dry-run) ─────────────────────────────────
+        // ─── 7. Enviar email (salvo dry-run) ─────────────────────────────────
         if ($isDry) {
             $this->line('');
             $this->warn('[DRY-RUN] Email no enviado');
@@ -221,6 +239,7 @@ class TalanaReporteAsistencia extends Command
     private function analizarTrabajadores(
         $contratosActivos,
         array $marcasPorPersona,
+        array $jornadaPorPersona,
         string $fecha,
         int $diasNuevo
     ): array {
@@ -228,6 +247,8 @@ class TalanaReporteAsistencia extends Command
         $incompletas      = [];
         $sinMarcacion     = [];
         $probablesNuevos  = [];
+        $descanso         = []; // Día de descanso según turno (workingDay = false)
+        $revision         = []; // Marcó en día de descanso — requiere revisión
 
         // IDs de personas con contrato activo que ya marcaron (o aparecen en marcas)
         $personasConMarca = array_keys($marcasPorPersona);
@@ -241,24 +262,39 @@ class TalanaReporteAsistencia extends Command
                 $data = $marcasPorPersona[$pid];
                 $fila = $this->buildFilaTrabajador($contrato, $data['marcas'], $data['categoria']);
 
-                switch ($data['categoria']) {
-                    case 'completo':
-                    case 'multiple':
-                        $completos[] = $fila;
-                        break;
-                    default:
-                        $incompletas[] = $fila;
-                        break;
+                // Si marcó pero su jornada es día de descanso → requiere revisión
+                $esDescansoConMarca = isset($jornadaPorPersona[$pid]) && $jornadaPorPersona[$pid] === false;
+
+                if ($esDescansoConMarca) {
+                    $revision[] = array_merge($fila, ['categoria' => 'revision']);
+                } else {
+                    switch ($data['categoria']) {
+                        case 'completo':
+                        case 'multiple':
+                            $completos[] = $fila;
+                            break;
+                        default:
+                            $incompletas[] = $fila;
+                            break;
+                    }
                 }
             } else {
-                // Sin marcación ese día — verificar si es probable nuevo
-                $fila        = $this->buildFilaTrabajador($contrato, [], 'sin_marcacion');
-                $esSinEnrolar = $this->esProbableNuevoSinEnrolar($contrato, $fecha, $diasNuevo);
+                // Sin marcación ese día — verificar si es día de descanso según turno
+                $esDescanso = isset($jornadaPorPersona[$pid]) && $jornadaPorPersona[$pid] === false;
 
-                if ($esSinEnrolar) {
-                    $probablesNuevos[] = array_merge($fila, ['motivo' => 'Contrato reciente sin marcas previas']);
+                if ($esDescanso) {
+                    // Día de descanso según turno rotativo — no es anomalía
+                    $descanso[] = $this->buildFilaTrabajador($contrato, [], 'descanso');
                 } else {
-                    $sinMarcacion[] = $fila;
+                    // Día laborable (o sin datos de jornada) y sin marcación
+                    $fila         = $this->buildFilaTrabajador($contrato, [], 'sin_marcacion');
+                    $esSinEnrolar = $this->esProbableNuevoSinEnrolar($contrato, $fecha, $diasNuevo);
+
+                    if ($esSinEnrolar) {
+                        $probablesNuevos[] = array_merge($fila, ['motivo' => 'Contrato reciente sin marcas previas']);
+                    } else {
+                        $sinMarcacion[] = $fila;
+                    }
                 }
             }
         }
@@ -269,6 +305,8 @@ class TalanaReporteAsistencia extends Command
         usort($incompletas, $sortNombre);
         usort($sinMarcacion, $sortNombre);
         usort($probablesNuevos, $sortNombre);
+        usort($descanso, $sortNombre);
+        usort($revision, $sortNombre);
 
         return [
             'fecha'                => $fecha,
@@ -277,10 +315,14 @@ class TalanaReporteAsistencia extends Command
             'total_incompletas'    => count($incompletas),
             'total_sin_marcacion'  => count($sinMarcacion),
             'total_sin_enrolar'    => count($probablesNuevos),
+            'total_descanso'       => count($descanso),
+            'total_revision'       => count($revision),
             'completos'            => $completos,
             'incompletas'          => $incompletas,
             'sin_marcacion'        => $sinMarcacion,
             'sin_enrolar'          => $probablesNuevos,
+            'descanso'             => $descanso,
+            'revision'             => $revision,
         ];
     }
 
@@ -336,6 +378,8 @@ class TalanaReporteAsistencia extends Command
             'centro_costo'     => $contrato->centro_costo_nombre ?? $contrato->sucursal_nombre ?? '—',
             'cargo'            => $contrato->cargo_nombre   ?? '—',
             'tipo_contrato'    => $contrato->tipo_contrato_nombre ?? '—',
+            'empresa_id'       => $contrato->empresa_id     ?? null,
+            'empresa'          => $contrato->empresa_nombre ?? 'Sin empresa',
             'desde'            => $contrato->desde          ?? null,
             'hasta'            => $contrato->hasta          ?? null,
             'primera_entrada'  => $primeraEntrada,
@@ -359,6 +403,16 @@ class TalanaReporteAsistencia extends Command
         $this->line("  ⚠️  Marcación incompleta (1m):  {$r['total_incompletas']}");
         $this->line("  ❌ Sin marcación:               {$r['total_sin_marcacion']}");
         $this->line("  🆕 Probables nuevos/sin enrolar:{$r['total_sin_enrolar']}");
+        $this->line("  😴 Día de descanso (turno):    {$r['total_descanso']}");
+        $this->line("  🔍 Marcó en día de descanso:    {$r['total_revision']}");
+
+        if (! empty($r['revision'])) {
+            $this->line('');
+            $this->warn('  Marcó en día de descanso (revisar):');
+            foreach ($r['revision'] as $t) {
+                $this->line("    - {$t['nombre']} ({$t['rut']}) | {$t['marcas']}");
+            }
+        }
 
         if (! empty($r['incompletas'])) {
             $this->line('');

@@ -23,22 +23,42 @@ class TalanaService
 
     private function get(string $endpoint, array $query = [], int $timeout = 30): array
     {
-        $url = "{$this->baseUrl}/{$endpoint}";
-
-        $response = Http::withHeaders([
+        $url     = "{$this->baseUrl}/{$endpoint}";
+        $headers = [
             'Authorization' => "Token {$this->token}",
             'Accept'        => 'application/json',
-        ])
-            ->timeout($timeout)
-            ->get($url, $query);
+        ];
 
-        if ($response->failed()) {
-            throw new \RuntimeException(
-                "Talana API error [{$response->status()}] {$endpoint}: {$response->body()}"
-            );
+        $maxRetries = 5;
+        $delay      = 2; // segundos iniciales
+
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            $response = Http::withHeaders($headers)
+                ->timeout($timeout)
+                ->get($url, $query);
+
+            if ($response->status() === 429) {
+                if ($attempt === $maxRetries) {
+                    throw new \RuntimeException(
+                        "Talana API error [429] {$endpoint}: demasiadas solicitudes tras {$maxRetries} intentos"
+                    );
+                }
+                $retryAfter = min((int) ($response->header('Retry-After') ?: $delay), 30);
+                sleep($retryAfter);
+                $delay = min($delay * 2, 60);
+                continue;
+            }
+
+            if ($response->failed()) {
+                throw new \RuntimeException(
+                    "Talana API error [{$response->status()}] {$endpoint}: {$response->body()}"
+                );
+            }
+
+            return $response->json() ?? [];
         }
 
-        return $response->json() ?? [];
+        return []; // nunca se alcanza
     }
 
     // ─── Paginación ───────────────────────────────────────────────────────────
@@ -56,7 +76,8 @@ class TalanaService
         array $query = [],
         int $pageSize = 200,
         int $timeout = 30,
-        int $startPage = 1
+        int $startPage = 1,
+        int $pageDelayMs = 0
     ): array {
         $all  = [];
         $page = $startPage;
@@ -67,6 +88,10 @@ class TalanaService
             $all     = array_merge($all, $results);
             $hasNext = ! empty($data['next']);
             $page++;
+
+            if ($hasNext && $pageDelayMs > 0) {
+                usleep($pageDelayMs * 1000);
+            }
         } while ($hasNext);
 
         return $all;
@@ -249,6 +274,60 @@ class TalanaService
      * @param string|null $desde  Filtrar desde esta fecha (YYYY-MM-DD)
      * @param string|null $hasta  Filtrar hasta esta fecha (YYYY-MM-DD)
      */
+    /**
+     * Obtiene la jornada calculada por persona y día (assignationSummaryApi/).
+     * Incluye workingDay (bool) — permite distinguir días de descanso de ausencias reales.
+     *
+     * @param string $desde  Fecha inicio YYYY-MM-DD
+     * @param string $hasta  Fecha fin   YYYY-MM-DD
+     */
+    public function assignationSummary(string $desde, string $hasta, int $timeout = 120): array
+    {
+        // La API ignora cualquier parámetro de filtro y devuelve todos los registros (1.2 M+).
+        // Los resultados vienen ordenados newest-first, por lo que hacemos early-stop
+        // cuando encontramos registros anteriores a $desde para evitar descargar todo.
+        $all      = [];
+        $page     = 1;
+        $pageSize = 200;
+        $endpoint = 'assignationSummaryApi/';
+
+        do {
+            $data    = $this->get($endpoint, ['page' => $page, 'page_size' => $pageSize], $timeout);
+            $results = $data['results'] ?? [];
+            $hasNext = ! empty($data['next']);
+
+            $shouldStop = false;
+            foreach ($results as $record) {
+                $date = $record['date'] ?? null;
+                if ($date === null || $date < $desde) {
+                    $shouldStop = true;
+                    break;
+                }
+                if ($date <= $hasta) {
+                    $all[] = $record;
+                }
+            }
+
+            $page++;
+
+            if ($hasNext && ! $shouldStop) {
+                usleep(200 * 1000); // 200 ms entre páginas
+            }
+        } while ($hasNext && ! $shouldStop);
+
+        return $all;
+    }
+
+    /**
+     * Obtiene todas las asignaciones persona ↔ turno (workShiftPersonRange/).
+     * Devuelve: id, fromDate, toDate, workShift (int), person (int).
+     */
+    public function workShiftPersonRange(array $query = [], int $timeout = 120): array
+    {
+        // 300 ms entre páginas para no exceder el rate-limit (60 K registros ≈ 303 páginas)
+        return $this->fetchAll('workShiftPersonRange/', $query, 200, $timeout, 1, 300);
+    }
+
     public function ausencias(?string $desde = null, ?string $hasta = null): array
     {
         $query = [];

@@ -91,6 +91,12 @@
             <div class="num">{{ $reporte['total_sin_enrolar'] }}</div>
             <div class="label">Sin enrolar 🆕</div>
         </div>
+        @if(($reporte['total_revision'] ?? 0) > 0)
+        <div class="card" style="background:#fdf4ff;color:#6b21a8;border:1px solid #d8b4fe;">
+            <div class="num">{{ $reporte['total_revision'] }}</div>
+            <div class="label">Revisión 🔍</div>
+        </div>
+        @endif
     </div>
 
     {{-- AVISO sin turno --}}
@@ -110,41 +116,48 @@
             Solo registraron una marca (entrada SIN salida, o salida SIN entrada). Requiere corrección en Talana.
         </p>
 
-        @foreach($incompletasPorCC as $cc => $trabajadores)
-        <div class="cc-group">
-            <div class="cc-title">{{ $cc }}</div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Nombre</th>
-                        <th>RUT</th>
-                        <th>Cargo</th>
-                        <th>Marca(s) del día</th>
-                        <th>Estado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($trabajadores as $t)
-                    <tr>
-                        <td>{{ $t['nombre'] }}</td>
-                        <td>{{ $t['rut'] }}</td>
-                        <td style="font-size:12px;color:#64748b;">{{ $t['cargo'] }}</td>
-                        <td class="marca-hora">{{ $t['marcas'] ?: '—' }}</td>
-                        <td>
-                            @if($t['categoria'] === 'solo_entrada')
-                                <span class="cat-solo_entrada">Solo entrada</span>
-                            @elseif($t['categoria'] === 'solo_salida')
-                                <span class="cat-solo_salida">Solo salida</span>
-                            @elseif($t['categoria'] === 'multiple')
-                                <span class="cat-multiple">Múltiples ({{ $t['total_marcas'] }})</span>
-                            @else
-                                <span class="cat-incompleto">Incompleto</span>
-                            @endif
-                        </td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
+        @foreach($incompletasPorEmpresaCC as $empresa => $ccGroups)
+        <div style="margin-bottom:20px;">
+            <div style="font-size:13px;font-weight:700;background:#1e3a5f;color:#fff;padding:6px 14px;border-radius:6px;margin-bottom:8px;">
+                🏢 Empresa {{ $empresa }}
+            </div>
+            @foreach($ccGroups as $cc => $trabajadores)
+            <div class="cc-group">
+                <div class="cc-title">{{ $cc }}</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>RUT</th>
+                            <th>Cargo</th>
+                            <th>Marca(s) del día</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($trabajadores as $t)
+                        <tr>
+                            <td>{{ $t['nombre'] }}</td>
+                            <td>{{ $t['rut'] }}</td>
+                            <td style="font-size:12px;color:#64748b;">{{ $t['cargo'] }}</td>
+                            <td class="marca-hora">{{ $t['marcas'] ?: '—' }}</td>
+                            <td>
+                                @if($t['categoria'] === 'solo_entrada')
+                                    <span class="cat-solo_entrada">Solo entrada</span>
+                                @elseif($t['categoria'] === 'solo_salida')
+                                    <span class="cat-solo_salida">Solo salida</span>
+                                @elseif($t['categoria'] === 'multiple')
+                                    <span class="cat-multiple">Múltiples ({{ $t['total_marcas'] }})</span>
+                                @else
+                                    <span class="cat-incompleto">Incompleto</span>
+                                @endif
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @endforeach
         </div>
         @endforeach
     </div>
@@ -203,40 +216,91 @@
             Pueden estar en día libre, vacaciones, licencia o ausencia. Verificar en Talana.
         </p>
 
-        @foreach($sinMarcacionPorCC as $cc => $trabajadores)
-        <div class="cc-group">
-            <div class="cc-title">{{ $cc }} ({{ count($trabajadores) }})</div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Nombre</th>
-                        <th>RUT</th>
-                        <th>Cargo</th>
-                        <th>Tipo Contrato</th>
-                        <th>Vence</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($trabajadores as $t)
-                    <tr>
-                        <td>{{ $t['nombre'] }}</td>
-                        <td>{{ $t['rut'] }}</td>
-                        <td style="font-size:12px;color:#64748b;">{{ $t['cargo'] }}</td>
-                        <td style="font-size:12px;">{{ $t['tipo_contrato'] }}</td>
-                        <td class="marca-hora" style="color:{{ $t['hasta'] ? '#dc2626' : '#16a34a' }};">
-                            {{ $t['hasta'] ? \Carbon\Carbon::parse($t['hasta'])->format('d/m/Y') : 'Indefinido' }}
-                        </td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
+        @foreach($sinMarcacionPorEmpresaCC as $empresa => $ccGroups)
+        <div style="margin-bottom:20px;">
+            <div style="font-size:13px;font-weight:700;background:#1e3a5f;color:#fff;padding:6px 14px;border-radius:6px;margin-bottom:8px;">
+                🏢 Empresa {{ $empresa }}
+            </div>
+            @foreach($ccGroups as $cc => $trabajadores)
+            <div class="cc-group">
+                <div class="cc-title">{{ $cc }} ({{ count($trabajadores) }})</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>RUT</th>
+                            <th>Cargo</th>
+                            <th>Vence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($trabajadores as $t)
+                        <tr>
+                            <td>{{ $t['nombre'] }}</td>
+                            <td>{{ $t['rut'] }}</td>
+                            <td style="font-size:12px;color:#64748b;">{{ $t['cargo'] }}</td>
+                            <td class="marca-hora" style="color:{{ $t['hasta'] ? '#dc2626' : '#16a34a' }};">
+                                {{ $t['hasta'] ? \Carbon\Carbon::parse($t['hasta'])->format('d/m/Y') : 'Indefinido' }}
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @endforeach
+        </div>
+        @endforeach
+    </div>
+    @endif
+
+    {{-- SECCIÓN: MARCÓ EN DÍA DE DESCANSO --}}
+    @if(($reporte['total_revision'] ?? 0) > 0)
+    <div class="section">
+        <div class="section-title">
+            🔍 Marcó en día de descanso
+            <span style="background:#f5f3ff;color:#6b21a8;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;">{{ $reporte['total_revision'] }} trabajador(es)</span>
+        </div>
+        <p style="font-size:12px;color:#6b21a8;margin-bottom:12px;">
+            Tenían turno de descanso asignado pero <strong>registraron marcas</strong> ese día. Requiere revisión manual.
+        </p>
+
+        @foreach($revisionPorEmpresaCC as $empresa => $ccGroups)
+        <div style="margin-bottom:20px;">
+            <div style="font-size:13px;font-weight:700;background:#6b21a8;color:#fff;padding:6px 14px;border-radius:6px;margin-bottom:8px;">
+                🏢 Empresa {{ $empresa }}
+            </div>
+            @foreach($ccGroups as $cc => $trabajadores)
+            <div class="cc-group">
+                <div class="cc-title">{{ $cc }}</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>RUT</th>
+                            <th>Cargo</th>
+                            <th>Marca(s) del día</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($trabajadores as $t)
+                        <tr>
+                            <td>{{ $t['nombre'] }}</td>
+                            <td>{{ $t['rut'] }}</td>
+                            <td style="font-size:12px;color:#64748b;">{{ $t['cargo'] }}</td>
+                            <td class="marca-hora">{{ $t['marcas'] ?: '—' }}</td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @endforeach
         </div>
         @endforeach
     </div>
     @endif
 
     {{-- Sin anomalías --}}
-    @if($reporte['total_incompletas'] === 0 && $reporte['total_sin_enrolar'] === 0 && $reporte['total_sin_marcacion'] === 0)
+    @if($reporte['total_incompletas'] === 0 && $reporte['total_sin_enrolar'] === 0 && $reporte['total_sin_marcacion'] === 0 && ($reporte['total_revision'] ?? 0) === 0)
     <div class="section" style="text-align:center;padding:40px 36px;">
         <div style="font-size:48px;">✅</div>
         <div style="font-size:18px;font-weight:700;color:#065f46;margin-top:12px;">Sin anomalías detectadas</div>

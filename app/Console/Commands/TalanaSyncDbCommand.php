@@ -144,54 +144,70 @@ class TalanaSyncDbCommand extends Command
         $this->line('');
         $this->line('📄 Sincronizando contratos...');
 
+        $empresas = config('services.talana.empresas', []);
+
+        if (empty($empresas)) {
+            $this->warn('   ⚠ No hay empresas configuradas en services.talana.empresas');
+            return;
+        }
+
         try {
-            $contratos = $this->talana->contratos();
-            $this->line("   API: {$this->count($contratos)} registros obtenidos");
+            $loteTotal = [];
+            $now       = now();
+
+            foreach ($empresas as $empresaId => $empresaNombre) {
+                $contratos = $this->talana->contratos(['empresa' => $empresaId]);
+                $this->line("   {$empresaNombre} (ID {$empresaId}): {$this->count($contratos)} registros");
+
+                if ($isDry) {
+                    $tipos = array_count_values(array_column(
+                        array_map(fn($c) => ['t' => $c['tipoContratoDetails']['nombre'] ?? 'N/A'], $contratos),
+                        't'
+                    ));
+                    foreach ($tipos as $tipo => $cnt) {
+                        $this->line("     • {$tipo}: {$cnt}");
+                    }
+                    continue;
+                }
+
+                foreach ($contratos as $c) {
+                    $emp  = $c['empleadoDetails'] ?? [];
+                    $tipo = $c['tipoContratoDetails'] ?? [];
+                    $jef  = $c['jefe'] ?? [];
+
+                    $loteTotal[] = [
+                        'talana_id'           => $c['id'],
+                        'empresa_id'          => $empresaId,
+                        'empresa_nombre'      => $empresaNombre,
+                        'persona_talana_id'   => $emp['id'] ?? null,
+                        'persona_nombre'      => $this->nombreCompleto($emp),
+                        'persona_rut'         => $this->str($emp['rut'] ?? null),
+                        'persona_email'       => $this->str($emp['email'] ?? null),
+                        'tipo_contrato'       => $this->str($tipo['codigo'] ?? $tipo['id'] ?? null),
+                        'tipo_contrato_nombre'=> $this->str($tipo['nombre'] ?? null),
+                        'desde'               => $this->date($c['desde'] ?? null),
+                        'hasta'               => $this->date($c['hasta'] ?? null),
+                        'finiquitado'         => (bool) ($c['finiquitado'] ?? false),
+                        'sucursal_nombre'     => $this->str($c['sucursal']['nombre'] ?? null),
+                        'centro_costo_nombre' => $this->str($c['centroCosto']['nombre'] ?? null),
+                        'cargo_nombre'        => $this->str(is_string($c['cargo'] ?? null) ? ($c['cargo'] ?? null) : ($c['cargo']['nombre'] ?? $c['cargoDetails']['nombre'] ?? null)),
+                        'horas_jornada'       => isset($c['jornada']['horasDeLaJornada']) ? (float) $c['jornada']['horasDeLaJornada'] : null,
+                        'jefe_nombre'         => $this->nombreCompleto($jef),
+                        'synced_at'           => $now,
+                        'created_at'          => $now,
+                        'updated_at'          => $now,
+                    ];
+                }
+            }
 
             if ($isDry) {
-                $tipos = array_count_values(array_column(
-                    array_map(fn($c) => ['t' => $c['tipoContratoDetails']['nombre'] ?? 'N/A'], $contratos),
-                    't'
-                ));
-                foreach ($tipos as $tipo => $cnt) {
-                    $this->line("     • {$tipo}: {$cnt}");
-                }
                 return;
             }
 
-            $now  = now();
-            $lote = [];
-
-            foreach ($contratos as $c) {
-                $emp  = $c['empleadoDetails'] ?? [];
-                $tipo = $c['tipoContratoDetails'] ?? [];
-                $jef  = $c['jefe'] ?? [];
-
-                $lote[] = [
-                    'talana_id'           => $c['id'],
-                    'persona_talana_id'   => $emp['id'] ?? null,
-                    'persona_nombre'      => $this->nombreCompleto($emp),
-                    'persona_rut'         => $this->str($emp['rut'] ?? null),
-                    'persona_email'       => $this->str($emp['email'] ?? null),
-                    'tipo_contrato'       => $this->str($tipo['codigo'] ?? $tipo['id'] ?? null),
-                    'tipo_contrato_nombre'=> $this->str($tipo['nombre'] ?? null),
-                    'desde'               => $this->date($c['desde'] ?? null),
-                    'hasta'               => $this->date($c['hasta'] ?? null),
-                    'finiquitado'         => (bool) ($c['finiquitado'] ?? false),
-                    'sucursal_nombre'     => $this->str($c['sucursal']['nombre'] ?? null),
-                    'centro_costo_nombre' => $this->str($c['centroCosto']['nombre'] ?? null),
-                    'cargo_nombre'        => $this->str(is_string($c['cargo'] ?? null) ? ($c['cargo'] ?? null) : ($c['cargo']['nombre'] ?? $c['cargoDetails']['nombre'] ?? null)),
-                    'horas_jornada'       => isset($c['jornada']['horasDeLaJornada']) ? (float) $c['jornada']['horasDeLaJornada'] : null,
-                    'jefe_nombre'         => $this->nombreCompleto($jef),
-                    'synced_at'           => $now,
-                    'created_at'          => $now,
-                    'updated_at'          => $now,
-                ];
-            }
-
-            if (! empty($lote)) {
-                foreach (array_chunk($lote, 200) as $chunk) {
+            if (! empty($loteTotal)) {
+                foreach (array_chunk($loteTotal, 200) as $chunk) {
                     TalanaContrato::upsert($chunk, ['talana_id'], [
+                        'empresa_id', 'empresa_nombre',
                         'persona_talana_id', 'persona_nombre', 'persona_rut', 'persona_email',
                         'tipo_contrato', 'tipo_contrato_nombre', 'desde', 'hasta',
                         'finiquitado', 'sucursal_nombre', 'centro_costo_nombre',
@@ -200,9 +216,9 @@ class TalanaSyncDbCommand extends Command
                 }
             }
 
-            $activos    = count(array_filter($lote, fn($c) => ! $c['finiquitado']));
-            $finiquitados = count($lote) - $activos;
-            $this->line("   ✓ {$this->count($lote)} contratos sincronizados ({$activos} activos, {$finiquitados} finiquitados)");
+            $activos      = count(array_filter($loteTotal, fn($c) => ! $c['finiquitado']));
+            $finiquitados = count($loteTotal) - $activos;
+            $this->line("   ✓ {$this->count($loteTotal)} contratos sincronizados ({$activos} activos, {$finiquitados} finiquitados)");
 
         } catch (\Exception $e) {
             $this->warn("   ⚠ Error contratos: {$e->getMessage()}");

@@ -29,7 +29,7 @@ class TalanaAsistenciaReporteMail extends Mailable
         $r = $this->reporte;
         $fecha = \Carbon\Carbon::parse($this->fecha)->locale('es')->isoFormat('dddd D [de] MMMM YYYY');
 
-        $urgencias = $r['total_incompletas'] + $r['total_sin_enrolar'];
+        $urgencias = $r['total_incompletas'] + $r['total_sin_enrolar'] + ($r['total_revision'] ?? 0);
 
         $prefijo = $urgencias > 0
             ? "⚠️ [{$urgencias} alertas]"
@@ -45,31 +45,44 @@ class TalanaAsistenciaReporteMail extends Mailable
         $r   = $this->reporte;
         $dia = \Carbon\Carbon::parse($this->fecha)->locale('es')->isoFormat('dddd D [de] MMMM YYYY');
 
-        // Agrupar "sin marcación" por centro de costo para el email
-        $sinMarcacionPorCC = [];
+        // Agrupar por empresa → centro de costo
+        $sinMarcacionPorEmpresaCC = [];
         foreach ($r['sin_marcacion'] as $t) {
-            $cc = $t['centro_costo'] ?? 'Sin clasificar';
-            $sinMarcacionPorCC[$cc][] = $t;
+            $emp = $t['empresa'] ?? 'Sin empresa';
+            $cc  = $t['centro_costo'] ?? 'Sin clasificar';
+            $sinMarcacionPorEmpresaCC[$emp][$cc][] = $t;
         }
-        ksort($sinMarcacionPorCC);
+        ksort($sinMarcacionPorEmpresaCC);
+        foreach ($sinMarcacionPorEmpresaCC as &$_g) { ksort($_g); } unset($_g);
 
-        // Agrupar incompletas por centro de costo
-        $incompletasPorCC = [];
+        $incompletasPorEmpresaCC = [];
         foreach ($r['incompletas'] as $t) {
-            $cc = $t['centro_costo'] ?? 'Sin clasificar';
-            $incompletasPorCC[$cc][] = $t;
+            $emp = $t['empresa'] ?? 'Sin empresa';
+            $cc  = $t['centro_costo'] ?? 'Sin clasificar';
+            $incompletasPorEmpresaCC[$emp][$cc][] = $t;
         }
-        ksort($incompletasPorCC);
+        ksort($incompletasPorEmpresaCC);
+        foreach ($incompletasPorEmpresaCC as &$_g) { ksort($_g); } unset($_g);
+
+        $revisionPorEmpresaCC = [];
+        foreach ($r['revision'] ?? [] as $t) {
+            $emp = $t['empresa'] ?? 'Sin empresa';
+            $cc  = $t['centro_costo'] ?? 'Sin clasificar';
+            $revisionPorEmpresaCC[$emp][$cc][] = $t;
+        }
+        ksort($revisionPorEmpresaCC);
+        foreach ($revisionPorEmpresaCC as &$_g) { ksort($_g); } unset($_g);
 
         return new Content(
             view: 'emails.talana_asistencia_reporte',
             with: [
-                'reporte'            => $r,
-                'dia'                => $dia,
-                'fecha'              => $this->fecha,
-                'sinMarcacionPorCC'  => $sinMarcacionPorCC,
-                'incompletasPorCC'   => $incompletasPorCC,
-                'generadoEn'         => now()->format('d/m/Y H:i'),
+                'reporte'                   => $r,
+                'dia'                       => $dia,
+                'fecha'                     => $this->fecha,
+                'sinMarcacionPorEmpresaCC'  => $sinMarcacionPorEmpresaCC,
+                'incompletasPorEmpresaCC'   => $incompletasPorEmpresaCC,
+                'revisionPorEmpresaCC'      => $revisionPorEmpresaCC,
+                'generadoEn'                => now()->format('d/m/Y H:i'),
             ],
         );
     }
@@ -110,11 +123,13 @@ class TalanaAsistenciaReporteMail extends Mailable
         $this->styleHeader($ws, 'A3:B3');
 
         $filas = [
-            ['Trabajadores activos',           $r['total_activos']],
-            ['✅ Con marcación completa',       $r['total_completos']],
-            ['⚠️ Marcación incompleta (1 sola marca)', $r['total_incompletas']],
-            ['❌ Sin marcación (activos)',      $r['total_sin_marcacion']],
-            ['🆕 Probable nuevo sin enrolar',  $r['total_sin_enrolar']],
+            ['Trabajadores activos',                         $r['total_activos']],
+            ['✅ Con marcación completa',                    $r['total_completos']],
+            ['⚠️ Marcación incompleta (1 sola marca)',       $r['total_incompletas']],
+            ['❌ Sin marcación (activos)',                   $r['total_sin_marcacion']],
+            ['🆕 Probable nuevo sin enrolar',               $r['total_sin_enrolar']],
+            ['😴 Día de descanso (turno)',                  $r['total_descanso'] ?? 0],
+            ['🔍 Marcó en día de descanso (revisión)',      $r['total_revision'] ?? 0],
         ];
 
         $row = 4;
@@ -127,32 +142,39 @@ class TalanaAsistenciaReporteMail extends Mailable
         $ws->getColumnDimension('A')->setWidth(45);
         $ws->getColumnDimension('B')->setWidth(12);
 
-        // ── Hoja 2: Marcación incompleta ─────────────────────────────────────
-        if (! empty($r['incompletas'])) {
-            $ws2 = $spreadsheet->createSheet();
-            $ws2->setTitle('Marcación Incompleta');
-            $this->escribirHojaPersonas($ws2, $r['incompletas'], 'Marcación Incompleta', true);
+        // ── Hojas: Marcación incompleta (por empresa) ────────────────────────
+        foreach ($this->porEmpresa($r['incompletas']) as $empresa => $filas) {
+            $ws = $spreadsheet->createSheet();
+            $ws->setTitle(mb_substr("Incompleta {$empresa}", 0, 31));
+            $this->escribirHojaPersonas($ws, $filas, "Marcación Incompleta — {$empresa}", true);
         }
 
-        // ── Hoja 3: Sin marcación ─────────────────────────────────────────────
-        if (! empty($r['sin_marcacion'])) {
-            $ws3 = $spreadsheet->createSheet();
-            $ws3->setTitle('Sin Marcación');
-            $this->escribirHojaPersonas($ws3, $r['sin_marcacion'], 'Sin Marcación', false);
+        // ── Hojas: Sin marcación (por empresa) ────────────────────────────────
+        foreach ($this->porEmpresa($r['sin_marcacion']) as $empresa => $filas) {
+            $ws = $spreadsheet->createSheet();
+            $ws->setTitle(mb_substr("Sin Marc. {$empresa}", 0, 31));
+            $this->escribirHojaPersonas($ws, $filas, "Sin Marcación — {$empresa}", false);
         }
 
-        // ── Hoja 4: Probables nuevos ─────────────────────────────────────────
-        if (! empty($r['sin_enrolar'])) {
-            $ws4 = $spreadsheet->createSheet();
-            $ws4->setTitle('Probables Nuevos');
-            $this->escribirHojaPersonas($ws4, $r['sin_enrolar'], 'Probables Nuevos Sin Enrolar', false);
+        // ── Hojas: Probables nuevos (por empresa) ────────────────────────────
+        foreach ($this->porEmpresa($r['sin_enrolar']) as $empresa => $filas) {
+            $ws = $spreadsheet->createSheet();
+            $ws->setTitle(mb_substr("Sin Enrolar {$empresa}", 0, 31));
+            $this->escribirHojaPersonas($ws, $filas, "Probables Nuevos Sin Enrolar — {$empresa}", false);
         }
 
-        // ── Hoja 5: Completos (para referencia) ──────────────────────────────
-        if (! empty($r['completos'])) {
-            $ws5 = $spreadsheet->createSheet();
-            $ws5->setTitle('Completos');
-            $this->escribirHojaPersonas($ws5, $r['completos'], 'Con Marcación Completa', true);
+        // ── Hojas: Revisión descanso (por empresa) ───────────────────────────
+        foreach ($this->porEmpresa($r['revision'] ?? []) as $empresa => $filas) {
+            $ws = $spreadsheet->createSheet();
+            $ws->setTitle(mb_substr("Revisión {$empresa}", 0, 31));
+            $this->escribirHojaPersonas($ws, $filas, "Marcó en Día de Descanso — {$empresa}", true);
+        }
+
+        // ── Hojas: Completos (por empresa) ───────────────────────────────────
+        foreach ($this->porEmpresa($r['completos']) as $empresa => $filas) {
+            $ws = $spreadsheet->createSheet();
+            $ws->setTitle(mb_substr("Completos {$empresa}", 0, 31));
+            $this->escribirHojaPersonas($ws, $filas, "Con Marcación Completa — {$empresa}", true);
         }
 
         $spreadsheet->setActiveSheetIndex(0);
@@ -213,6 +235,17 @@ class TalanaAsistenciaReporteMail extends Mailable
         foreach (range('A', chr(ord('A') + count($headers) - 1)) as $c) {
             $ws->getColumnDimension($c)->setAutoSize(true);
         }
+    }
+
+    private function porEmpresa(array $filas): array
+    {
+        $grupos = [];
+        foreach ($filas as $f) {
+            $empresa = $f['empresa'] ?? 'Sin empresa';
+            $grupos[$empresa][] = $f;
+        }
+        ksort($grupos);
+        return $grupos;
     }
 
     private function setCellBold(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $ws, string $cell, string $value, int $size = 12): void

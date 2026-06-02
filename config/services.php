@@ -85,6 +85,10 @@ return [
         'token'       => env('TALANA_API_TOKEN'),
         'alerta_email' => env('TALANA_ALERTA_EMAIL'),
         'alerta_dias'  => (int) env('TALANA_ALERTA_DIAS', 30),
+        'empresas'    => [
+            (int) env('TALANA_EMPRESA_SAEP_ID', 1039)    => 'SAEP',
+            (int) env('TALANA_EMPRESA_SAEP_EST_ID', 1081) => 'SAEP EST',
+        ],
     ],
 
     'google_drive' => [
