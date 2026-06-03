@@ -59,12 +59,24 @@ class TalanaReporteAsistencia extends Command
         $this->info("  Talana — Reporte Asistencia: {$fecha}");
         $this->info("═══════════════════════════════════════════");
 
-        // ─── 1. Obtener marcas del día desde la API ───────────────────────────
+        // ─── 1. Obtener marcas del día desde la API (todas las empresas) ─────────
         $this->line('');
         $this->line('📡 Obteniendo marcas de asistencia...');
 
+        $empresas  = config('services.talana.empresas', []);
+        $marcasRaw = [];
+
         try {
-            $marcasRaw = $this->talana->marcasAsistencia($fecha, $fecha, 60);
+            if (empty($empresas)) {
+                // Sin config multiempresa: llamada única sin filtro
+                $marcasRaw = $this->talana->marcasAsistencia($fecha, $fecha, 60);
+            } else {
+                foreach ($empresas as $empresaId => $empresaNombre) {
+                    $lote = $this->talana->marcasAsistencia($fecha, $fecha, 60, (int) $empresaId);
+                    $this->line("   {$empresaNombre}: {$this->cnt($lote)} marcas");
+                    $marcasRaw = array_merge($marcasRaw, $lote);
+                }
+            }
         } catch (\Throwable $e) {
             $this->error("Error al obtener marcas: {$e->getMessage()}");
             Log::error('TalanaReporteAsistencia: error marcas API', ['error' => $e->getMessage(), 'fecha' => $fecha]);
@@ -105,7 +117,16 @@ class TalanaReporteAsistencia extends Command
         $horasAsignacion   = []; // pid → working_seconds (int)
 
         try {
-            $assignSummaries = $this->talana->assignationSummary($fecha, $fecha, 120);
+            $assignSummaries = [];
+            if (empty($empresas)) {
+                $assignSummaries = $this->talana->assignationSummary($fecha, $fecha, 120);
+            } else {
+                foreach ($empresas as $empresaId => $empresaNombre) {
+                    $lote = $this->talana->assignationSummary($fecha, $fecha, 120, (int) $empresaId);
+                    $this->line("   {$empresaNombre}: {$this->cnt($lote)} jornadas");
+                    $assignSummaries = array_merge($assignSummaries, $lote);
+                }
+            }
 
             if (empty($assignSummaries)) {
                 $this->warn('   ⚠ Sin datos de jornada en API para ' . $fecha . '. El filtro de días de descanso y horas no estará disponible.');

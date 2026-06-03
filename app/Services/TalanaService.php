@@ -240,12 +240,17 @@ class TalanaService
      * @param string $desde  Fecha inicio YYYY-MM-DD
      * @param string $hasta  Fecha fin   YYYY-MM-DD
      */
-    public function marcasAsistencia(string $desde, string $hasta, int $timeout = 60): array
+    public function marcasAsistencia(string $desde, string $hasta, int $timeout = 60, ?int $empresa = null): array
     {
-        return $this->fetchAll('mark/', [
+        $query = [
             'desde' => $desde,
             'hasta' => $hasta,
-        ], 200, $timeout);
+        ];
+        if ($empresa !== null) {
+            $query['empresa'] = $empresa;
+        }
+
+        return $this->fetchAll('mark/', $query, 200, $timeout);
     }
 
     /**
@@ -281,7 +286,7 @@ class TalanaService
      * @param string $desde  Fecha inicio YYYY-MM-DD
      * @param string $hasta  Fecha fin   YYYY-MM-DD
      */
-    public function assignationSummary(string $desde, string $hasta, int $timeout = 120): array
+    public function assignationSummary(string $desde, string $hasta, int $timeout = 120, ?int $empresa = null): array
     {
         // La API ignora cualquier parámetro de filtro y devuelve todos los registros (1.2 M+).
         // Los resultados vienen ordenados newest-first, por lo que hacemos early-stop
@@ -291,8 +296,14 @@ class TalanaService
         $pageSize = 200;
         $endpoint = 'assignationSummaryApi/';
 
+        $query = ['page' => $page, 'page_size' => $pageSize];
+        if ($empresa !== null) {
+            $query['empresa'] = $empresa;
+        }
+
         do {
-            $data    = $this->get($endpoint, ['page' => $page, 'page_size' => $pageSize], $timeout);
+            $query['page'] = $page;
+            $data    = $this->get($endpoint, $query, $timeout);
             $results = $data['results'] ?? [];
             $hasNext = ! empty($data['next']);
 
