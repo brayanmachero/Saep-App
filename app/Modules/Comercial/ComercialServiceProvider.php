@@ -26,10 +26,14 @@ class ComercialServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(__DIR__.'/routes/web.php');
 
         // Load views. Project-level views take precedence so the module can be themed with SAEP.
-        $this->loadViewsFrom([
-            resource_path('views/comercial'),
-            __DIR__.'/resources/views',
-        ], 'comercial');
+        $viewPaths = [resource_path('views/comercial')];
+        $moduleViewPath = __DIR__.'/resources/views';
+
+        if (is_dir($moduleViewPath)) {
+            $viewPaths[] = $moduleViewPath;
+        }
+
+        $this->loadViewsFrom($viewPaths, 'comercial');
 
         // Publish config
         $this->publishes([
