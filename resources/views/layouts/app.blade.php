@@ -138,6 +138,33 @@
             </a>
             @endif
 
+            {{-- COMERCIAL --}}
+            @if(auth()->user()->tieneAcceso('comercial'))
+            <div class="nav-section-label">Comercial</div>
+            <a href="{{ route('comercial.cotizaciones.index') }}" class="nav-item {{ request()->routeIs('comercial.cotizaciones.*') ? 'active' : '' }}">
+                <i class="bi bi-calculator-fill"></i>
+                <span>Cotizador</span>
+            </a>
+            <a href="{{ route('comercial.clientes.index') }}" class="nav-item {{ request()->routeIs('comercial.clientes.*') ? 'active' : '' }}">
+                <i class="bi bi-building-fill"></i>
+                <span>Clientes Comerciales</span>
+            </a>
+            <a href="{{ route('comercial.centros-costo.index') }}" class="nav-item {{ request()->routeIs('comercial.centros-costo.*') ? 'active' : '' }}">
+                <i class="bi bi-diagram-3-fill"></i>
+                <span>Centros Comerciales</span>
+            </a>
+            @if(auth()->user()->tieneAcceso('comercial', 'puede_editar'))
+            <a href="{{ route('comercial.parametros.index') }}" class="nav-item {{ request()->routeIs('comercial.parametros.*') ? 'active' : '' }}">
+                <i class="bi bi-sliders"></i>
+                <span>Mantenedor Comercial</span>
+            </a>
+            @endif
+            <a href="{{ route('comercial.reportes.cotizaciones') }}" class="nav-item {{ request()->routeIs('comercial.reportes.*') ? 'active' : '' }}">
+                <i class="bi bi-bar-chart-fill"></i>
+                <span>Reportes Comerciales</span>
+            </a>
+            @endif
+
             {{-- ADMINISTRACIÓN --}}
             @if(auth()->user()->tieneAcceso('usuarios') || auth()->user()->tieneAcceso('departamentos') || auth()->user()->tieneAcceso('cargos') || auth()->user()->tieneAcceso('centros_costo'))
             <div class="nav-section-label">Administración</div>
