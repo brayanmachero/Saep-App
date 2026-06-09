@@ -12,8 +12,6 @@ class ComercialServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/config/comercial.php', 'comercial');
-
-        $this->app->register(ComercialEventServiceProvider::class);
     }
 
     /**
