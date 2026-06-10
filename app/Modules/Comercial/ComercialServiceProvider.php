@@ -3,6 +3,7 @@
 namespace App\Modules\Comercial;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Route;
 
 class ComercialServiceProvider extends ServiceProvider
 {
@@ -22,8 +23,8 @@ class ComercialServiceProvider extends ServiceProvider
         // Load migrations
         $this->loadMigrationsFrom(__DIR__.'/database/migrations');
 
-        // Load routes
-        $this->loadRoutesFrom(__DIR__.'/routes/web.php');
+        // Load routes inside the web stack so auth can read the browser session.
+        Route::middleware('web')->group(__DIR__.'/routes/web.php');
 
         // Load views. Project-level views take precedence so the module can be themed with SAEP.
         $viewPaths = [resource_path('views/comercial')];
