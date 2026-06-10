@@ -754,6 +754,13 @@ function formatPercent(value) {
     return `${Number(value || 0).toLocaleString('es-CL', { maximumFractionDigits: 4 })}%`;
 }
 
+function formatFactor(value) {
+    return Number(value || 0).toLocaleString('es-CL', {
+        minimumFractionDigits: 6,
+        maximumFractionDigits: 6
+    });
+}
+
 function parseMoney(value) {
     return String(value ?? '').replace(/[^\d]/g, '');
 }
@@ -901,6 +908,11 @@ function actualizarDesglose(data = {}) {
     const resumen = data.resumen_excel || {};
     const detalles = data.detalles || [];
     const horas = data.horas || {};
+    const jornadaHhee = horas.jornada_semanal_hhee ?? resumen.jornadaSemanalHhee;
+    const factorHhee = horas.factor_normal_hhee ?? resumen.horaNormalFactorHhee;
+    const metaHoraHhee = jornadaHhee
+        ? `Base HHEE ${formatCLP(resumen.precioVentaHhee)} x factor ${formatFactor(factorHhee)} (${formatNumber(jornadaHhee)} hrs/sem)`
+        : `Base HHEE ${formatCLP(resumen.precioVentaHhee)} antes de recargos`;
 
     const haberesRows = [
         lineRow('Gratificación legal', resumen.gratificacion, detailMeta(detalles, 'Gratificación', '25% con tope legal'), false),
@@ -940,7 +952,7 @@ function actualizarDesglose(data = {}) {
 
     const horasRows = [
         hourRow('Hora normal', horas.normal ?? resumen.horaNormal, 'Precio venta / horas mensuales'),
-        hourRow('Hora normal HHEE', horas.normal_hhee ?? resumen.horaNormalHhee, `Base HHEE ${formatCLP(resumen.precioVentaHhee)} antes de recargos`),
+        hourRow('Hora normal HHEE', horas.normal_hhee ?? resumen.horaNormalHhee, metaHoraHhee),
         hourRow('Hora extra 50%', horas.extra_50 ?? resumen.horaExtra50, 'Hora normal HHEE x 1,5'),
         hourRow('Hora extra 100%', horas.extra_100 ?? resumen.horaExtra100, 'Hora normal HHEE x 2'),
     ].join('');

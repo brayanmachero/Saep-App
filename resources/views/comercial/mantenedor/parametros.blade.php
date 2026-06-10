@@ -97,12 +97,14 @@
             $valorParametro = fn($parametro) => $parametro->formatearValorVisual(old('parametros.' . $parametro->id . '.valor', $parametro->valor));
             $hintParametro = fn($parametro) => strtoupper($parametro->clave) === 'UF'
                 ? 'Valor UF con decimales'
-                : match($parametro->formato_visual) {
+                : (strtoupper($parametro->clave) === 'JORNADA_SEMANAL_SUB'
+                    ? 'Horas semanales para HHEE'
+                    : match($parametro->formato_visual) {
                     'moneda' => 'Monto con separador de miles',
                     'porcentaje' => 'Valor porcentual',
                     'entero' => 'Número entero',
                     default => 'Número decimal',
-                };
+                });
         @endphp
 
         {{-- Parámetros de Gobierno (UF, Sueldo Mínimo, IPC) --}}

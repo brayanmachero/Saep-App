@@ -24,7 +24,8 @@ class CalculadoraSUBService
         $gastosAdminPct = (float) Parametro::valor('GASTOS_ADMIN_SUB', 3);
         $margenPct = (float) Parametro::valor('MARGEN_SUB', 14);
         $horasMensuales = (float) Parametro::valor('HORAS_MENSUALES_SUB', 180);
-        $horaNormalFactorHhee = (float) Parametro::valor('HORA_NORMAL_FACTOR_SUB', 0.005303);
+        $jornadaSemanalHhee = $this->obtenerJornadaSemanalHhee();
+        $horaNormalFactorHhee = $this->calcularFactorHoraNormalHhee($jornadaSemanalHhee);
 
         $baseGratificacion = $i['sueldo_base'] + $i['bono_asistencia'] + $i['bono_compromiso'] + $i['otros_haberes'];
         $gratificacion = min($baseGratificacion * 0.25, $gratificacionTope);
@@ -100,8 +101,12 @@ class CalculadoraSUBService
             'horaNormal',
             'horaNormalHhee',
             'horaExtra50',
-            'horaExtra100'
+            'horaExtra100',
+            'jornadaSemanalHhee',
+            'horaNormalFactorHhee'
         );
+        $resumenExcel = array_map(fn ($v) => round((float) $v, 2), $resumen);
+        $resumenExcel['horaNormalFactorHhee'] = round($horaNormalFactorHhee, 6);
 
         return [
             'modalidad' => 'SUB',
@@ -122,14 +127,34 @@ class CalculadoraSUBService
                 'margen' => $margenPct,
             ]),
             'uniformes' => $i['uniformes'],
-            'resumen_excel' => array_map(fn ($v) => round((float) $v, 2), $resumen),
+            'resumen_excel' => $resumenExcel,
             'horas' => [
                 'normal' => round($horaNormal, 2),
                 'normal_hhee' => round($horaNormalHhee, 2),
                 'extra_50' => round($horaExtra50, 2),
                 'extra_100' => round($horaExtra100, 2),
+                'jornada_semanal_hhee' => round($jornadaSemanalHhee, 2),
+                'factor_normal_hhee' => round($horaNormalFactorHhee, 6),
             ],
         ];
+    }
+
+    private function obtenerJornadaSemanalHhee(): float
+    {
+        $jornada = (float) Parametro::valor('JORNADA_SEMANAL_SUB', 0);
+
+        if ($jornada > 0) {
+            return $jornada;
+        }
+
+        $factorAnterior = (float) Parametro::valor('HORA_NORMAL_FACTOR_SUB', 0.005303);
+
+        return $factorAnterior > 0 ? round(7 / (30 * $factorAnterior), 2) : 44.0;
+    }
+
+    private function calcularFactorHoraNormalHhee(float $jornadaSemanal): float
+    {
+        return $jornadaSemanal > 0 ? round(7 / (30 * $jornadaSemanal), 6) : 0.0;
     }
 
     private function normalizarEntrada(array $datos): array

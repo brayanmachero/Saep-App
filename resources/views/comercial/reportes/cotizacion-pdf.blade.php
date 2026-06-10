@@ -113,6 +113,7 @@
     $detallesCalculo = collect($datos_calculo['detalles'] ?? $detalles->toArray());
     $money = fn($value) => '$' . number_format((float) ($value ?? 0), 0, ',', '.');
     $pct = fn($value) => $value === null ? '—' : number_format((float) $value, 2, ',', '.') . '%';
+    $num = fn($value, $decimals = 2) => number_format((float) ($value ?? 0), $decimals, ',', '.');
     $get = fn($item, $key) => is_array($item) ? ($item[$key] ?? null) : ($item->{$key} ?? null);
     $detail = fn($needle) => $detallesCalculo->first(fn($row) => str_contains(mb_strtolower((string) $get($row, 'concepto')), mb_strtolower($needle)));
     $detailValue = fn($needle) => (float) ($get($detail($needle), 'valor') ?? 0);
@@ -134,6 +135,11 @@
     $costoBrutoHhee = (float) ($resumen['costoBrutoHhee'] ?? (($resumen['totalImponible'] ?? 0) + (float) $cotizacion->total_cotizaciones));
     $margenHhee = (float) ($resumen['margenHhee'] ?? ($costoBrutoHhee * ($margenPct / 100)));
     $precioVentaHhee = (float) ($resumen['precioVentaHhee'] ?? ($costoBrutoHhee + $margenHhee));
+    $jornadaSemanalHhee = $horas['jornada_semanal_hhee'] ?? ($resumen['jornadaSemanalHhee'] ?? null);
+    $factorHoraNormalHhee = $horas['factor_normal_hhee'] ?? ($resumen['horaNormalFactorHhee'] ?? null);
+    $metaHoraHhee = $jornadaSemanalHhee
+        ? 'Base HHEE ' . $money($precioVentaHhee) . ' x factor ' . $num($factorHoraNormalHhee, 6) . ' (' . $num($jornadaSemanalHhee) . ' hrs/sem)'
+        : 'Base HHEE antes de recargos';
     $lineas = [
         ['Haberes', 'Gratificación legal', $basePct('Gratificación') ?: '25% con tope legal', null, $resumen['gratificacion'] ?? $detailValue('Gratificación'), false],
         ['Haberes', 'Total imponible', 'Sueldo base + bonos + gratificación', null, $resumen['totalImponible'] ?? 0, true],
@@ -163,7 +169,7 @@
         ['HHEE', 'Margen operacional HHEE', 'Margen sobre base HHEE', $margenPct, $margenHhee, false],
         ['HHEE', 'Precio venta HHEE', 'Base columna HHEE', null, $precioVentaHhee, true],
         ['Horas', 'Hora normal', 'Precio venta / horas mensuales', null, $horas['normal'] ?? ($resumen['horaNormal'] ?? 0), false],
-        ['Horas', 'Hora normal HHEE', 'Base HHEE antes de recargos', null, $horas['normal_hhee'] ?? ($resumen['horaNormalHhee'] ?? 0), false],
+        ['Horas', 'Hora normal HHEE', $metaHoraHhee, null, $horas['normal_hhee'] ?? ($resumen['horaNormalHhee'] ?? 0), false],
         ['Horas', 'Hora extra 50%', 'Hora normal HHEE x 1,5', null, $horas['extra_50'] ?? ($resumen['horaExtra50'] ?? 0), false],
         ['Horas', 'Hora extra 100%', 'Hora normal HHEE x 2', null, $horas['extra_100'] ?? ($resumen['horaExtra100'] ?? 0), false],
     ];

@@ -114,8 +114,26 @@ class Parametro extends Model
 
     public function getUnidadVisualAttribute(): string
     {
-        if (strtoupper($this->clave) === 'UF') {
+        $clave = strtoupper($this->clave);
+
+        if ($clave === 'UF') {
             return 'UF';
+        }
+
+        if ($clave === 'JORNADA_SEMANAL_SUB') {
+            return 'hrs/sem';
+        }
+
+        if (str_starts_with($clave, 'HORAS_')) {
+            return 'hrs';
+        }
+
+        if (str_contains($clave, 'DIAS')) {
+            return 'dias';
+        }
+
+        if (str_contains($clave, 'MESES')) {
+            return 'meses';
         }
 
         return match ($this->formato_visual) {
