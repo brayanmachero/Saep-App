@@ -56,6 +56,11 @@ else
 fi
 
 php artisan storage:link --force 2>/dev/null || true
+php artisan optimize:clear || true
+php artisan view:clear || true
+php artisan config:clear || true
+php artisan route:clear || true
+php artisan cache:clear || true
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache

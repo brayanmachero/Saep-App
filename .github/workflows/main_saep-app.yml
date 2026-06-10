@@ -72,3 +72,6 @@ jobs:
           app-name: 'saep-app'
           slot-name: 'Production'
           package: .
+
+      - name: Restart Azure Web App
+        run: az webapp restart --resource-group saep-rg --name saep-app
