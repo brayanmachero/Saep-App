@@ -143,6 +143,8 @@ class CotizacionController
             'margen_porcentaje' => $calculo['margen_porcentaje'],
             'margen' => $calculo['margen'],
             'precio_venta' => $calculo['precio_venta'],
+            'resumen_excel' => $calculo['resumen_excel'] ?? [],
+            'detalles' => $calculo['detalles'] ?? [],
             'horas' => $calculo['horas'] ?? [],
         ]);
     }

@@ -1,5 +1,222 @@
 @extends('layouts.app')
 @section('title', 'Nueva Cotización')
+@push('styles')
+<style>
+    .quote-form .glass-card {
+        margin-bottom: 1rem !important;
+        padding: 1.1rem 1.25rem;
+    }
+
+    .quote-form .form-grid {
+        gap: .85rem 1rem;
+    }
+
+    .quote-form .form-group {
+        margin-bottom: .75rem;
+    }
+
+    .quote-form .form-group label {
+        margin-bottom: .35rem;
+        font-size: .84rem;
+    }
+
+    .quote-form .form-control {
+        min-height: 40px;
+        padding-top: .55rem;
+        padding-bottom: .55rem;
+    }
+
+    .quote-form textarea.form-control {
+        min-height: 72px;
+    }
+
+    .quote-form .data-table th,
+    .quote-form .data-table td {
+        padding: .55rem .75rem;
+        vertical-align: middle;
+    }
+
+    .quote-summary-bar {
+        position: sticky;
+        top: .75rem;
+        z-index: 30;
+        display: grid;
+        grid-template-columns: minmax(190px, 1.2fr) repeat(5, minmax(115px, 1fr)) auto;
+        gap: .55rem;
+        align-items: stretch;
+        margin-bottom: 1rem;
+        padding: .7rem;
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--surface-color) 94%, transparent);
+        box-shadow: 0 14px 35px rgba(15, 23, 42, .12);
+        backdrop-filter: blur(16px);
+    }
+
+    .quote-summary-cell {
+        min-width: 0;
+        padding: .65rem .75rem;
+        border: 1px solid var(--surface-border);
+        border-radius: 8px;
+        background: var(--bg-tertiary);
+    }
+
+    .quote-summary-cell > span {
+        display: block;
+        color: var(--text-muted);
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .quote-summary-cell strong {
+        display: block;
+        margin-top: .18rem;
+        color: var(--text-primary);
+        font-size: 1rem;
+        line-height: 1.15;
+        white-space: nowrap;
+    }
+
+    .quote-summary-cell.is-price {
+        background: var(--accent-primary);
+        border-color: var(--accent-primary);
+        color: white;
+    }
+
+    .quote-summary-cell.is-price > span,
+    .quote-summary-cell.is-price strong {
+        color: white;
+    }
+
+    .quote-summary-cell.is-price strong {
+        font-size: 1.45rem;
+    }
+
+    .quote-summary-actions {
+        display: flex;
+        gap: .45rem;
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    .quote-money-input {
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+    }
+
+    .quote-collapse summary {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        font-weight: 700;
+    }
+
+    .quote-collapse summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .quote-collapse summary::after {
+        content: '+';
+        margin-left: auto;
+        color: var(--text-muted);
+        font-weight: 700;
+    }
+
+    .quote-collapse[open] summary::after {
+        content: '-';
+    }
+
+    .quote-breakdown-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: .85rem;
+    }
+
+    .quote-breakdown-section {
+        border: 1px solid var(--surface-border);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--surface-color);
+    }
+
+    .quote-breakdown-title {
+        padding: .65rem .75rem;
+        border-bottom: 1px solid var(--surface-border);
+        background: var(--bg-tertiary);
+        font-size: .78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    .quote-line {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: .75rem;
+        padding: .55rem .75rem;
+        border-bottom: 1px solid var(--surface-border);
+    }
+
+    .quote-line:last-child {
+        border-bottom: 0;
+    }
+
+    .quote-line-label {
+        min-width: 0;
+        color: var(--text-primary);
+        font-size: .86rem;
+        font-weight: 650;
+    }
+
+    .quote-line-meta {
+        margin-top: .15rem;
+        color: var(--text-muted);
+        font-size: .72rem;
+        line-height: 1.3;
+    }
+
+    .quote-line-value {
+        align-self: center;
+        color: var(--text-primary);
+        font-size: .9rem;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    .quote-line.is-total {
+        background: color-mix(in srgb, var(--accent-primary) 8%, var(--surface-color));
+    }
+
+    .quote-line.is-total .quote-line-label,
+    .quote-line.is-total .quote-line-value {
+        color: var(--accent-primary);
+    }
+
+    @media (max-width: 1280px) {
+        .quote-summary-bar {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .quote-summary-actions {
+            grid-column: 1 / -1;
+        }
+    }
+
+    @media (max-width: 900px) {
+        .quote-summary-bar,
+        .quote-breakdown-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .quote-summary-bar {
+            position: static;
+        }
+    }
+</style>
+@endpush
 @section('content')
 <div class="page-container">
     <div class="page-header">
@@ -14,8 +231,50 @@
 
     @include('partials._alerts')
 
-    <form method="POST" action="{{ route('comercial.cotizaciones.store') }}" id="cotizacionForm">
+    <form method="POST" action="{{ route('comercial.cotizaciones.store') }}" id="cotizacionForm" class="quote-form">
         @csrf
+
+        <div class="quote-summary-bar" aria-label="Resumen de cotización">
+            <div class="quote-summary-cell is-price">
+                <span>Precio venta</span>
+                <strong id="previewPrecioVenta">$0</strong>
+                <input type="hidden" id="precioVenta" name="precio_venta" value="0">
+            </div>
+            <div class="quote-summary-cell">
+                <span>Total haberes</span>
+                <strong id="previewTotalRemuneraciones">$0</strong>
+                <input type="hidden" id="totalRemuneraciones" value="0">
+            </div>
+            <div class="quote-summary-cell">
+                <span>ISES</span>
+                <strong id="previewTotalCotizaciones">$0</strong>
+                <input type="hidden" id="totalCotizaciones" value="0">
+            </div>
+            <div class="quote-summary-cell">
+                <span>Provisiones</span>
+                <strong id="previewTotalProvisiones">$0</strong>
+                <input type="hidden" id="totalProvisiones" value="0">
+            </div>
+            <div class="quote-summary-cell">
+                <span>Gastos</span>
+                <strong id="previewTotalGastos">$0</strong>
+                <input type="hidden" id="totalGastos" value="0">
+            </div>
+            <div class="quote-summary-cell">
+                <span>Margen</span>
+                <strong><span id="previewMargenPorcentaje">0%</span> / <span id="previewMargenValor">$0</span></strong>
+                <input type="hidden" id="margenPorcentaje" value="0">
+                <input type="hidden" id="margenValor" value="0">
+                <input type="hidden" id="subtotal" value="0">
+                <span id="previewSubtotal" style="display:none">$0</span>
+            </div>
+            <div class="quote-summary-actions">
+                <a href="{{ route('comercial.cotizaciones.index') }}" class="btn-secondary">Cancelar</a>
+                <button type="submit" class="btn-premium">
+                    <i class="bi bi-check-lg"></i> Crear
+                </button>
+            </div>
+        </div>
 
         {{-- Sección de Datos Básicos --}}
         <div class="glass-card" style="margin-bottom:1.5rem">
@@ -105,7 +364,7 @@
 
             <div class="form-group">
                 <label>Observaciones</label>
-                <textarea name="observaciones" class="form-control" rows="3" placeholder="Notas o comentarios sobre esta cotización">{{ old('observaciones') }}</textarea>
+                <textarea name="observaciones" class="form-control" rows="2" placeholder="Notas o comentarios sobre esta cotización">{{ old('observaciones') }}</textarea>
             </div>
         </div>
 
@@ -183,111 +442,87 @@
             <div class="form-grid">
                 <div class="form-group">
                     <label>Asignación Movilización</label>
-                    <input type="number" name="asignacion_movilizacion" value="{{ old('asignacion_movilizacion', 0) }}" class="form-control" min="0" step="1">
+                    <input type="text" name="asignacion_movilizacion" value="{{ old('asignacion_movilizacion', 0) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
                 </div>
                 <div class="form-group">
                     <label>Asignación Colación</label>
-                    <input type="number" name="asignacion_colacion" value="{{ old('asignacion_colacion', 0) }}" class="form-control" min="0" step="1">
+                    <input type="text" name="asignacion_colacion" value="{{ old('asignacion_colacion', 0) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
                 </div>
                 <div class="form-group">
                     <label>Servicios de Casino</label>
-                    <input type="number" name="servicios_casino" value="{{ old('servicios_casino', 0) }}" class="form-control" min="0" step="1">
+                    <input type="text" name="servicios_casino" value="{{ old('servicios_casino', 0) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
                 </div>
                 <div class="form-group">
                     <label>Seguro Accidentes Personales</label>
-                    <input type="number" name="seguro_accidentes" value="{{ old('seguro_accidentes', 0) }}" class="form-control" min="0" step="1">
+                    <input type="text" name="seguro_accidentes" value="{{ old('seguro_accidentes', 0) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
                 </div>
                 <div class="form-group">
                     <label>Otros Gastos</label>
-                    <input type="number" name="otros_gastos" value="{{ old('otros_gastos', 0) }}" class="form-control" min="0" step="1">
+                    <input type="text" name="otros_gastos" value="{{ old('otros_gastos', 0) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
                 </div>
                 <div class="form-group">
                     <label>Otros Beneficios / Aguinaldos</label>
-                    <input type="number" name="otros_beneficios" value="{{ old('otros_beneficios', 5000) }}" class="form-control" min="0" step="1">
+                    <input type="text" name="otros_beneficios" value="{{ old('otros_beneficios', 5000) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
                 </div>
             </div>
         </div>
 
         {{-- Sección de Uniformes --}}
         <div class="glass-card" style="margin-bottom:1.5rem">
-            <h3 style="margin:0 0 1rem 0;font-size:1rem;display:flex;align-items:center;gap:.5rem">
-                <i class="bi bi-bag" style="color:var(--accent-primary)"></i> Uniformes y Equipos (Opcional)
-            </h3>
+            <details class="quote-collapse">
+                <summary>
+                    <i class="bi bi-bag" style="color:var(--accent-primary)"></i>
+                    Uniformes y Equipos (Opcional)
+                </summary>
 
-            <div style="overflow-x:auto;margin-bottom:1rem">
-                <table class="data-table" style="margin-bottom:1rem">
-                    <thead>
-                        <tr>
-                            <th>Descripción</th>
-                            <th>Cantidad</th>
-                            <th>Precio Unit.</th>
-                            <th>Total</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="uniformesTable">
-                        {{-- Filas dinámicas --}}
-                    </tbody>
-                </table>
-            </div>
+                <div style="overflow-x:auto;margin:1rem 0">
+                    <table class="data-table" style="margin-bottom:1rem">
+                        <thead>
+                            <tr>
+                                <th>Descripción</th>
+                                <th>Cantidad</th>
+                                <th>Precio Unit.</th>
+                                <th>Total</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="uniformesTable">
+                            {{-- Filas dinámicas --}}
+                        </tbody>
+                    </table>
+                </div>
 
-            <button type="button" class="btn-secondary" onclick="agregarUniforme()">
-                <i class="bi bi-plus-lg"></i> Agregar Uniforme
-            </button>
+                <button type="button" class="btn-secondary" onclick="agregarUniforme()">
+                    <i class="bi bi-plus-lg"></i> Agregar Uniforme
+                </button>
+            </details>
         </div>
 
-        {{-- Resumen de Cálculos --}}
-        <div class="glass-card" style="margin-bottom:1.5rem;background:linear-gradient(135deg, var(--surface-color) 0%, var(--bg-tertiary) 100%)">
+        {{-- Desglose de Cálculos --}}
+        <div class="glass-card" style="margin-bottom:1.5rem">
             <h3 style="margin:0 0 1rem 0;font-size:1rem;display:flex;align-items:center;gap:.5rem">
-                <i class="bi bi-graph-up" style="color:var(--accent-primary)"></i> Resumen de Cálculo
+                <i class="bi bi-table" style="color:var(--accent-primary)"></i> Desglose de cálculo tipo Excel
             </h3>
 
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem">
-                <div style="border-left:4px solid var(--accent-primary);padding-left:1rem">
-                    <div style="font-size:.85rem;color:var(--text-muted)">Total Remuneraciones</div>
-                    <div id="previewTotalRemuneraciones" style="font-size:1.5rem;font-weight:700;color:var(--text-primary)">$0</div>
-                    <input type="hidden" id="totalRemuneraciones" value="0">
+            <div class="quote-breakdown-grid">
+                <div class="quote-breakdown-section">
+                    <div class="quote-breakdown-title">Haberes, descuentos e impuestos</div>
+                    <div id="previewHaberesDetalle"></div>
                 </div>
 
-                <div style="border-left:4px solid var(--accent-secondary);padding-left:1rem">
-                    <div style="font-size:.85rem;color:var(--text-muted)">Cotizaciones (ISES)</div>
-                    <div id="previewTotalCotizaciones" style="font-size:1.5rem;font-weight:700;color:var(--text-primary)">$0</div>
-                    <input type="hidden" id="totalCotizaciones" value="0">
+                <div class="quote-breakdown-section">
+                    <div class="quote-breakdown-title">Seguros, provisiones y gastos</div>
+                    <div id="previewCostosDetalle"></div>
                 </div>
 
-                <div style="border-left:4px solid var(--warning-color);padding-left:1rem">
-                    <div style="font-size:.85rem;color:var(--text-muted)">Provisiones</div>
-                    <div id="previewTotalProvisiones" style="font-size:1.5rem;font-weight:700;color:var(--text-primary)">$0</div>
-                    <input type="hidden" id="totalProvisiones" value="0">
+                <div class="quote-breakdown-section">
+                    <div class="quote-breakdown-title">Precio y margen</div>
+                    <div id="previewPrecioDetalle"></div>
                 </div>
 
-                <div style="border-left:4px solid var(--danger-color);padding-left:1rem">
-                    <div style="font-size:.85rem;color:var(--text-muted)">Gastos Operacionales</div>
-                    <div id="previewTotalGastos" style="font-size:1.5rem;font-weight:700;color:var(--text-primary)">$0</div>
-                    <input type="hidden" id="totalGastos" value="0">
-                </div>
-
-                <div style="border-left:4px solid var(--success-color);padding-left:1rem">
-                    <div style="font-size:.85rem;color:var(--text-muted)">Subtotal</div>
-                    <div id="previewSubtotal" style="font-size:1.5rem;font-weight:700;color:var(--text-primary)">$0</div>
-                    <input type="hidden" id="subtotal" value="0">
-                </div>
-
-                <div style="border-left:4px solid var(--accent-primary);padding-left:1rem;background:var(--bg-tertiary);padding:1rem;border-radius:.5rem">
-                    <div style="font-size:.85rem;color:var(--text-muted)">Margen (%) / Valor</div>
-                    <div style="font-size:1.5rem;font-weight:700;color:var(--accent-primary)">
-                        <span id="previewMargenPorcentaje">0%</span> / <span id="previewMargenValor">$0</span>
-                    </div>
-                    <input type="hidden" id="margenPorcentaje" value="0">
-                    <input type="hidden" id="margenValor" value="0">
-                </div>
-
-                <div style="grid-column:1/-1;border-top:2px solid var(--surface-border);padding-top:1rem;margin-top:1rem">
-                    <div style="display:flex;justify-content:space-between;align-items:center">
-                        <span style="font-size:1.1rem;font-weight:600">PRECIO VENTA</span>
-                        <div id="previewPrecioVenta" style="font-size:2rem;font-weight:700;color:var(--accent-primary)">$0</div>
-                    </div>
-                    <input type="hidden" id="precioVenta" name="precio_venta" value="0">
+                <div class="quote-breakdown-section">
+                    <div class="quote-breakdown-title">Valores hora</div>
+                    <div id="previewHorasDetalle"></div>
                 </div>
             </div>
         </div>
@@ -483,6 +718,60 @@ function formatCLP(value) {
     return clpFormatter.format(Number(value || 0));
 }
 
+function formatNumber(value) {
+    return new Intl.NumberFormat('es-CL', { maximumFractionDigits: 2 }).format(Number(value || 0));
+}
+
+function formatPercent(value) {
+    return `${Number(value || 0).toLocaleString('es-CL', { maximumFractionDigits: 4 })}%`;
+}
+
+function parseMoney(value) {
+    return String(value ?? '').replace(/[^\d]/g, '');
+}
+
+function formatMoneyValue(value) {
+    const raw = parseMoney(value);
+    return raw ? new Intl.NumberFormat('es-CL').format(Number(raw)) : '';
+}
+
+function initMoneyInput(input) {
+    if (!input || input.dataset.moneyReady === '1') return;
+
+    input.dataset.moneyReady = '1';
+    input.classList.add('quote-money-input');
+    input.value = formatMoneyValue(input.value);
+
+    input.addEventListener('input', () => {
+        input.value = formatMoneyValue(input.value);
+        actualizarUniformeFila(input.closest('tr'));
+    });
+}
+
+function normalizeMoneyInputsForSubmit() {
+    document.querySelectorAll('[data-money-input][name]').forEach((input) => {
+        input.value = parseMoney(input.value);
+    });
+}
+
+function buildPreviewFormData(form) {
+    const formData = new FormData(form);
+    form.querySelectorAll('[data-money-input][name]').forEach((input) => {
+        formData.set(input.name, parseMoney(input.value));
+    });
+
+    return formData;
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
 function setText(id, value) {
     const el = document.getElementById(id);
     if (el) {
@@ -495,6 +784,106 @@ function setValue(id, value) {
     if (el) {
         el.value = Number(value || 0).toFixed(2);
     }
+}
+
+function findDetail(detalles, concept) {
+    const needle = concept.toLowerCase();
+    return (detalles || []).find((detalle) => String(detalle.concepto || '').toLowerCase().includes(needle));
+}
+
+function detailMeta(detalles, concept, fallback = '') {
+    const detalle = findDetail(detalles, concept);
+    if (!detalle) return fallback;
+
+    const meta = [];
+    if (Number(detalle.valor_base || 0) > 0) {
+        meta.push(`Base ${formatCLP(detalle.valor_base)}`);
+    }
+    if (detalle.porcentaje !== null && detalle.porcentaje !== undefined) {
+        meta.push(formatPercent(detalle.porcentaje));
+    }
+    if (detalle.formula?.descripcion) {
+        meta.push(detalle.formula.descripcion);
+    }
+
+    return meta.join(' · ') || fallback;
+}
+
+function lineRow(label, value, meta = '', total = false) {
+    return `
+        <div class="quote-line ${total ? 'is-total' : ''}">
+            <div>
+                <div class="quote-line-label">${escapeHtml(label)}</div>
+                ${meta ? `<div class="quote-line-meta">${escapeHtml(meta)}</div>` : ''}
+            </div>
+            <div class="quote-line-value">${formatCLP(value)}</div>
+        </div>
+    `;
+}
+
+function hourRow(label, value, meta = '') {
+    return `
+        <div class="quote-line">
+            <div>
+                <div class="quote-line-label">${escapeHtml(label)}</div>
+                ${meta ? `<div class="quote-line-meta">${escapeHtml(meta)}</div>` : ''}
+            </div>
+            <div class="quote-line-value">${formatCLP(value)}</div>
+        </div>
+    `;
+}
+
+function actualizarDesglose(data = {}) {
+    const resumen = data.resumen_excel || {};
+    const detalles = data.detalles || [];
+    const horas = data.horas || {};
+
+    const haberesRows = [
+        lineRow('Gratificación legal', resumen.gratificacion, detailMeta(detalles, 'Gratificación', '25% con tope legal'), false),
+        lineRow('Total imponible', resumen.totalImponible, 'Sueldo base + bonos + gratificación', true),
+        lineRow('Total no imponible', resumen.totalNoImponible, 'Movilización + colación', false),
+        lineRow('Total haberes', resumen.totalHaberes, 'Total imponible + total no imponible', true),
+        lineRow('Imposiciones', resumen.imposiciones, 'Descuento trabajador configurado en parámetros', false),
+        lineRow('Alcance líquido', resumen.alcanceLiquido, 'Total haberes - imposiciones - IU', true),
+        lineRow('Renta tributable', resumen.rentaTributable, 'Total imponible - imposiciones', false),
+        lineRow('Impuesto Único (IU)', resumen.impuestoUnico, 'Factor y rebaja configurados en mantenedor', false),
+    ].join('');
+
+    const costosRows = [
+        lineRow('REFPREV', resumen.refprev, detailMeta(detalles, 'REFPREV'), false),
+        lineRow('Seg. Inv. y Sob. (SIS)', resumen.sis, detailMeta(detalles, 'SIS'), false),
+        lineRow('Mutual Seguridad I.S.T.', resumen.mutual, detailMeta(detalles, 'Mutual'), false),
+        lineRow('Seguro Cesantía', resumen.seguroCesantia, detailMeta(detalles, 'Cesantía'), false),
+        lineRow('Provisión Vacaciones', resumen.provisionVacaciones, detailMeta(detalles, 'Vacaciones'), false),
+        lineRow('Provisión Indemnizaciones', resumen.provisionIndemnizaciones, detailMeta(detalles, 'Indemnizaciones', 'Aplica principalmente en modalidad SUB'), false),
+        lineRow('Seguro Accidentes Personales', findDetail(detalles, 'Accidentes')?.valor || 0, detailMeta(detalles, 'Accidentes', 'Valor ingresado'), false),
+        lineRow('Otros Seguros / Gastos', findDetail(detalles, 'Otros Gastos')?.valor || 0, detailMeta(detalles, 'Otros Gastos', 'Valor ingresado'), false),
+        lineRow('Otros Beneficios / Aguinaldos', findDetail(detalles, 'Otros Beneficios')?.valor || 0, detailMeta(detalles, 'Otros Beneficios', 'Valor ingresado'), false),
+        lineRow('Gastos Administración', resumen.gastosAdministracion, detailMeta(detalles, 'Administración'), false),
+    ].join('');
+
+    const precioRows = [
+        lineRow('Costo bruto', resumen.costoBruto || data.subtotal, 'Haberes + ISES + provisiones + gastos', true),
+        lineRow('Margen operacional', resumen.margen || data.margen, formatPercent(data.margen_porcentaje || 0), false),
+        lineRow('Precio venta', resumen.precioVenta || data.precio_venta, 'Costo bruto + margen operacional', true),
+    ].join('');
+
+    const horasRows = [
+        hourRow('Hora normal', horas.normal ?? resumen.horaNormal, 'Precio venta / horas mensuales'),
+        hourRow('Hora normal HHEE', horas.normal_hhee, 'Base para cálculo de horas extra'),
+        hourRow('Hora extra 50%', horas.extra_50 ?? resumen.horaExtra50, 'Hora normal HHEE x 1,5'),
+        hourRow('Hora extra 100%', horas.extra_100 ?? resumen.horaExtra100, 'Hora normal HHEE x 2'),
+    ].join('');
+
+    setText('previewHaberesDetalle', '');
+    setText('previewCostosDetalle', '');
+    setText('previewPrecioDetalle', '');
+    setText('previewHorasDetalle', '');
+
+    document.getElementById('previewHaberesDetalle').innerHTML = haberesRows;
+    document.getElementById('previewCostosDetalle').innerHTML = costosRows;
+    document.getElementById('previewPrecioDetalle').innerHTML = precioRows;
+    document.getElementById('previewHorasDetalle').innerHTML = horasRows;
 }
 
 function actualizarResumen(data = {}) {
@@ -515,6 +904,8 @@ function actualizarResumen(data = {}) {
     setValue('margenPorcentaje', data.margen_porcentaje);
     setValue('margenValor', data.margen);
     setValue('precioVenta', data.precio_venta);
+
+    actualizarDesglose(data);
 }
 
 function schedulePreview() {
@@ -531,7 +922,7 @@ function agregarRemuneracion() {
             <input type="text" name="remuneraciones[${idx}][concepto]" class="form-control" placeholder="Sueldo Base, Bono, etc" required>
         </td>
         <td>
-            <input type="number" name="remuneraciones[${idx}][valor]" class="form-control" placeholder="0" step="1" min="0" required onchange="schedulePreview()">
+            <input type="text" name="remuneraciones[${idx}][valor]" class="form-control quote-money-input" placeholder="0" inputmode="numeric" data-money-input required>
         </td>
         <td>
             <button type="button" class="icon-btn danger" onclick="this.parentElement.parentElement.remove(); schedulePreview()">
@@ -540,6 +931,18 @@ function agregarRemuneracion() {
         </td>
     `;
     tabla.appendChild(fila);
+    initMoneyInput(fila.querySelector('[data-money-input]'));
+}
+
+function actualizarUniformeFila(fila) {
+    if (!fila || !fila.querySelector('[name*="[precio_unitario]"]')) return;
+
+    const cantidad = Number(fila.querySelector('[name*="[cantidad]"]')?.value || 0);
+    const precio = Number(parseMoney(fila.querySelector('[name*="[precio_unitario]"]')?.value || 0));
+    const total = fila.querySelector('[data-uniforme-total]');
+    if (total) {
+        total.value = formatCLP(cantidad * precio);
+    }
 }
 
 function agregarUniforme() {
@@ -551,13 +954,13 @@ function agregarUniforme() {
             <input type="text" name="uniformes[${idx}][descripcion]" class="form-control" placeholder="Ej: Casco de Seguridad">
         </td>
         <td>
-            <input type="number" name="uniformes[${idx}][cantidad]" class="form-control" placeholder="0" min="0" value="1" onchange="schedulePreview()">
+            <input type="number" name="uniformes[${idx}][cantidad]" class="form-control" placeholder="0" min="0" value="1" oninput="actualizarUniformeFila(this.closest('tr'))" onchange="schedulePreview()">
         </td>
         <td>
-            <input type="number" name="uniformes[${idx}][precio_unitario]" class="form-control" placeholder="0" step=".01" min="0" onchange="schedulePreview()">
+            <input type="text" name="uniformes[${idx}][precio_unitario]" class="form-control quote-money-input" placeholder="0" inputmode="numeric" data-money-input>
         </td>
         <td>
-            <input type="text" class="form-control" disabled placeholder="Total">
+            <input type="text" class="form-control quote-money-input" data-uniforme-total disabled placeholder="Total">
         </td>
         <td>
             <button type="button" class="icon-btn danger" onclick="this.parentElement.parentElement.remove(); schedulePreview()">
@@ -566,6 +969,8 @@ function agregarUniforme() {
         </td>
     `;
     tabla.appendChild(fila);
+    initMoneyInput(fila.querySelector('[data-money-input]'));
+    actualizarUniformeFila(fila);
 }
 
 async function actualizarCalculos() {
@@ -582,7 +987,7 @@ async function actualizarCalculos() {
                 'Accept': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            body: new FormData(form)
+            body: buildPreviewFormData(form)
         });
 
         if (!response.ok) {
@@ -597,8 +1002,10 @@ async function actualizarCalculos() {
 
 // Cargar centros de costo si hay cliente preseleccionado
 document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('cotizacionForm').addEventListener('input', schedulePreview);
-    document.getElementById('cotizacionForm').addEventListener('change', schedulePreview);
+    const form = document.getElementById('cotizacionForm');
+    form.addEventListener('input', schedulePreview);
+    form.addEventListener('change', schedulePreview);
+    form.addEventListener('submit', normalizeMoneyInputsForSubmit);
 
     const clienteId = document.getElementById('clienteSelect').value;
     if(clienteId) {
@@ -608,10 +1015,14 @@ document.addEventListener('DOMContentLoaded', function() {
         ['Sueldo Base', 'Bono Asistencia', 'Bono Compromiso', 'Otros Haberes'].forEach(concepto => {
             agregarRemuneracion();
             const row = document.getElementById('remuneracionesTable').lastElementChild;
-            row.querySelector('input[type="text"]').value = concepto;
-            row.querySelector('input[type="number"]').value = concepto === 'Sueldo Base' ? (sueldoMinimoLegal || '') : 0;
+            row.querySelector('input[name*="[concepto]"]').value = concepto;
+            const valorInput = row.querySelector('input[name*="[valor]"]');
+            valorInput.value = concepto === 'Sueldo Base' ? (sueldoMinimoLegal || '') : 0;
+            valorInput.value = formatMoneyValue(valorInput.value);
         });
     }
+    document.querySelectorAll('[data-money-input]').forEach(initMoneyInput);
+    document.querySelectorAll('#uniformesTable tr').forEach(actualizarUniformeFila);
     actualizarCalculos();
 });
 </script>
