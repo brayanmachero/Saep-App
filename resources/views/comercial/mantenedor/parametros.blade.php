@@ -1,5 +1,39 @@
 @extends('layouts.app')
 @section('title', 'Mantenedor de Parámetros')
+@push('styles')
+<style>
+    .param-value-wrap {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+
+    .param-value-wrap .form-control {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .param-unit {
+        min-width: 58px;
+        padding: .5rem .65rem;
+        border: 1px solid var(--surface-border);
+        border-radius: 8px;
+        background: var(--hover-bg, #f9fafb);
+        color: var(--text-muted);
+        font-size: .78rem;
+        font-weight: 800;
+        text-align: center;
+        text-transform: uppercase;
+    }
+
+    .param-format-hint {
+        margin-top: .35rem;
+        color: var(--text-muted);
+        font-size: .72rem;
+        font-weight: 600;
+    }
+</style>
+@endpush
 @section('content')
 <div class="page-container">
     <div class="page-header">
@@ -13,6 +47,15 @@
 
     <form method="POST" action="{{ route('comercial.parametros.batch-update') }}" id="parametrosForm">
         @csrf
+        @php
+            $valorParametro = fn($parametro) => $parametro->formatearValorVisual(old('parametros.' . $parametro->id . '.valor', $parametro->valor));
+            $hintParametro = fn($parametro) => match($parametro->formato_visual) {
+                'moneda' => 'Monto con separador de miles',
+                'porcentaje' => 'Valor porcentual',
+                'entero' => 'Número entero',
+                default => 'Número decimal',
+            };
+        @endphp
 
         {{-- Parámetros de Gobierno (UF, Sueldo Mínimo, IPC) --}}
         <div class="glass-card" style="margin-bottom:1.5rem">
@@ -34,13 +77,22 @@
                     <div style="display:flex;gap:.5rem;align-items:flex-end">
                         <div style="flex:1">
                             @if($parametro->editable)
-                            <input type="text" name="parametros[{{ $parametro->id }}][valor]"
-                                   value="{{ old('parametros.' . $parametro->id . '.valor', $parametro->valor) }}"
-                                   class="form-control" style="font-size:1.1rem;font-weight:600"
-                                   data-parametro-id="{{ $parametro->id }}">
+                            <div class="param-value-wrap">
+                                <input type="text" name="parametros[{{ $parametro->id }}][valor]"
+                                       value="{{ $valorParametro($parametro) }}"
+                                       class="form-control" style="font-size:1.1rem;font-weight:600"
+                                       inputmode="decimal"
+                                       data-parametro-id="{{ $parametro->id }}"
+                                       data-param-format="{{ $parametro->formato_visual }}">
+                                <span class="param-unit">{{ $parametro->unidad_visual }}</span>
+                            </div>
+                            <div class="param-format-hint">{{ $hintParametro($parametro) }}</div>
                             @else
-                            <input type="text" value="{{ $parametro->valor }}" class="form-control" disabled
-                                   style="font-size:1.1rem;font-weight:600">
+                            <div class="param-value-wrap">
+                                <input type="text" value="{{ $parametro->formatearValorVisual() }}" class="form-control" disabled
+                                       style="font-size:1.1rem;font-weight:600">
+                                <span class="param-unit">{{ $parametro->unidad_visual }}</span>
+                            </div>
                             @endif
                         </div>
                     </div>
@@ -65,13 +117,15 @@
                     <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.75rem">
                         {{ $parametro->nombre }}
                     </label>
-                    <div style="display:flex;gap:.5rem;align-items:center">
-                        <input type="number" name="parametros[{{ $parametro->id }}][valor]"
-                               value="{{ old('parametros.' . $parametro->id . '.valor', $parametro->valor) }}"
-                               class="form-control" placeholder="0" step="0.01" min="0"
+                    <div class="param-value-wrap">
+                        <input type="text" name="parametros[{{ $parametro->id }}][valor]"
+                               value="{{ $valorParametro($parametro) }}"
+                               class="form-control" placeholder="0" inputmode="decimal"
+                               data-param-format="{{ $parametro->formato_visual }}"
                                @if(!$parametro->editable) disabled @endif>
-                        <span style="font-weight:600;color:var(--accent-primary)">%</span>
+                        <span class="param-unit">{{ $parametro->unidad_visual }}</span>
                     </div>
+                    <div class="param-format-hint">{{ $hintParametro($parametro) }}</div>
                     <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem">
                         {{ $parametro->descripcion }}
                     </div>
@@ -95,13 +149,15 @@
                     <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.75rem">
                         {{ $parametro->nombre }}
                     </label>
-                    <div style="display:flex;gap:.5rem;align-items:center">
-                        <input type="number" name="parametros[{{ $parametro->id }}][valor]"
-                               value="{{ old('parametros.' . $parametro->id . '.valor', $parametro->valor) }}"
-                               class="form-control" placeholder="0" step="0.01" min="0"
+                    <div class="param-value-wrap">
+                        <input type="text" name="parametros[{{ $parametro->id }}][valor]"
+                               value="{{ $valorParametro($parametro) }}"
+                               class="form-control" placeholder="0" inputmode="decimal"
+                               data-param-format="{{ $parametro->formato_visual }}"
                                @if(!$parametro->editable) disabled @endif>
-                        <span style="font-weight:600;color:var(--danger-color)">%</span>
+                        <span class="param-unit">{{ $parametro->unidad_visual }}</span>
                     </div>
+                    <div class="param-format-hint">{{ $hintParametro($parametro) }}</div>
                     <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem">
                         {{ $parametro->descripcion }}
                     </div>
@@ -126,10 +182,15 @@
                         <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.75rem">
                             {{ $parametro->nombre }}
                         </label>
-                        <input type="number" name="parametros[{{ $parametro->id }}][valor]"
-                               value="{{ old('parametros.' . $parametro->id . '.valor', $parametro->valor) }}"
-                               class="form-control" placeholder="0" step="0.000001"
-                               @if(!$parametro->editable) disabled @endif>
+                        <div class="param-value-wrap">
+                            <input type="text" name="parametros[{{ $parametro->id }}][valor]"
+                                   value="{{ $valorParametro($parametro) }}"
+                                   class="form-control" placeholder="0" inputmode="decimal"
+                                   data-param-format="{{ $parametro->formato_visual }}"
+                                   @if(!$parametro->editable) disabled @endif>
+                            <span class="param-unit">{{ $parametro->unidad_visual }}</span>
+                        </div>
+                        <div class="param-format-hint">{{ $hintParametro($parametro) }}</div>
                         <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem">
                             {{ $parametro->descripcion }}
                         </div>
@@ -151,13 +212,15 @@
                     <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.75rem">
                         {{ $parametro->nombre }}
                     </label>
-                    <div style="display:flex;gap:.5rem;align-items:center">
-                        <input type="number" name="parametros[{{ $parametro->id }}][valor]"
-                               value="{{ old('parametros.' . $parametro->id . '.valor', $parametro->valor) }}"
-                               class="form-control" placeholder="0" step=".01" min="0"
+                    <div class="param-value-wrap">
+                        <input type="text" name="parametros[{{ $parametro->id }}][valor]"
+                               value="{{ $valorParametro($parametro) }}"
+                               class="form-control" placeholder="0" inputmode="decimal"
+                               data-param-format="{{ $parametro->formato_visual }}"
                                @if(!$parametro->editable) disabled @endif>
-                        <span style="font-weight:600">$</span>
+                        <span class="param-unit">{{ $parametro->unidad_visual }}</span>
                     </div>
+                    <div class="param-format-hint">{{ $hintParametro($parametro) }}</div>
                     <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem">
                         {{ $parametro->descripcion }}
                     </div>
@@ -262,6 +325,54 @@
 </div>
 
 <script>
+function parseParamNumber(value, format) {
+    let raw = String(value ?? '').replace(/[$%\s]/g, '').replace(/[^\d,.-]/g, '');
+    if (!raw) return '';
+
+    if (raw.includes(',')) {
+        raw = raw.replace(/\./g, '').replace(',', '.');
+    } else if (format === 'entero') {
+        raw = raw.replace(/\./g, '');
+    } else if (format === 'moneda') {
+        const parts = raw.split('.');
+        if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+            raw = raw.replace(/\./g, '');
+        }
+    }
+
+    return raw;
+}
+
+function formatParamNumber(value, format) {
+    const raw = parseParamNumber(value, format);
+    if (!raw || Number.isNaN(Number(raw))) return value;
+
+    const number = Number(raw);
+    const decimals = (() => {
+        if (format === 'entero') return 0;
+        if (format === 'decimal' && number > 0 && number < 1) return 6;
+        if (Number.isInteger(number)) return 0;
+        return 2;
+    })();
+
+    return new Intl.NumberFormat('es-CL', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    }).format(number);
+}
+
+document.querySelectorAll('[data-param-format]').forEach((input) => {
+    input.addEventListener('blur', () => {
+        input.value = formatParamNumber(input.value, input.dataset.paramFormat);
+    });
+});
+
+document.getElementById('parametrosForm')?.addEventListener('submit', () => {
+    document.querySelectorAll('[data-param-format][name]').forEach((input) => {
+        input.value = parseParamNumber(input.value, input.dataset.paramFormat);
+    });
+});
+
 function actualizarParametrosGobierno() {
     if(confirm('¿Actualizar parámetros de gobierno desde las APIs? (UF, Sueldo Mínimo, IPC)')) {
         fetch('{{ route("comercial.parametros.actualizar-gobierno") }}', {

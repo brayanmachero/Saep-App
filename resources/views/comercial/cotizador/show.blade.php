@@ -1,5 +1,75 @@
 @extends('layouts.app')
 @section('title', 'Cotización ' . $cotizacion->numero)
+@push('styles')
+<style>
+    .quote-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .9rem;
+    }
+
+    .quote-detail-section {
+        border: 1px solid var(--surface-border);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--surface-color);
+    }
+
+    .quote-detail-title {
+        padding: .65rem .8rem;
+        border-bottom: 1px solid var(--surface-border);
+        background: var(--hover-bg, #f9fafb);
+        color: var(--text-muted);
+        font-size: .78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+
+    .quote-detail-line {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: .75rem;
+        padding: .62rem .8rem;
+        border-bottom: 1px solid var(--surface-border);
+    }
+
+    .quote-detail-line:last-child {
+        border-bottom: 0;
+    }
+
+    .quote-detail-line.is-total {
+        background: color-mix(in srgb, var(--primary-color, #0f1b4c) 8%, var(--surface-color));
+    }
+
+    .quote-detail-label {
+        color: var(--text-primary);
+        font-size: .88rem;
+        font-weight: 700;
+    }
+
+    .quote-detail-meta {
+        margin-top: .15rem;
+        color: var(--text-muted);
+        font-size: .73rem;
+        line-height: 1.35;
+    }
+
+    .quote-detail-value {
+        align-self: center;
+        color: var(--text-primary);
+        font-size: .92rem;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    @media (max-width: 900px) {
+        .quote-detail-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+@endpush
 @section('content')
 <div class="page-container">
     <div class="page-header">
@@ -33,6 +103,83 @@
     </div>
 
     @include('partials._alerts')
+    @php
+        $resumen = $cotizacion->datos_calculo['resumen_excel'] ?? [];
+        $horas = $cotizacion->datos_calculo['horas'] ?? [];
+        $detallesCalculo = collect($cotizacion->datos_calculo['detalles'] ?? $cotizacion->detalles->toArray());
+        $valor = fn($monto) => '$' . number_format((float) ($monto ?? 0), 0, ',', '.');
+        $porcentaje = fn($pct) => number_format((float) ($pct ?? 0), 2, ',', '.') . '%';
+        $get = fn($item, $key) => is_array($item) ? ($item[$key] ?? null) : ($item->{$key} ?? null);
+        $detallePor = fn($texto) => $detallesCalculo->first(fn($detalle) => str_contains(mb_strtolower((string) $get($detalle, 'concepto')), mb_strtolower($texto)));
+        $detalleValor = fn($texto) => (float) ($get($detallePor($texto), 'valor') ?? 0);
+        $margenPct = (float) ($cotizacion->datos_calculo['margen_porcentaje'] ?? 0);
+        $costoBrutoHhee = (float) ($resumen['costoBrutoHhee'] ?? (($resumen['totalImponible'] ?? 0) + (float) $cotizacion->total_cotizaciones));
+        $margenHhee = (float) ($resumen['margenHhee'] ?? ($costoBrutoHhee * ($margenPct / 100)));
+        $precioVentaHhee = (float) ($resumen['precioVentaHhee'] ?? ($costoBrutoHhee + $margenHhee));
+        $detalleMeta = function ($texto, $fallback = '') use ($detallePor, $get, $valor, $porcentaje) {
+            $detalle = $detallePor($texto);
+            if (! $detalle) {
+                return $fallback;
+            }
+
+            $meta = [];
+            if ((float) ($get($detalle, 'valor_base') ?? 0) > 0) {
+                $meta[] = 'Base ' . $valor($get($detalle, 'valor_base'));
+            }
+            if ($get($detalle, 'porcentaje') !== null) {
+                $meta[] = $porcentaje($get($detalle, 'porcentaje'));
+            }
+            $formula = $get($detalle, 'formula');
+            $formulaTexto = is_array($formula) ? ($formula['descripcion'] ?? null) : null;
+            if ($formulaTexto) {
+                $meta[] = $formulaTexto;
+            }
+
+            return implode(' · ', $meta) ?: $fallback;
+        };
+
+        $seccionesCalculo = [
+            'Haberes, descuentos e impuestos' => [
+                ['Gratificación legal', $resumen['gratificacion'] ?? $detalleValor('Gratificación'), $detalleMeta('Gratificación', '25% con tope legal')],
+                ['Total imponible', $resumen['totalImponible'] ?? 0, 'Sueldo base + bonos + gratificación', true],
+                ['Total no imponible', $resumen['totalNoImponible'] ?? 0, 'Movilización + colación'],
+                ['Total haberes', $resumen['totalHaberes'] ?? $cotizacion->total_remuneraciones, 'Total imponible + total no imponible', true],
+                ['Imposiciones', $resumen['imposiciones'] ?? 0, 'Descuento trabajador configurado en parámetros'],
+                ['Alcance líquido', $resumen['alcanceLiquido'] ?? 0, 'Total haberes - imposiciones - IU', true],
+                ['Renta tributable', $resumen['rentaTributable'] ?? 0, 'Total imponible - imposiciones'],
+                ['Impuesto Único (IU)', $resumen['impuestoUnico'] ?? 0, 'Factor y rebaja configurados en mantenedor'],
+            ],
+            'Seguros, provisiones y gastos' => [
+                ['REFPREV', $resumen['refprev'] ?? $detalleValor('REFPREV'), $detalleMeta('REFPREV')],
+                ['Seg. Inv. y Sob. (SIS)', $resumen['sis'] ?? $detalleValor('SIS'), $detalleMeta('SIS')],
+                ['Mutual Seguridad I.S.T.', $resumen['mutual'] ?? $detalleValor('Mutual'), $detalleMeta('Mutual')],
+                ['Seguro Cesantía', $resumen['seguroCesantia'] ?? $detalleValor('Cesantía'), $detalleMeta('Cesantía')],
+                ['Total cotizaciones (ISES)', $cotizacion->total_cotizaciones, 'REFPREV + SIS + Mutual + Cesantía', true],
+                ['Provisión Vacaciones', $resumen['provisionVacaciones'] ?? $detalleValor('Vacaciones'), $detalleMeta('Vacaciones')],
+                ['Provisión Indemnizaciones', $resumen['provisionIndemnizaciones'] ?? $detalleValor('Indemnizaciones'), $detalleMeta('Indemnizaciones', 'Aplica principalmente en SUB')],
+                ['Total provisiones', $cotizacion->total_provisiones, 'Vacaciones + indemnizaciones cuando aplique', true],
+                ['Seguro Accidentes Personales', $detalleValor('Accidentes'), $detalleMeta('Accidentes', 'Valor ingresado')],
+                ['Otros Seguros / Gastos', $detalleValor('Otros Gastos'), $detalleMeta('Otros Gastos', 'Valor ingresado')],
+                ['Otros Beneficios / Aguinaldos', $detalleValor('Otros Beneficios'), $detalleMeta('Otros Beneficios', 'Valor ingresado')],
+                ['Gastos Administración', $resumen['gastosAdministracion'] ?? $detalleValor('Administración'), $detalleMeta('Administración')],
+                ['Total gastos operacionales', $cotizacion->total_gastos, 'Uniformes + casino + seguros + beneficios + administración', true],
+            ],
+            'Precio y margen' => [
+                ['Costo bruto normal', $resumen['costoBruto'] ?? $cotizacion->subtotal, 'Haberes + ISES + provisiones + gastos', true],
+                ['Margen operacional normal', $resumen['margen'] ?? $cotizacion->margen, $porcentaje($cotizacion->datos_calculo['margen_porcentaje'] ?? 0)],
+                ['Precio venta normal', $resumen['precioVenta'] ?? $cotizacion->precio_venta, 'Costo bruto normal + margen operacional', true],
+                ['Costo bruto HHEE', $costoBrutoHhee, 'Total imponible + cotizaciones empresa', true],
+                ['Margen operacional HHEE', $margenHhee, $porcentaje($margenPct)],
+                ['Precio venta HHEE', $precioVentaHhee, 'Base para horas extra', true],
+            ],
+            'Valores hora' => [
+                ['Hora normal', $horas['normal'] ?? ($resumen['horaNormal'] ?? 0), 'Precio venta / horas mensuales'],
+                ['Hora normal HHEE', $horas['normal_hhee'] ?? ($resumen['horaNormalHhee'] ?? 0), 'Base HHEE antes de recargos'],
+                ['Hora extra 50%', $horas['extra_50'] ?? ($resumen['horaExtra50'] ?? 0), 'Hora normal HHEE x 1,5'],
+                ['Hora extra 100%', $horas['extra_100'] ?? ($resumen['horaExtra100'] ?? 0), 'Hora normal HHEE x 2'],
+            ],
+        ];
+    @endphp
 
     {{-- Estado y Acciones --}}
     <div class="glass-card" style="margin-bottom:1.5rem">
@@ -133,62 +280,43 @@
         @endif
     </div>
 
-    {{-- Detalles de Cálculo --}}
     <div class="glass-card" style="margin-bottom:1.5rem">
-        <h3 style="margin:0 0 1rem 0;font-size:1rem">Desglose de Cálculo</h3>
+        <h3 style="margin:0 0 1rem 0;font-size:1rem;display:flex;align-items:center;gap:.5rem">
+            <i class="bi bi-table"></i> Desglose de cálculo tipo Excel
+        </h3>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-bottom:1.5rem">
-            <div style="background:var(--bg-tertiary);padding:1rem;border-radius:.5rem;border-left:4px solid var(--accent-primary)">
-                <div style="font-size:.8rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Total Remuneraciones</div>
-                <div style="font-size:1.3rem;font-weight:700;margin-top:.5rem">${{ number_format($cotizacion->total_remuneraciones, 0, ',', '.') }}</div>
+        <div class="quote-detail-grid">
+            @foreach($seccionesCalculo as $titulo => $lineas)
+            <div class="quote-detail-section">
+                <div class="quote-detail-title">{{ $titulo }}</div>
+                @foreach($lineas as $linea)
+                <div class="quote-detail-line {{ ($linea[3] ?? false) ? 'is-total' : '' }}">
+                    <div>
+                        <div class="quote-detail-label">{{ $linea[0] }}</div>
+                        @if(!empty($linea[2]))
+                        <div class="quote-detail-meta">{{ $linea[2] }}</div>
+                        @endif
+                    </div>
+                    <div class="quote-detail-value">{{ $valor($linea[1]) }}</div>
+                </div>
+                @endforeach
             </div>
-
-            <div style="background:var(--bg-tertiary);padding:1rem;border-radius:.5rem;border-left:4px solid var(--accent-secondary)">
-                <div style="font-size:.8rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Cotizaciones (ISES)</div>
-                <div style="font-size:1.3rem;font-weight:700;margin-top:.5rem">${{ number_format($cotizacion->total_cotizaciones, 0, ',', '.') }}</div>
-            </div>
-
-            <div style="background:var(--bg-tertiary);padding:1rem;border-radius:.5rem;border-left:4px solid var(--warning-color)">
-                <div style="font-size:.8rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Provisiones</div>
-                <div style="font-size:1.3rem;font-weight:700;margin-top:.5rem">${{ number_format($cotizacion->total_provisiones, 0, ',', '.') }}</div>
-            </div>
-
-            <div style="background:var(--bg-tertiary);padding:1rem;border-radius:.5rem;border-left:4px solid var(--danger-color)">
-                <div style="font-size:.8rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Gastos Operacionales</div>
-                <div style="font-size:1.3rem;font-weight:700;margin-top:.5rem">${{ number_format($cotizacion->total_gastos, 0, ',', '.') }}</div>
-            </div>
-
-            <div style="background:var(--bg-tertiary);padding:1rem;border-radius:.5rem;border-left:4px solid var(--success-color)">
-                <div style="font-size:.8rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Subtotal</div>
-                <div style="font-size:1.3rem;font-weight:700;margin-top:.5rem">${{ number_format($cotizacion->subtotal, 0, ',', '.') }}</div>
-            </div>
-
-            <div style="background:var(--accent-primary);color:white;padding:1rem;border-radius:.5rem">
-                <div style="font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;opacity:.9">Margen</div>
-                <div style="font-size:1.1rem;font-weight:700;margin-top:.25rem">{{ number_format($cotizacion->datos_calculo['margen_porcentaje'] ?? 0, 2) }}%</div>
-                <div style="font-size:.9rem;margin-top:.5rem">${{ number_format($cotizacion->datos_calculo['margen'] ?? 0, 0, ',', '.') }}</div>
-            </div>
-        </div>
-
-        {{-- Precio Venta Destacado --}}
-        <div style="background:linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));color:white;padding:2rem;border-radius:.75rem;text-align:center">
-            <div style="font-size:.9rem;text-transform:uppercase;letter-spacing:.05em;opacity:.9;margin-bottom:.5rem">PRECIO VENTA FINAL</div>
-            <div style="font-size:2.5rem;font-weight:700">${{ number_format($cotizacion->precio_venta, 0, ',', '.') }}</div>
+            @endforeach
         </div>
     </div>
 
-    {{-- Tabla de Detalles --}}
     <div class="glass-card" style="margin-bottom:1.5rem">
-        <h3 style="margin:0 0 1rem 0;font-size:1rem">Detalle por Concepto</h3>
+        <h3 style="margin:0 0 1rem 0;font-size:1rem">Detalle por concepto guardado</h3>
         <div style="overflow-x:auto">
             <table class="data-table">
                 <thead>
                     <tr>
                         <th>Tipo</th>
                         <th>Concepto</th>
-                        <th>Valor Base</th>
-                        <th>Porcentaje</th>
+                        <th>Base</th>
+                        <th>%</th>
                         <th>Valor</th>
+                        <th>Fórmula / referencia</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -204,9 +332,12 @@
                             </span>
                         </td>
                         <td><strong>{{ $detalle->concepto }}</strong></td>
-                        <td>${{ number_format($detalle->valor_base, 0, ',', '.') }}</td>
-                        <td>{{ number_format($detalle->porcentaje, 2) }}%</td>
-                        <td style="font-weight:600">${{ number_format($detalle->valor, 0, ',', '.') }}</td>
+                        <td>{{ $valor($detalle->valor_base) }}</td>
+                        <td>{{ $detalle->porcentaje !== null ? $porcentaje($detalle->porcentaje) : '—' }}</td>
+                        <td style="font-weight:700">{{ $valor($detalle->valor) }}</td>
+                        <td style="font-size:.8rem;color:var(--text-muted);min-width:220px">
+                            {{ $detalle->formula['descripcion'] ?? '—' }}
+                        </td>
                     </tr>
                     @endforeach
                 </tbody>

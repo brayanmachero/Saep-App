@@ -105,6 +105,30 @@
         text-align: right;
     }
 
+    .quote-param-wrap {
+        display: flex;
+        gap: .45rem;
+        align-items: center;
+    }
+
+    .quote-param-wrap .form-control {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .quote-param-unit {
+        min-width: 54px;
+        padding: .5rem .55rem;
+        border: 1px solid var(--surface-border);
+        border-radius: 8px;
+        background: var(--hover-bg, #f9fafb);
+        color: var(--text-muted);
+        font-size: .7rem;
+        font-weight: 800;
+        text-align: center;
+        text-transform: uppercase;
+    }
+
     .quote-collapse summary {
         cursor: pointer;
         display: flex;
@@ -386,12 +410,16 @@
                             <label style="font-size:.78rem;font-weight:600;display:block;margin-bottom:.4rem">
                                 {{ $parametro->nombre }}
                             </label>
-                            <input type="number"
-                                   value="{{ $parametro->valor }}"
-                                   class="form-control"
-                                   style="height:38px"
-                                   step="{{ $parametro->tipo === 'integer' ? '1' : '0.000001' }}"
-                                   data-parametro-quick="{{ $parametro->id }}">
+                            <div class="quote-param-wrap">
+                                <input type="text"
+                                       value="{{ $parametro->formatearValorVisual() }}"
+                                       class="form-control"
+                                       style="height:38px"
+                                       inputmode="decimal"
+                                       data-parametro-quick="{{ $parametro->id }}"
+                                       data-param-format="{{ $parametro->formato_visual }}">
+                                <span class="quote-param-unit">{{ $parametro->unidad_visual }}</span>
+                            </div>
                         </div>
                         @endforeach
                     @endforeach
@@ -667,7 +695,7 @@ async function guardarParametrosRapidos() {
     formData.append('origen', 'cotizador_rapido');
 
     inputs.forEach((input) => {
-        formData.append(`parametros[${input.dataset.parametroQuick}][valor]`, input.value);
+        formData.append(`parametros[${input.dataset.parametroQuick}][valor]`, parseParamNumber(input.value, input.dataset.paramFormat));
     });
 
     setStatus('quickParametrosStatus', 'Guardando...');
@@ -733,6 +761,42 @@ function parseMoney(value) {
 function formatMoneyValue(value) {
     const raw = parseMoney(value);
     return raw ? new Intl.NumberFormat('es-CL').format(Number(raw)) : '';
+}
+
+function parseParamNumber(value, format) {
+    let raw = String(value ?? '').replace(/[$%\s]/g, '').replace(/[^\d,.-]/g, '');
+    if (!raw) return '';
+
+    if (raw.includes(',')) {
+        raw = raw.replace(/\./g, '').replace(',', '.');
+    } else if (format === 'entero') {
+        raw = raw.replace(/\./g, '');
+    } else if (format === 'moneda') {
+        const parts = raw.split('.');
+        if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+            raw = raw.replace(/\./g, '');
+        }
+    }
+
+    return raw;
+}
+
+function formatParamNumber(value, format) {
+    const raw = parseParamNumber(value, format);
+    if (!raw || Number.isNaN(Number(raw))) return value;
+
+    const number = Number(raw);
+    const decimals = (() => {
+        if (format === 'entero') return 0;
+        if (format === 'decimal' && number > 0 && number < 1) return 6;
+        if (Number.isInteger(number)) return 0;
+        return 2;
+    })();
+
+    return new Intl.NumberFormat('es-CL', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    }).format(number);
 }
 
 function initMoneyInput(input) {
@@ -1028,6 +1092,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     document.querySelectorAll('[data-money-input]').forEach(initMoneyInput);
+    document.querySelectorAll('[data-parametro-quick]').forEach((input) => {
+        input.addEventListener('blur', () => {
+            input.value = formatParamNumber(input.value, input.dataset.paramFormat);
+        });
+    });
     document.querySelectorAll('#uniformesTable tr').forEach(actualizarUniformeFila);
     actualizarCalculos();
 });

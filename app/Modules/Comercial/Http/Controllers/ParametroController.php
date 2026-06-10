@@ -104,6 +104,7 @@ class ParametroController
             throw new \InvalidArgumentException('Este parámetro no es editable.');
         }
 
+        $valor = $this->normalizarValor($valor, $parametro);
         $this->validarValor($valor, $parametro->tipo);
 
         $valorAnterior = $parametro->valor;
@@ -125,6 +126,35 @@ class ParametroController
             'ip_address' => request()?->ip(),
             'user_agent' => request()?->header('User-Agent'),
         ]);
+    }
+
+    private function normalizarValor(mixed $valor, Parametro $parametro): string
+    {
+        $valor = trim((string) $valor);
+        $valor = str_replace(['$', '%', ' '], '', $valor);
+        $valor = preg_replace('/[^\d,.\-]/', '', $valor) ?? '';
+
+        if ($valor === '') {
+            return $valor;
+        }
+
+        if (str_contains($valor, ',')) {
+            $valor = str_replace('.', '', $valor);
+            return str_replace(',', '.', $valor);
+        }
+
+        if ($parametro->formato_visual === 'entero') {
+            return str_replace('.', '', $valor);
+        }
+
+        if ($parametro->formato_visual === 'moneda') {
+            $partes = explode('.', $valor);
+            if (count($partes) > 2 || (count($partes) === 2 && strlen(end($partes)) === 3)) {
+                return str_replace('.', '', $valor);
+            }
+        }
+
+        return $valor;
     }
 
     private function validarValor(mixed $valor, string $tipo): void

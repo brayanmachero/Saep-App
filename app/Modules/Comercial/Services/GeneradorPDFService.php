@@ -27,6 +27,9 @@ class GeneradorPDFService
 
         // Configurar opciones de PDF
         $pdf->setPaper('A4', 'portrait');
+        $pdf->setOption('defaultFont', 'DejaVu Sans');
+        $pdf->setOption('isHtml5ParserEnabled', true);
+        $pdf->setOption('isRemoteEnabled', true);
         $pdf->setOption('margin-top', 15);
         $pdf->setOption('margin-right', 15);
         $pdf->setOption('margin-left', 15);
@@ -114,6 +117,9 @@ class GeneradorPDFService
         ]);
 
         $pdf->setPaper('A4', 'portrait');
+        $pdf->setOption('defaultFont', 'DejaVu Sans');
+        $pdf->setOption('isHtml5ParserEnabled', true);
+        $pdf->setOption('isRemoteEnabled', true);
 
         return $pdf;
     }
