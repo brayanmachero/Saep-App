@@ -65,8 +65,12 @@ class CalculadoraSUBService
         $margen = $costoBruto * ($margenPct / 100);
         $precioVenta = $costoBruto + $margen;
 
+        $costoBrutoHhee = $totalImponible + $totalCotizaciones;
+        $margenHhee = $costoBrutoHhee * ($margenPct / 100);
+        $precioVentaHhee = $costoBrutoHhee + $margenHhee;
+
         $horaNormal = $horasMensuales > 0 ? $precioVenta / $horasMensuales : 0;
-        $horaNormalHhee = $precioVenta * $horaNormalFactorHhee;
+        $horaNormalHhee = $precioVentaHhee * $horaNormalFactorHhee;
         $horaExtra50 = $horaNormalHhee * 1.5;
         $horaExtra100 = $horaNormalHhee * 2;
 
@@ -90,7 +94,11 @@ class CalculadoraSUBService
             'costoBruto',
             'margen',
             'precioVenta',
+            'costoBrutoHhee',
+            'margenHhee',
+            'precioVentaHhee',
             'horaNormal',
+            'horaNormalHhee',
             'horaExtra50',
             'horaExtra100'
         );

@@ -58,7 +58,7 @@
         padding: .65rem .75rem;
         border: 1px solid var(--surface-border);
         border-radius: 8px;
-        background: var(--bg-tertiary);
+        background: var(--bg-tertiary, var(--hover-bg, #f9fafb));
     }
 
     .quote-summary-cell > span {
@@ -79,8 +79,8 @@
     }
 
     .quote-summary-cell.is-price {
-        background: var(--accent-primary);
-        border-color: var(--accent-primary);
+        background: var(--primary-color, #0f1b4c);
+        border-color: var(--primary-color, #0f1b4c);
         color: white;
     }
 
@@ -144,7 +144,7 @@
     .quote-breakdown-title {
         padding: .65rem .75rem;
         border-bottom: 1px solid var(--surface-border);
-        background: var(--bg-tertiary);
+        background: var(--bg-tertiary, var(--hover-bg, #f9fafb));
         font-size: .78rem;
         font-weight: 800;
         text-transform: uppercase;
@@ -187,12 +187,12 @@
     }
 
     .quote-line.is-total {
-        background: color-mix(in srgb, var(--accent-primary) 8%, var(--surface-color));
+        background: color-mix(in srgb, var(--primary-color, #0f1b4c) 8%, var(--surface-color));
     }
 
     .quote-line.is-total .quote-line-label,
     .quote-line.is-total .quote-line-value {
-        color: var(--accent-primary);
+        color: var(--primary-color, #0f1b4c);
     }
 
     @media (max-width: 1280px) {
@@ -246,7 +246,7 @@
                 <input type="hidden" id="totalRemuneraciones" value="0">
             </div>
             <div class="quote-summary-cell">
-                <span>ISES</span>
+                <span>Cotizaciones (ISES)</span>
                 <strong id="previewTotalCotizaciones">$0</strong>
                 <input type="hidden" id="totalCotizaciones" value="0">
             </div>
@@ -256,7 +256,7 @@
                 <input type="hidden" id="totalProvisiones" value="0">
             </div>
             <div class="quote-summary-cell">
-                <span>Gastos</span>
+                <span>Gastos op.</span>
                 <strong id="previewTotalGastos">$0</strong>
                 <input type="hidden" id="totalGastos" value="0">
             </div>
@@ -854,23 +854,29 @@ function actualizarDesglose(data = {}) {
         lineRow('Seg. Inv. y Sob. (SIS)', resumen.sis, detailMeta(detalles, 'SIS'), false),
         lineRow('Mutual Seguridad I.S.T.', resumen.mutual, detailMeta(detalles, 'Mutual'), false),
         lineRow('Seguro Cesantía', resumen.seguroCesantia, detailMeta(detalles, 'Cesantía'), false),
+        lineRow('Total cotizaciones (ISES)', data.total_cotizaciones, 'REFPREV + SIS + Mutual + Cesantía', true),
         lineRow('Provisión Vacaciones', resumen.provisionVacaciones, detailMeta(detalles, 'Vacaciones'), false),
         lineRow('Provisión Indemnizaciones', resumen.provisionIndemnizaciones, detailMeta(detalles, 'Indemnizaciones', 'Aplica principalmente en modalidad SUB'), false),
+        lineRow('Total provisiones', data.total_provisiones, 'Vacaciones + indemnizaciones cuando aplique', true),
         lineRow('Seguro Accidentes Personales', findDetail(detalles, 'Accidentes')?.valor || 0, detailMeta(detalles, 'Accidentes', 'Valor ingresado'), false),
         lineRow('Otros Seguros / Gastos', findDetail(detalles, 'Otros Gastos')?.valor || 0, detailMeta(detalles, 'Otros Gastos', 'Valor ingresado'), false),
         lineRow('Otros Beneficios / Aguinaldos', findDetail(detalles, 'Otros Beneficios')?.valor || 0, detailMeta(detalles, 'Otros Beneficios', 'Valor ingresado'), false),
         lineRow('Gastos Administración', resumen.gastosAdministracion, detailMeta(detalles, 'Administración'), false),
+        lineRow('Total gastos operacionales', data.total_gastos, 'Uniformes + casino + seguros + beneficios + administración', true),
     ].join('');
 
     const precioRows = [
-        lineRow('Costo bruto', resumen.costoBruto || data.subtotal, 'Haberes + ISES + provisiones + gastos', true),
-        lineRow('Margen operacional', resumen.margen || data.margen, formatPercent(data.margen_porcentaje || 0), false),
-        lineRow('Precio venta', resumen.precioVenta || data.precio_venta, 'Costo bruto + margen operacional', true),
+        lineRow('Costo bruto normal', resumen.costoBruto || data.subtotal, 'Haberes + ISES + provisiones + gastos', true),
+        lineRow('Margen operacional normal', resumen.margen || data.margen, formatPercent(data.margen_porcentaje || 0), false),
+        lineRow('Precio venta normal', resumen.precioVenta || data.precio_venta, 'Costo bruto normal + margen operacional', true),
+        lineRow('Costo bruto HHEE', resumen.costoBrutoHhee, 'Total imponible + cotizaciones empresa', true),
+        lineRow('Margen operacional HHEE', resumen.margenHhee, formatPercent(data.margen_porcentaje || 0), false),
+        lineRow('Precio venta HHEE', resumen.precioVentaHhee, 'Base columna D para horas extra', true),
     ].join('');
 
     const horasRows = [
         hourRow('Hora normal', horas.normal ?? resumen.horaNormal, 'Precio venta / horas mensuales'),
-        hourRow('Hora normal HHEE', horas.normal_hhee, 'Base para cálculo de horas extra'),
+        hourRow('Hora normal HHEE', horas.normal_hhee ?? resumen.horaNormalHhee, `Base HHEE ${formatCLP(resumen.precioVentaHhee)} antes de recargos`),
         hourRow('Hora extra 50%', horas.extra_50 ?? resumen.horaExtra50, 'Hora normal HHEE x 1,5'),
         hourRow('Hora extra 100%', horas.extra_100 ?? resumen.horaExtra100, 'Hora normal HHEE x 2'),
     ].join('');
