@@ -145,6 +145,7 @@ class IntegradorGobiernoService
         $parametro = Parametro::where('clave', $clave)->first();
 
         if ($parametro) {
+            $valorAnterior = $parametro->valor;
             $parametro->valor_anterior = $parametro->valor;
             $parametro->version += 1;
             $parametro->valor = (string) $valor;
@@ -152,10 +153,25 @@ class IntegradorGobiernoService
             $parametro->descripcion = $descripcion ?: $parametro->descripcion;
             $parametro->save();
 
+            if ((string) $valorAnterior !== (string) $valor) {
+                $parametro->auditorias()->create([
+                    'usuario_id' => auth()->id(),
+                    'clave' => $parametro->clave,
+                    'nombre' => $parametro->nombre,
+                    'categoria' => $parametro->categoria,
+                    'valor_anterior' => $valorAnterior,
+                    'valor_nuevo' => (string) $valor,
+                    'origen' => 'api_gobierno',
+                    'descripcion' => $descripcion ?: "Actualización automática de {$parametro->nombre}",
+                    'ip_address' => request()?->ip(),
+                    'user_agent' => request()?->header('User-Agent'),
+                ]);
+            }
+
             return;
         }
 
-        Parametro::create([
+        $parametro = Parametro::create([
             'clave' => $clave,
             'nombre' => ucwords(str_replace('_', ' ', strtolower($clave))),
             'descripcion' => $descripcion,
@@ -165,6 +181,19 @@ class IntegradorGobiernoService
             'categoria' => 'GOBIERNO',
             'version' => 1,
             'actualizado_por' => auth()->id(),
+        ]);
+
+        $parametro->auditorias()->create([
+            'usuario_id' => auth()->id(),
+            'clave' => $parametro->clave,
+            'nombre' => $parametro->nombre,
+            'categoria' => $parametro->categoria,
+            'valor_anterior' => null,
+            'valor_nuevo' => (string) $valor,
+            'origen' => 'api_gobierno',
+            'descripcion' => $descripcion ?: "Creación automática de {$parametro->nombre}",
+            'ip_address' => request()?->ip(),
+            'user_agent' => request()?->header('User-Agent'),
         ]);
     }
 

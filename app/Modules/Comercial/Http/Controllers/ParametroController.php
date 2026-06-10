@@ -3,6 +3,7 @@
 namespace App\Modules\Comercial\Http\Controllers;
 
 use App\Modules\Comercial\Models\Parametro;
+use App\Modules\Comercial\Models\ParametroAuditoria;
 use App\Modules\Comercial\Services\IntegradorGobiernoService;
 use Illuminate\Http\Request;
 
@@ -20,7 +21,16 @@ class ParametroController
             ->latest('updated_at')
             ->first();
 
-        return view('comercial::mantenedor.parametros', compact('parametrosPorCategoria', 'ultimaActualizacion'));
+        $auditorias = ParametroAuditoria::with('usuario')
+            ->latest('created_at')
+            ->limit(80)
+            ->get();
+
+        return view('comercial::mantenedor.parametros', compact(
+            'parametrosPorCategoria',
+            'ultimaActualizacion',
+            'auditorias',
+        ));
     }
 
     public function update(Request $request)
@@ -53,7 +63,7 @@ class ParametroController
 
                 $parametro = Parametro::findOrFail($id);
                 if ($parametro->editable && (string) $valor !== (string) $parametro->valor) {
-                    $this->actualizarParametro($parametro, $valor);
+                    $this->actualizarParametro($parametro, $valor, $request->input('origen', 'mantenedor'));
                 }
             }
 
@@ -88,7 +98,7 @@ class ParametroController
         ]);
     }
 
-    private function actualizarParametro(Parametro $parametro, mixed $valor): void
+    private function actualizarParametro(Parametro $parametro, mixed $valor, string $origen = 'mantenedor'): void
     {
         if (! $parametro->editable) {
             throw new \InvalidArgumentException('Este parámetro no es editable.');
@@ -96,11 +106,25 @@ class ParametroController
 
         $this->validarValor($valor, $parametro->tipo);
 
+        $valorAnterior = $parametro->valor;
         $parametro->valor_anterior = $parametro->valor;
         $parametro->valor = (string) $valor;
         $parametro->version += 1;
         $parametro->actualizado_por = auth()->id();
         $parametro->save();
+
+        $parametro->auditorias()->create([
+            'usuario_id' => auth()->id(),
+            'clave' => $parametro->clave,
+            'nombre' => $parametro->nombre,
+            'categoria' => $parametro->categoria,
+            'valor_anterior' => $valorAnterior,
+            'valor_nuevo' => (string) $valor,
+            'origen' => $origen,
+            'descripcion' => "Cambio de {$parametro->nombre}",
+            'ip_address' => request()?->ip(),
+            'user_agent' => request()?->header('User-Agent'),
+        ]);
     }
 
     private function validarValor(mixed $valor, string $tipo): void

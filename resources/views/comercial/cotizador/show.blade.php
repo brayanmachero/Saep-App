@@ -227,7 +227,7 @@
     {{-- Auditoría --}}
     @if($cotizacion->auditorias->count() > 0)
     <div class="glass-card">
-        <h3 style="margin:0 0 1rem 0;font-size:1rem">Registro de Auditoría</h3>
+        <h3 style="margin:0 0 1rem 0;font-size:1rem">Bitácora de la Cotización</h3>
         <div style="overflow-x:auto">
             <table class="data-table">
                 <thead>
@@ -236,6 +236,8 @@
                         <th>Usuario</th>
                         <th>Fecha</th>
                         <th>Descripción</th>
+                        <th>Detalle</th>
+                        <th>IP</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -247,6 +249,20 @@
                         <td>{{ $auditoria->usuario->name ?? 'Sistema' }}</td>
                         <td style="font-size:.9rem">{{ $auditoria->created_at->format('d/m/Y H:i:s') }}</td>
                         <td style="font-size:.85rem;color:var(--text-muted)">{{ $auditoria->descripcion }}</td>
+                        <td style="font-size:.8rem;color:var(--text-muted);min-width:220px">
+                            @if($auditoria->cambios)
+                                @foreach($auditoria->cambios as $clave => $valor)
+                                    @if(is_scalar($valor) || $valor === null)
+                                        <div><strong>{{ str_replace('_', ' ', ucfirst($clave)) }}:</strong> {{ $valor ?? 'N/A' }}</div>
+                                    @elseif(is_array($valor))
+                                        <div><strong>{{ str_replace('_', ' ', ucfirst($clave)) }}:</strong> {{ count($valor) }} dato(s)</div>
+                                    @endif
+                                @endforeach
+                            @else
+                                —
+                            @endif
+                        </td>
+                        <td style="font-size:.8rem;color:var(--text-muted)">{{ $auditoria->ip_address ?? '—' }}</td>
                     </tr>
                     @endforeach
                 </tbody>

@@ -429,6 +429,7 @@ async function crearCentroRapido() {
 async function guardarParametrosRapidos() {
     const inputs = document.querySelectorAll('[data-parametro-quick]');
     const formData = new FormData();
+    formData.append('origen', 'cotizador_rapido');
 
     inputs.forEach((input) => {
         formData.append(`parametros[${input.dataset.parametroQuick}][valor]`, input.value);

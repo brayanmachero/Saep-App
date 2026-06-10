@@ -78,7 +78,17 @@ class CalculadoraCotizacionService
         $cotizacion->auditorias()->create([
             'usuario_id' => auth()->id(),
             'accion' => 'creada',
-            'descripcion' => 'Cotización creada',
+            'descripcion' => "Cotización {$cotizacion->numero} creada con precio venta $".number_format((float) $cotizacion->precio_venta, 0, ',', '.'),
+            'cambios' => [
+                'numero' => $cotizacion->numero,
+                'total_remuneraciones' => $cotizacion->total_remuneraciones,
+                'total_cotizaciones' => $cotizacion->total_cotizaciones,
+                'total_provisiones' => $cotizacion->total_provisiones,
+                'total_gastos' => $cotizacion->total_gastos,
+                'subtotal' => $cotizacion->subtotal,
+                'margen' => $cotizacion->margen,
+                'precio_venta' => $cotizacion->precio_venta,
+            ],
             'ip_address' => request()->ip(),
             'user_agent' => request()->header('User-Agent'),
         ]);

@@ -326,6 +326,11 @@ class CotizacionController
 
     public function generatePdf(Cotizacion $cotizacion)
     {
+        $this->registrarAuditoria($cotizacion, 'pdf_generado', 'PDF de cotización generado/descargado', [
+            'numero' => $cotizacion->numero,
+            'precio_venta' => $cotizacion->precio_venta,
+        ]);
+
         return $this->generadorPDF->descargar($cotizacion);
     }
 

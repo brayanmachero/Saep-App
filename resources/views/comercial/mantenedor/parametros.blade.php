@@ -205,7 +205,58 @@
 
         <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--surface-border);background:var(--bg-tertiary);padding:1rem;border-radius:.5rem;font-size:.85rem">
             <i class="bi bi-info-circle"></i>
-            <strong>Nota:</strong> Todos los cambios son registrados automáticamente en la auditoría del sistema. Cada parámetro mantiene su historial de versiones para poder rastrear cambios anteriores.
+            <strong>Nota:</strong> Todos los cambios quedan registrados en la bitácora inferior con usuario, fecha, origen y valores modificados.
+        </div>
+    </div>
+
+    <div class="glass-card" style="margin-top:2rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
+            <h3 style="margin:0;font-size:1rem;display:flex;align-items:center;gap:.5rem">
+                <i class="bi bi-journal-text"></i> Bitácora de Cambios de Parámetros
+            </h3>
+            <span class="badge badge-info">{{ $auditorias->count() }} últimos registros</span>
+        </div>
+
+        <div style="overflow-x:auto">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Usuario</th>
+                        <th>Parámetro</th>
+                        <th>Antes</th>
+                        <th>Después</th>
+                        <th>Origen</th>
+                        <th>IP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($auditorias as $auditoria)
+                    <tr>
+                        <td style="font-size:.85rem;white-space:nowrap">{{ $auditoria->created_at?->format('d/m/Y H:i:s') }}</td>
+                        <td>{{ $auditoria->usuario?->name ?? 'Sistema' }}</td>
+                        <td>
+                            <strong>{{ $auditoria->nombre }}</strong>
+                            <div style="font-size:.75rem;color:var(--text-muted)">{{ $auditoria->clave }} · {{ $auditoria->categoria }}</div>
+                        </td>
+                        <td><code style="font-size:.8rem">{{ $auditoria->valor_anterior ?? 'N/A' }}</code></td>
+                        <td><code style="font-size:.8rem">{{ $auditoria->valor_nuevo ?? 'N/A' }}</code></td>
+                        <td>
+                            <span class="badge {{ $auditoria->origen === 'api_gobierno' ? 'badge-info' : ($auditoria->origen === 'cotizador_rapido' ? 'badge-warning' : 'badge-success') }}">
+                                {{ ucfirst(str_replace('_', ' ', $auditoria->origen)) }}
+                            </span>
+                        </td>
+                        <td style="font-size:.8rem;color:var(--text-muted)">{{ $auditoria->ip_address ?? '—' }}</td>
+                    </tr>
+                    @empty
+                    <tr>
+                        <td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">
+                            Aún no hay cambios registrados en parámetros.
+                        </td>
+                    </tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

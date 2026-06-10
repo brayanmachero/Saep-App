@@ -4,6 +4,7 @@ namespace App\Modules\Comercial\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Parametro extends Model
@@ -39,6 +40,11 @@ class Parametro extends Model
     public function actualizadoPor(): BelongsTo
     {
         return $this->belongsTo(\App\Models\User::class, 'actualizado_por');
+    }
+
+    public function auditorias(): HasMany
+    {
+        return $this->hasMany(ParametroAuditoria::class);
     }
 
     /**
