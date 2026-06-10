@@ -114,6 +114,10 @@ class Parametro extends Model
 
     public function getUnidadVisualAttribute(): string
     {
+        if (strtoupper($this->clave) === 'UF') {
+            return 'UF';
+        }
+
         return match ($this->formato_visual) {
             'moneda' => '$',
             'porcentaje' => '%',

@@ -32,6 +32,52 @@
         font-size: .72rem;
         font-weight: 600;
     }
+
+    .param-category-layout {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+        gap: 1rem;
+        align-items: stretch;
+    }
+
+    .param-category-panel {
+        min-width: 0;
+        padding: .95rem;
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        background: var(--bg-tertiary);
+    }
+
+    .param-category-title {
+        margin: 0 0 .85rem;
+        color: var(--text-muted);
+        font-size: .76rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+
+    .param-field-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: .85rem;
+        align-items: stretch;
+    }
+
+    .param-field-card {
+        min-width: 0;
+        height: 100%;
+        padding: .85rem;
+        border: 1px solid var(--surface-border);
+        border-radius: 8px;
+        background: var(--surface-color);
+    }
+
+    @media (max-width: 720px) {
+        .param-category-layout,
+        .param-field-grid {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 @endpush
 @section('content')
@@ -49,12 +95,14 @@
         @csrf
         @php
             $valorParametro = fn($parametro) => $parametro->formatearValorVisual(old('parametros.' . $parametro->id . '.valor', $parametro->valor));
-            $hintParametro = fn($parametro) => match($parametro->formato_visual) {
-                'moneda' => 'Monto con separador de miles',
-                'porcentaje' => 'Valor porcentual',
-                'entero' => 'Número entero',
-                default => 'Número decimal',
-            };
+            $hintParametro = fn($parametro) => strtoupper($parametro->clave) === 'UF'
+                ? 'Valor UF con decimales'
+                : match($parametro->formato_visual) {
+                    'moneda' => 'Monto con separador de miles',
+                    'porcentaje' => 'Valor porcentual',
+                    'entero' => 'Número entero',
+                    default => 'Número decimal',
+                };
         @endphp
 
         {{-- Parámetros de Gobierno (UF, Sueldo Mínimo, IPC) --}}
@@ -140,29 +188,33 @@
                 <i class="bi bi-shield-check" style="color:var(--danger-color)"></i> Tasas de Cotizaciones (ISES)
             </h3>
 
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem">
+            <div class="param-category-layout">
                 @php($categoriasTasas = $parametrosPorCategoria->filter(fn($items, $categoria) => str_starts_with((string) $categoria, 'TASAS')))
                 @foreach($categoriasTasas as $categoria => $items)
-                    <div style="grid-column:1/-1;font-size:.8rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;margin-top:.25rem">{{ str_replace('_', ' ', $categoria) }}</div>
-                    @foreach($items as $parametro)
-                <div style="background:var(--bg-tertiary);padding:1rem;border-radius:.5rem">
-                    <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.75rem">
-                        {{ $parametro->nombre }}
-                    </label>
-                    <div class="param-value-wrap">
-                        <input type="text" name="parametros[{{ $parametro->id }}][valor]"
-                               value="{{ $valorParametro($parametro) }}"
-                               class="form-control" placeholder="0" inputmode="decimal"
-                               data-param-format="{{ $parametro->formato_visual }}"
-                               @if(!$parametro->editable) disabled @endif>
-                        <span class="param-unit">{{ $parametro->unidad_visual }}</span>
+                    <div class="param-category-panel">
+                        <div class="param-category-title">{{ str_replace('_', ' ', $categoria) }}</div>
+                        <div class="param-field-grid">
+                            @foreach($items as $parametro)
+                            <div class="param-field-card">
+                                <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.75rem">
+                                    {{ $parametro->nombre }}
+                                </label>
+                                <div class="param-value-wrap">
+                                    <input type="text" name="parametros[{{ $parametro->id }}][valor]"
+                                           value="{{ $valorParametro($parametro) }}"
+                                           class="form-control" placeholder="0" inputmode="decimal"
+                                           data-param-format="{{ $parametro->formato_visual }}"
+                                           @if(!$parametro->editable) disabled @endif>
+                                    <span class="param-unit">{{ $parametro->unidad_visual }}</span>
+                                </div>
+                                <div class="param-format-hint">{{ $hintParametro($parametro) }}</div>
+                                <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem">
+                                    {{ $parametro->descripcion }}
+                                </div>
+                            </div>
+                            @endforeach
+                        </div>
                     </div>
-                    <div class="param-format-hint">{{ $hintParametro($parametro) }}</div>
-                    <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem">
-                        {{ $parametro->descripcion }}
-                    </div>
-                </div>
-                    @endforeach
                 @endforeach
             </div>
         </div>
@@ -173,29 +225,33 @@
                 <i class="bi bi-sliders" style="color:var(--accent-primary)"></i> Fórmulas y Horas
             </h3>
 
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem">
+            <div class="param-category-layout">
                 @php($categoriasFormula = $parametrosPorCategoria->filter(fn($items, $categoria) => in_array((string) $categoria, ['FORMULAS', 'FORMULAS_EST', 'FORMULAS_SUB', 'HORAS'], true)))
                 @foreach($categoriasFormula as $categoria => $items)
-                    <div style="grid-column:1/-1;font-size:.8rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;margin-top:.25rem">{{ str_replace('_', ' ', $categoria) }}</div>
-                    @foreach($items as $parametro)
-                    <div style="background:var(--bg-tertiary);padding:1rem;border-radius:.5rem">
-                        <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.75rem">
-                            {{ $parametro->nombre }}
-                        </label>
-                        <div class="param-value-wrap">
-                            <input type="text" name="parametros[{{ $parametro->id }}][valor]"
-                                   value="{{ $valorParametro($parametro) }}"
-                                   class="form-control" placeholder="0" inputmode="decimal"
-                                   data-param-format="{{ $parametro->formato_visual }}"
-                                   @if(!$parametro->editable) disabled @endif>
-                            <span class="param-unit">{{ $parametro->unidad_visual }}</span>
-                        </div>
-                        <div class="param-format-hint">{{ $hintParametro($parametro) }}</div>
-                        <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem">
-                            {{ $parametro->descripcion }}
+                    <div class="param-category-panel">
+                        <div class="param-category-title">{{ str_replace('_', ' ', $categoria) }}</div>
+                        <div class="param-field-grid">
+                            @foreach($items as $parametro)
+                            <div class="param-field-card">
+                                <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.75rem">
+                                    {{ $parametro->nombre }}
+                                </label>
+                                <div class="param-value-wrap">
+                                    <input type="text" name="parametros[{{ $parametro->id }}][valor]"
+                                           value="{{ $valorParametro($parametro) }}"
+                                           class="form-control" placeholder="0" inputmode="decimal"
+                                           data-param-format="{{ $parametro->formato_visual }}"
+                                           @if(!$parametro->editable) disabled @endif>
+                                    <span class="param-unit">{{ $parametro->unidad_visual }}</span>
+                                </div>
+                                <div class="param-format-hint">{{ $hintParametro($parametro) }}</div>
+                                <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem">
+                                    {{ $parametro->descripcion }}
+                                </div>
+                            </div>
+                            @endforeach
                         </div>
                     </div>
-                    @endforeach
                 @endforeach
             </div>
         </div>
