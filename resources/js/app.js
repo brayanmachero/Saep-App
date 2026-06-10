@@ -8,8 +8,63 @@ document.addEventListener('DOMContentLoaded', () => {
     const overlay  = document.getElementById('sidebar-overlay');
     const mobileMenuTrigger = document.getElementById('mobile-menu-trigger');
     const mobileNavMenuBtn = document.getElementById('mobile-nav-menu-btn');
+    const sidebarNav = sidebar?.querySelector('.sidebar-nav');
 
     const isMobile = () => window.innerWidth < 768;
+
+    if (sidebarNav) {
+        const sidebarScrollKey = 'saep_sidebar_scroll';
+        let saveQueued = false;
+
+        const saveSidebarScroll = () => {
+            sessionStorage.setItem(sidebarScrollKey, String(sidebarNav.scrollTop));
+        };
+
+        const keepActiveItemVisible = () => {
+            const activeItem = sidebarNav.querySelector('.nav-item.active');
+            if (!activeItem) return;
+
+            const buffer = 16;
+            const navTop = sidebarNav.scrollTop;
+            const navBottom = navTop + sidebarNav.clientHeight;
+            const itemTop = activeItem.offsetTop;
+            const itemBottom = itemTop + activeItem.offsetHeight;
+            const isVisible = itemTop >= navTop + buffer && itemBottom <= navBottom - buffer;
+
+            if (!isVisible) {
+                sidebarNav.scrollTop = Math.max(
+                    itemTop - (sidebarNav.clientHeight / 2) + (activeItem.offsetHeight / 2),
+                    0,
+                );
+            }
+        };
+
+        const restoreSidebarScroll = () => {
+            const saved = Number(sessionStorage.getItem(sidebarScrollKey));
+            if (Number.isFinite(saved) && saved > 0) {
+                sidebarNav.scrollTop = saved;
+            }
+
+            keepActiveItemVisible();
+            saveSidebarScroll();
+        };
+
+        requestAnimationFrame(restoreSidebarScroll);
+
+        sidebarNav.addEventListener('scroll', () => {
+            if (saveQueued) return;
+            saveQueued = true;
+
+            requestAnimationFrame(() => {
+                saveSidebarScroll();
+                saveQueued = false;
+            });
+        }, { passive: true });
+
+        sidebarNav.querySelectorAll('a.nav-item').forEach((link) => {
+            link.addEventListener('click', saveSidebarScroll);
+        });
+    }
 
     // Show/hide mobile hamburger button
     function updateMobileUI() {
