@@ -5,6 +5,7 @@ namespace App\Modules\Comercial\Http\Controllers;
 use App\Modules\Comercial\Models\CentroCosto;
 use App\Modules\Comercial\Models\Cliente;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class CentroCostoController
 {
@@ -13,7 +14,10 @@ class CentroCostoController
      */
     public function index()
     {
-        $centrosCosto = CentroCosto::with('cliente')->paginate(20);
+        $centrosCosto = CentroCosto::with('cliente')
+            ->orderBy('nombre')
+            ->paginate(20);
+
         return view('comercial::centros-costo.index', compact('centrosCosto'));
     }
 
@@ -32,17 +36,31 @@ class CentroCostoController
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'cliente_id' => 'required|exists:comercial_clientes,id',
-            'nombre' => 'required|string',
-            'codigo' => 'required|unique:comercial_centros_costo,codigo',
-            'descripcion' => 'nullable|string',
-            'ubicacion' => 'nullable|string',
-            'responsable' => 'nullable|string',
-            'email_responsable' => 'nullable|email',
-            'estado' => 'nullable|in:activo,inactivo',
+            'cliente_id' => ['required', 'exists:comercial_clientes,id'],
+            'nombre' => ['required', 'string', 'max:180'],
+            'codigo' => ['nullable', 'string', 'max:80', Rule::unique('comercial_centros_costo', 'codigo')],
+            'descripcion' => ['nullable', 'string', 'max:500'],
+            'ubicacion' => ['nullable', 'string', 'max:180'],
+            'responsable' => ['nullable', 'string', 'max:180'],
+            'email_responsable' => ['nullable', 'email', 'max:180'],
+            'estado' => ['nullable', 'in:activo,inactivo'],
         ]);
 
-        CentroCosto::create($validated);
+        $validated['estado'] ??= 'activo';
+        $centro = CentroCosto::create($validated);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'centro_costo' => [
+                    'id' => $centro->id,
+                    'cliente_id' => $centro->cliente_id,
+                    'nombre' => $centro->nombre,
+                    'codigo' => $centro->codigo,
+                    'label' => $centro->nombre,
+                ],
+            ], 201);
+        }
 
         return redirect()->route('comercial.centros-costo.index')
             ->with('success', 'Centro de costo creado');
@@ -72,14 +90,14 @@ class CentroCostoController
     public function update(Request $request, CentroCosto $centroCosto)
     {
         $validated = $request->validate([
-            'cliente_id' => 'required|exists:comercial_clientes,id',
-            'nombre' => 'required|string',
-            'codigo' => "required|unique:comercial_centros_costo,codigo,{$centroCosto->id}",
-            'descripcion' => 'nullable|string',
-            'ubicacion' => 'nullable|string',
-            'responsable' => 'nullable|string',
-            'email_responsable' => 'nullable|email',
-            'estado' => 'nullable|in:activo,inactivo',
+            'cliente_id' => ['required', 'exists:comercial_clientes,id'],
+            'nombre' => ['required', 'string', 'max:180'],
+            'codigo' => ['nullable', 'string', 'max:80', Rule::unique('comercial_centros_costo', 'codigo')->ignore($centroCosto->id)],
+            'descripcion' => ['nullable', 'string', 'max:500'],
+            'ubicacion' => ['nullable', 'string', 'max:180'],
+            'responsable' => ['nullable', 'string', 'max:180'],
+            'email_responsable' => ['nullable', 'email', 'max:180'],
+            'estado' => ['nullable', 'in:activo,inactivo'],
         ]);
 
         $centroCosto->update($validated);

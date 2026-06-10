@@ -57,8 +57,22 @@ class ParametroController
                 }
             }
 
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Parámetros actualizados exitosamente.',
+                ]);
+            }
+
             return back()->with('success', 'Parámetros actualizados exitosamente.');
         } catch (\Throwable $e) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
             return back()->with('error', 'Error: '.$e->getMessage());
         }
     }

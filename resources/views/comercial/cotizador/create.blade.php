@@ -42,23 +42,51 @@
 
                 <div class="form-group">
                     <label>Cliente <span class="required">*</span></label>
-                    <select name="cliente_id" id="clienteSelect" class="form-control @error('cliente_id') is-invalid @enderror" required onchange="cargarCentrosCosto()">
-                        <option value="">-- Seleccionar Cliente --</option>
-                        @foreach($clientes as $cliente)
-                        <option value="{{ $cliente->id }}" {{ old('cliente_id') == $cliente->id ? 'selected' : '' }}>
-                            {{ $cliente->nombre_comercial ?? $cliente->nombre }} ({{ $cliente->rut }})
-                        </option>
-                        @endforeach
-                    </select>
+                    <div style="display:flex;gap:.5rem">
+                        <select name="cliente_id" id="clienteSelect" class="form-control @error('cliente_id') is-invalid @enderror" required onchange="cargarCentrosCosto()">
+                            <option value="">-- Seleccionar Cliente --</option>
+                            @foreach($clientes as $cliente)
+                            <option value="{{ $cliente->id }}" {{ old('cliente_id') == $cliente->id ? 'selected' : '' }}>
+                                {{ $cliente->nombre_comercial ?? $cliente->nombre }}
+                            </option>
+                            @endforeach
+                        </select>
+                        <button type="button" class="icon-btn" onclick="toggleQuickBox('quickClienteBox')" title="Crear cliente">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
                     @error('cliente_id')<span class="form-error">{{ $message }}</span>@enderror
+                    <div id="quickClienteBox" style="display:none;margin-top:.65rem;padding:.75rem;border:1px solid var(--surface-border);border-radius:8px;background:var(--bg-tertiary)">
+                        <div style="display:flex;gap:.5rem">
+                            <input type="text" id="quickClienteNombre" class="form-control" placeholder="Nombre cliente">
+                            <button type="button" class="btn-secondary" onclick="crearClienteRapido()">
+                                <i class="bi bi-check-lg"></i> Guardar
+                            </button>
+                        </div>
+                        <div id="quickClienteStatus" style="font-size:.78rem;color:var(--text-muted);margin-top:.4rem"></div>
+                    </div>
                 </div>
 
                 <div class="form-group">
                     <label>Centro de Costo <span class="required">*</span></label>
-                    <select name="centro_costo_id" id="centroCostoSelect" class="form-control @error('centro_costo_id') is-invalid @enderror" required>
-                        <option value="">-- Seleccionar Centro --</option>
-                    </select>
+                    <div style="display:flex;gap:.5rem">
+                        <select name="centro_costo_id" id="centroCostoSelect" class="form-control @error('centro_costo_id') is-invalid @enderror" required>
+                            <option value="">-- Seleccionar Centro --</option>
+                        </select>
+                        <button type="button" class="icon-btn" onclick="toggleQuickBox('quickCentroBox')" title="Crear centro de costo">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
                     @error('centro_costo_id')<span class="form-error">{{ $message }}</span>@enderror
+                    <div id="quickCentroBox" style="display:none;margin-top:.65rem;padding:.75rem;border:1px solid var(--surface-border);border-radius:8px;background:var(--bg-tertiary)">
+                        <div style="display:flex;gap:.5rem">
+                            <input type="text" id="quickCentroNombre" class="form-control" placeholder="Nombre centro de costo">
+                            <button type="button" class="btn-secondary" onclick="crearCentroRapido()">
+                                <i class="bi bi-check-lg"></i> Guardar
+                            </button>
+                        </div>
+                        <div id="quickCentroStatus" style="font-size:.78rem;color:var(--text-muted);margin-top:.4rem"></div>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -80,6 +108,45 @@
                 <textarea name="observaciones" class="form-control" rows="3" placeholder="Notas o comentarios sobre esta cotización">{{ old('observaciones') }}</textarea>
             </div>
         </div>
+
+        @if(auth()->user()->tieneAcceso('comercial', 'puede_editar'))
+        <div class="glass-card" style="margin-bottom:1.5rem">
+            <details>
+                <summary style="cursor:pointer;font-weight:700;display:flex;align-items:center;gap:.5rem">
+                    <i class="bi bi-sliders" style="color:var(--accent-primary)"></i>
+                    Parámetros rápidos de cálculo
+                </summary>
+
+                <div style="margin-top:1rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.85rem">
+                    @foreach($parametrosPorCategoria as $categoria => $items)
+                        <div style="grid-column:1/-1;font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;margin-top:.25rem">
+                            {{ str_replace('_', ' ', $categoria) }}
+                        </div>
+                        @foreach($items as $parametro)
+                        <div style="background:var(--bg-tertiary);border:1px solid var(--surface-border);border-radius:8px;padding:.75rem">
+                            <label style="font-size:.78rem;font-weight:600;display:block;margin-bottom:.4rem">
+                                {{ $parametro->nombre }}
+                            </label>
+                            <input type="number"
+                                   value="{{ $parametro->valor }}"
+                                   class="form-control"
+                                   style="height:38px"
+                                   step="{{ $parametro->tipo === 'integer' ? '1' : '0.000001' }}"
+                                   data-parametro-quick="{{ $parametro->id }}">
+                        </div>
+                        @endforeach
+                    @endforeach
+                </div>
+
+                <div style="display:flex;gap:.75rem;justify-content:flex-end;align-items:center;margin-top:1rem">
+                    <span id="quickParametrosStatus" style="font-size:.8rem;color:var(--text-muted)"></span>
+                    <button type="button" class="btn-secondary" onclick="guardarParametrosRapidos()">
+                        <i class="bi bi-save"></i> Guardar parámetros
+                    </button>
+                </div>
+            </details>
+        </div>
+        @endif
 
         {{-- Sección de Remuneraciones --}}
         <div class="glass-card" style="margin-bottom:1.5rem">
@@ -240,12 +307,158 @@
 const centrosCostoData = {!! json_encode($centrosCostoAgrupados ?? []) !!};
 const selectedCentroCostoId = @json(old('centro_costo_id'));
 const previewUrl = @json(route('comercial.cotizaciones.preview'));
+const quickClienteUrl = @json(route('comercial.clientes.store'));
+const quickCentroUrl = @json(route('comercial.centros-costo.store'));
+const parametrosBatchUrl = @json(route('comercial.parametros.batch-update'));
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+const sueldoMinimoLegal = Number(@json($sueldoMinimoLegal ?? 0));
 const clpFormatter = new Intl.NumberFormat('es-CL', {
     style: 'currency',
     currency: 'CLP',
     maximumFractionDigits: 0
 });
 let previewTimer = null;
+
+function toggleQuickBox(id) {
+    const box = document.getElementById(id);
+    if (box) {
+        box.style.display = box.style.display === 'none' || !box.style.display ? 'block' : 'none';
+    }
+}
+
+function setStatus(id, message, type = 'info') {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const colors = { info: 'var(--text-muted)', success: 'var(--success-color)', error: 'var(--danger-color)' };
+    el.style.color = colors[type] || colors.info;
+    el.textContent = message;
+}
+
+async function postForm(url, payload) {
+    const formData = new FormData();
+    Object.entries(payload).forEach(([key, value]) => formData.append(key, value));
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: formData,
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        const firstError = data.errors ? Object.values(data.errors).flat()[0] : null;
+        throw new Error(firstError || data.message || 'No fue posible guardar.');
+    }
+
+    return data;
+}
+
+function appendOption(select, value, label) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    option.selected = true;
+    select.appendChild(option);
+}
+
+async function crearClienteRapido() {
+    const input = document.getElementById('quickClienteNombre');
+    const nombre = input.value.trim();
+
+    if (!nombre) {
+        setStatus('quickClienteStatus', 'Ingresa un nombre de cliente.', 'error');
+        input.focus();
+        return;
+    }
+
+    setStatus('quickClienteStatus', 'Guardando...');
+
+    try {
+        const data = await postForm(quickClienteUrl, { nombre });
+        const select = document.getElementById('clienteSelect');
+        appendOption(select, data.cliente.id, data.cliente.label);
+        centrosCostoData[data.cliente.id] = [];
+        cargarCentrosCosto();
+        input.value = '';
+        setStatus('quickClienteStatus', 'Cliente creado.', 'success');
+        if (typeof showToast === 'function') showToast('Cliente creado.', 'success');
+    } catch (error) {
+        setStatus('quickClienteStatus', error.message, 'error');
+    }
+}
+
+async function crearCentroRapido() {
+    const clienteId = document.getElementById('clienteSelect').value;
+    const input = document.getElementById('quickCentroNombre');
+    const nombre = input.value.trim();
+
+    if (!clienteId) {
+        setStatus('quickCentroStatus', 'Selecciona o crea un cliente.', 'error');
+        return;
+    }
+
+    if (!nombre) {
+        setStatus('quickCentroStatus', 'Ingresa un nombre de centro.', 'error');
+        input.focus();
+        return;
+    }
+
+    setStatus('quickCentroStatus', 'Guardando...');
+
+    try {
+        const data = await postForm(quickCentroUrl, { cliente_id: clienteId, nombre });
+        const centro = data.centro_costo;
+        centrosCostoData[clienteId] = centrosCostoData[clienteId] || [];
+        centrosCostoData[clienteId].push(centro);
+        cargarCentrosCosto();
+        document.getElementById('centroCostoSelect').value = String(centro.id);
+        input.value = '';
+        setStatus('quickCentroStatus', 'Centro creado.', 'success');
+        if (typeof showToast === 'function') showToast('Centro de costo creado.', 'success');
+    } catch (error) {
+        setStatus('quickCentroStatus', error.message, 'error');
+    }
+}
+
+async function guardarParametrosRapidos() {
+    const inputs = document.querySelectorAll('[data-parametro-quick]');
+    const formData = new FormData();
+
+    inputs.forEach((input) => {
+        formData.append(`parametros[${input.dataset.parametroQuick}][valor]`, input.value);
+    });
+
+    setStatus('quickParametrosStatus', 'Guardando...');
+
+    try {
+        const response = await fetch(parametrosBatchUrl, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: formData,
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.message || 'No fue posible guardar parámetros.');
+        }
+
+        setStatus('quickParametrosStatus', data.message || 'Parámetros guardados.', 'success');
+        if (typeof showToast === 'function') showToast('Parámetros comerciales guardados.', 'success');
+        actualizarCalculos();
+    } catch (error) {
+        setStatus('quickParametrosStatus', error.message, 'error');
+    }
+}
 
 function cargarCentrosCosto() {
     const clienteId = document.getElementById('clienteSelect').value;
@@ -256,7 +469,7 @@ function cargarCentrosCosto() {
         centrosCostoData[clienteId].forEach(cc => {
             const opt = document.createElement('option');
             opt.value = cc.id;
-            opt.textContent = cc.nombre + ' (' + cc.codigo + ')';
+            opt.textContent = cc.codigo ? cc.nombre + ' (' + cc.codigo + ')' : cc.nombre;
             if (String(cc.id) === String(selectedCentroCostoId)) {
                 opt.selected = true;
             }
@@ -395,7 +608,7 @@ document.addEventListener('DOMContentLoaded', function() {
             agregarRemuneracion();
             const row = document.getElementById('remuneracionesTable').lastElementChild;
             row.querySelector('input[type="text"]').value = concepto;
-            row.querySelector('input[type="number"]').value = concepto === 'Sueldo Base' ? '' : 0;
+            row.querySelector('input[type="number"]').value = concepto === 'Sueldo Base' ? (sueldoMinimoLegal || '') : 0;
         });
     }
     actualizarCalculos();

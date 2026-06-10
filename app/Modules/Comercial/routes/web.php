@@ -30,6 +30,7 @@ Route::middleware(['auth', 'consentimiento', 'force.password', 'modulo:comercial
     // Clientes
     Route::get('clientes', [ClienteController::class, 'index'])->name('clientes.index');
     Route::get('clientes/create', [ClienteController::class, 'create'])->middleware('modulo:comercial,puede_crear')->name('clientes.create');
+    Route::post('clientes/importar', [ClienteController::class, 'importar'])->middleware('modulo:comercial,puede_crear')->name('clientes.importar');
     Route::post('clientes', [ClienteController::class, 'store'])->middleware('modulo:comercial,puede_crear')->name('clientes.store');
     Route::get('clientes/{cliente}', [ClienteController::class, 'show'])->name('clientes.show');
     Route::get('clientes/{cliente}/edit', [ClienteController::class, 'edit'])->middleware('modulo:comercial,puede_editar')->name('clientes.edit');

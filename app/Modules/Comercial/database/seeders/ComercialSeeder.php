@@ -43,7 +43,7 @@ class ComercialSeeder extends Seeder
     {
         return [
             ['clave' => 'UF', 'nombre' => 'Unidad de Fomento', 'descripcion' => 'Valor vigente de UF. Se puede actualizar por integración configurada.', 'valor' => '0', 'tipo' => 'decimal', 'editable' => true, 'categoria' => 'GOBIERNO', 'version' => 1],
-            ['clave' => 'SUELDO_MINIMO', 'nombre' => 'Sueldo Mínimo Legal', 'descripcion' => 'Valor legal vigente usado para análisis y reajustes. Sin API oficial configurada queda editable.', 'valor' => '0', 'tipo' => 'integer', 'editable' => true, 'categoria' => 'GOBIERNO', 'version' => 1],
+            ['clave' => 'SUELDO_MINIMO', 'nombre' => 'Sueldo Mínimo Legal', 'descripcion' => 'Ingreso mínimo mensual vigente desde 01-01-2026 para trabajadores mayores de 18 y hasta 65 años. Sin API oficial configurada queda editable.', 'valor' => '539000', 'tipo' => 'integer', 'editable' => true, 'categoria' => 'GOBIERNO', 'version' => 1],
             ['clave' => 'IPC', 'nombre' => 'IPC Mensual', 'descripcion' => 'Variación mensual IPC usada para reajustes comerciales.', 'valor' => '0', 'tipo' => 'decimal', 'editable' => true, 'categoria' => 'GOBIERNO', 'version' => 1],
 
             ['clave' => 'GRATIFICACION_TOPE', 'nombre' => 'Tope Gratificación', 'descripcion' => 'Tope aplicado a gratificación legal de la planilla.', 'valor' => '209396', 'tipo' => 'decimal', 'editable' => true, 'categoria' => 'FORMULAS', 'version' => 1],

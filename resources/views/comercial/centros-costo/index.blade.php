@@ -19,10 +19,8 @@
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Código</th>
-                        <th>Nombre</th>
+                        <th>Centro de Costo</th>
                         <th>Cliente</th>
-                        <th>Responsable</th>
                         <th>Estado</th>
                         <th>Acciones</th>
                     </tr>
@@ -30,21 +28,18 @@
                 <tbody>
                     @forelse($centrosCosto as $centro)
                     <tr>
-                        <td><code>{{ $centro->codigo }}</code></td>
                         <td><strong>{{ $centro->nombre }}</strong></td>
                         <td>{{ $centro->cliente?->nombre_comercial ?? $centro->cliente?->nombre }}</td>
-                        <td>{{ $centro->responsable ?? '—' }}</td>
                         <td><span class="badge {{ $centro->estado === 'activo' ? 'badge-success' : 'badge-danger' }}">{{ ucfirst($centro->estado) }}</span></td>
                         <td>
                             <div style="display:flex;gap:.25rem">
-                                <a href="{{ route('comercial.centros-costo.show', $centro) }}" class="icon-btn" title="Ver"><i class="bi bi-eye-fill"></i></a>
                                 <a href="{{ route('comercial.centros-costo.edit', $centro) }}" class="icon-btn" title="Editar"><i class="bi bi-pencil-fill"></i></a>
                             </div>
                         </td>
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">No hay centros de costo comerciales registrados.</td>
+                        <td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">No hay centros de costo comerciales registrados.</td>
                     </tr>
                     @endforelse
                 </tbody>

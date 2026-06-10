@@ -6,6 +6,7 @@ use App\Modules\Comercial\Models\CentroCosto;
 use App\Modules\Comercial\Models\Cliente;
 use App\Modules\Comercial\Models\Cotizacion;
 use App\Modules\Comercial\Models\Modalidad;
+use App\Modules\Comercial\Models\Parametro;
 use App\Modules\Comercial\Services\CalculadoraCotizacionService;
 use App\Modules\Comercial\Services\GeneradorPDFService;
 use Illuminate\Http\Request;
@@ -44,6 +45,12 @@ class CotizacionController
     {
         $clientes = Cliente::activos()->orderBy('nombre')->get();
         $modalidades = Modalidad::activas()->orderBy('codigo')->get();
+        $parametrosPorCategoria = Parametro::editables()
+            ->orderBy('categoria')
+            ->orderBy('nombre')
+            ->get()
+            ->groupBy('categoria');
+        $sueldoMinimoLegal = Parametro::valor('SUELDO_MINIMO', 0);
         $centrosCostoAgrupados = CentroCosto::activos()
             ->orderBy('nombre')
             ->get(['id', 'cliente_id', 'nombre', 'codigo'])
@@ -51,7 +58,13 @@ class CotizacionController
             ->map(fn ($items) => $items->values())
             ->toArray();
 
-        return view('comercial::cotizador.create', compact('clientes', 'modalidades', 'centrosCostoAgrupados'));
+        return view('comercial::cotizador.create', compact(
+            'clientes',
+            'modalidades',
+            'centrosCostoAgrupados',
+            'parametrosPorCategoria',
+            'sueldoMinimoLegal',
+        ));
     }
 
     public function store(Request $request)
