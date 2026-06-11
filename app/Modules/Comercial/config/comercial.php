@@ -49,6 +49,14 @@ return [
         ],
     ],
 
+    'api' => [
+        'enabled' => env('COMERCIAL_API_ENABLED', true),
+        'token' => env('COMERCIAL_API_TOKEN'),
+        'allow_query_token' => env('COMERCIAL_API_ALLOW_QUERY_TOKEN', false),
+        'default_estados' => ['vigente', 'aprobada'],
+        'default_limit' => 500,
+    ],
+
     'pdf' => [
         'logo_path' => public_path('images/saep-logo.png'),
         'font_family' => 'Arial',

@@ -6,6 +6,21 @@ use App\Modules\Comercial\Http\Controllers\ClienteController;
 use App\Modules\Comercial\Http\Controllers\CentroCostoController;
 use App\Modules\Comercial\Http\Controllers\ParametroController;
 use App\Modules\Comercial\Http\Controllers\ReporteController;
+use App\Modules\Comercial\Http\Controllers\TarifaApiController;
+
+Route::prefix('comercial/api')
+    ->name('comercial.api.')
+    ->withoutMiddleware([
+        \Illuminate\Cookie\Middleware\EncryptCookies::class,
+        \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+        \Illuminate\Session\Middleware\StartSession::class,
+        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+        \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+    ])
+    ->group(function () {
+        Route::get('clientes', [TarifaApiController::class, 'clientes'])->name('clientes');
+        Route::get('tarifas-cotizadas', [TarifaApiController::class, 'tarifasCotizadas'])->name('tarifas-cotizadas');
+    });
 
 Route::middleware(['auth', 'consentimiento', 'force.password', 'modulo:comercial'])
     ->prefix('comercial')
