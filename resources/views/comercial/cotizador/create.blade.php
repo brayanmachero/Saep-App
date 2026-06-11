@@ -522,6 +522,36 @@
                     Uniformes y Equipos (Opcional)
                 </summary>
 
+                <div style="display:flex;gap:.75rem;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:1rem">
+                    <div style="font-size:.82rem;color:var(--text-muted)">
+                        Selecciona desde catálogo para traer el precio referencial o ingresa un ítem libre.
+                    </div>
+                    @if(auth()->user()->tieneAcceso('comercial', 'puede_editar'))
+                    <button type="button" class="btn-secondary" onclick="toggleQuickBox('quickUniformeBox')">
+                        <i class="bi bi-plus-lg"></i> Nuevo item catálogo
+                    </button>
+                    @endif
+                </div>
+
+                @if(auth()->user()->tieneAcceso('comercial', 'puede_editar'))
+                <div id="quickUniformeBox" style="display:none;margin-top:.65rem;padding:.75rem;border:1px solid var(--surface-border);border-radius:8px;background:var(--bg-tertiary)">
+                    <div style="display:grid;grid-template-columns:minmax(220px,1fr) minmax(160px,.7fr) auto;gap:.5rem;align-items:end">
+                        <div>
+                            <label style="font-size:.78rem;font-weight:700;margin-bottom:.35rem;display:block">Nombre item</label>
+                            <input type="text" id="quickUniformeNombre" class="form-control" placeholder="Ej: Guantes anticorte">
+                        </div>
+                        <div>
+                            <label style="font-size:.78rem;font-weight:700;margin-bottom:.35rem;display:block">Precio</label>
+                            <input type="text" id="quickUniformePrecio" class="form-control quote-money-input" placeholder="0" inputmode="numeric" data-money-input>
+                        </div>
+                        <button type="button" class="btn-secondary" onclick="crearUniformeCatalogoRapido()">
+                            <i class="bi bi-check-lg"></i> Guardar
+                        </button>
+                    </div>
+                    <div id="quickUniformeStatus" style="font-size:.78rem;color:var(--text-muted);margin-top:.4rem"></div>
+                </div>
+                @endif
+
                 <div style="overflow-x:auto;margin:1rem 0">
                     <table class="data-table" style="margin-bottom:1rem">
                         <thead>
@@ -588,6 +618,7 @@
 <script>
 const centrosCostoData = {!! json_encode($centrosCostoAgrupados ?? []) !!};
 const modalidadCodes = @json($modalidades->pluck('codigo', 'id'));
+let uniformesCatalogo = @json($uniformesCatalogo ?? []);
 const selectedCentroCostoId = @json(old('centro_costo_id'));
 const previewUrl = @json(route('comercial.cotizaciones.preview'));
 const quickClienteUrl = @json(route('comercial.clientes.store'));
@@ -774,6 +805,63 @@ async function guardarParametrosRapidos() {
         actualizarCalculos();
     } catch (error) {
         setStatus('quickParametrosStatus', error.message, 'error');
+    }
+}
+
+async function crearUniformeCatalogoRapido() {
+    const nombreInput = document.getElementById('quickUniformeNombre');
+    const precioInput = document.getElementById('quickUniformePrecio');
+    const nombre = nombreInput?.value.trim() || '';
+    const precio = parseMoney(precioInput?.value || '');
+
+    if (!nombre) {
+        setStatus('quickUniformeStatus', 'Ingresa el nombre del item.', 'error');
+        nombreInput?.focus();
+        return;
+    }
+
+    if (!precio) {
+        setStatus('quickUniformeStatus', 'Ingresa un precio referencial.', 'error');
+        precioInput?.focus();
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('origen', 'cotizador_rapido');
+    formData.append('uniformes_nuevos[0][nombre]', nombre);
+    formData.append('uniformes_nuevos[0][valor]', precio);
+
+    setStatus('quickUniformeStatus', 'Guardando...');
+
+    try {
+        const response = await fetch(parametrosBatchUrl, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: formData,
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.message || 'No fue posible crear el item.');
+        }
+
+        const item = data.uniformes?.[0];
+        if (item) {
+            uniformesCatalogo.push(item);
+            refreshUniformeCatalogoOptions();
+            agregarUniforme(item);
+        }
+
+        nombreInput.value = '';
+        precioInput.value = '';
+        setStatus('quickUniformeStatus', data.message || 'Item creado.', 'success');
+        if (typeof showToast === 'function') showToast('Item de uniforme creado.', 'success');
+    } catch (error) {
+        setStatus('quickUniformeStatus', error.message, 'error');
     }
 }
 
@@ -1080,19 +1168,50 @@ function actualizarUniformeFila(fila) {
     }
 }
 
-function agregarUniforme() {
+function uniformCatalogOptions(selectedId = '') {
+    return uniformesCatalogo.map((item) => {
+        const selected = String(item.id) === String(selectedId) ? 'selected' : '';
+        return `<option value="${escapeHtml(item.id)}" ${selected}>${escapeHtml(item.nombre)} - ${formatCLP(item.valor)}</option>`;
+    }).join('');
+}
+
+function refreshUniformeCatalogoOptions() {
+    document.querySelectorAll('[data-uniforme-catalogo]').forEach((select) => {
+        const currentValue = select.value;
+        select.innerHTML = `<option value="">-- Item libre / catálogo --</option>${uniformCatalogOptions(currentValue)}`;
+        select.value = String(currentValue || '');
+    });
+}
+
+function seleccionarUniformeCatalogo(select) {
+    const fila = select.closest('tr');
+    const item = uniformesCatalogo.find((uniforme) => String(uniforme.id) === String(select.value));
+    if (!fila || !item) return;
+
+    fila.querySelector('[name*="[descripcion]"]').value = item.nombre;
+    const precioInput = fila.querySelector('[name*="[precio_unitario]"]');
+    precioInput.value = formatMoneyValue(item.valor);
+    actualizarUniformeFila(fila);
+    schedulePreview();
+}
+
+function agregarUniforme(item = null) {
     const tabla = document.getElementById('uniformesTable');
     const fila = document.createElement('tr');
     const idx = tabla.children.length;
     fila.innerHTML = `
         <td>
-            <input type="text" name="uniformes[${idx}][descripcion]" class="form-control" placeholder="Ej: Casco de Seguridad">
+            <select class="form-control" style="margin-bottom:.45rem" data-uniforme-catalogo onchange="seleccionarUniformeCatalogo(this)">
+                <option value="">-- Item libre / catálogo --</option>
+                ${uniformCatalogOptions(item?.id)}
+            </select>
+            <input type="text" name="uniformes[${idx}][descripcion]" class="form-control" placeholder="Ej: Casco de Seguridad" value="${escapeHtml(item?.nombre || '')}">
         </td>
         <td>
             <input type="number" name="uniformes[${idx}][cantidad]" class="form-control" placeholder="0" min="0" value="1" oninput="actualizarUniformeFila(this.closest('tr'))" onchange="schedulePreview()">
         </td>
         <td>
-            <input type="text" name="uniformes[${idx}][precio_unitario]" class="form-control quote-money-input" placeholder="0" inputmode="numeric" data-money-input>
+            <input type="text" name="uniformes[${idx}][precio_unitario]" class="form-control quote-money-input" placeholder="0" inputmode="numeric" data-money-input value="${item?.valor ? formatMoneyValue(item.valor) : ''}">
         </td>
         <td>
             <input type="text" class="form-control quote-money-input" data-uniforme-total disabled placeholder="Total">

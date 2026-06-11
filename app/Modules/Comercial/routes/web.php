@@ -22,6 +22,7 @@ Route::middleware(['auth', 'consentimiento', 'force.password', 'modulo:comercial
     Route::delete('cotizaciones/{cotizacion}', [CotizacionController::class, 'destroy'])->middleware('modulo:comercial,puede_eliminar')->name('cotizaciones.destroy');
     Route::patch('cotizaciones/{cotizacion}/aprobar', [CotizacionController::class, 'aprobar'])->middleware('modulo:comercial,puede_editar')->name('cotizaciones.aprobar');
     Route::patch('cotizaciones/{cotizacion}/hacer-vigente', [CotizacionController::class, 'hacerVigente'])->middleware('modulo:comercial,puede_editar')->name('cotizaciones.hacer-vigente');
+    Route::patch('cotizaciones/{cotizacion}/rechazar', [CotizacionController::class, 'rechazar'])->middleware('modulo:comercial,puede_editar')->name('cotizaciones.rechazar');
     Route::patch('cotizaciones/{cotizacion}/cancelar', [CotizacionController::class, 'cancelar'])->middleware('modulo:comercial,puede_editar')->name('cotizaciones.cancelar');
     Route::get('cotizaciones/{cotizacion}/historico', [CotizacionController::class, 'historico'])->name('cotizaciones.historico');
     Route::post('cotizaciones/{cotizacion}/enviar-email', [CotizacionController::class, 'enviarEmail'])->middleware('modulo:comercial,puede_editar')->name('cotizaciones.enviar-email');

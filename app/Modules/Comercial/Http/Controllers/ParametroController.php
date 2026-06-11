@@ -56,7 +56,7 @@ class ParametroController
     {
         $parametros = $request->input('parametros', []);
         $uniformesNuevos = $request->input('uniformes_nuevos', []);
-        $uniformesCreados = 0;
+        $uniformesCreados = [];
 
         try {
             DB::transaction(function () use ($request, $parametros, $uniformesNuevos, &$uniformesCreados) {
@@ -75,14 +75,16 @@ class ParametroController
                 $uniformesCreados = $this->crearUniformes($uniformesNuevos, $request->input('origen', 'mantenedor'));
             });
 
-            $message = $uniformesCreados > 0
-                ? 'Parámetros actualizados y '.$uniformesCreados.' uniforme'.($uniformesCreados === 1 ? '' : 's').' agregado'.($uniformesCreados === 1 ? '' : 's').' exitosamente.'
+            $totalUniformesCreados = count($uniformesCreados);
+            $message = $totalUniformesCreados > 0
+                ? 'Parámetros actualizados y '.$totalUniformesCreados.' uniforme'.($totalUniformesCreados === 1 ? '' : 's').' agregado'.($totalUniformesCreados === 1 ? '' : 's').' exitosamente.'
                 : 'Parámetros actualizados exitosamente.';
 
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => true,
                     'message' => $message,
+                    'uniformes' => $uniformesCreados,
                 ]);
             }
 
@@ -140,9 +142,9 @@ class ParametroController
         ]);
     }
 
-    private function crearUniformes(array $uniformes, string $origen = 'mantenedor'): int
+    private function crearUniformes(array $uniformes, string $origen = 'mantenedor'): array
     {
-        $creados = 0;
+        $creados = [];
 
         foreach ($uniformes as $uniforme) {
             $nombre = trim((string) ($uniforme['nombre'] ?? ''));
@@ -204,7 +206,13 @@ class ParametroController
                 'user_agent' => request()?->header('User-Agent'),
             ]);
 
-            $creados++;
+            $creados[] = [
+                'id' => $parametro->id,
+                'clave' => $parametro->clave,
+                'nombre' => $parametro->nombre,
+                'valor' => (float) $parametro->valor,
+                'valor_visual' => $parametro->formatearValorVisual(),
+            ];
         }
 
         return $creados;

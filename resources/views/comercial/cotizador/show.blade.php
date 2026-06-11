@@ -71,6 +71,10 @@
 </style>
 @endpush
 @section('content')
+@php
+    $puedeEditarComercial = auth()->user()->tieneAcceso('comercial', 'puede_editar');
+    $puedeEliminarComercial = auth()->user()->tieneAcceso('comercial', 'puede_eliminar');
+@endphp
 <div class="page-container">
     <div class="page-header">
         <div>
@@ -86,12 +90,12 @@
             <a href="{{ route('comercial.cotizaciones.pdf', $cotizacion) }}" class="btn-secondary" target="_blank">
                 <i class="bi bi-file-pdf-fill"></i> Descargar PDF
             </a>
-            @if($cotizacion->estado === 'vigente')
+            @if($cotizacion->estado === 'vigente' && $puedeEditarComercial)
             <button type="button" class="btn-secondary" onclick="enviarPorEmail()">
                 <i class="bi bi-envelope-fill"></i> Enviar Email
             </button>
             @endif
-            @if($cotizacion->estado === 'en_cotizacion')
+            @if($cotizacion->estado === 'en_cotizacion' && $puedeEditarComercial)
             <a href="{{ route('comercial.cotizaciones.edit', $cotizacion) }}" class="btn-secondary">
                 <i class="bi bi-pencil-fill"></i> Editar
             </a>
@@ -208,7 +212,7 @@
             </div>
 
             <div style="display:flex;gap:.5rem">
-                @if($cotizacion->estado === 'en_cotizacion')
+                @if($cotizacion->estado === 'en_cotizacion' && $puedeEditarComercial)
                 <form method="POST" action="{{ route('comercial.cotizaciones.aprobar', $cotizacion) }}" style="display:inline">
                     @csrf @method('PATCH')
                     <button type="submit" class="btn-premium" onclick="return confirm('¿Aprobar esta cotización?')">
@@ -217,7 +221,7 @@
                 </form>
                 @endif
 
-                @if($cotizacion->estado === 'aprobada')
+                @if($cotizacion->estado === 'aprobada' && $puedeEditarComercial)
                 <form method="POST" action="{{ route('comercial.cotizaciones.hacer-vigente', $cotizacion) }}" style="display:inline">
                     @csrf @method('PATCH')
                     <button type="submit" class="btn-premium" onclick="return confirm('¿Hacer vigente esta cotización?')">
@@ -226,11 +230,29 @@
                 </form>
                 @endif
 
-                @if($cotizacion->estado === 'vigente')
+                @if(in_array($cotizacion->estado, ['en_cotizacion', 'aprobada'], true) && $puedeEditarComercial)
+                <form method="POST" action="{{ route('comercial.cotizaciones.rechazar', $cotizacion) }}" style="display:inline">
+                    @csrf @method('PATCH')
+                    <button type="submit" class="btn-secondary" onclick="return confirm('¿Rechazar esta cotización?')">
+                        <i class="bi bi-x-circle-fill"></i> Rechazar
+                    </button>
+                </form>
+                @endif
+
+                @if($cotizacion->estado === 'vigente' && $puedeEditarComercial)
                 <form method="POST" action="{{ route('comercial.cotizaciones.cancelar', $cotizacion) }}" style="display:inline">
                     @csrf @method('PATCH')
-                    <button type="submit" class="btn-secondary" onclick="return confirm('¿Cancelar esta cotización?')">
-                        <i class="bi bi-x-circle-fill"></i> Cancelar
+                    <button type="submit" class="btn-secondary" onclick="return confirm('¿Cancelar la vigencia de esta cotización?')">
+                        <i class="bi bi-stop-circle-fill"></i> Cancelar vigencia
+                    </button>
+                </form>
+                @endif
+
+                @if($puedeEliminarComercial)
+                <form method="POST" action="{{ route('comercial.cotizaciones.destroy', $cotizacion) }}" style="display:inline">
+                    @csrf @method('DELETE')
+                    <button type="submit" class="btn-secondary" style="color:var(--danger-color)" onclick="return confirm('¿Eliminar esta cotización? Esta acción ocultará el registro del listado.')">
+                        <i class="bi bi-trash-fill"></i> Eliminar
                     </button>
                 </form>
                 @endif

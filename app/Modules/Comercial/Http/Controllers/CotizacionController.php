@@ -50,6 +50,18 @@ class CotizacionController
             ->orderBy('nombre')
             ->get()
             ->groupBy('categoria');
+        $uniformesCatalogo = Parametro::editables()
+            ->porCategoria('UNIFORMES')
+            ->orderBy('nombre')
+            ->get()
+            ->map(fn (Parametro $parametro) => [
+                'id' => $parametro->id,
+                'clave' => $parametro->clave,
+                'nombre' => $parametro->nombre,
+                'valor' => (float) $parametro->valor_actual,
+                'valor_visual' => $parametro->formatearValorVisual(),
+            ])
+            ->values();
         $sueldoMinimoLegal = Parametro::valor('SUELDO_MINIMO', 0);
         $centrosCostoAgrupados = CentroCosto::activos()
             ->orderBy('nombre')
@@ -63,6 +75,7 @@ class CotizacionController
             'modalidades',
             'centrosCostoAgrupados',
             'parametrosPorCategoria',
+            'uniformesCatalogo',
             'sueldoMinimoLegal',
         ));
     }
@@ -172,8 +185,20 @@ class CotizacionController
         }
 
         $cotizacion->load(['cliente', 'centroCosto', 'modalidad', 'detalles', 'uniformes']);
+        $uniformesCatalogo = Parametro::editables()
+            ->porCategoria('UNIFORMES')
+            ->orderBy('nombre')
+            ->get()
+            ->map(fn (Parametro $parametro) => [
+                'id' => $parametro->id,
+                'clave' => $parametro->clave,
+                'nombre' => $parametro->nombre,
+                'valor' => (float) $parametro->valor_actual,
+                'valor_visual' => $parametro->formatearValorVisual(),
+            ])
+            ->values();
 
-        return view('comercial::cotizador.edit', compact('cotizacion'));
+        return view('comercial::cotizador.edit', compact('cotizacion', 'uniformesCatalogo'));
     }
 
     public function update(Request $request, Cotizacion $cotizacion)
@@ -211,6 +236,7 @@ class CotizacionController
 
     public function destroy(Cotizacion $cotizacion)
     {
+        $this->registrarAuditoria($cotizacion, 'eliminada', 'Cotización eliminada');
         $cotizacion->delete();
 
         return redirect()->route('comercial.cotizaciones.index')
@@ -263,9 +289,25 @@ class CotizacionController
         return back()->with('success', 'Cotización ahora es vigente.');
     }
 
+    public function rechazar(Cotizacion $cotizacion)
+    {
+        if (! in_array($cotizacion->estado, ['en_cotizacion', 'aprobada'], true)) {
+            return back()->with('error', 'Solo puedes rechazar cotizaciones en estado En Cotización o Aprobada.');
+        }
+
+        $cotizacion->update([
+            'estado' => 'rechazada',
+            'fecha_cancelacion' => now(),
+        ]);
+
+        $this->registrarAuditoria($cotizacion, 'rechazada', 'Cotización rechazada');
+
+        return back()->with('success', 'Cotización rechazada.');
+    }
+
     public function cancelar(Cotizacion $cotizacion)
     {
-        if (! in_array($cotizacion->estado, ['en_cotizacion', 'aprobada', 'vigente'], true)) {
+        if (! in_array($cotizacion->estado, ['vigente'], true)) {
             return back()->with('error', 'Esta cotización no puede cancelarse.');
         }
 
