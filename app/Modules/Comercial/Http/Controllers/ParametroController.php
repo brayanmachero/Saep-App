@@ -6,6 +6,8 @@ use App\Modules\Comercial\Models\Parametro;
 use App\Modules\Comercial\Models\ParametroAuditoria;
 use App\Modules\Comercial\Services\IntegradorGobiernoService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ParametroController
 {
@@ -53,28 +55,38 @@ class ParametroController
     public function batchUpdate(Request $request)
     {
         $parametros = $request->input('parametros', []);
+        $uniformesNuevos = $request->input('uniformes_nuevos', []);
+        $uniformesCreados = 0;
 
         try {
-            foreach ($parametros as $id => $payload) {
-                $valor = is_array($payload) ? ($payload['valor'] ?? null) : $payload;
-                if ($valor === null) {
-                    continue;
+            DB::transaction(function () use ($request, $parametros, $uniformesNuevos, &$uniformesCreados) {
+                foreach ($parametros as $id => $payload) {
+                    $valor = is_array($payload) ? ($payload['valor'] ?? null) : $payload;
+                    if ($valor === null) {
+                        continue;
+                    }
+
+                    $parametro = Parametro::findOrFail($id);
+                    if ($parametro->editable && (string) $valor !== (string) $parametro->valor) {
+                        $this->actualizarParametro($parametro, $valor, $request->input('origen', 'mantenedor'));
+                    }
                 }
 
-                $parametro = Parametro::findOrFail($id);
-                if ($parametro->editable && (string) $valor !== (string) $parametro->valor) {
-                    $this->actualizarParametro($parametro, $valor, $request->input('origen', 'mantenedor'));
-                }
-            }
+                $uniformesCreados = $this->crearUniformes($uniformesNuevos, $request->input('origen', 'mantenedor'));
+            });
+
+            $message = $uniformesCreados > 0
+                ? 'Parámetros actualizados y '.$uniformesCreados.' uniforme'.($uniformesCreados === 1 ? '' : 's').' agregado'.($uniformesCreados === 1 ? '' : 's').' exitosamente.'
+                : 'Parámetros actualizados exitosamente.';
 
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => true,
-                    'message' => 'Parámetros actualizados exitosamente.',
+                    'message' => $message,
                 ]);
             }
 
-            return back()->with('success', 'Parámetros actualizados exitosamente.');
+            return back()->with('success', $message);
         } catch (\Throwable $e) {
             if ($request->expectsJson()) {
                 return response()->json([
@@ -83,7 +95,7 @@ class ParametroController
                 ], 422);
             }
 
-            return back()->with('error', 'Error: '.$e->getMessage());
+            return back()->withInput()->with('error', 'Error: '.$e->getMessage());
         }
     }
 
@@ -126,6 +138,93 @@ class ParametroController
             'ip_address' => request()?->ip(),
             'user_agent' => request()?->header('User-Agent'),
         ]);
+    }
+
+    private function crearUniformes(array $uniformes, string $origen = 'mantenedor'): int
+    {
+        $creados = 0;
+
+        foreach ($uniformes as $uniforme) {
+            $nombre = trim((string) ($uniforme['nombre'] ?? ''));
+            $valor = $uniforme['valor'] ?? null;
+            $valorTexto = trim((string) $valor);
+
+            if ($nombre === '' && $valorTexto === '') {
+                continue;
+            }
+
+            if ($nombre === '') {
+                throw new \InvalidArgumentException('Cada uniforme nuevo debe tener nombre.');
+            }
+
+            if (mb_strlen($nombre) > 120) {
+                throw new \InvalidArgumentException('El nombre del uniforme no puede superar 120 caracteres.');
+            }
+
+            if ($valorTexto === '') {
+                throw new \InvalidArgumentException("Debe indicar precio para el uniforme '{$nombre}'.");
+            }
+
+            $existe = Parametro::where('categoria', 'UNIFORMES')
+                ->whereRaw('LOWER(nombre) = ?', [mb_strtolower($nombre)])
+                ->exists();
+
+            if ($existe) {
+                throw new \InvalidArgumentException("Ya existe un uniforme llamado '{$nombre}'. Edite su precio en la tarjeta existente.");
+            }
+
+            $clave = $this->generarClaveUniforme($nombre);
+            $parametro = new Parametro([
+                'clave' => $clave,
+                'nombre' => $nombre,
+                'descripcion' => 'Precio referencial uniforme.',
+                'tipo' => 'decimal',
+                'editable' => true,
+                'categoria' => 'UNIFORMES',
+                'version' => 1,
+                'actualizado_por' => auth()->id(),
+            ]);
+
+            $valorNormalizado = $this->normalizarValor($valorTexto, $parametro);
+            $this->validarValor($valorNormalizado, $parametro);
+
+            $parametro->valor = (string) $valorNormalizado;
+            $parametro->save();
+
+            $parametro->auditorias()->create([
+                'usuario_id' => auth()->id(),
+                'clave' => $parametro->clave,
+                'nombre' => $parametro->nombre,
+                'categoria' => $parametro->categoria,
+                'valor_anterior' => null,
+                'valor_nuevo' => (string) $valorNormalizado,
+                'origen' => $origen,
+                'descripcion' => "Creación de uniforme {$parametro->nombre}",
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->header('User-Agent'),
+            ]);
+
+            $creados++;
+        }
+
+        return $creados;
+    }
+
+    private function generarClaveUniforme(string $nombre): string
+    {
+        $base = 'UNIFORME_'.Str::upper(Str::slug($nombre, '_'));
+        if ($base === 'UNIFORME_') {
+            throw new \InvalidArgumentException('El nombre del uniforme debe contener letras o números.');
+        }
+
+        $clave = $base;
+        $sufijo = 2;
+        while (Parametro::withTrashed()->where('clave', $clave)->exists()) {
+            $clave = $base.'_'.$sufijo;
+            $sufijo++;
+        }
+
+        return $clave;
     }
 
     private function normalizarValor(mixed $valor, Parametro $parametro): string
