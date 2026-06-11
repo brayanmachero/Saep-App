@@ -234,23 +234,56 @@
                         <div class="param-category-title">{{ str_replace('_', ' ', $categoria) }}</div>
                         <div class="param-field-grid">
                             @foreach($items as $parametro)
-                            <div class="param-field-card">
-                                <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.75rem">
-                                    {{ $parametro->nombre }}
-                                </label>
-                                <div class="param-value-wrap">
-                                    <input type="text" name="parametros[{{ $parametro->id }}][valor]"
-                                           value="{{ $valorParametro($parametro) }}"
-                                           class="form-control" placeholder="0" inputmode="decimal"
-                                           data-param-format="{{ $parametro->formato_visual }}"
-                                           @if(!$parametro->editable) disabled @endif>
-                                    <span class="param-unit">{{ $parametro->unidad_visual }}</span>
+                                @if($parametro->clave === 'JORNADA_SEMANAL_SUB')
+                                <div class="param-field-card" style="border-left:4px solid var(--accent-primary)">
+                                    <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.75rem">
+                                        {{ $parametro->nombre }}
+                                    </label>
+                                    <div class="param-value-wrap">
+                                        <select name="parametros[{{ $parametro->id }}][valor]"
+                                                class="form-control"
+                                                onchange="actualizarFactorVisual(this)"
+                                                @if(!$parametro->editable) disabled @endif>
+                                            @foreach([45, 44, 43, 42, 41, 40] as $h)
+                                                <option value="{{ $h }}" {{ old('parametros.' . $parametro->id . '.valor', $parametro->valor) == $h ? 'selected' : '' }}>
+                                                    {{ $h }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        <span class="param-unit">{{ $parametro->unidad_visual }}</span>
+                                    </div>
+                                    <div class="param-format-hint">{{ $hintParametro($parametro) }}</div>
+                                    
+                                    <div style="margin-top:.75rem;padding:.5rem;background:var(--surface-bg);border-radius:.375rem;font-size:.8rem;color:var(--accent-primary);font-weight:600;display:flex;justify-content:space-between;align-items:center;">
+                                        <span>Factor Matemático:</span>
+                                        <span id="factor_visual_sub" style="font-variant-numeric: tabular-nums;">
+                                            {{ number_format(7 / (30 * max((float)old('parametros.' . $parametro->id . '.valor', $parametro->valor), 1)), 6) }}
+                                        </span>
+                                    </div>
+                                    
+                                    <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem">
+                                        {{ $parametro->descripcion }}
+                                    </div>
                                 </div>
-                                <div class="param-format-hint">{{ $hintParametro($parametro) }}</div>
-                                <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem">
-                                    {{ $parametro->descripcion }}
+                                @else
+                                <div class="param-field-card">
+                                    <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.75rem">
+                                        {{ $parametro->nombre }}
+                                    </label>
+                                    <div class="param-value-wrap">
+                                        <input type="text" name="parametros[{{ $parametro->id }}][valor]"
+                                               value="{{ $valorParametro($parametro) }}"
+                                               class="form-control" placeholder="0" inputmode="decimal"
+                                               data-param-format="{{ $parametro->formato_visual }}"
+                                               @if(!$parametro->editable) disabled @endif>
+                                        <span class="param-unit">{{ $parametro->unidad_visual }}</span>
+                                    </div>
+                                    <div class="param-format-hint">{{ $hintParametro($parametro) }}</div>
+                                    <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem">
+                                        {{ $parametro->descripcion }}
+                                    </div>
                                 </div>
-                            </div>
+                                @endif
                             @endforeach
                         </div>
                     </div>
@@ -430,6 +463,15 @@ document.getElementById('parametrosForm')?.addEventListener('submit', () => {
         input.value = parseParamNumber(input.value, input.dataset.paramFormat);
     });
 });
+
+<script>
+function actualizarFactorVisual(select) {
+    const horas = parseFloat(select.value);
+    if(horas > 0) {
+        const factor = 7 / (30 * horas);
+        document.getElementById('factor_visual_sub').innerText = factor.toFixed(6);
+    }
+}
 
 function actualizarParametrosGobierno() {
     if(confirm('¿Actualizar parámetros de gobierno desde las APIs? (UF, Sueldo Mínimo, IPC)')) {
