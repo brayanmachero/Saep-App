@@ -400,13 +400,29 @@
                     Parámetros rápidos de cálculo
                 </summary>
 
+                @php
+                    $parametroScope = function ($parametro, $categoria) {
+                        $clave = strtoupper($parametro->clave);
+                        $categoria = strtoupper((string) $categoria);
+
+                        if (str_ends_with($categoria, '_EST') || str_ends_with($clave, '_EST')) {
+                            return 'EST';
+                        }
+
+                        if (str_ends_with($categoria, '_SUB') || str_ends_with($clave, '_SUB') || $clave === 'JORNADA_SEMANAL_SUB') {
+                            return 'SUB';
+                        }
+
+                        return 'ALL';
+                    };
+                @endphp
                 <div style="margin-top:1rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.85rem">
                     @foreach($parametrosPorCategoria as $categoria => $items)
-                        <div style="grid-column:1/-1;font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;margin-top:.25rem">
+                        <div data-param-category-header data-param-category="{{ $categoria }}" style="grid-column:1/-1;font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;margin-top:.25rem">
                             {{ str_replace('_', ' ', $categoria) }}
                         </div>
                         @foreach($items as $parametro)
-                        <div style="background:var(--bg-tertiary);border:1px solid var(--surface-border);border-radius:8px;padding:.75rem">
+                        <div data-param-card data-param-category="{{ $categoria }}" data-param-scope="{{ $parametroScope($parametro, $categoria) }}" style="background:var(--bg-tertiary);border:1px solid var(--surface-border);border-radius:8px;padding:.75rem">
                             <label style="font-size:.78rem;font-weight:600;display:block;margin-bottom:.4rem">
                                 {{ $parametro->nombre }}
                             </label>
@@ -423,6 +439,9 @@
                         </div>
                         @endforeach
                     @endforeach
+                    <div id="quickParametrosEmpty" style="display:none;grid-column:1/-1;padding:.8rem;border:1px dashed var(--surface-border);border-radius:8px;color:var(--text-muted);font-size:.82rem">
+                        Selecciona una modalidad para ver sus parámetros específicos.
+                    </div>
                 </div>
 
                 <div style="display:flex;gap:.75rem;justify-content:flex-end;align-items:center;margin-top:1rem">
@@ -568,6 +587,7 @@
 {{-- Script para cálculos y dinámicas --}}
 <script>
 const centrosCostoData = {!! json_encode($centrosCostoAgrupados ?? []) !!};
+const modalidadCodes = @json($modalidades->pluck('codigo', 'id'));
 const selectedCentroCostoId = @json(old('centro_costo_id'));
 const previewUrl = @json(route('comercial.cotizaciones.preview'));
 const quickClienteUrl = @json(route('comercial.clientes.store'));
@@ -596,6 +616,34 @@ function setStatus(id, message, type = 'info') {
     const colors = { info: 'var(--text-muted)', success: 'var(--success-color)', error: 'var(--danger-color)' };
     el.style.color = colors[type] || colors.info;
     el.textContent = message;
+}
+
+function getSelectedModalidadCode() {
+    const modalidadId = document.getElementById('modalidadSelect')?.value;
+    return modalidadId ? (modalidadCodes[modalidadId] || '') : '';
+}
+
+function filterQuickParamsByModalidad() {
+    const modalidad = getSelectedModalidadCode();
+    const cards = Array.from(document.querySelectorAll('[data-param-card]'));
+
+    cards.forEach((card) => {
+        const scope = card.dataset.paramScope || 'ALL';
+        const visible = scope === 'ALL' || (modalidad && scope === modalidad);
+        card.style.display = visible ? '' : 'none';
+    });
+
+    document.querySelectorAll('[data-param-category-header]').forEach((header) => {
+        const category = header.dataset.paramCategory;
+        const hasVisible = cards.some((card) => card.dataset.paramCategory === category && card.style.display !== 'none');
+        header.style.display = hasVisible ? '' : 'none';
+    });
+
+    const empty = document.getElementById('quickParametrosEmpty');
+    if (empty) {
+        const hasSpecificCards = cards.some((card) => card.dataset.paramScope !== 'ALL' && card.style.display !== 'none');
+        empty.style.display = modalidad && !hasSpecificCards ? 'block' : 'none';
+    }
 }
 
 async function postForm(url, payload) {
@@ -695,6 +743,11 @@ async function guardarParametrosRapidos() {
     formData.append('origen', 'cotizador_rapido');
 
     inputs.forEach((input) => {
+        const card = input.closest('[data-param-card]');
+        if (card && card.style.display === 'none') {
+            return;
+        }
+
         formData.append(`parametros[${input.dataset.parametroQuick}][valor]`, parseParamNumber(input.value, input.dataset.paramFormat));
     });
 
@@ -1088,6 +1141,7 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('input', schedulePreview);
     form.addEventListener('change', schedulePreview);
     form.addEventListener('submit', normalizeMoneyInputsForSubmit);
+    document.getElementById('modalidadSelect')?.addEventListener('change', filterQuickParamsByModalidad);
 
     const clienteId = document.getElementById('clienteSelect').value;
     if(clienteId) {
@@ -1109,6 +1163,7 @@ document.addEventListener('DOMContentLoaded', function() {
             input.value = formatParamNumber(input.value, input.dataset.paramFormat);
         });
     });
+    filterQuickParamsByModalidad();
     document.querySelectorAll('#uniformesTable tr').forEach(actualizarUniformeFila);
     actualizarCalculos();
 });

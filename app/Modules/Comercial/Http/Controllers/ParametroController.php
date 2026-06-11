@@ -105,7 +105,7 @@ class ParametroController
         }
 
         $valor = $this->normalizarValor($valor, $parametro);
-        $this->validarValor($valor, $parametro->tipo);
+        $this->validarValor($valor, $parametro);
 
         $valorAnterior = $parametro->valor;
         $parametro->valor_anterior = $parametro->valor;
@@ -157,14 +157,18 @@ class ParametroController
         return $valor;
     }
 
-    private function validarValor(mixed $valor, string $tipo): void
+    private function validarValor(mixed $valor, Parametro $parametro): void
     {
-        match ($tipo) {
+        match ($parametro->tipo) {
             'integer' => $this->validarEntero($valor),
             'decimal' => $this->validarDecimal($valor),
             'date' => $this->validarFecha($valor),
             default => null,
         };
+
+        if (strtoupper($parametro->clave) === 'JORNADA_SEMANAL_SUB') {
+            $this->validarRangoNumerico($valor, 1, 60, 'La jornada semanal debe estar entre 1 y 60 horas.');
+        }
     }
 
     private function validarEntero(mixed $valor): void
@@ -178,6 +182,13 @@ class ParametroController
     {
         if (! is_numeric($valor)) {
             throw new \InvalidArgumentException('Debe ser un número decimal.');
+        }
+    }
+
+    private function validarRangoNumerico(mixed $valor, float $min, float $max, string $mensaje): void
+    {
+        if (! is_numeric($valor) || (float) $valor < $min || (float) $valor > $max) {
+            throw new \InvalidArgumentException($mensaje);
         }
     }
 
