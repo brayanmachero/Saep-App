@@ -24,7 +24,7 @@
 
         th, td {
             border: 1px solid #d1d5db;
-            padding: 4px 5px;
+            padding: 3px 5px;
             vertical-align: top;
             overflow-wrap: break-word;
             word-wrap: break-word;
@@ -43,17 +43,19 @@
         .muted { color: #6b7280; }
         .strong { font-weight: 700; }
         .amount { color: #0f1b4c; font-weight: 700; white-space: nowrap; }
-        .section { margin-top: 8px; page-break-inside: avoid; }
+        tr { page-break-inside: avoid; }
+        .section { margin-top: 6px; }
+        .summary-section { page-break-inside: avoid; }
         .section-title {
             margin: 0 0 4px;
-            padding: 5px 7px;
+            padding: 4px 7px;
             background: #0f1b4c;
             color: #fff;
-            font-size: 8.5pt;
+            font-size: 8pt;
             font-weight: 700;
         }
 
-        .header td { padding: 0 0 8px; }
+        .header td { padding: 0 0 6px; }
         .brand { color: #ff6b35; font-size: 22pt; font-weight: 800; letter-spacing: .2px; }
         .doc-title { color: #0f1b4c; font-size: 15pt; font-weight: 800; text-align: right; }
         .doc-meta { text-align: right; color: #4b5563; font-size: 8pt; }
@@ -76,9 +78,9 @@
             background: #0f1b4c;
             color: #fff;
             border-color: #0f1b4c;
-            padding: 7px 8px;
+            padding: 6px 8px;
         }
-        .price-box .price { font-size: 15pt; font-weight: 800; text-align: right; }
+        .price-box .price { font-size: 14pt; font-weight: 800; text-align: right; }
         .note {
             margin-top: 8px;
             padding: 7px;
@@ -132,6 +134,11 @@
         return implode(' · ', $parts);
     };
     $margenPct = (float) ($datos_calculo['margen_porcentaje'] ?? 0);
+    $vigencia = trim(
+        (optional($cotizacion->fecha_vigencia_desde)->format('d/m/Y') ?? '—')
+        . ' a '
+        . (optional($cotizacion->fecha_vigencia_hasta)->format('d/m/Y') ?? '—')
+    );
     $costoBrutoHhee = (float) ($resumen['costoBrutoHhee'] ?? (($resumen['totalImponible'] ?? 0) + (float) $cotizacion->total_cotizaciones));
     $margenHhee = (float) ($resumen['margenHhee'] ?? ($costoBrutoHhee * ($margenPct / 100)));
     $precioVentaHhee = (float) ($resumen['precioVentaHhee'] ?? ($costoBrutoHhee + $margenHhee));
@@ -201,19 +208,14 @@
 <table>
     <tr>
         <td style="width:25%"><div class="info-label">Cliente</div><div class="info-value">{{ $cliente->nombre_comercial ?? $cliente->nombre }}</div></td>
-        <td style="width:18%"><div class="info-label">RUT</div><div class="info-value">{{ $cliente->rut ?? '—' }}</div></td>
+        <td style="width:22%"><div class="info-label">Centro de costo</div><div class="info-value">{{ $centroCosto->nombre }}</div></td>
         <td style="width:18%"><div class="info-label">Modalidad</div><div class="info-value">{{ $modalidad->codigo }} · {{ $modalidad->nombre }}</div></td>
-        <td style="width:20%"><div class="info-label">Centro de costo</div><div class="info-value">{{ $centroCosto->nombre }}</div></td>
-        <td style="width:19%"><div class="info-label">Cargo</div><div class="info-value">{{ $cotizacion->cargo }}</div></td>
-    </tr>
-    <tr>
-        <td colspan="2"><div class="info-label">Email</div><div>{{ $cliente->email ?? '—' }}</div></td>
-        <td><div class="info-label">Teléfono</div><div>{{ $cliente->telefono ?? '—' }}</div></td>
-        <td colspan="2"><div class="info-label">Dirección / Región</div><div>{{ $cliente->direccion ?? '—' }} · {{ $cliente->region ?? '—' }}</div></td>
+        <td style="width:22%"><div class="info-label">Cargo</div><div class="info-value">{{ $cotizacion->cargo }}</div></td>
+        <td style="width:13%"><div class="info-label">Vigencia</div><div class="info-value">{{ $vigencia }}</div></td>
     </tr>
 </table>
 
-<div class="section">
+<div class="section summary-section">
     <table>
         <tr>
             <td><div class="metric-label">Total haberes</div><div class="metric-value">{{ $money($cotizacion->total_remuneraciones) }}</div></td>
