@@ -16,7 +16,7 @@
     </div>
 
     {{-- Stats --}}
-    <div class="stats-grid" style="grid-template-columns:repeat(5,1fr);">
+    <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));">
         <div class="glass-card stat-item">
             <div class="stat-icon primary"><i class="bi bi-envelope"></i></div>
             <div class="stat-info"><h3>{{ $stats['total'] }}</h3><p>Total</p></div>
@@ -28,6 +28,10 @@
         <div class="glass-card stat-item">
             <div class="stat-icon danger"><i class="bi bi-x-circle-fill"></i></div>
             <div class="stat-info"><h3>{{ $stats['failed'] }}</h3><p>Fallidos</p></div>
+        </div>
+        <div class="glass-card stat-item">
+            <div class="stat-icon" style="background:rgba(245,158,11,0.15);color:#f59e0b;"><i class="bi bi-slash-circle-fill"></i></div>
+            <div class="stat-info"><h3>{{ $stats['blocked'] }}</h3><p>Bloqueados</p></div>
         </div>
         <div class="glass-card stat-item">
             <div class="stat-icon" style="background:rgba(99,102,241,0.15);color:#6366f1;"><i class="bi bi-calendar-event"></i></div>
@@ -47,6 +51,67 @@
     </div>
     @endif
 
+    @if($errors->any())
+    <div class="glass-card" style="padding:.75rem 1rem;margin-bottom:1rem;border-left:4px solid #dc2626;color:#dc2626;">
+        <i class="bi bi-exclamation-triangle"></i> Revisa los datos enviados para actualizar automatizaciones.
+    </div>
+    @endif
+
+    {{-- Control de automatizaciones --}}
+    <form method="POST" action="{{ route('mail-logs.automation.update') }}" class="glass-card" style="margin-bottom:1.25rem;padding:1rem 1.25rem;">
+        @csrf
+        @method('PATCH')
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+            <div>
+                <h3 style="margin:0;font-size:18px;">Automatizaciones de email</h3>
+                <p style="margin:.25rem 0 0;color:var(--text-muted);font-size:13px;">
+                    Activa o desactiva envios automaticos por tipo. Los bloqueados quedan registrados con preview en esta bitacora.
+                </p>
+            </div>
+            <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+                <input type="hidden" name="global_enabled" value="0">
+                <label style="display:flex;align-items:center;gap:.5rem;padding:.55rem .75rem;border:1px solid var(--border-color);border-radius:.6rem;background:{{ $mailGlobalEnabled ? 'rgba(16,185,129,.10)' : 'rgba(239,68,68,.10)' }};cursor:pointer;">
+                    <input type="checkbox" name="global_enabled" value="1" {{ $mailGlobalEnabled ? 'checked' : '' }}>
+                    <span style="font-weight:700;font-size:13px;">Envio global {{ $mailGlobalEnabled ? 'activo' : 'apagado' }}</span>
+                </label>
+                <button type="submit" class="btn-premium">
+                    <i class="bi bi-save"></i> Guardar switches
+                </button>
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">
+            @foreach($mailAutomationGroups as $category => $items)
+                <div style="border:1px solid var(--border-color);border-radius:.75rem;overflow:hidden;">
+                    <div style="padding:.65rem .85rem;background:rgba(148,163,184,.08);font-size:12px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">
+                        {{ $category }}
+                    </div>
+                    <div style="display:grid;gap:.65rem;padding:.75rem;">
+                        @foreach($items as $item)
+                            <label style="display:grid;grid-template-columns:auto 1fr;gap:.55rem;align-items:flex-start;cursor:pointer;">
+                                <input type="hidden" name="automations[{{ $item['key'] }}]" value="0">
+                                <input type="checkbox" name="automations[{{ $item['key'] }}]" value="1" {{ $item['enabled'] ? 'checked' : '' }} style="margin-top:.2rem;">
+                                <span>
+                                    <span style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;">
+                                        <strong style="font-size:13px;">{{ $item['label'] }}</strong>
+                                        @if($item['critical'])
+                                            <span class="badge badge-danger" style="font-size:10px;">Critico</span>
+                                        @endif
+                                        <span class="badge {{ $item['enabled'] ? 'badge-success' : 'badge-secondary' }}" style="font-size:10px;">
+                                            {{ $item['enabled'] ? 'Activo' : 'Apagado' }}
+                                        </span>
+                                    </span>
+                                    <small style="display:block;color:var(--text-muted);font-size:12px;line-height:1.35;margin-top:.15rem;">{{ $item['description'] }}</small>
+                                    <code style="display:block;color:var(--text-muted);font-size:11px;margin-top:.15rem;">{{ $item['key'] }}</code>
+                                </span>
+                            </label>
+                        @endforeach
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    </form>
+
     {{-- Filtros --}}
     <form method="GET" action="{{ route('mail-logs.index') }}" class="filter-form glass-card" style="margin-bottom:1.25rem;">
         <div class="filter-group">
@@ -55,6 +120,7 @@
                 <option value="">Todos</option>
                 <option value="sent"   {{ request('status') == 'sent'   ? 'selected' : '' }}>Enviados</option>
                 <option value="failed" {{ request('status') == 'failed' ? 'selected' : '' }}>Fallidos</option>
+                <option value="blocked" {{ request('status') == 'blocked' ? 'selected' : '' }}>Bloqueados</option>
             </select>
         </div>
         <div class="filter-group">
@@ -122,6 +188,8 @@
                 <td>
                     @if($log->status === 'sent')
                         <span class="badge badge-success"><i class="bi bi-check-circle"></i> Enviado</span>
+                    @elseif($log->status === 'blocked')
+                        <span class="badge" style="background:rgba(245,158,11,.14);color:#b45309;"><i class="bi bi-slash-circle"></i> Bloqueado</span>
                     @else
                         <span class="badge badge-danger"><i class="bi bi-x-circle"></i> Fallido</span>
                     @endif

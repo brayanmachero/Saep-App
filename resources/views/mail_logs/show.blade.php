@@ -21,6 +21,8 @@
                     <dd style="margin:0;margin-top:.25rem;">
                         @if($mailLog->status === 'sent')
                             <span class="badge badge-success"><i class="bi bi-check-circle-fill"></i> Enviado correctamente</span>
+                        @elseif($mailLog->status === 'blocked')
+                            <span class="badge" style="background:rgba(245,158,11,.14);color:#b45309;"><i class="bi bi-slash-circle-fill"></i> Bloqueado por configuracion</span>
                         @else
                             <span class="badge badge-danger"><i class="bi bi-x-circle-fill"></i> Falló el envío</span>
                         @endif
@@ -51,10 +53,12 @@
                         {{ $mailLog->sent_at?->format('d/m/Y H:i:s') ?? $mailLog->created_at->format('d/m/Y H:i:s') }}
                     </dd>
                 </div>
-                @if($mailLog->status === 'failed' && $mailLog->error_message)
-                <div style="background:rgba(239,68,68,.08);border-radius:.5rem;padding:.75rem;">
-                    <dt style="font-size:11px;color:#dc2626;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">Error</dt>
-                    <dd style="margin:.25rem 0 0;font-family:monospace;font-size:12px;color:#dc2626;word-break:break-all;">{{ $mailLog->error_message }}</dd>
+                @if(in_array($mailLog->status, ['failed', 'blocked'], true) && $mailLog->error_message)
+                <div style="background:{{ $mailLog->status === 'blocked' ? 'rgba(245,158,11,.10)' : 'rgba(239,68,68,.08)' }};border-radius:.5rem;padding:.75rem;">
+                    <dt style="font-size:11px;color:{{ $mailLog->status === 'blocked' ? '#b45309' : '#dc2626' }};text-transform:uppercase;letter-spacing:.05em;font-weight:700;">
+                        {{ $mailLog->status === 'blocked' ? 'Motivo' : 'Error' }}
+                    </dt>
+                    <dd style="margin:.25rem 0 0;font-family:monospace;font-size:12px;color:{{ $mailLog->status === 'blocked' ? '#92400e' : '#dc2626' }};word-break:break-word;">{{ $mailLog->error_message }}</dd>
                 </div>
                 @endif
             </dl>
@@ -82,6 +86,8 @@
                     No hay preview disponible para este correo
                     @if($mailLog->status === 'failed')
                         <br><small>El mail falló antes de generarse el cuerpo HTML</small>
+                    @elseif($mailLog->status === 'blocked')
+                        <br><small>El mail fue bloqueado antes de enviarse.</small>
                     @endif
                 </div>
             @endif

@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Listeners\BlockDisabledMailAutomation;
 use App\Listeners\LogMailSent;
 use App\Mail\Transport\GraphTransport;
 use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
@@ -29,6 +31,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // ── Listener global: bloquear mails desactivados antes del SMTP ──
+        Event::listen(MessageSending::class, BlockDisabledMailAutomation::class);
+
         // ── Listener global: loguear todos los mails enviados ─────
         Event::listen(MessageSent::class, LogMailSent::class);
 

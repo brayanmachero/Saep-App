@@ -2,6 +2,7 @@
 
 namespace App\Modules\Comercial\Http\Controllers;
 
+use App\Models\MailLog;
 use App\Modules\Comercial\Models\CentroCosto;
 use App\Modules\Comercial\Models\Cliente;
 use App\Modules\Comercial\Models\Cotizacion;
@@ -9,6 +10,7 @@ use App\Modules\Comercial\Models\Modalidad;
 use App\Modules\Comercial\Models\Parametro;
 use App\Modules\Comercial\Services\CalculadoraCotizacionService;
 use App\Modules\Comercial\Services\GeneradorPDFService;
+use App\Services\MailAutomationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -345,7 +347,8 @@ class CotizacionController
         try {
             $pdf = $this->generadorPDF->generar($cotizacion)->output();
 
-            Mail::send('emails.comercial_cotizacion', [
+            $sentMessage = Mail::send('emails.comercial_cotizacion', [
+                MailAutomationService::CUSTOM_MAIL_KEY => 'ComercialCotizacionMail',
                 'cotizacion' => $cotizacion->load(['cliente', 'centroCosto', 'modalidad']),
                 'mensajeUsuario' => $validated['mensaje'] ?? null,
             ], function ($message) use ($validated, $cotizacion, $pdf) {
@@ -356,6 +359,10 @@ class CotizacionController
                     ]);
             });
 
+            if ($sentMessage === null) {
+                return back()->with('error', 'El email no fue enviado porque la automatizacion de cotizaciones esta desactivada.');
+            }
+
             $this->registrarAuditoria($cotizacion, 'email_enviado', 'Cotización enviada por email', [
                 'destinatario' => $validated['destinatario'],
             ]);
@@ -363,6 +370,7 @@ class CotizacionController
             return back()->with('success', 'Cotización enviada por email.');
         } catch (\Throwable $e) {
             report($e);
+            MailLog::recordFailed($validated['destinatario'], $validated['asunto'], $e->getMessage(), 'ComercialCotizacionMail');
 
             return back()->with('error', 'No fue posible enviar el email: '.$e->getMessage());
         }
