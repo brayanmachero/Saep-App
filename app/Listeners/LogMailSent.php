@@ -3,6 +3,7 @@
 namespace App\Listeners;
 
 use App\Models\MailLog;
+use App\Services\MailAutomationService;
 use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Support\Facades\Log;
 
@@ -20,7 +21,8 @@ class LogMailSent
 
             // Obtener el nombre corto del Mailable desde la clave que Laravel inyecta automáticamente
             $mailableClass = $event->data['__laravel_mailable'] ?? null;
-            $mailable = $mailableClass ? class_basename($mailableClass) : null;
+            $customKey = $event->data[MailAutomationService::CUSTOM_MAIL_KEY] ?? null;
+            $mailable = $mailableClass ? class_basename($mailableClass) : ($customKey ? class_basename($customKey) : null);
 
             MailLog::create([
                 'mailable'  => $mailable,

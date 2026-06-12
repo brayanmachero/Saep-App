@@ -43,4 +43,28 @@ class MailLog extends Model
             // No interrumpir el flujo si el log falla
         }
     }
+
+    public static function recordBlocked(
+        string $toEmail,
+        string $subject,
+        string $reason,
+        ?string $mailable = null,
+        ?string $toName = null,
+        ?string $bodyHtml = null
+    ): void {
+        try {
+            static::create([
+                'mailable'      => $mailable,
+                'subject'       => $subject,
+                'to_email'      => $toEmail,
+                'to_name'       => $toName,
+                'status'        => 'blocked',
+                'error_message' => $reason,
+                'body_html'     => $bodyHtml,
+                'sent_at'       => now(),
+            ]);
+        } catch (\Throwable) {
+            // No interrumpir el flujo si el log falla
+        }
+    }
 }

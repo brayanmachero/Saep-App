@@ -156,6 +156,12 @@
                         @foreach($cotizacion->uniformes as $idx => $uniforme)
                         <tr>
                             <td>
+                                <select class="form-control" style="margin-bottom:.45rem" data-uniforme-catalogo onchange="seleccionarUniformeCatalogo(this)">
+                                    <option value="">-- Item libre / catálogo --</option>
+                                    @foreach($uniformesCatalogo ?? [] as $item)
+                                    <option value="{{ $item['id'] }}">{{ $item['nombre'] }} - ${{ number_format($item['valor'], 0, ',', '.') }}</option>
+                                    @endforeach
+                                </select>
                                 <input type="text" name="uniformes[{{ $idx }}][descripcion]" value="{{ $uniforme->descripcion }}" class="form-control">
                             </td>
                             <td>
@@ -224,6 +230,7 @@
 
 <script>
 const previewUrl = @json(route('comercial.cotizaciones.preview'));
+const uniformesCatalogo = @json($uniformesCatalogo ?? []);
 const clpFormatter = new Intl.NumberFormat('es-CL', {
     style: 'currency',
     currency: 'CLP',
@@ -233,6 +240,31 @@ let previewTimer = null;
 
 function formatCLP(value) {
     return clpFormatter.format(Number(value || 0));
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function uniformCatalogOptions() {
+    return uniformesCatalogo.map((item) => {
+        return `<option value="${escapeHtml(item.id)}">${escapeHtml(item.nombre)} - ${formatCLP(item.valor)}</option>`;
+    }).join('');
+}
+
+function seleccionarUniformeCatalogo(select) {
+    const fila = select.closest('tr');
+    const item = uniformesCatalogo.find((uniforme) => String(uniforme.id) === String(select.value));
+    if (!fila || !item) return;
+
+    fila.querySelector('[name*="[descripcion]"]').value = item.nombre;
+    fila.querySelector('[name*="[precio_unitario]"]').value = Number(item.valor || 0).toFixed(0);
+    schedulePreview();
 }
 
 function setText(id, value) {
@@ -280,6 +312,10 @@ function agregarUniforme() {
     const fila = document.createElement('tr');
     fila.innerHTML = `
         <td>
+            <select class="form-control" style="margin-bottom:.45rem" data-uniforme-catalogo onchange="seleccionarUniformeCatalogo(this)">
+                <option value="">-- Item libre / catálogo --</option>
+                ${uniformCatalogOptions()}
+            </select>
             <input type="text" name="uniformes[${idx}][descripcion]" class="form-control" placeholder="Descripción">
         </td>
         <td>

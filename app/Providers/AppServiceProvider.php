@@ -2,11 +2,8 @@
 
 namespace App\Providers;
 
-use App\Listeners\LogMailSent;
 use App\Mail\Transport\GraphTransport;
 use Illuminate\Filesystem\FilesystemAdapter;
-use Illuminate\Mail\Events\MessageSent;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
@@ -29,9 +26,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // ── Listener global: loguear todos los mails enviados ─────
-        Event::listen(MessageSent::class, LogMailSent::class);
-
         // ── Transporte Microsoft Graph (Mail.Send via Azure AD) ───
         Mail::extend('graph', function () {
             return new GraphTransport(

@@ -72,10 +72,50 @@
         background: var(--surface-color);
     }
 
+    .uniform-manager-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+
+    .uniform-new-list {
+        display: grid;
+        gap: .75rem;
+        margin-top: 1rem;
+    }
+
+    .uniform-new-row {
+        display: grid;
+        grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 1fr) auto;
+        gap: .75rem;
+        align-items: end;
+        padding: .85rem;
+        border: 1px dashed var(--surface-border);
+        border-radius: 8px;
+        background: var(--bg-tertiary);
+    }
+
+    .uniform-remove-btn {
+        width: 42px;
+        height: 42px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
     @media (max-width: 720px) {
         .param-category-layout,
-        .param-field-grid {
+        .param-field-grid,
+        .uniform-new-row {
             grid-template-columns: 1fr;
+        }
+
+        .uniform-remove-btn {
+            width: 100%;
         }
     }
 </style>
@@ -293,9 +333,14 @@
 
         {{-- Uniformes y Equipos --}}
         <div class="glass-card" style="margin-bottom:1.5rem">
-            <h3 style="margin:0 0 1rem 0;font-size:1rem;display:flex;align-items:center;gap:.5rem">
-                <i class="bi bi-bag" style="color:var(--success-color)"></i> Costos de Uniformes
-            </h3>
+            <div class="uniform-manager-header">
+                <h3 style="margin:0;font-size:1rem;display:flex;align-items:center;gap:.5rem">
+                    <i class="bi bi-bag" style="color:var(--success-color)"></i> Costos de Uniformes
+                </h3>
+                <button type="button" class="btn-secondary" style="font-size:.85rem" onclick="agregarUniformeParametro()">
+                    <i class="bi bi-plus-lg"></i> Agregar Item
+                </button>
+            </div>
 
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem">
                 @foreach($parametrosPorCategoria['UNIFORMES'] ?? [] as $parametro)
@@ -319,17 +364,37 @@
                 @endforeach
             </div>
 
-            <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--surface-border)">
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem">
+            @php($uniformesNuevosOld = old('uniformes_nuevos', []))
+            @php($uniformesNuevosNextIndex = empty($uniformesNuevosOld) ? 0 : (max(array_map('intval', array_keys($uniformesNuevosOld))) + 1))
+            <div id="uniformeNuevosLista" class="uniform-new-list" data-next-index="{{ $uniformesNuevosNextIndex }}">
+                @foreach($uniformesNuevosOld as $idx => $uniformeNuevo)
+                <div class="uniform-new-row" data-uniforme-nuevo-row>
                     <div>
-                        <strong style="font-size:.9rem">Agregar nuevos ítems</strong>
-                        <div style="font-size:.75rem;color:var(--text-muted)">Quedan disponibles para futuras cotizaciones y se auditan como creación de parámetro.</div>
+                        <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.5rem">Nuevo item</label>
+                        <input type="text"
+                               name="uniformes_nuevos[{{ $idx }}][nombre]"
+                               value="{{ $uniformeNuevo['nombre'] ?? '' }}"
+                               class="form-control"
+                               placeholder="Nombre del uniforme">
                     </div>
-                    <button type="button" class="btn-secondary" onclick="agregarUniformeNuevo()">
-                        <i class="bi bi-plus-lg"></i> Agregar item
+                    <div>
+                        <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.5rem">Precio referencial</label>
+                        <div class="param-value-wrap">
+                            <input type="text"
+                                   name="uniformes_nuevos[{{ $idx }}][valor]"
+                                   value="{{ $uniformeNuevo['valor'] ?? '' }}"
+                                   class="form-control"
+                                   placeholder="0"
+                                   inputmode="decimal"
+                                   data-param-format="moneda">
+                            <span class="param-unit">$</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-secondary uniform-remove-btn" onclick="eliminarUniformeParametro(this)" title="Quitar item">
+                        <i class="bi bi-trash"></i>
                     </button>
                 </div>
-                <div id="uniformesNuevos" class="param-field-grid"></div>
+                @endforeach
             </div>
         </div>
 
@@ -465,11 +530,13 @@ function formatParamNumber(value, format) {
     }).format(number);
 }
 
-document.querySelectorAll('[data-param-format]').forEach((input) => {
+function bindParamFormatInput(input) {
     input.addEventListener('blur', () => {
         input.value = formatParamNumber(input.value, input.dataset.paramFormat);
     });
-});
+}
+
+document.querySelectorAll('[data-param-format]').forEach(bindParamFormatInput);
 
 document.getElementById('parametrosForm')?.addEventListener('submit', () => {
     document.querySelectorAll('[data-param-format][name]').forEach((input) => {
@@ -477,32 +544,48 @@ document.getElementById('parametrosForm')?.addEventListener('submit', () => {
     });
 });
 
-let uniformesNuevosIndex = 0;
+function agregarUniformeParametro() {
+    const lista = document.getElementById('uniformeNuevosLista');
+    if (!lista) return;
 
-function agregarUniformeNuevo() {
-    const contenedor = document.getElementById('uniformesNuevos');
-    const idx = uniformesNuevosIndex++;
-    const card = document.createElement('div');
-    card.className = 'param-field-card';
-    card.innerHTML = `
-        <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.75rem">Nuevo uniforme</label>
-        <div class="form-grid" style="grid-template-columns:minmax(0,1fr) minmax(140px,.5fr);gap:.65rem">
-            <input type="text" name="uniformes_nuevos[${idx}][nombre]" class="form-control" placeholder="Nombre item">
+    const idx = Number(lista.dataset.nextIndex || 0);
+    lista.dataset.nextIndex = String(idx + 1);
+
+    const fila = document.createElement('div');
+    fila.className = 'uniform-new-row';
+    fila.dataset.uniformeNuevoRow = 'true';
+    fila.innerHTML = `
+        <div>
+            <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.5rem">Nuevo item</label>
+            <input type="text"
+                   name="uniformes_nuevos[${idx}][nombre]"
+                   class="form-control"
+                   placeholder="Nombre del uniforme">
+        </div>
+        <div>
+            <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.5rem">Precio referencial</label>
             <div class="param-value-wrap">
-                <input type="text" name="uniformes_nuevos[${idx}][valor]" class="form-control" placeholder="0" inputmode="numeric" data-param-format="moneda">
+                <input type="text"
+                       name="uniformes_nuevos[${idx}][valor]"
+                       class="form-control"
+                       placeholder="0"
+                       inputmode="decimal"
+                       data-param-format="moneda">
                 <span class="param-unit">$</span>
             </div>
         </div>
-        <div style="display:flex;justify-content:flex-end;margin-top:.65rem">
-            <button type="button" class="icon-btn danger" onclick="this.closest('.param-field-card').remove()">
-                <i class="bi bi-trash-fill"></i>
-            </button>
-        </div>
+        <button type="button" class="btn-secondary uniform-remove-btn" onclick="eliminarUniformeParametro(this)" title="Quitar item">
+            <i class="bi bi-trash"></i>
+        </button>
     `;
-    contenedor.appendChild(card);
-    card.querySelector('[data-param-format]')?.addEventListener('blur', (event) => {
-        event.target.value = formatParamNumber(event.target.value, event.target.dataset.paramFormat);
-    });
+
+    lista.appendChild(fila);
+    fila.querySelectorAll('[data-param-format]').forEach(bindParamFormatInput);
+    fila.querySelector('input[name$="[nombre]"]')?.focus();
+}
+
+function eliminarUniformeParametro(button) {
+    button.closest('[data-uniforme-nuevo-row]')?.remove();
 }
 
 function actualizarFactorVisual(select) {

@@ -4,6 +4,7 @@ namespace App\Modules\Comercial\Http\Controllers;
 
 use App\Modules\Comercial\Models\Cliente;
 use App\Modules\Comercial\Models\Cotizacion;
+use App\Modules\Comercial\Models\Parametro;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -108,6 +109,37 @@ class ReporteController
         foreach (range('A', 'O') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
+
+        $catalogoSheet = $spreadsheet->createSheet();
+        $catalogoSheet->setTitle('Catalogo Uniformes');
+        $catalogoSheet->fromArray([
+            'Clave',
+            'Item',
+            'Precio Referencial',
+            'Actualizado',
+        ], null, 'A1');
+
+        $uniformes = Parametro::editables()
+            ->porCategoria('UNIFORMES')
+            ->orderBy('nombre')
+            ->get();
+
+        $catalogRow = 2;
+        foreach ($uniformes as $uniforme) {
+            $catalogoSheet->fromArray([
+                $uniforme->clave,
+                $uniforme->nombre,
+                (float) $uniforme->valor_actual,
+                optional($uniforme->updated_at)->format('Y-m-d H:i:s'),
+            ], null, "A{$catalogRow}");
+            $catalogRow++;
+        }
+
+        foreach (range('A', 'D') as $column) {
+            $catalogoSheet->getColumnDimension($column)->setAutoSize(true);
+        }
+
+        $spreadsheet->setActiveSheetIndex(0);
 
         $path = tempnam(sys_get_temp_dir(), 'comercial_cotizaciones_').'.xlsx';
         (new Xlsx($spreadsheet))->save($path);

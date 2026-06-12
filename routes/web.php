@@ -343,9 +343,10 @@ Route::middleware('auth')->group(function () {
 
     // --- MAIL LOGS / Monitor de Correos (solo configuracion / superadmin) ---
     Route::middleware('modulo:configuracion')->group(function () {
-        Route::get('mail-logs',          [MailLogController::class, 'index'])->name('mail-logs.index');
+        Route::get('mail-logs',           [MailLogController::class, 'index'])->name('mail-logs.index');
+        Route::patch('mail-logs/automation', [MailLogController::class, 'updateAutomation'])->name('mail-logs.automation.update');
         Route::get('mail-logs/{mailLog}', [MailLogController::class, 'show'])->name('mail-logs.show');
-        Route::delete('mail-logs',       [MailLogController::class, 'limpiar'])->name('mail-logs.limpiar');
+        Route::delete('mail-logs',        [MailLogController::class, 'limpiar'])->name('mail-logs.limpiar');
     });
 
     // --- PERMISOS POR ROL ---

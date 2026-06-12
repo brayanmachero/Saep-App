@@ -2,6 +2,7 @@
 
 namespace App\Modules\Comercial\Http\Controllers;
 
+use App\Models\MailLog;
 use App\Modules\Comercial\Models\CentroCosto;
 use App\Modules\Comercial\Models\Cliente;
 use App\Modules\Comercial\Models\Cotizacion;
@@ -9,6 +10,7 @@ use App\Modules\Comercial\Models\Modalidad;
 use App\Modules\Comercial\Models\Parametro;
 use App\Modules\Comercial\Services\CalculadoraCotizacionService;
 use App\Modules\Comercial\Services\GeneradorPDFService;
+use App\Services\MailAutomationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -51,6 +53,18 @@ class CotizacionController
             ->orderBy('nombre')
             ->get()
             ->groupBy('categoria');
+        $uniformesCatalogo = Parametro::editables()
+            ->porCategoria('UNIFORMES')
+            ->orderBy('nombre')
+            ->get()
+            ->map(fn (Parametro $parametro) => [
+                'id' => $parametro->id,
+                'clave' => $parametro->clave,
+                'nombre' => $parametro->nombre,
+                'valor' => (float) $parametro->valor_actual,
+                'valor_visual' => $parametro->formatearValorVisual(),
+            ])
+            ->values();
         $sueldoMinimoLegal = Parametro::valor('SUELDO_MINIMO', 0);
         $centrosCostoAgrupados = CentroCosto::activos()
             ->orderBy('nombre')
@@ -64,6 +78,7 @@ class CotizacionController
             'modalidades',
             'centrosCostoAgrupados',
             'parametrosPorCategoria',
+            'uniformesCatalogo',
             'sueldoMinimoLegal',
         ));
     }
@@ -173,8 +188,20 @@ class CotizacionController
         }
 
         $cotizacion->load(['cliente', 'centroCosto', 'modalidad', 'detalles', 'uniformes']);
+        $uniformesCatalogo = Parametro::editables()
+            ->porCategoria('UNIFORMES')
+            ->orderBy('nombre')
+            ->get()
+            ->map(fn (Parametro $parametro) => [
+                'id' => $parametro->id,
+                'clave' => $parametro->clave,
+                'nombre' => $parametro->nombre,
+                'valor' => (float) $parametro->valor_actual,
+                'valor_visual' => $parametro->formatearValorVisual(),
+            ])
+            ->values();
 
-        return view('comercial::cotizador.edit', compact('cotizacion'));
+        return view('comercial::cotizador.edit', compact('cotizacion', 'uniformesCatalogo'));
     }
 
     public function update(Request $request, Cotizacion $cotizacion)
@@ -212,8 +239,7 @@ class CotizacionController
 
     public function destroy(Cotizacion $cotizacion)
     {
-        $this->registrarAuditoria($cotizacion, 'eliminada', 'Cotización enviada a papelera');
-
+        $this->registrarAuditoria($cotizacion, 'eliminada', 'Cotización eliminada');
         $cotizacion->delete();
 
         return redirect()->route('comercial.cotizaciones.index')
@@ -290,7 +316,7 @@ class CotizacionController
 
     public function cancelar(Cotizacion $cotizacion)
     {
-        if (! in_array($cotizacion->estado, ['en_cotizacion', 'aprobada', 'vigente'], true)) {
+        if (! in_array($cotizacion->estado, ['vigente'], true)) {
             return back()->with('error', 'Esta cotización no puede cancelarse.');
         }
 
@@ -328,7 +354,8 @@ class CotizacionController
         try {
             $pdf = $this->generadorPDF->generar($cotizacion)->output();
 
-            Mail::send('emails.comercial_cotizacion', [
+            $sentMessage = Mail::send('emails.comercial_cotizacion', [
+                MailAutomationService::CUSTOM_MAIL_KEY => 'ComercialCotizacionMail',
                 'cotizacion' => $cotizacion->load(['cliente', 'centroCosto', 'modalidad']),
                 'mensajeUsuario' => $validated['mensaje'] ?? null,
             ], function ($message) use ($validated, $cotizacion, $pdf) {
@@ -339,6 +366,10 @@ class CotizacionController
                     ]);
             });
 
+            if ($sentMessage === null) {
+                return back()->with('error', 'El email no fue enviado porque la automatizacion de cotizaciones esta desactivada.');
+            }
+
             $this->registrarAuditoria($cotizacion, 'email_enviado', 'Cotización enviada por email', [
                 'destinatario' => $validated['destinatario'],
             ]);
@@ -346,6 +377,7 @@ class CotizacionController
             return back()->with('success', 'Cotización enviada por email.');
         } catch (\Throwable $e) {
             report($e);
+            MailLog::recordFailed($validated['destinatario'], $validated['asunto'], $e->getMessage(), 'ComercialCotizacionMail');
 
             return back()->with('error', 'No fue posible enviar el email: '.$e->getMessage());
         }

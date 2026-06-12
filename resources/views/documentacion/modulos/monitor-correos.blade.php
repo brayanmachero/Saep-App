@@ -53,6 +53,7 @@
         <div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.25rem;">
             @foreach([
                 ['bi-broadcast','#3b82f6','<strong>Automático (enviados):</strong> El listener <code>LogMailSent</code> escucha el evento <code>Illuminate\Mail\Events\MessageSent</code> que Laravel dispara para <em>todos</em> los correos enviados exitosamente.'],
+                ['bi-slash-circle-fill','#f59e0b','<strong>Automático (bloqueados):</strong> El listener <code>BlockDisabledMailAutomation</code> escucha <code>MessageSending</code>, revisa los switches del monitor y puede cancelar el envío antes del SMTP.'],
                 ['bi-bug-fill','#ef4444','<strong>Manual (fallidos):</strong> En los bloques <code>catch</code> de los controladores, se llama a <code>MailLog::recordFailed()</code> para registrar los errores de envío.'],
             ] as [$icono,$color,$texto])
             <div style="display:flex;align-items:flex-start;gap:.75rem;padding:.75rem;background:var(--surface-bg);border-radius:.5rem;">
@@ -68,10 +69,15 @@
             <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;font-size:.8rem;">
                 <div style="background:var(--primary-color);color:#fff;padding:.4rem .8rem;border-radius:.4rem;white-space:nowrap;">Controlador llama Mail::send()</div>
                 <i class="bi bi-arrow-right" style="color:var(--text-muted);"></i>
-                <div style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);padding:.4rem .8rem;border-radius:.4rem;white-space:nowrap;">Resend API</div>
+                <div style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);padding:.4rem .8rem;border-radius:.4rem;white-space:nowrap;">MessageSending</div>
+                <i class="bi bi-arrow-right" style="color:var(--text-muted);"></i>
+                <div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);padding:.4rem .8rem;border-radius:.4rem;white-space:nowrap;">Switches email</div>
+                <i class="bi bi-arrow-right" style="color:var(--text-muted);"></i>
+                <div style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);padding:.4rem .8rem;border-radius:.4rem;white-space:nowrap;">SMTP / Mailer</div>
                 <i class="bi bi-arrow-right" style="color:var(--text-muted);"></i>
                 <div style="display:flex;flex-direction:column;gap:.3rem;">
                     <div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);padding:.35rem .75rem;border-radius:.4rem;white-space:nowrap;font-size:.75rem;">✅ OK → MessageSent → LogMailSent → mail_logs (status: sent)</div>
+                    <div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);padding:.35rem .75rem;border-radius:.4rem;white-space:nowrap;font-size:.75rem;">Bloqueado → BlockDisabledMailAutomation → mail_logs (status: blocked)</div>
                     <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);padding:.35rem .75rem;border-radius:.4rem;white-space:nowrap;font-size:.75rem;">❌ Error → catch block → MailLog::recordFailed() → mail_logs (status: failed)</div>
                 </div>
             </div>
@@ -105,8 +111,8 @@
                         ['subject','varchar(500) nullable','Asunto del correo'],
                         ['to_email','varchar(255)','Dirección de destino'],
                         ['to_name','varchar(255) nullable','Nombre del destinatario'],
-                        ['status','enum(sent,failed)','Estado del envío'],
-                        ['error_message','text nullable','Mensaje de error (solo cuando status=failed)'],
+                        ['status','enum(sent,failed,blocked)','Estado del envío o bloqueo preventivo'],
+                        ['error_message','text nullable','Mensaje de error o motivo de bloqueo'],
                         ['body_html','longtext nullable','Cuerpo HTML del correo (para preview)'],
                         ['sent_at','timestamp nullable','Timestamp del intento de envío'],
                         ['created_at / updated_at','timestamps','Timestamps de Laravel'],
@@ -127,25 +133,27 @@
         <div style="border-bottom:1px solid var(--surface-border);padding-bottom:.75rem;margin-bottom:1.25rem;">
             <h3 style="margin:0;font-size:1.1rem;display:flex;align-items:center;gap:.5rem;">
                 <span style="background:var(--primary-color);color:#fff;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.85rem;">3</span>
-                Listener Automático — <code>LogMailSent</code>
+                Listeners Automáticos — <code>BlockDisabledMailAutomation</code> / <code>LogMailSent</code>
             </h3>
         </div>
         <div style="display:flex;flex-direction:column;gap:.875rem;">
             <div>
                 <strong style="font-size:.875rem;display:block;margin-bottom:.4rem;">Ubicación</strong>
+                <code style="font-size:.8rem;">app/Listeners/BlockDisabledMailAutomation.php</code><br>
                 <code style="font-size:.8rem;">app/Listeners/LogMailSent.php</code>
             </div>
             <div>
-                <strong style="font-size:.875rem;display:block;margin-bottom:.4rem;">Evento que escucha</strong>
-                <code style="font-size:.8rem;">Illuminate\Mail\Events\MessageSent</code>
+                <strong style="font-size:.875rem;display:block;margin-bottom:.4rem;">Eventos que escucha</strong>
+                <code style="font-size:.8rem;">Illuminate\Mail\Events\MessageSending</code>
+                <span style="display:block;font-size:.8rem;color:var(--text-muted);margin-top:.25rem;">Permite bloquear un correo antes de pasar al transporte SMTP.</span>
+                <code style="font-size:.8rem;display:inline-block;margin-top:.5rem;">Illuminate\Mail\Events\MessageSent</code>
                 <span style="display:block;font-size:.8rem;color:var(--text-muted);margin-top:.25rem;">Laravel lo dispara automáticamente después de cada envío exitoso.</span>
             </div>
             <div>
-                <strong style="font-size:.875rem;display:block;margin-bottom:.4rem;">Registro en AppServiceProvider</strong>
+                <strong style="font-size:.875rem;display:block;margin-bottom:.4rem;">Registro automático</strong>
                 <div style="background:var(--surface-bg);border-radius:.5rem;padding:1rem;font-family:monospace;font-size:.78rem;line-height:1.8;overflow-x:auto;">
-                    <span style="color:#8b5cf6;">use</span> Illuminate\Mail\Events\MessageSent;<br>
-                    <span style="color:#8b5cf6;">use</span> App\Listeners\LogMailSent;<br><br>
-                    Event::listen(MessageSent::class, LogMailSent::class);
+                    Laravel descubre estos listeners por la firma del metodo <code>handle()</code>.<br>
+                    No registrar manualmente con <code>Event::listen()</code>, porque se duplicaria la bitacora.
                 </div>
             </div>
             <div>
@@ -157,6 +165,7 @@
                     <li>HTML del body del correo (<code>body_html</code>) para preview</li>
                     <li>Timestamp actual (<code>sent_at</code>)</li>
                     <li>Status siempre <code>sent</code> (ya que el evento solo se dispara en éxito)</li>
+                    <li>Intentos bloqueados con status <code>blocked</code> y motivo de configuración</li>
                 </ul>
             </div>
         </div>
@@ -245,8 +254,9 @@
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.875rem;">
             @foreach([
-                ['bi-bar-chart-fill','#3b82f6','Estadísticas rápidas','Total de correos, enviados, fallidos y tasa de éxito (%) en tarjetas en la parte superior.'],
-                ['bi-funnel-fill','#8b5cf6','Filtros','Buscar por email de destino, asunto del correo, y filtro por estado (todos / enviados / fallidos).'],
+                ['bi-bar-chart-fill','#3b82f6','Estadísticas rápidas','Total de correos, enviados, fallidos, bloqueados y actividad del día.'],
+                ['bi-toggles','#f59e0b','Switches de automatización','Encendido global y control por tipo de correo desde el monitor.'],
+                ['bi-funnel-fill','#8b5cf6','Filtros','Buscar por email de destino, asunto del correo, tipo de mail y estado (todos / enviados / fallidos / bloqueados).'],
                 ['bi-table','#10b981','Tabla paginada','Lista ordenada por fecha descendente con columnas: estado, asunto, destinatario, clase Mailable y fecha/hora.'],
                 ['bi-eye-fill','#f59e0b','Preview HTML','Modal que renderiza el HTML del correo dentro de un <code>&lt;iframe&gt;</code> sandboxed para previsualizar el contenido.'],
                 ['bi-trash3-fill','#ef4444','Limpiar registros','Modal de confirmación para eliminar logs de un rango de fechas. Protegido con confirmación antes de borrar.'],
