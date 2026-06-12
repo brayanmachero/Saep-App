@@ -150,14 +150,10 @@
                 <span style="display:block;font-size:.8rem;color:var(--text-muted);margin-top:.25rem;">Laravel lo dispara automáticamente después de cada envío exitoso.</span>
             </div>
             <div>
-                <strong style="font-size:.875rem;display:block;margin-bottom:.4rem;">Registro en AppServiceProvider</strong>
+                <strong style="font-size:.875rem;display:block;margin-bottom:.4rem;">Registro automático</strong>
                 <div style="background:var(--surface-bg);border-radius:.5rem;padding:1rem;font-family:monospace;font-size:.78rem;line-height:1.8;overflow-x:auto;">
-                    <span style="color:#8b5cf6;">use</span> Illuminate\Mail\Events\MessageSent;<br>
-                    <span style="color:#8b5cf6;">use</span> Illuminate\Mail\Events\MessageSending;<br>
-                    <span style="color:#8b5cf6;">use</span> App\Listeners\BlockDisabledMailAutomation;<br>
-                    <span style="color:#8b5cf6;">use</span> App\Listeners\LogMailSent;<br><br>
-                    Event::listen(MessageSending::class, BlockDisabledMailAutomation::class);<br>
-                    Event::listen(MessageSent::class, LogMailSent::class);
+                    Laravel descubre estos listeners por la firma del metodo <code>handle()</code>.<br>
+                    No registrar manualmente con <code>Event::listen()</code>, porque se duplicaria la bitacora.
                 </div>
             </div>
             <div>
