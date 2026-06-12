@@ -6,6 +6,7 @@ use App\Modules\Comercial\Models\Parametro;
 use App\Modules\Comercial\Models\ParametroAuditoria;
 use App\Modules\Comercial\Services\IntegradorGobiernoService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class ParametroController
 {
@@ -67,10 +68,16 @@ class ParametroController
                 }
             }
 
+            $uniformesCreados = $this->crearUniformes(
+                $request->input('uniformes_nuevos', []),
+                $request->input('origen', 'mantenedor')
+            );
+
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => true,
                     'message' => 'Parámetros actualizados exitosamente.',
+                    'uniformes' => $uniformesCreados,
                 ]);
             }
 
@@ -128,7 +135,94 @@ class ParametroController
         ]);
     }
 
+    private function crearUniformes(array $uniformes, string $origen): array
+    {
+        $creados = [];
+
+        foreach ($uniformes as $uniforme) {
+            $nombre = trim((string) ($uniforme['nombre'] ?? ''));
+            $valor = $uniforme['valor'] ?? ($uniforme['precio'] ?? null);
+
+            if ($nombre === '' || $valor === null || $valor === '') {
+                continue;
+            }
+
+            $valor = $this->normalizarNumeroSimple($valor, 'moneda');
+            $this->validarDecimal($valor);
+
+            $existente = Parametro::where('categoria', 'UNIFORMES')
+                ->whereRaw('LOWER(nombre) = ?', [mb_strtolower($nombre)])
+                ->first();
+
+            if ($existente) {
+                $creados[] = $this->uniformePayload($existente);
+                continue;
+            }
+
+            $claveBase = 'UNIFORME_' . strtoupper(Str::slug($nombre, '_'));
+            $clave = $claveBase ?: 'UNIFORME_ITEM';
+            $suffix = 2;
+
+            while (Parametro::where('clave', $clave)->exists()) {
+                $clave = $claveBase . '_' . $suffix;
+                $suffix++;
+            }
+
+            $parametro = Parametro::create([
+                'clave' => $clave,
+                'nombre' => $nombre,
+                'descripcion' => 'Precio referencial uniforme.',
+                'valor' => (string) $valor,
+                'tipo' => 'decimal',
+                'editable' => true,
+                'categoria' => 'UNIFORMES',
+                'version' => 1,
+                'actualizado_por' => auth()->id(),
+            ]);
+
+            $parametro->auditorias()->create([
+                'usuario_id' => auth()->id(),
+                'clave' => $parametro->clave,
+                'nombre' => $parametro->nombre,
+                'categoria' => $parametro->categoria,
+                'valor_anterior' => null,
+                'valor_nuevo' => (string) $valor,
+                'origen' => $origen,
+                'descripcion' => "Creación de {$parametro->nombre}",
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->header('User-Agent'),
+            ]);
+
+            $creados[] = $this->uniformePayload($parametro);
+        }
+
+        return $creados;
+    }
+
+    private function uniformePayload(Parametro $parametro): array
+    {
+        return [
+            'id' => $parametro->id,
+            'nombre' => $parametro->nombre,
+            'valor' => (float) $parametro->valor_actual,
+            'valor_visual' => $parametro->formatearValorVisual(),
+        ];
+    }
+
     private function normalizarValor(mixed $valor, Parametro $parametro): string
+    {
+        $valor = trim((string) $valor);
+        $valor = str_replace(['$', '%', ' '], '', $valor);
+        $valor = preg_replace('/[^\d,.\-]/', '', $valor) ?? '';
+
+        if ($valor === '') {
+            return $valor;
+        }
+
+        return $this->normalizarNumeroSimple($valor, $parametro->formato_visual);
+    }
+
+    private function normalizarNumeroSimple(mixed $valor, string $formato): string
     {
         $valor = trim((string) $valor);
         $valor = str_replace(['$', '%', ' '], '', $valor);
@@ -143,11 +237,11 @@ class ParametroController
             return str_replace(',', '.', $valor);
         }
 
-        if ($parametro->formato_visual === 'entero') {
+        if ($formato === 'entero') {
             return str_replace('.', '', $valor);
         }
 
-        if ($parametro->formato_visual === 'moneda') {
+        if ($formato === 'moneda') {
             $partes = explode('.', $valor);
             if (count($partes) > 2 || (count($partes) === 2 && strlen(end($partes)) === 3)) {
                 return str_replace('.', '', $valor);

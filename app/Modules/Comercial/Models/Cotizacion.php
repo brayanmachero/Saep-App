@@ -154,7 +154,10 @@ class Cotizacion extends Model
     public function scopeVigentes($query)
     {
         return $query->where('estado', 'vigente')
-                     ->where('fecha_vigencia_hasta', '>=', now());
+                     ->where(function ($subQuery) {
+                         $subQuery->whereNull('fecha_vigencia_hasta')
+                             ->orWhere('fecha_vigencia_hasta', '>=', now());
+                     });
     }
 
     /**
@@ -170,8 +173,18 @@ class Cotizacion extends Model
      */
     public static function generarNumero()
     {
-        $contador = self::whereYear('created_at', now()->year)->count() + 1;
-        return 'COTIZ-' . now()->format('Y') . '-' . str_pad($contador, 5, '0', STR_PAD_LEFT);
+        $year = now()->format('Y');
+        $prefix = "COTIZ-{$year}-";
+        $ultimoNumero = self::where('numero', 'like', "{$prefix}%")
+            ->lockForUpdate()
+            ->orderByDesc('numero')
+            ->value('numero');
+
+        $contador = $ultimoNumero
+            ? ((int) substr($ultimoNumero, -5)) + 1
+            : 1;
+
+        return $prefix . str_pad((string) $contador, 5, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -187,6 +200,7 @@ class Cotizacion extends Model
      */
     public function esVigente(): bool
     {
-        return $this->estado === 'vigente' && $this->fecha_vigencia_hasta >= now();
+        return $this->estado === 'vigente'
+            && ($this->fecha_vigencia_hasta === null || $this->fecha_vigencia_hasta >= now());
     }
 }

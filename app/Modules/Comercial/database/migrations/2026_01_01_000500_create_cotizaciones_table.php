@@ -21,7 +21,7 @@ return new class extends Migration
             $table->foreignId('modalidad_id')->constrained('comercial_modalidades')->cascadeOnDelete();
             $table->foreignId('usuario_id')->nullable()->constrained('users')->nullOnDelete();
 
-            $table->enum('estado', ['en_cotizacion', 'aprobada', 'vigente', 'no_vigente', 'cancelada'])->default('en_cotizacion');
+            $table->enum('estado', ['en_cotizacion', 'aprobada', 'vigente', 'no_vigente', 'rechazada', 'cancelada'])->default('en_cotizacion');
             $table->integer('version')->default(1);
             $table->foreignId('cotizacion_anterior_id')->nullable()->constrained('comercial_cotizaciones')->nullOnDelete();
 

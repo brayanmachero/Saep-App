@@ -318,6 +318,19 @@
                 </div>
                 @endforeach
             </div>
+
+            <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--surface-border)">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem">
+                    <div>
+                        <strong style="font-size:.9rem">Agregar nuevos ítems</strong>
+                        <div style="font-size:.75rem;color:var(--text-muted)">Quedan disponibles para futuras cotizaciones y se auditan como creación de parámetro.</div>
+                    </div>
+                    <button type="button" class="btn-secondary" onclick="agregarUniformeNuevo()">
+                        <i class="bi bi-plus-lg"></i> Agregar item
+                    </button>
+                </div>
+                <div id="uniformesNuevos" class="param-field-grid"></div>
+            </div>
         </div>
 
         {{-- Botones de Acción --}}
@@ -464,7 +477,34 @@ document.getElementById('parametrosForm')?.addEventListener('submit', () => {
     });
 });
 
-<script>
+let uniformesNuevosIndex = 0;
+
+function agregarUniformeNuevo() {
+    const contenedor = document.getElementById('uniformesNuevos');
+    const idx = uniformesNuevosIndex++;
+    const card = document.createElement('div');
+    card.className = 'param-field-card';
+    card.innerHTML = `
+        <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.75rem">Nuevo uniforme</label>
+        <div class="form-grid" style="grid-template-columns:minmax(0,1fr) minmax(140px,.5fr);gap:.65rem">
+            <input type="text" name="uniformes_nuevos[${idx}][nombre]" class="form-control" placeholder="Nombre item">
+            <div class="param-value-wrap">
+                <input type="text" name="uniformes_nuevos[${idx}][valor]" class="form-control" placeholder="0" inputmode="numeric" data-param-format="moneda">
+                <span class="param-unit">$</span>
+            </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:.65rem">
+            <button type="button" class="icon-btn danger" onclick="this.closest('.param-field-card').remove()">
+                <i class="bi bi-trash-fill"></i>
+            </button>
+        </div>
+    `;
+    contenedor.appendChild(card);
+    card.querySelector('[data-param-format]')?.addEventListener('blur', (event) => {
+        event.target.value = formatParamNumber(event.target.value, event.target.dataset.paramFormat);
+    });
+}
+
 function actualizarFactorVisual(select) {
     const horas = parseFloat(select.value);
     if(horas > 0) {

@@ -38,6 +38,8 @@
                     <option value="aprobada" {{ request('estado') === 'aprobada' ? 'selected' : '' }}>Aprobada</option>
                     <option value="vigente" {{ request('estado') === 'vigente' ? 'selected' : '' }}>Vigente</option>
                     <option value="no_vigente" {{ request('estado') === 'no_vigente' ? 'selected' : '' }}>No Vigente</option>
+                    <option value="rechazada" {{ request('estado') === 'rechazada' ? 'selected' : '' }}>Rechazada</option>
+                    <option value="cancelada" {{ request('estado') === 'cancelada' ? 'selected' : '' }}>Cancelada</option>
                 </select>
             </div>
         </form>
@@ -87,7 +89,8 @@
                             <span class="badge {{
                                 $cotizacion->estado === 'vigente' ? 'badge-success' :
                                 ($cotizacion->estado === 'aprobada' ? 'badge-info' :
-                                ($cotizacion->estado === 'en_cotizacion' ? 'badge-warning' : 'badge-danger'))
+                                ($cotizacion->estado === 'en_cotizacion' ? 'badge-warning' :
+                                (in_array($cotizacion->estado, ['rechazada', 'cancelada'], true) ? 'badge-danger' : 'badge-secondary')))
                             }}">
                                 {{ ucfirst(str_replace('_', ' ', $cotizacion->estado)) }}
                             </span>

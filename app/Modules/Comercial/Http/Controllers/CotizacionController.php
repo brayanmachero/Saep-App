@@ -12,6 +12,7 @@ use App\Modules\Comercial\Services\GeneradorPDFService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\ValidationException;
 
 class CotizacionController
 {
@@ -211,6 +212,8 @@ class CotizacionController
 
     public function destroy(Cotizacion $cotizacion)
     {
+        $this->registrarAuditoria($cotizacion, 'eliminada', 'Cotización enviada a papelera');
+
         $cotizacion->delete();
 
         return redirect()->route('comercial.cotizaciones.index')
@@ -261,6 +264,28 @@ class CotizacionController
         });
 
         return back()->with('success', 'Cotización ahora es vigente.');
+    }
+
+    public function rechazar(Request $request, Cotizacion $cotizacion)
+    {
+        if (! in_array($cotizacion->estado, ['en_cotizacion', 'aprobada'], true)) {
+            return back()->with('error', 'Solo puedes rechazar cotizaciones en estado En Cotización o Aprobada.');
+        }
+
+        $validated = $request->validate([
+            'motivo' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $cotizacion->update([
+            'estado' => 'rechazada',
+            'fecha_cancelacion' => now(),
+        ]);
+
+        $this->registrarAuditoria($cotizacion, 'rechazada', 'Cotización rechazada', [
+            'motivo' => $validated['motivo'],
+        ]);
+
+        return back()->with('success', 'Cotización rechazada.');
     }
 
     public function cancelar(Cotizacion $cotizacion)
@@ -338,7 +363,7 @@ class CotizacionController
 
     private function validarCotizacion(Request $request, ?Cotizacion $cotizacion = null): array
     {
-        return $request->validate([
+        $validated = $request->validate([
             'titulo' => 'nullable|string|max:180',
             'cargo' => 'required|string|max:180',
             'cliente_id' => 'required|exists:comercial_clientes,id',
@@ -361,6 +386,18 @@ class CotizacionController
             'otros_gastos' => 'nullable|numeric|min:0',
             'otros_beneficios' => 'nullable|numeric|min:0',
         ]);
+
+        $centroValido = CentroCosto::whereKey($validated['centro_costo_id'])
+            ->where('cliente_id', $validated['cliente_id'])
+            ->exists();
+
+        if (! $centroValido) {
+            throw ValidationException::withMessages([
+                'centro_costo_id' => 'El centro de costo seleccionado no pertenece al cliente indicado.',
+            ]);
+        }
+
+        return $validated;
     }
 
     private function datosParaCalculo(array $validated, ?Cotizacion $cotizacion = null): array

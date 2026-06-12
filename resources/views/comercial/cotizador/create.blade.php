@@ -400,13 +400,30 @@
                     Parámetros rápidos de cálculo
                 </summary>
 
+                @php
+                    $scopeParametro = function ($parametro, $categoria) {
+                        $clave = strtoupper((string) $parametro->clave);
+                        $categoria = strtoupper((string) $categoria);
+
+                        if (str_contains($categoria, '_EST') || str_contains($clave, '_EST') || str_ends_with($clave, 'EST')) {
+                            return 'est';
+                        }
+
+                        if (str_contains($categoria, '_SUB') || str_contains($clave, '_SUB') || str_ends_with($clave, 'SUB')) {
+                            return 'sub';
+                        }
+
+                        return 'common';
+                    };
+                @endphp
                 <div style="margin-top:1rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.85rem">
                     @foreach($parametrosPorCategoria as $categoria => $items)
-                        <div style="grid-column:1/-1;font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;margin-top:.25rem">
+                        @php($categoriaKey = md5((string) $categoria))
+                        <div data-param-category="{{ $categoriaKey }}" style="grid-column:1/-1;font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;margin-top:.25rem">
                             {{ str_replace('_', ' ', $categoria) }}
                         </div>
                         @foreach($items as $parametro)
-                        <div style="background:var(--bg-tertiary);border:1px solid var(--surface-border);border-radius:8px;padding:.75rem">
+                        <div data-param-card data-param-group="{{ $categoriaKey }}" data-param-scope="{{ $scopeParametro($parametro, $categoria) }}" style="background:var(--bg-tertiary);border:1px solid var(--surface-border);border-radius:8px;padding:.75rem">
                             <label style="font-size:.78rem;font-weight:600;display:block;margin-bottom:.4rem">
                                 {{ $parametro->nombre }}
                             </label>
@@ -430,6 +447,9 @@
                     <button type="button" class="btn-secondary" onclick="guardarParametrosRapidos()">
                         <i class="bi bi-save"></i> Guardar parámetros
                     </button>
+                </div>
+                <div style="margin-top:.65rem;color:var(--text-muted);font-size:.78rem">
+                    Estos cambios actualizan parámetros globales y quedan auditados con origen cotizador rápido.
                 </div>
             </details>
         </div>
@@ -520,9 +540,35 @@
                     </table>
                 </div>
 
-                <button type="button" class="btn-secondary" onclick="agregarUniforme()">
-                    <i class="bi bi-plus-lg"></i> Agregar Uniforme
-                </button>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+                    <select id="uniformCatalogSelect" class="form-control" style="max-width:320px">
+                        <option value="">-- Seleccionar del catálogo --</option>
+                    </select>
+                    <button type="button" class="btn-secondary" onclick="agregarUniformeDesdeCatalogo()">
+                        <i class="bi bi-plus-lg"></i> Agregar desde catálogo
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="agregarUniforme()">
+                        <i class="bi bi-pencil-square"></i> Agregar manual
+                    </button>
+                    @if(auth()->user()->tieneAcceso('comercial', 'puede_editar'))
+                    <button type="button" class="btn-secondary" onclick="toggleQuickBox('quickUniformeBox')">
+                        <i class="bi bi-bag-plus"></i> Nuevo item catálogo
+                    </button>
+                    @endif
+                </div>
+
+                @if(auth()->user()->tieneAcceso('comercial', 'puede_editar'))
+                <div id="quickUniformeBox" style="display:none;margin-top:.65rem;padding:.75rem;border:1px solid var(--surface-border);border-radius:8px;background:var(--bg-tertiary)">
+                    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,.35fr) auto;gap:.5rem">
+                        <input type="text" id="quickUniformeNombre" class="form-control" placeholder="Nombre item">
+                        <input type="text" id="quickUniformePrecio" class="form-control quote-money-input" placeholder="Precio" inputmode="numeric">
+                        <button type="button" class="btn-secondary" onclick="crearUniformeCatalogoRapido()">
+                            <i class="bi bi-check-lg"></i> Guardar
+                        </button>
+                    </div>
+                    <div id="quickUniformeStatus" style="font-size:.78rem;color:var(--text-muted);margin-top:.4rem"></div>
+                </div>
+                @endif
             </details>
         </div>
 
@@ -573,6 +619,13 @@ const previewUrl = @json(route('comercial.cotizaciones.preview'));
 const quickClienteUrl = @json(route('comercial.clientes.store'));
 const quickCentroUrl = @json(route('comercial.centros-costo.store'));
 const parametrosBatchUrl = @json(route('comercial.parametros.batch-update'));
+const modalidadCodes = @json($modalidades->pluck('codigo', 'id'));
+let uniformesCatalogo = @json(collect($parametrosPorCategoria['UNIFORMES'] ?? [])->map(fn ($parametro) => [
+    'id' => $parametro->id,
+    'nombre' => $parametro->nombre,
+    'valor' => (float) $parametro->valor_actual,
+    'valor_visual' => $parametro->formatearValorVisual(),
+])->values());
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
 const sueldoMinimoLegal = Number(@json($sueldoMinimoLegal ?? 0));
 const clpFormatter = new Intl.NumberFormat('es-CL', {
@@ -690,7 +743,16 @@ async function crearCentroRapido() {
 }
 
 async function guardarParametrosRapidos() {
-    const inputs = document.querySelectorAll('[data-parametro-quick]');
+    const inputs = document.querySelectorAll('[data-parametro-quick]:not(:disabled)');
+    if (!inputs.length) {
+        setStatus('quickParametrosStatus', 'Selecciona una modalidad para ver parámetros aplicables.', 'error');
+        return;
+    }
+
+    if (!confirm('Estos cambios modifican parámetros globales del cotizador. ¿Deseas continuar?')) {
+        return;
+    }
+
     const formData = new FormData();
     formData.append('origen', 'cotizador_rapido');
 
@@ -740,6 +802,30 @@ function cargarCentrosCosto() {
             select.appendChild(opt);
         });
     }
+}
+
+function modalidadSeleccionada() {
+    const id = document.getElementById('modalidadSelect')?.value;
+    return String(modalidadCodes[id] || '').toLowerCase();
+}
+
+function filterQuickParamsByModalidad() {
+    const modalidad = modalidadSeleccionada();
+    document.querySelectorAll('[data-param-card]').forEach((card) => {
+        const scope = card.dataset.paramScope || 'common';
+        const visible = !modalidad || scope === 'common' || scope === modalidad;
+        card.style.display = visible ? '' : 'none';
+        card.querySelectorAll('[data-parametro-quick]').forEach((input) => {
+            input.disabled = !visible;
+        });
+    });
+
+    document.querySelectorAll('[data-param-category]').forEach((heading) => {
+        const group = heading.dataset.paramCategory;
+        const hasVisibleCards = Array.from(document.querySelectorAll(`[data-param-card][data-param-group="${group}"]`))
+            .some((card) => card.style.display !== 'none');
+        heading.style.display = hasVisibleCards ? '' : 'none';
+    });
 }
 
 function formatCLP(value) {
@@ -1027,7 +1113,35 @@ function actualizarUniformeFila(fila) {
     }
 }
 
-function agregarUniforme() {
+function renderUniformCatalogSelect() {
+    const select = document.getElementById('uniformCatalogSelect');
+    if (!select) return;
+
+    const selected = select.value;
+    select.innerHTML = '<option value="">-- Seleccionar del catálogo --</option>';
+    uniformesCatalogo.forEach((item, index) => {
+        const option = document.createElement('option');
+        option.value = String(index);
+        option.textContent = `${item.nombre} - ${formatCLP(item.valor)}`;
+        select.appendChild(option);
+    });
+    select.value = selected;
+}
+
+function agregarUniformeDesdeCatalogo() {
+    const select = document.getElementById('uniformCatalogSelect');
+    const selectedIndex = select?.value ?? '';
+    const item = selectedIndex === '' ? null : uniformesCatalogo[Number(selectedIndex)];
+
+    if (!item) {
+        if (typeof showToast === 'function') showToast('Selecciona un item de uniforme.', 'error');
+        return;
+    }
+
+    agregarUniforme(item);
+}
+
+function agregarUniforme(uniforme = null) {
     const tabla = document.getElementById('uniformesTable');
     const fila = document.createElement('tr');
     const idx = tabla.children.length;
@@ -1052,7 +1166,71 @@ function agregarUniforme() {
     `;
     tabla.appendChild(fila);
     initMoneyInput(fila.querySelector('[data-money-input]'));
+
+    if (uniforme) {
+        fila.querySelector('[name*="[descripcion]"]').value = uniforme.nombre || '';
+        const precioInput = fila.querySelector('[name*="[precio_unitario]"]');
+        precioInput.value = formatMoneyValue(uniforme.valor || 0);
+    }
+
     actualizarUniformeFila(fila);
+    schedulePreview();
+}
+
+async function crearUniformeCatalogoRapido() {
+    const nombreInput = document.getElementById('quickUniformeNombre');
+    const precioInput = document.getElementById('quickUniformePrecio');
+    const nombre = nombreInput.value.trim();
+    const precio = parseMoney(precioInput.value);
+
+    if (!nombre) {
+        setStatus('quickUniformeStatus', 'Ingresa un nombre de item.', 'error');
+        nombreInput.focus();
+        return;
+    }
+
+    if (!precio || Number(precio) <= 0) {
+        setStatus('quickUniformeStatus', 'Ingresa un precio válido.', 'error');
+        precioInput.focus();
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('origen', 'cotizador_rapido');
+    formData.append('uniformes_nuevos[0][nombre]', nombre);
+    formData.append('uniformes_nuevos[0][valor]', precio);
+    setStatus('quickUniformeStatus', 'Guardando...');
+
+    try {
+        const response = await fetch(parametrosBatchUrl, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: formData,
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || data.success === false) {
+            throw new Error(data.message || 'No fue posible crear el item.');
+        }
+
+        (data.uniformes || []).forEach((item) => {
+            if (!uniformesCatalogo.some((actual) => Number(actual.id) === Number(item.id))) {
+                uniformesCatalogo.push(item);
+            }
+            agregarUniforme(item);
+        });
+        renderUniformCatalogSelect();
+        nombreInput.value = '';
+        precioInput.value = '';
+        setStatus('quickUniformeStatus', 'Item creado y agregado.', 'success');
+        if (typeof showToast === 'function') showToast('Item de uniforme creado.', 'success');
+    } catch (error) {
+        setStatus('quickUniformeStatus', error.message, 'error');
+    }
 }
 
 async function actualizarCalculos() {
@@ -1104,11 +1282,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     document.querySelectorAll('[data-money-input]').forEach(initMoneyInput);
+    initMoneyInput(document.getElementById('quickUniformePrecio'));
+    renderUniformCatalogSelect();
     document.querySelectorAll('[data-parametro-quick]').forEach((input) => {
         input.addEventListener('blur', () => {
             input.value = formatParamNumber(input.value, input.dataset.paramFormat);
         });
     });
+    document.getElementById('modalidadSelect')?.addEventListener('change', filterQuickParamsByModalidad);
+    filterQuickParamsByModalidad();
     document.querySelectorAll('#uniformesTable tr').forEach(actualizarUniformeFila);
     actualizarCalculos();
 });

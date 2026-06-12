@@ -61,6 +61,8 @@ return [
         'from_name' => env('COMERCIAL_EMAIL_FROM_NAME', 'SAEP - Sistema de Cotizaciones'),
     ],
 
+    'api_token' => env('COMERCIAL_API_TOKEN'),
+
     'quotation' => [
         'default_currency' => 'CLP',
         'default_validity_days' => 30,

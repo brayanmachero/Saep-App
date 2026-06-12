@@ -107,6 +107,7 @@
         $resumen = $cotizacion->datos_calculo['resumen_excel'] ?? [];
         $horas = $cotizacion->datos_calculo['horas'] ?? [];
         $detallesCalculo = collect($cotizacion->datos_calculo['detalles'] ?? $cotizacion->detalles->toArray());
+        $puedeAprobar = (bool) (auth()->user()?->rol?->puede_aprobar);
         $valor = fn($monto) => '$' . number_format((float) ($monto ?? 0), 0, ',', '.');
         $porcentaje = fn($pct) => number_format((float) ($pct ?? 0), 2, ',', '.') . '%';
         $numero = fn($valor, $decimales = 2) => number_format((float) ($valor ?? 0), $decimales, ',', '.');
@@ -207,7 +208,12 @@
                 </div>
             </div>
 
-            <div style="display:flex;gap:.5rem">
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                @if(! $puedeAprobar && in_array($cotizacion->estado, ['en_cotizacion', 'aprobada'], true))
+                    <span class="badge badge-secondary">Pendiente de aprobador</span>
+                @endif
+
+                @if($puedeAprobar)
                 @if($cotizacion->estado === 'en_cotizacion')
                 <form method="POST" action="{{ route('comercial.cotizaciones.aprobar', $cotizacion) }}" style="display:inline">
                     @csrf @method('PATCH')
@@ -215,6 +221,12 @@
                         <i class="bi bi-check-circle-fill"></i> Aprobar
                     </button>
                 </form>
+                @endif
+
+                @if(in_array($cotizacion->estado, ['en_cotizacion', 'aprobada'], true))
+                <button type="button" class="btn-secondary" onclick="document.getElementById('rechazoModal').style.display='flex'">
+                    <i class="bi bi-x-circle-fill"></i> Rechazar
+                </button>
                 @endif
 
                 @if($cotizacion->estado === 'aprobada')
@@ -233,6 +245,7 @@
                         <i class="bi bi-x-circle-fill"></i> Cancelar
                     </button>
                 </form>
+                @endif
                 @endif
             </div>
         </div>
@@ -407,6 +420,33 @@
         </div>
     </div>
     @endif
+</div>
+
+{{-- Modal para Rechazar --}}
+<div id="rechazoModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:1rem">
+    <div style="background:var(--surface-color);border:1px solid var(--surface-border);border-radius:14px;padding:1.5rem;max-width:520px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.2)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+            <h3 style="margin:0;font-size:1.1rem"><i class="bi bi-x-circle-fill"></i> Rechazar Cotización</h3>
+            <button type="button" onclick="document.getElementById('rechazoModal').style.display='none'"
+                    style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted)">&times;</button>
+        </div>
+
+        <form method="POST" action="{{ route('comercial.cotizaciones.rechazar', $cotizacion) }}">
+            @csrf @method('PATCH')
+            <div class="form-group">
+                <label>Motivo del rechazo <span class="required">*</span></label>
+                <textarea name="motivo" class="form-control" rows="4" maxlength="1000" required placeholder="Ej: tarifa requiere ajuste de margen, cliente rechazó condiciones, datos incompletos...">{{ old('motivo') }}</textarea>
+                @error('motivo')<span class="form-error">{{ $message }}</span>@enderror
+            </div>
+
+            <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.5rem">
+                <button type="button" class="btn-secondary" onclick="document.getElementById('rechazoModal').style.display='none'">Cancelar</button>
+                <button type="submit" class="btn-premium" onclick="return confirm('¿Rechazar esta cotización?')">
+                    <i class="bi bi-x-lg"></i> Confirmar rechazo
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
 
 {{-- Modal para Enviar Email --}}
