@@ -395,8 +395,10 @@ Route::middleware('auth')->group(function () {
     });
 
     // --- DOCUMENTACIÓN ---
-    Route::get('documentacion', [DocumentacionController::class, 'index'])->name('documentacion.index');
-    Route::get('documentacion/{modulo}', [DocumentacionController::class, 'show'])->name('documentacion.show');
+    Route::middleware('modulo:documentacion')->group(function () {
+        Route::get('documentacion', [DocumentacionController::class, 'index'])->name('documentacion.index');
+        Route::get('documentacion/{modulo}', [DocumentacionController::class, 'show'])->name('documentacion.show');
+    });
 
     // --- NOTAS PERSONALES (dictado por voz) ---
     Route::middleware('modulo:notas_personales')->group(function () {

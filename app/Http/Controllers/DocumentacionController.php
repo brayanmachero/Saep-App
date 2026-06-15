@@ -2,6 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Modules\Comercial\Models\CentroCosto as ComercialCentroCosto;
+use App\Modules\Comercial\Models\Cliente as ComercialCliente;
+use App\Modules\Comercial\Models\Cotizacion;
+use App\Modules\Comercial\Models\CotizacionAuditoria;
+use App\Modules\Comercial\Models\Parametro;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
 class DocumentacionController extends Controller
 {
     /**
@@ -108,6 +116,13 @@ class DocumentacionController extends Controller
                 'estado'      => 'completo',
                 'version'     => '1.1',
             ],
+            'comercial' => [
+                'titulo'      => 'Comercial y Cotizador',
+                'icono'       => 'bi-calculator-fill',
+                'descripcion' => 'Cotizador EST/SUB, mantenedor de parámetros, auditoría, PDF, email y API de tarifas aprobadas.',
+                'estado'      => 'completo',
+                'version'     => '1.2',
+            ],
             'monitor-correos' => [
                 'titulo'      => 'Monitor de Correos',
                 'icono'       => 'bi-envelope-check-fill',
@@ -145,6 +160,113 @@ class DocumentacionController extends Controller
             return view('documentacion.pendiente', compact('meta', 'modulo', 'modulos'));
         }
 
-        return view("documentacion.modulos.{$modulo}", compact('meta', 'modulo', 'modulos'));
+        $data = compact('meta', 'modulo', 'modulos');
+
+        if ($modulo === 'comercial') {
+            $data['comercialDocs'] = $this->comercialContext();
+        }
+
+        return view("documentacion.modulos.{$modulo}", $data);
+    }
+
+    private function comercialContext(): array
+    {
+        $context = [
+            'available' => false,
+            'error' => null,
+            'stats' => [
+                'cotizaciones' => 0,
+                'clientes' => 0,
+                'centros' => 0,
+                'parametros' => 0,
+                'vigentes' => 0,
+                'aprobadas' => 0,
+                'precio_vigente' => 0,
+            ],
+            'estados' => [],
+            'categorias_parametros' => [],
+            'ultima_actualizacion' => null,
+            'ultima_cotizacion' => null,
+            'api' => [
+                'enabled' => (bool) config('comercial.api.enabled', true),
+                'token_configurado' => false,
+                'query_token' => (bool) config('comercial.api.allow_query_token', false),
+                'default_limit' => (int) config('comercial.api.default_limit', 500),
+            ],
+            'auditorias' => collect(),
+        ];
+
+        try {
+            $context['available'] = Schema::hasTable('comercial_cotizaciones');
+
+            if (! $context['available']) {
+                return $context;
+            }
+
+            $estadoCounts = Cotizacion::query()
+                ->select('estado', DB::raw('COUNT(*) as total'))
+                ->groupBy('estado')
+                ->pluck('total', 'estado')
+                ->map(fn ($total) => (int) $total)
+                ->all();
+
+            $context['stats'] = [
+                'cotizaciones' => array_sum($estadoCounts),
+                'clientes' => Schema::hasTable('comercial_clientes') ? ComercialCliente::query()->count() : 0,
+                'centros' => Schema::hasTable('comercial_centros_costo') ? ComercialCentroCosto::query()->count() : 0,
+                'parametros' => Schema::hasTable('comercial_parametros') ? Parametro::query()->count() : 0,
+                'vigentes' => $estadoCounts['vigente'] ?? 0,
+                'aprobadas' => $estadoCounts['aprobada'] ?? 0,
+                'precio_vigente' => (float) Cotizacion::query()
+                    ->whereIn('estado', ['vigente', 'aprobada'])
+                    ->sum('precio_venta'),
+            ];
+
+            $context['estados'] = $estadoCounts;
+
+            if (Schema::hasTable('comercial_parametros')) {
+                $context['categorias_parametros'] = Parametro::query()
+                    ->select('categoria', DB::raw('COUNT(*) as total'))
+                    ->groupBy('categoria')
+                    ->orderBy('categoria')
+                    ->pluck('total', 'categoria')
+                    ->map(fn ($total) => (int) $total)
+                    ->all();
+
+                $context['ultima_actualizacion'] = Parametro::with('actualizadoPor')
+                    ->latest('updated_at')
+                    ->first();
+            }
+
+            $context['ultima_cotizacion'] = Cotizacion::query()
+                ->latest('updated_at')
+                ->first();
+
+            $context['api']['token_configurado'] = filled(config('comercial.api.token'))
+                || (
+                    Schema::hasTable('configuraciones')
+                    && DB::table('configuraciones')
+                        ->where('clave', 'comercial_api_token')
+                        ->whereNotNull('valor')
+                        ->where('valor', '<>', '')
+                        ->exists()
+                );
+
+            if (Schema::hasTable('comercial_cotizacion_auditorias')) {
+                $context['auditorias'] = CotizacionAuditoria::with([
+                        'usuario:id,name',
+                        'cotizacion:id,numero',
+                    ])
+                    ->latest('created_at')
+                    ->limit(6)
+                    ->get();
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            $context['available'] = false;
+            $context['error'] = 'No fue posible leer indicadores dinámicos del módulo Comercial.';
+        }
+
+        return $context;
     }
 }

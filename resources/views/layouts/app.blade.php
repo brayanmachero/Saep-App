@@ -163,6 +163,12 @@
                 <i class="bi bi-bar-chart-fill"></i>
                 <span>Reportes Comerciales</span>
             </a>
+            @if(auth()->user()->tieneAcceso('documentacion'))
+            <a href="{{ route('documentacion.show', 'comercial') }}" class="nav-item {{ request()->routeIs('documentacion.show') && request()->route('modulo') === 'comercial' ? 'active' : '' }}">
+                <i class="bi bi-journal-richtext"></i>
+                <span>Doc. Comercial</span>
+            </a>
+            @endif
             @endif
 
             {{-- ADMINISTRACIÓN --}}

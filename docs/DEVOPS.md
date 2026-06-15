@@ -5,6 +5,8 @@
 > **Repositorio:** `brayanmachero/saep-platform`  
 > **URL producción:** `https://app.saep.cl`
 
+> **Documento relacionado:** [Módulo Comercial - Documentación Gerencial y Operativa](MODULO_COMERCIAL_DOCUMENTACION_GERENCIAL.md)
+
 ---
 
 ## Tabla de Contenidos
