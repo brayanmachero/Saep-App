@@ -57,8 +57,8 @@
                 ['#api','API / Excel'],
                 ['#tecnologia','Tecnología'],
                 ['#scripts','Scripts'],
+                ['#azure','Azure'],
                 ['#correos','Correos'],
-                ['#demo','Demo gerencial'],
             ] as [$href,$label])
             <a href="{{ $href }}" class="btn-ghost" style="font-size:.8rem;padding:.35rem .75rem;">{{ $label }}</a>
             @endforeach
@@ -394,6 +394,57 @@ in
         </div>
     </div>
 
+    <div class="glass-card" style="margin-bottom:1.25rem;" id="azure">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+            <div>
+                <h3 style="margin:0;font-size:1.05rem;display:flex;align-items:center;gap:.5rem;">
+                    <i class="bi bi-cloud-fill"></i> Ubicación y revisión en Azure
+                </h3>
+                <p style="margin:.35rem 0 0;font-size:.86rem;color:var(--text-muted);line-height:1.55;">
+                    Enlaces operativos para revisar infraestructura, despliegues, logs y archivos. Requieren sesión con permisos en Azure/GitHub; no contienen credenciales ni tokens.
+                </p>
+            </div>
+            <span class="badge" style="font-size:.72rem;">Resource Group: saep-rg</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:.75rem;">
+            @foreach([
+                ['Portal Azure','Entrada general al portal Microsoft Azure.','https://portal.azure.com/','bi-microsoft','#0078d4','portal.azure.com'],
+                ['Resource Group','Contenedor de recursos SAEP: App Service, MySQL y Storage.','https://portal.azure.com/#@/resource/subscriptions/dc9fbc10-208d-4e64-89d8-c3f176438bb2/resourceGroups/saep-rg/overview','bi-folder2-open','#0078d4','saep-rg'],
+                ['App Service','Aplicación productiva Linux PHP 8.3. Revisar Overview, Restart, Deployment Center y Configuration.','https://portal.azure.com/#@/resource/subscriptions/dc9fbc10-208d-4e64-89d8-c3f176438bb2/resourceGroups/saep-rg/providers/Microsoft.Web/sites/saep-app/overview','bi-window-stack','#2563eb','saep-app'],
+                ['Log stream','Revisión de logs runtime: App Service > Monitoring > Log stream.','https://portal.azure.com/#@/resource/subscriptions/dc9fbc10-208d-4e64-89d8-c3f176438bb2/resourceGroups/saep-rg/providers/Microsoft.Web/sites/saep-app/overview','bi-activity','#10b981','Monitoring > Log stream'],
+                ['SSH / Kudu','Consola del contenedor para revisar /home/site/wwwroot y ejecutar comandos Artisan.','https://saep-app-gah2azercshxb0ey.scm.chilecentral-01.azurewebsites.net/webssh/host','bi-terminal-fill','#111827','/home/site/wwwroot'],
+                ['Kudu Advanced Tools','Herramientas SCM del App Service: procesos, consola, archivos y diagnóstico.','https://saep-app-gah2azercshxb0ey.scm.chilecentral-01.azurewebsites.net/','bi-tools','#475569','Advanced Tools'],
+                ['GitHub Actions','Workflow de build/deploy automático hacia Azure App Service.','https://github.com/brayanmachero/saep-platform/actions/workflows/main_saep-app.yml','bi-github','#111827','main_saep-app.yml'],
+                ['Repositorio productivo','Código fuente productivo y commits desplegados.','https://github.com/brayanmachero/saep-platform','bi-git','#fb6b32','brayanmachero/saep-platform'],
+                ['Azure MySQL','Base de datos productiva: host saep-mysql.mysql.database.azure.com.','https://portal.azure.com/#@/resource/subscriptions/dc9fbc10-208d-4e64-89d8-c3f176438bb2/resourceGroups/saep-rg/providers/Microsoft.DBforMySQL/flexibleServers/saep-mysql/overview','bi-database-fill','#0ea5e9','saep-mysql'],
+                ['Azure Storage','Storage Account donde se alojan blobs públicos del sistema.','https://portal.azure.com/#@/resource/subscriptions/dc9fbc10-208d-4e64-89d8-c3f176438bb2/resourceGroups/saep-rg/providers/Microsoft.Storage/storageAccounts/saepplatformstorage/overview','bi-hdd-fill','#0078d4','saepplatformstorage'],
+                ['Contenedor Blob','URL base pública del contenedor saep-files.','https://saepplatformstorage.blob.core.windows.net/saep-files','bi-box-seam','#0891b2','saep-files'],
+                ['Dominio productivo','Aplicación visible para usuarios finales.','https://app.saep.cl','bi-globe2','#10b981','app.saep.cl'],
+            ] as [$titulo,$desc,$url,$icon,$color,$metaAzure])
+            <a href="{{ $url }}" target="_blank" rel="noopener noreferrer"
+               style="text-decoration:none;color:inherit;background:var(--surface-bg);border:1px solid var(--surface-border);border-radius:.7rem;padding:.9rem;display:flex;gap:.75rem;align-items:flex-start;transition:transform .15s,box-shadow .15s;"
+               onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 8px 20px rgba(0,0,0,.12)'"
+               onmouseleave="this.style.transform='none';this.style.boxShadow='none'">
+                <div style="width:38px;height:38px;border-radius:.6rem;background:{{ $color }}18;color:{{ $color }};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:1.1rem;">
+                    <i class="bi {{ $icon }}"></i>
+                </div>
+                <div style="min-width:0;">
+                    <strong style="display:flex;align-items:center;gap:.4rem;font-size:.86rem;">
+                        {{ $titulo }} <i class="bi bi-box-arrow-up-right" style="font-size:.72rem;color:var(--text-muted);"></i>
+                    </strong>
+                    <code style="display:block;margin:.22rem 0;font-size:.72rem;color:var(--primary-color);word-break:break-word;">{{ $metaAzure }}</code>
+                    <span style="display:block;font-size:.78rem;color:var(--text-muted);line-height:1.45;">{{ $desc }}</span>
+                </div>
+            </a>
+            @endforeach
+        </div>
+
+        <div style="margin-top:.9rem;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.22);border-radius:.65rem;padding:.8rem .95rem;font-size:.82rem;color:var(--text-muted);line-height:1.55;">
+            <strong style="color:#2563eb;">Ruta operativa:</strong> Azure Portal > Resource groups > <code>saep-rg</code> > <code>saep-app</code>. Para revisar código desplegado: SSH/Kudu > <code>cd /home/site/wwwroot</code>.
+        </div>
+    </div>
+
     <div class="glass-card" style="margin-bottom:1.25rem;" id="correos">
         <h3 style="margin:0 0 1rem;font-size:1.05rem;display:flex;align-items:center;gap:.5rem;">
             <i class="bi bi-envelope-check"></i> Correos comerciales y automatizaciones
@@ -413,30 +464,6 @@ in
                 </div>
             </div>
             @endforeach
-        </div>
-    </div>
-
-    <div class="glass-card" id="demo">
-        <h3 style="margin:0 0 1rem;font-size:1.05rem;display:flex;align-items:center;gap:.5rem;">
-            <i class="bi bi-easel"></i> Guion para exposición gerencial
-        </h3>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.75rem;">
-            @foreach([
-                'Mostrar indicadores vivos de cotizaciones, clientes y parámetros.',
-                'Crear o editar una cotización EST/SUB y explicar parámetros rápidos por modalidad.',
-                'Mostrar desglose tipo Excel: gratificación, imponible, descuentos, seguros, provisiones, margen y horas.',
-                'Abrir mantenedor y mostrar auditoría de cambios por usuario.',
-                'Generar PDF y explicar que el envío queda en Monitor de Correos.',
-                'Explicar API para Excel/Power Query con token y filtros por cliente.',
-            ] as $item)
-            <div style="display:flex;gap:.65rem;align-items:flex-start;background:var(--surface-bg);border-radius:.55rem;padding:.75rem .85rem;">
-                <i class="bi bi-check2-circle" style="color:#10b981;margin-top:.1rem;"></i>
-                <span style="font-size:.84rem;line-height:1.5;">{{ $item }}</span>
-            </div>
-            @endforeach
-        </div>
-        <div style="margin-top:1rem;border-top:1px solid var(--surface-border);padding-top:1rem;font-size:.82rem;color:var(--text-muted);line-height:1.6;">
-            Mensaje ejecutivo: el módulo transforma una planilla crítica en un proceso empresarial trazable, parametrizable y consultable por integración externa.
         </div>
     </div>
 </div>
