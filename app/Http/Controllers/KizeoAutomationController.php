@@ -23,6 +23,8 @@ class KizeoAutomationController extends Controller
 
     public function index()
     {
+        $legacyAutomations = $this->legacyAutomations();
+
         $rules = KizeoAutomationRule::withCount('runs')
             ->with('latestRun')
             ->orderBy('form_id')
@@ -32,11 +34,12 @@ class KizeoAutomationController extends Controller
         $stats = [
             'rules' => KizeoAutomationRule::count(),
             'active' => KizeoAutomationRule::where('enabled', true)->count(),
+            'legacy_active' => collect($legacyAutomations)->where('active', true)->count(),
             'runs_today' => KizeoAutomationRun::whereDate('created_at', today())->count(),
             'errors_today' => KizeoAutomationRun::whereDate('created_at', today())->where('status', 'error')->count(),
         ];
 
-        return view('kizeo_automations.index', compact('rules', 'stats'));
+        return view('kizeo_automations.index', compact('rules', 'stats', 'legacyAutomations'));
     }
 
     public function create(KizeoService $kizeo)
@@ -168,5 +171,66 @@ class KizeoAutomationController extends Controller
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    private function legacyAutomations(): array
+    {
+        $site = config('services.microsoft_graph.sharepoint_site', 'PDR');
+        $root = config('services.microsoft_graph.root_folder', 'Actas Vehiculos');
+
+        return collect([
+            [
+                'name' => 'Vehículos Entrega / Devolución',
+                'form_id' => config('services.kizeo.vehicle_form_id'),
+                'destination' => "{$site} / {$root}",
+                'source' => 'KIZEO_VEHICLE_FORM_ID',
+            ],
+            [
+                'name' => 'Charla SST',
+                'form_id' => config('services.kizeo.charla_form_id'),
+                'destination' => $site . ' / ' . config('services.kizeo.charla_sharepoint_folder', 'Charlas SST'),
+                'source' => 'KIZEO_CHARLA_FORM_ID',
+            ],
+            [
+                'name' => 'Observación de Conducta',
+                'form_id' => config('services.kizeo.observacion_form_id'),
+                'destination' => $site . ' / ' . config('services.kizeo.observacion_sharepoint_folder', 'Observaciones Conducta'),
+                'source' => 'KIZEO_OBSERVACION_FORM_ID',
+            ],
+            [
+                'name' => 'Inspección SST',
+                'form_id' => config('services.kizeo.inspeccion_form_id'),
+                'destination' => $site . ' / ' . config('services.kizeo.inspeccion_sharepoint_folder', 'Inspecciones SST'),
+                'source' => 'KIZEO_INSPECCION_FORM_ID',
+            ],
+            [
+                'name' => 'Visita Terreno',
+                'form_id' => config('services.kizeo.visita_form_id'),
+                'destination' => $site . ' / ' . config('services.kizeo.visita_sharepoint_folder', 'Visitas Terreno'),
+                'source' => 'KIZEO_VISITA_FORM_ID',
+            ],
+            [
+                'name' => 'Accidente SST',
+                'form_id' => config('services.kizeo.accidente_form_id'),
+                'destination' => $site . ' / ' . config('services.kizeo.accidente_sharepoint_folder', 'Accidentes SST'),
+                'source' => 'KIZEO_ACCIDENTE_FORM_ID',
+            ],
+            [
+                'name' => 'Declaración de Incidente',
+                'form_id' => config('services.kizeo.declaracion_form_id'),
+                'destination' => $site . ' / ' . config('services.kizeo.declaracion_sharepoint_folder', 'Declaraciones SST'),
+                'source' => 'KIZEO_DECLARACION_FORM_ID',
+            ],
+            [
+                'name' => 'Reunión CPHS',
+                'form_id' => config('services.kizeo.cphs_form_id'),
+                'destination' => $site . ' / ' . config('services.kizeo.cphs_sharepoint_folder', 'Reuniones CPHS'),
+                'source' => 'KIZEO_CPHS_FORM_ID',
+            ],
+        ])->map(function (array $automation) {
+            $automation['active'] = filled($automation['form_id']);
+
+            return $automation;
+        })->all();
     }
 }

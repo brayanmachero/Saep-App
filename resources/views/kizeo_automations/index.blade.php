@@ -15,14 +15,18 @@
 
     @include('partials._alerts')
 
-    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
+    <div class="stats-grid" style="grid-template-columns:repeat(5,1fr);">
         <div class="glass-card stat-item">
             <div class="stat-icon primary"><i class="bi bi-diagram-3-fill"></i></div>
-            <div class="stat-info"><h3>{{ $stats['rules'] }}</h3><p>Reglas</p></div>
+            <div class="stat-info"><h3>{{ $stats['rules'] }}</h3><p>Configurables</p></div>
         </div>
         <div class="glass-card stat-item">
             <div class="stat-icon success"><i class="bi bi-toggle-on"></i></div>
-            <div class="stat-info"><h3>{{ $stats['active'] }}</h3><p>Activas</p></div>
+            <div class="stat-info"><h3>{{ $stats['active'] }}</h3><p>Config. activas</p></div>
+        </div>
+        <div class="glass-card stat-item">
+            <div class="stat-icon" style="background:rgba(14,165,233,0.15);color:#0284c7;"><i class="bi bi-code-square"></i></div>
+            <div class="stat-info"><h3>{{ $stats['legacy_active'] }}</h3><p>Legacy activas</p></div>
         </div>
         <div class="glass-card stat-item">
             <div class="stat-icon" style="background:rgba(99,102,241,0.15);color:#6366f1;"><i class="bi bi-calendar-check"></i></div>
@@ -34,7 +38,11 @@
         </div>
     </div>
 
-    <div class="glass-card">
+    <div class="glass-card" style="margin-bottom:1.25rem;">
+        <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--surface-border);">
+            <strong>Reglas configurables</strong>
+            <div style="font-size:.78rem;color:var(--text-muted);margin-top:.15rem;">Estas son las nuevas reglas creadas desde la plataforma.</div>
+        </div>
         <div style="overflow-x:auto">
             <table class="data-table">
                 <thead>
@@ -116,6 +124,51 @@
                 {{ $rules->links() }}
             </div>
         @endif
+    </div>
+
+    <div class="glass-card">
+        <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--surface-border);">
+            <strong>Automatizaciones vigentes legacy</strong>
+            <div style="font-size:.78rem;color:var(--text-muted);margin-top:.15rem;">Siguen funcionando desde el webhook actual. No están duplicadas como reglas configurables para evitar doble procesamiento.</div>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Automatización</th>
+                        <th>Form ID</th>
+                        <th>Destino</th>
+                        <th>Origen config</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($legacyAutomations as $legacy)
+                        <tr>
+                            <td><strong>{{ $legacy['name'] }}</strong></td>
+                            <td>
+                                @if($legacy['form_id'])
+                                    <code>{{ $legacy['form_id'] }}</code>
+                                @else
+                                    <span style="color:var(--text-muted)">Sin configurar</span>
+                                @endif
+                            </td>
+                            <td style="max-width:360px;">
+                                <code style="font-size:.72rem;white-space:normal;">{{ $legacy['destination'] }}</code>
+                            </td>
+                            <td><code style="font-size:.72rem;">{{ $legacy['source'] }}</code></td>
+                            <td>
+                                @if($legacy['active'])
+                                    <span class="badge badge-success"><i class="bi bi-check-circle"></i> Activa legacy</span>
+                                @else
+                                    <span class="badge badge-secondary"><i class="bi bi-dash-circle"></i> Inactiva</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 @endsection
