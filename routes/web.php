@@ -19,6 +19,7 @@ use App\Http\Controllers\FormularioController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\CharlaTrackingController;
 use App\Http\Controllers\KizeoDashboardController;
+use App\Http\Controllers\KizeoAutomationController;
 use App\Http\Controllers\KizeoWebhookController;
 use App\Http\Controllers\LeyKarinController;
 use App\Http\Controllers\WebhookLogController;
@@ -336,6 +337,9 @@ Route::middleware('auth')->group(function () {
     Route::middleware('modulo:configuracion')->group(function () {
         Route::get('configuraciones',   [ConfiguracionController::class, 'index'])->name('configuraciones.index');
         Route::put('configuraciones',   [ConfiguracionController::class, 'update'])->name('configuraciones.update');
+        Route::patch('kizeo-automations/{kizeoAutomation}/toggle', [KizeoAutomationController::class, 'toggle'])
+            ->name('kizeo-automations.toggle');
+        Route::resource('kizeo-automations', KizeoAutomationController::class)->except(['show']);
     });
 
     // --- WEBHOOK LOGS (solo configuracion / superadmin) ---

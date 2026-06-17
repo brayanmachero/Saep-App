@@ -179,6 +179,10 @@
                 <i class="bi bi-gear-fill"></i>
                 <span>Configuración</span>
             </a>
+            <a href="{{ route('kizeo-automations.index') }}" class="nav-item {{ request()->routeIs('kizeo-automations.*') ? 'active' : '' }}">
+                <i class="bi bi-diagram-3-fill"></i>
+                <span>Automatizaciones Kizeo</span>
+            </a>
             @endif
             @if(auth()->user()->tieneAcceso('permisos'))
             <a href="{{ route('permisos.index') }}" class="nav-item {{ request()->routeIs('permisos.*') ? 'active' : '' }}">

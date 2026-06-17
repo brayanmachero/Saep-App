@@ -8,6 +8,7 @@ use App\Models\Configuracion;
 use App\Models\User;
 use App\Models\WebhookLog;
 use App\Notifications\AppNotification;
+use App\Services\KizeoAutomationService;
 use App\Services\KizeoService;
 use App\Services\OneDriveService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -38,10 +39,12 @@ class KizeoWebhookController extends Controller
     ];
 
     private KizeoService $kizeo;
+    private KizeoAutomationService $automations;
 
-    public function __construct(KizeoService $kizeo)
+    public function __construct(KizeoService $kizeo, KizeoAutomationService $automations)
     {
         $this->kizeo = $kizeo;
+        $this->automations = $automations;
     }
 
     /**
@@ -84,6 +87,25 @@ class KizeoWebhookController extends Controller
                 Log::warning('Webhook sin formId o dataId', ['payload_keys' => array_keys($payload)]);
                 WebhookLog::logIgnored(['origen' => 'kizeo', 'form_id' => $formId, 'data_id' => $dataId, 'tipo' => 'sin_identificar', 'resumen' => 'Payload sin form_id o data_id', 'ip' => $request->ip()]);
                 return response()->json(['status' => 'ignored', 'message' => 'Sin form_id o data_id'], 200);
+            }
+
+            $automationResult = $this->automations->process((string) $formId, (string) $dataId, $payload, $request->ip());
+            if ($automationResult['matched'] > 0) {
+                if ($automationResult['failed'] > 0) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Una o más automatizaciones Kizeo fallaron',
+                        'automation' => $automationResult,
+                    ], 500);
+                }
+
+                if (!$automationResult['continue_legacy']) {
+                    return response()->json([
+                        'status' => 'success',
+                        'message' => 'Automatización configurable procesada correctamente',
+                        'automation' => $automationResult,
+                    ], 200);
+                }
             }
 
             // Despachar según el formulario
