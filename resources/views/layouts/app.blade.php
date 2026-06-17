@@ -49,203 +49,259 @@
             @endif
 
             {{-- FORMULARIOS --}}
-            <div class="nav-section-label">Formularios</div>
-            <a href="{{ route('mis-formularios.index') }}" class="nav-item {{ request()->routeIs('mis-formularios.*') ? 'active' : '' }}">
-                <i class="bi bi-clipboard-check-fill"></i>
-                <span>Mis Formularios</span>
-            </a>
-            @if(auth()->user()->tieneAcceso('formularios'))
-            <a href="{{ route('formularios.index') }}" class="nav-item {{ request()->routeIs('formularios.*') ? 'active' : '' }}">
-                <i class="bi bi-ui-checks"></i>
-                <span>Formularios</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('categorias_formularios'))
-            <a href="{{ route('categorias-formularios.index') }}" class="nav-item {{ request()->routeIs('categorias-formularios.*') ? 'active' : '' }}">
-                <i class="bi bi-tag-fill"></i>
-                <span>Categorías</span>
-            </a>
-            @endif
+            <div class="nav-section" data-nav-section="formularios">
+                <button type="button" class="nav-section-toggle" aria-expanded="false">
+                    <span>Formularios</span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="nav-section-items">
+                    <a href="{{ route('mis-formularios.index') }}" class="nav-item {{ request()->routeIs('mis-formularios.*') ? 'active' : '' }}">
+                        <i class="bi bi-clipboard-check-fill"></i>
+                        <span>Mis Formularios</span>
+                    </a>
+                    @if(auth()->user()->tieneAcceso('formularios'))
+                    <a href="{{ route('formularios.index') }}" class="nav-item {{ request()->routeIs('formularios.*') ? 'active' : '' }}">
+                        <i class="bi bi-ui-checks"></i>
+                        <span>Formularios</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('categorias_formularios'))
+                    <a href="{{ route('categorias-formularios.index') }}" class="nav-item {{ request()->routeIs('categorias-formularios.*') ? 'active' : '' }}">
+                        <i class="bi bi-tag-fill"></i>
+                        <span>Categorías</span>
+                    </a>
+                    @endif
+                </div>
+            </div>
 
             {{-- SST --}}
             @if(auth()->user()->tieneAcceso('kizeo_analytics') || auth()->user()->tieneAcceso('charlas') || auth()->user()->tieneAcceso('carta_gantt') || auth()->user()->tieneAcceso('visitas_sst') || auth()->user()->tieneAcceso('auditorias_sst') || auth()->user()->tieneAcceso('accidentes_sst') || auth()->user()->tieneAcceso('ley_karin') || auth()->user()->tieneAcceso('ley_karin_denuncia') || auth()->user()->tieneAcceso('stop_dashboard'))
-            <div class="nav-section-label">Prevención SST</div>
-            @if(auth()->user()->tieneAcceso('kizeo_analytics'))
-            <a href="{{ route('kizeo.dashboard') }}" class="nav-item {{ request()->routeIs('kizeo.*') && !request()->routeIs('charla-tracking.*') ? 'active' : '' }}">
-                <i class="bi bi-activity"></i>
-                <span>Kizeo Analytics</span>
-            </a>
-            <a href="{{ route('charla-tracking.index') }}" class="nav-item {{ request()->routeIs('charla-tracking.*') ? 'active' : '' }}">
-                <i class="bi bi-clipboard-data"></i>
-                <span>Seguimiento Charlas</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('stop_dashboard'))
-            <a href="{{ route('stop-dashboard') }}" class="nav-item {{ request()->routeIs('stop-dashboard*') ? 'active' : '' }}">
-                <i class="bi bi-hand-index-fill"></i>
-                <span>Tarjeta STOP CCU</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('charlas'))
-            <a href="{{ route('charlas.index') }}" class="nav-item {{ request()->routeIs('charlas.*') ? 'active' : '' }}">
-                <i class="bi bi-mic-fill"></i>
-                <span>Charlas SST</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('carta_gantt'))
-            <a href="{{ route('carta-gantt.index') }}" class="nav-item {{ request()->routeIs('carta-gantt.*') ? 'active' : '' }}">
-                <i class="bi bi-kanban-fill"></i>
-                <span>Carta Gantt</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('visitas_sst'))
-            <a href="{{ route('visitas-sst.index') }}" class="nav-item {{ request()->routeIs('visitas-sst.*') ? 'active' : '' }}">
-                <i class="bi bi-binoculars-fill"></i>
-                <span>Visitas / Inspecciones</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('auditorias_sst'))
-            <a href="{{ route('auditorias-sst.index') }}" class="nav-item {{ request()->routeIs('auditorias-sst.*') ? 'active' : '' }}">
-                <i class="bi bi-clipboard2-check-fill"></i>
-                <span>Auditorías</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('accidentes_sst'))
-            <a href="{{ route('accidentes-sst.index') }}" class="nav-item {{ request()->routeIs('accidentes-sst.*') ? 'active' : '' }}">
-                <i class="bi bi-exclamation-triangle-fill"></i>
-                <span>Accidentes</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('ley_karin'))
-            <a href="{{ route('ley-karin.index') }}" class="nav-item {{ request()->routeIs('ley-karin.index') || request()->routeIs('ley-karin.show') || request()->routeIs('ley-karin.create') || request()->routeIs('ley-karin.edit') ? 'active' : '' }}">
-                <i class="bi bi-shield-fill-exclamation"></i>
-                <span>Ley Karin</span>
-            </a>
-            <a href="{{ route('ley-karin.dashboard') }}" class="nav-item {{ request()->routeIs('ley-karin.dashboard') ? 'active' : '' }}" style="padding-left:2.25rem;">
-                <i class="bi bi-bar-chart-line-fill"></i>
-                <span>Dashboard LK</span>
-            </a>
-            @elseif(auth()->user()->tieneAcceso('ley_karin_denuncia'))
-            <a href="{{ route('ley-karin.denuncia') }}" class="nav-item {{ request()->routeIs('ley-karin.denuncia*') || request()->routeIs('ley-karin.confirmacion') ? 'active' : '' }}">
-                <i class="bi bi-shield-fill-exclamation"></i>
-                <span>Canal de Denuncia</span>
-            </a>
-            @endif
+            <div class="nav-section" data-nav-section="sst">
+                <button type="button" class="nav-section-toggle" aria-expanded="false">
+                    <span>Prevención SST</span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="nav-section-items">
+                    @if(auth()->user()->tieneAcceso('kizeo_analytics'))
+                    <a href="{{ route('kizeo.dashboard') }}" class="nav-item {{ request()->routeIs('kizeo.*') && !request()->routeIs('charla-tracking.*') ? 'active' : '' }}">
+                        <i class="bi bi-activity"></i>
+                        <span>Kizeo Analytics</span>
+                    </a>
+                    <a href="{{ route('charla-tracking.index') }}" class="nav-item {{ request()->routeIs('charla-tracking.*') ? 'active' : '' }}">
+                        <i class="bi bi-clipboard-data"></i>
+                        <span>Seguimiento Charlas</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('stop_dashboard'))
+                    <a href="{{ route('stop-dashboard') }}" class="nav-item {{ request()->routeIs('stop-dashboard*') ? 'active' : '' }}">
+                        <i class="bi bi-hand-index-fill"></i>
+                        <span>Tarjeta STOP CCU</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('charlas'))
+                    <a href="{{ route('charlas.index') }}" class="nav-item {{ request()->routeIs('charlas.*') ? 'active' : '' }}">
+                        <i class="bi bi-mic-fill"></i>
+                        <span>Charlas SST</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('carta_gantt'))
+                    <a href="{{ route('carta-gantt.index') }}" class="nav-item {{ request()->routeIs('carta-gantt.*') ? 'active' : '' }}">
+                        <i class="bi bi-kanban-fill"></i>
+                        <span>Carta Gantt</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('visitas_sst'))
+                    <a href="{{ route('visitas-sst.index') }}" class="nav-item {{ request()->routeIs('visitas-sst.*') ? 'active' : '' }}">
+                        <i class="bi bi-binoculars-fill"></i>
+                        <span>Visitas / Inspecciones</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('auditorias_sst'))
+                    <a href="{{ route('auditorias-sst.index') }}" class="nav-item {{ request()->routeIs('auditorias-sst.*') ? 'active' : '' }}">
+                        <i class="bi bi-clipboard2-check-fill"></i>
+                        <span>Auditorías</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('accidentes_sst'))
+                    <a href="{{ route('accidentes-sst.index') }}" class="nav-item {{ request()->routeIs('accidentes-sst.*') ? 'active' : '' }}">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span>Accidentes</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('ley_karin'))
+                    <a href="{{ route('ley-karin.index') }}" class="nav-item {{ request()->routeIs('ley-karin.index') || request()->routeIs('ley-karin.show') || request()->routeIs('ley-karin.create') || request()->routeIs('ley-karin.edit') ? 'active' : '' }}">
+                        <i class="bi bi-shield-fill-exclamation"></i>
+                        <span>Ley Karin</span>
+                    </a>
+                    <a href="{{ route('ley-karin.dashboard') }}" class="nav-item {{ request()->routeIs('ley-karin.dashboard') ? 'active' : '' }}" style="padding-left:2.25rem;">
+                        <i class="bi bi-bar-chart-line-fill"></i>
+                        <span>Dashboard LK</span>
+                    </a>
+                    @elseif(auth()->user()->tieneAcceso('ley_karin_denuncia'))
+                    <a href="{{ route('ley-karin.denuncia') }}" class="nav-item {{ request()->routeIs('ley-karin.denuncia*') || request()->routeIs('ley-karin.confirmacion') ? 'active' : '' }}">
+                        <i class="bi bi-shield-fill-exclamation"></i>
+                        <span>Canal de Denuncia</span>
+                    </a>
+                    @endif
+                </div>
+            </div>
             @endif
 
             {{-- RRHH --}}
             @if(auth()->user()->tieneAcceso('contratacion'))
-            <div class="nav-section-label">RRHH</div>
-            <a href="{{ route('contratacion.index') }}" class="nav-item {{ request()->routeIs('contratacion.*') ? 'active' : '' }}">
-                <i class="bi bi-person-badge-fill"></i>
-                <span>Contratación</span>
-            </a>
+            <div class="nav-section" data-nav-section="rrhh">
+                <button type="button" class="nav-section-toggle" aria-expanded="false">
+                    <span>RRHH</span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="nav-section-items">
+                    <a href="{{ route('contratacion.index') }}" class="nav-item {{ request()->routeIs('contratacion.*') ? 'active' : '' }}">
+                        <i class="bi bi-person-badge-fill"></i>
+                        <span>Contratación</span>
+                    </a>
+                </div>
+            </div>
             @endif
 
             {{-- ADMINISTRACIÓN --}}
             @if(auth()->user()->tieneAcceso('usuarios') || auth()->user()->tieneAcceso('departamentos') || auth()->user()->tieneAcceso('cargos') || auth()->user()->tieneAcceso('centros_costo'))
-            <div class="nav-section-label">Administración</div>
-            @if(auth()->user()->tieneAcceso('usuarios'))
-            <a href="{{ route('usuarios.index') }}" class="nav-item {{ request()->routeIs('usuarios.*') ? 'active' : '' }}">
-                <i class="bi bi-people-fill"></i>
-                <span>Usuarios</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('departamentos'))
-            <a href="{{ route('departamentos.index') }}" class="nav-item {{ request()->routeIs('departamentos.*') ? 'active' : '' }}">
-                <i class="bi bi-building"></i>
-                <span>Departamentos</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('cargos'))
-            <a href="{{ route('cargos.index') }}" class="nav-item {{ request()->routeIs('cargos.*') ? 'active' : '' }}">
-                <i class="bi bi-person-badge-fill"></i>
-                <span>Cargos</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('centros_costo'))
-            <a href="{{ route('centros-costo.index') }}" class="nav-item {{ request()->routeIs('centros-costo.*') ? 'active' : '' }}">
-                <i class="bi bi-geo-alt-fill"></i>
-                <span>Centros de Costo</span>
-            </a>
-            @endif
+            <div class="nav-section" data-nav-section="administracion">
+                <button type="button" class="nav-section-toggle" aria-expanded="false">
+                    <span>Administración</span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="nav-section-items">
+                    @if(auth()->user()->tieneAcceso('usuarios'))
+                    <a href="{{ route('usuarios.index') }}" class="nav-item {{ request()->routeIs('usuarios.*') ? 'active' : '' }}">
+                        <i class="bi bi-people-fill"></i>
+                        <span>Usuarios</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('departamentos'))
+                    <a href="{{ route('departamentos.index') }}" class="nav-item {{ request()->routeIs('departamentos.*') ? 'active' : '' }}">
+                        <i class="bi bi-building"></i>
+                        <span>Departamentos</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('cargos'))
+                    <a href="{{ route('cargos.index') }}" class="nav-item {{ request()->routeIs('cargos.*') ? 'active' : '' }}">
+                        <i class="bi bi-person-badge-fill"></i>
+                        <span>Cargos</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('centros_costo'))
+                    <a href="{{ route('centros-costo.index') }}" class="nav-item {{ request()->routeIs('centros-costo.*') ? 'active' : '' }}">
+                        <i class="bi bi-geo-alt-fill"></i>
+                        <span>Centros de Costo</span>
+                    </a>
+                    @endif
+                </div>
+            </div>
             @endif
 
             {{-- SISTEMA --}}
             @if(auth()->user()->tieneAcceso('configuracion') || auth()->user()->tieneAcceso('permisos') || auth()->user()->tieneAcceso('importacion'))
-            <div class="nav-section-label">Sistema</div>
-            @if(auth()->user()->tieneAcceso('configuracion'))
-            <a href="{{ route('configuraciones.index') }}" class="nav-item {{ request()->routeIs('configuraciones.*') ? 'active' : '' }}">
-                <i class="bi bi-gear-fill"></i>
-                <span>Configuración</span>
-            </a>
-            <a href="{{ route('kizeo-automations.index') }}" class="nav-item {{ request()->routeIs('kizeo-automations.*') ? 'active' : '' }}">
-                <i class="bi bi-diagram-3-fill"></i>
-                <span>Autom. Kizeo</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('permisos'))
-            <a href="{{ route('permisos.index') }}" class="nav-item {{ request()->routeIs('permisos.*') ? 'active' : '' }}">
-                <i class="bi bi-key-fill"></i>
-                <span>Permisos por Rol</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('importacion'))
-            <a href="{{ route('importacion.index') }}" class="nav-item {{ request()->routeIs('importacion.*') ? 'active' : '' }}">
-                <i class="bi bi-cloud-upload-fill"></i>
-                <span>Importar Datos</span>
-            </a>
-            @endif
-            @if(auth()->user()->tieneAcceso('configuracion'))
-            <a href="{{ route('webhook-logs.index') }}" class="nav-item {{ request()->routeIs('webhook-logs.*') ? 'active' : '' }}">
-                <i class="bi bi-activity"></i>
-                <span>Webhooks Log</span>
-            </a>
-            @endif
-            @if(auth()->user()->rol && auth()->user()->rol->codigo === 'SUPER_ADMIN')
-            <a href="{{ route('grafana.index') }}" class="nav-item {{ request()->routeIs('grafana.*') ? 'active' : '' }}"
-               title="Analytics Talana — Beta">
-                <i class="bi bi-bar-chart-line-fill"></i>
-                <span>Analytics Talana <span style="font-size:.65rem;background:#f97316;color:#fff;padding:1px 5px;border-radius:4px;margin-left:4px;vertical-align:middle;">BETA</span></span>
-            </a>
-            @endif
+            <div class="nav-section" data-nav-section="sistema">
+                <button type="button" class="nav-section-toggle" aria-expanded="false">
+                    <span>Sistema</span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="nav-section-items">
+                    @if(auth()->user()->tieneAcceso('configuracion'))
+                    <a href="{{ route('configuraciones.index') }}" class="nav-item {{ request()->routeIs('configuraciones.*') ? 'active' : '' }}">
+                        <i class="bi bi-gear-fill"></i>
+                        <span>Configuración</span>
+                    </a>
+                    <a href="{{ route('kizeo-automations.index') }}" class="nav-item {{ request()->routeIs('kizeo-automations.*') ? 'active' : '' }}">
+                        <i class="bi bi-diagram-3-fill"></i>
+                        <span>Autom. Kizeo</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('permisos'))
+                    <a href="{{ route('permisos.index') }}" class="nav-item {{ request()->routeIs('permisos.*') ? 'active' : '' }}">
+                        <i class="bi bi-key-fill"></i>
+                        <span>Permisos por Rol</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('importacion'))
+                    <a href="{{ route('importacion.index') }}" class="nav-item {{ request()->routeIs('importacion.*') ? 'active' : '' }}">
+                        <i class="bi bi-cloud-upload-fill"></i>
+                        <span>Importar Datos</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('configuracion'))
+                    <a href="{{ route('webhook-logs.index') }}" class="nav-item {{ request()->routeIs('webhook-logs.*') ? 'active' : '' }}">
+                        <i class="bi bi-activity"></i>
+                        <span>Webhooks Log</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->rol && auth()->user()->rol->codigo === 'SUPER_ADMIN')
+                    <a href="{{ route('grafana.index') }}" class="nav-item {{ request()->routeIs('grafana.*') ? 'active' : '' }}"
+                       title="Analytics Talana — Beta">
+                        <i class="bi bi-bar-chart-line-fill"></i>
+                        <span>Analytics Talana <span style="font-size:.65rem;background:#f97316;color:#fff;padding:1px 5px;border-radius:4px;margin-left:4px;vertical-align:middle;">BETA</span></span>
+                    </a>
+                    @endif
+                </div>
+            </div>
             @endif
 
             {{-- PROTECCIÓN DE DATOS (Ley 21.719) --}}
             @if(auth()->user()->tieneAcceso('proteccion_datos'))
-            <div class="nav-section-label">Protección de Datos</div>
-            <a href="{{ route('proteccion-datos.index') }}" class="nav-item {{ request()->routeIs('proteccion-datos.index') || request()->routeIs('proteccion-datos.crear-solicitud') || request()->routeIs('proteccion-datos.ver-solicitud') ? 'active' : '' }}">
-                <i class="bi bi-shield-lock-fill"></i>
-                <span>Mis Derechos ARCO</span>
-            </a>
-            @if(auth()->user()->tieneAcceso('proteccion_datos', 'puede_editar'))
-            <a href="{{ route('proteccion-datos.administrar') }}" class="nav-item {{ request()->routeIs('proteccion-datos.administrar') ? 'active' : '' }}">
-                <i class="bi bi-shield-check"></i>
-                <span>Gestión Solicitudes</span>
-            </a>
-            <a href="{{ route('proteccion-datos.registro-tratamiento') }}" class="nav-item {{ request()->routeIs('proteccion-datos.registro-tratamiento') ? 'active' : '' }}">
-                <i class="bi bi-journal-text"></i>
-                <span>Registro Tratamiento</span>
-            </a>
-            @endif
+            <div class="nav-section" data-nav-section="proteccion-datos">
+                <button type="button" class="nav-section-toggle" aria-expanded="false">
+                    <span>Protección de Datos</span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="nav-section-items">
+                    <a href="{{ route('proteccion-datos.index') }}" class="nav-item {{ request()->routeIs('proteccion-datos.index') || request()->routeIs('proteccion-datos.crear-solicitud') || request()->routeIs('proteccion-datos.ver-solicitud') ? 'active' : '' }}">
+                        <i class="bi bi-shield-lock-fill"></i>
+                        <span>Mis Derechos ARCO</span>
+                    </a>
+                    @if(auth()->user()->tieneAcceso('proteccion_datos', 'puede_editar'))
+                    <a href="{{ route('proteccion-datos.administrar') }}" class="nav-item {{ request()->routeIs('proteccion-datos.administrar') ? 'active' : '' }}">
+                        <i class="bi bi-shield-check"></i>
+                        <span>Gestión Solicitudes</span>
+                    </a>
+                    <a href="{{ route('proteccion-datos.registro-tratamiento') }}" class="nav-item {{ request()->routeIs('proteccion-datos.registro-tratamiento') ? 'active' : '' }}">
+                        <i class="bi bi-journal-text"></i>
+                        <span>Registro Tratamiento</span>
+                    </a>
+                    @endif
+                </div>
+            </div>
             @endif
 
             {{-- DOCUMENTACIÓN --}}
             @if(auth()->user()->tieneAcceso('documentacion'))
-            <div class="nav-section-label">Ayuda</div>
-            <a href="{{ route('documentacion.index') }}" class="nav-item {{ request()->routeIs('documentacion.*') ? 'active' : '' }}">
-                <i class="bi bi-book-fill"></i>
-                <span>Documentación</span>
-            </a>
+            <div class="nav-section" data-nav-section="ayuda">
+                <button type="button" class="nav-section-toggle" aria-expanded="false">
+                    <span>Ayuda</span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="nav-section-items">
+                    <a href="{{ route('documentacion.index') }}" class="nav-item {{ request()->routeIs('documentacion.*') ? 'active' : '' }}">
+                        <i class="bi bi-book-fill"></i>
+                        <span>Documentación</span>
+                    </a>
+                </div>
+            </div>
             @endif
 
             {{-- NOTAS PERSONALES --}}
             @if(auth()->user()->tieneAcceso('notas_personales'))
-            <div class="nav-section-label">Mis Herramientas</div>
-            <a href="{{ route('notas.index') }}" class="nav-item {{ request()->routeIs('notas.*') ? 'active' : '' }}">
-                <i class="bi bi-journal-text"></i>
-                <span>Notas por Voz</span>
-            </a>
+            <div class="nav-section" data-nav-section="herramientas">
+                <button type="button" class="nav-section-toggle" aria-expanded="false">
+                    <span>Mis Herramientas</span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="nav-section-items">
+                    <a href="{{ route('notas.index') }}" class="nav-item {{ request()->routeIs('notas.*') ? 'active' : '' }}">
+                        <i class="bi bi-journal-text"></i>
+                        <span>Notas por Voz</span>
+                    </a>
+                </div>
+            </div>
             @endif
         </nav>
 
@@ -559,12 +615,17 @@
 
     // --- Preservar posición de scroll tras acciones (POST → redirect → GET) ---
     (function() {
+        if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'manual';
+        }
+
         const key = 'saep_scroll_' + window.location.pathname;
         const saved = sessionStorage.getItem(key);
         if (saved !== null) {
             sessionStorage.removeItem(key);
-            requestAnimationFrame(() => window.scrollTo({ top: parseInt(saved, 10), behavior: 'instant' }));
+            window.scrollTo(0, parseInt(saved, 10) || 0);
         }
+
         // Guardar scroll antes de enviar cualquier formulario
         document.addEventListener('submit', function() {
             sessionStorage.setItem(key, window.scrollY);

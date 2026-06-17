@@ -186,6 +186,12 @@ body {
     border-radius: 10px;
 }
 
+.nav-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
 .nav-section-label {
     font-size: 0.65rem;
     font-weight: 700;
@@ -196,6 +202,59 @@ body {
     opacity: 0.6;
 }
 .sidebar.collapsed .nav-section-label { display: none; }
+
+.nav-section-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.65rem 1rem 0.35rem;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-align: left;
+    text-transform: uppercase;
+    border-radius: 10px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.nav-section-toggle:hover,
+.nav-section.is-open .nav-section-toggle {
+    background: rgba(107, 114, 128, 0.08);
+    color: var(--primary-color);
+}
+
+.nav-section-toggle i {
+    font-size: 0.8rem;
+    transition: transform 0.2s ease;
+}
+
+.nav-section.is-open .nav-section-toggle i {
+    transform: rotate(180deg);
+}
+
+.nav-section-items {
+    display: none;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.nav-section.is-open .nav-section-items {
+    display: flex;
+}
+
+.sidebar.collapsed .nav-section-toggle {
+    display: none;
+}
+
+.sidebar.collapsed .nav-section-items {
+    display: flex;
+}
 
 .nav-item {
     display: flex;
@@ -925,4 +984,3 @@ body.dark-mode .badge.secondary { background: rgba(107,114,128,0.2); color: #d1d
 @media (max-width: 768px) {
     #sidebar-overlay { z-index: 199; }
 }
-
