@@ -110,6 +110,34 @@ class KizeoAutomationController extends Controller
         return back()->with('success', 'Estado de automatización actualizado.');
     }
 
+    public function lookupForm(Request $request, KizeoService $kizeo)
+    {
+        $data = $request->validate([
+            'form_id' => ['required', 'string', 'max:80'],
+        ]);
+
+        try {
+            $response = $kizeo->rawGet('forms/' . $data['form_id'], 20);
+            $form = $response['form'] ?? [];
+
+            if (!$form) {
+                return response()->json(['message' => 'Formulario no encontrado en Kizeo.'], 404);
+            }
+
+            return response()->json([
+                'id' => (string) ($form['id'] ?? $data['form_id']),
+                'name' => (string) ($form['name'] ?? ''),
+                'fields' => $this->fieldsFromForm($form),
+                'exports' => $this->exportsFromForm($form),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'No se pudo consultar el formulario en Kizeo.',
+                'error' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
     private function validated(Request $request): array
     {
         $data = $request->validate([
@@ -171,6 +199,40 @@ class KizeoAutomationController extends Controller
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    private function fieldsFromForm(array $form): array
+    {
+        return collect($form['fields'] ?? [])
+            ->map(function ($field, $key) {
+                return [
+                    'key' => (string) $key,
+                    'caption' => (string) ($field['caption'] ?? $key),
+                    'type' => (string) ($field['type'] ?? ''),
+                    'required' => (bool) ($field['required'] ?? false),
+                    'token' => '{' . $key . '}',
+                    'kizeo_tag' => '##' . $key . '##',
+                ];
+            })
+            ->reject(fn ($field) => in_array($field['type'], ['section', 'separator', 'fixed_text'], true))
+            ->values()
+            ->all();
+    }
+
+    private function exportsFromForm(array $form): array
+    {
+        return collect($form['exports'] ?? [])
+            ->map(fn ($export) => [
+                'id' => (string) ($export['id'] ?? ''),
+                'name' => (string) ($export['computedNames']['pdf'] ?? $export['name'] ?? 'Export'),
+                'type' => (string) ($export['type'] ?? ''),
+                'is_default' => (bool) ($export['is_default'] ?? false),
+                'is_pdf_default' => (bool) ($export['json']['is_pdf_default'] ?? false),
+                'deleted' => (bool) ($export['deleted'] ?? false),
+            ])
+            ->filter(fn ($export) => $export['id'] !== '' && !$export['deleted'])
+            ->values()
+            ->all();
     }
 
     private function legacyAutomations(): array
