@@ -290,6 +290,11 @@ class OneDriveService
     {
         $fileSize = strlen($content);
         $this->lastUploadResult['path'] = $fullPath;
+        $folderPath = trim(dirname($fullPath), '.\\/');
+
+        if ($folderPath !== '' && !$this->ensureFolderPath($token, $siteId, $folderPath, $context)) {
+            return false;
+        }
 
         if ($fileSize > 4 * 1024 * 1024) {
             return $this->uploadLargeFile($token, $siteId, $fullPath, $content, $contentType);
@@ -371,6 +376,49 @@ class OneDriveService
         return Http::withToken($token)
             ->get($this->driveRootUrl($siteId, $fullPath))
             ->successful();
+    }
+
+    private function ensureFolderPath(string $token, string $siteId, string $folderPath, string $context): bool
+    {
+        $currentPath = '';
+
+        foreach (explode('/', $folderPath) as $segment) {
+            $segment = trim($segment);
+            if ($segment === '') {
+                continue;
+            }
+
+            $parentPath = $currentPath;
+            $currentPath = trim($currentPath . '/' . $segment, '/');
+
+            if ($this->fileExists($token, $siteId, $currentPath)) {
+                continue;
+            }
+
+            $url = $parentPath === ''
+                ? "https://graph.microsoft.com/v1.0/sites/{$siteId}/drive/root/children"
+                : $this->driveRootUrl($siteId, $parentPath, ':/children');
+
+            $response = Http::withToken($token)->post($url, [
+                'name' => $segment,
+                'folder' => new \stdClass(),
+                '@microsoft.graph.conflictBehavior' => 'replace',
+            ]);
+
+            if ($response->successful() || $response->status() === 409 || $this->fileExists($token, $siteId, $currentPath)) {
+                continue;
+            }
+
+            $this->recordUploadError($context . ': Error creando carpeta SharePoint', [
+                'path' => $currentPath,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return false;
+        }
+
+        return true;
     }
 
     private function isNameAlreadyExists($response): bool
