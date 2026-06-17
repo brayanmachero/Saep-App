@@ -18,7 +18,8 @@
     <tr>
         <td style="padding:32px 36px;">
             <p style="font-size:15px;color:#1e1e2e;margin:0 0 20px;">
-                Se ha registrado un nuevo postulante en el Portal de Contratación.
+                Se ha registrado un nuevo postulante en el Portal de Contratación. La documentación debe revisarse
+                desde el panel interno; no se adjuntan documentos en este correo.
             </p>
 
             <!-- Folio -->
@@ -88,6 +89,54 @@
                 </tr>
             </table>
             @endforeach
+
+            @php
+                $politicaUrl = route('proteccion-datos.politica-privacidad');
+                $consentimientoFecha = $postulante->consentimiento_at
+                    ? $postulante->consentimiento_at->format('d/m/Y H:i')
+                    : null;
+            @endphp
+
+            <!-- Privacy and confidentiality -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border-radius:10px;margin-top:22px;margin-bottom:24px;">
+                <tr>
+                    <td style="padding:16px;">
+                        <p style="font-size:13px;font-weight:700;color:#7c2d12;margin:0 0 10px;">
+                            Tratamiento confidencial obligatorio
+                        </p>
+                        <p style="font-size:12px;color:#7c2d12;line-height:1.6;margin:0 0 10px;">
+                            Esta postulación contiene datos personales y documentos de identidad, previsión, salud u otros
+                            antecedentes laborales. Su revisión debe limitarse a fines de reclutamiento, selección,
+                            verificación documental y eventual contratación.
+                        </p>
+                        <p style="font-size:12px;color:#7c2d12;line-height:1.6;margin:0 0 10px;">
+                            No reenvíes este correo, no descargues ni compartas documentos fuera de SAEP, SharePoint o los
+                            canales corporativos autorizados. El acceso corresponde solo a personal habilitado de RRHH o
+                            responsables del proceso.
+                        </p>
+                        <p style="font-size:12px;color:#7c2d12;line-height:1.6;margin:0 0 10px;">
+                            El tratamiento debe respetar la Ley N° 19.628 y su reforma por Ley N° 21.719, incluyendo
+                            licitud, finalidad, proporcionalidad, seguridad, transparencia y confidencialidad.
+                        </p>
+                        <p style="font-size:12px;color:#7c2d12;line-height:1.6;margin:0;">
+                            @if($postulante->consentimiento_datos)
+                                Consentimiento registrado
+                                @if($consentimientoFecha)
+                                    el {{ $consentimientoFecha }}
+                                @endif
+                                @if($postulante->consentimiento_version)
+                                    · versión {{ $postulante->consentimiento_version }}
+                                @endif
+                                .
+                            @else
+                                Revisar consentimiento antes de continuar el tratamiento.
+                            @endif
+                            Política vigente:
+                            <a href="{{ $politicaUrl }}" style="color:#9a3412;text-decoration:none;font-weight:700;">ver política</a>.
+                        </p>
+                    </td>
+                </tr>
+            </table>
 
             <!-- CTA -->
             @php $panelUrl = config('app.url') . '/contratacion/' . $postulante->id; @endphp

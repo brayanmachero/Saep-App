@@ -21,8 +21,9 @@
                 Estimado/a <strong>{{ $postulante->nombre }}</strong>,
             </p>
             <p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 24px;">
-                Hemos recibido tu postulación. Nuestro equipo de RRHH revisará tu información
-                y te contactará a la brevedad.
+                Hemos recibido tu postulación y la documentación asociada. Este correo confirma la recepción
+                de los antecedentes; no constituye una oferta o aceptación laboral. Nuestro equipo de RRHH
+                revisará tu información y te contactará si corresponde continuar el proceso.
             </p>
 
             <!-- Folio -->
@@ -92,6 +93,51 @@
                 </tr>
             </table>
             @endif
+
+            @php
+                $politicaUrl = route('proteccion-datos.politica-privacidad');
+                $consentimientoFecha = $postulante->consentimiento_at
+                    ? $postulante->consentimiento_at->format('d/m/Y H:i')
+                    : null;
+            @endphp
+
+            <!-- Privacy notice -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2ff;border-radius:10px;margin-top:20px;margin-bottom:24px;">
+                <tr>
+                    <td style="padding:16px;">
+                        <p style="font-size:13px;font-weight:700;color:#1e1e2e;margin:0 0 10px;">
+                            Tratamiento de datos personales
+                        </p>
+                        <p style="font-size:12px;color:#4b5563;line-height:1.6;margin:0 0 10px;">
+                            Los datos personales y documentos que entregaste serán tratados por SAEP y el área de RRHH
+                            para gestionar tu postulación, verificar antecedentes documentales, comunicarnos contigo,
+                            evaluar tu incorporación y, si corresponde, preparar la contratación.
+                        </p>
+                        <p style="font-size:12px;color:#4b5563;line-height:1.6;margin:0 0 10px;">
+                            La información se conservará en la plataforma SAEP y en repositorios corporativos autorizados,
+                            incluyendo SharePoint, con acceso restringido al personal habilitado para el proceso. No se
+                            adjuntan documentos en este correo para proteger tu información.
+                        </p>
+                        <p style="font-size:12px;color:#4b5563;line-height:1.6;margin:0 0 10px;">
+                            Puedes ejercer tus derechos de acceso, rectificación, supresión/cancelación, oposición,
+                            bloqueo y portabilidad cuando resulten aplicables, conforme a la normativa chilena de
+                            protección de datos personales.
+                        </p>
+                        @if($consentimientoFecha)
+                        <p style="font-size:12px;color:#4b5563;line-height:1.6;margin:0 0 10px;">
+                            Consentimiento registrado el {{ $consentimientoFecha }}.
+                            @if($postulante->consentimiento_version)
+                                Versión: {{ $postulante->consentimiento_version }}.
+                            @endif
+                        </p>
+                        @endif
+                        <p style="font-size:12px;color:#4b5563;line-height:1.6;margin:0;">
+                            Revisa la política completa aquí:
+                            <a href="{{ $politicaUrl }}" style="color:#1d4ed8;text-decoration:none;font-weight:700;">Política de privacidad</a>.
+                        </p>
+                    </td>
+                </tr>
+            </table>
 
             <p style="font-size:13px;color:#6b7280;line-height:1.6;margin:0;">
                 Si tienes dudas, responde este correo o contacta directamente con RRHH.

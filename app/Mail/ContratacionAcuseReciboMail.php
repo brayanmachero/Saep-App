@@ -19,7 +19,7 @@ class ContratacionAcuseReciboMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: "Recibimos tu postulación — {$this->postulante->folio}"
+            subject: "Confirmación de postulación — {$this->postulante->folio}"
         );
     }
 

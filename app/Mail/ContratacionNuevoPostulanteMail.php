@@ -19,7 +19,7 @@ class ContratacionNuevoPostulanteMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: "Nuevo Postulante — {$this->postulante->folio}"
+            subject: "RRHH: nuevo postulante — {$this->postulante->folio}"
         );
     }
 
