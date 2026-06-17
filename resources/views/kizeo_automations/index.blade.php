@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Automatizaciones Kizeo')
+@section('title', 'Autom. Kizeo')
 
 @section('content')
 <div class="page-container">
