@@ -79,80 +79,45 @@ class KizeoAutomationService
                 $result['continue_legacy'] = false;
             }
 
-            $run = KizeoAutomationRun::create([
-                'kizeo_automation_rule_id' => $rule->id,
-                'form_id' => $formId,
-                'data_id' => $dataId,
-                'status' => 'processing',
-                'context' => $this->compactContext($context),
-            ]);
+            $runResult = $this->runRule($rule, $formId, $dataId, $context, $ip);
 
-            try {
-                $upload = $this->executeRule($rule, $formId, $dataId, $context);
-
-                $run->update([
-                    'status' => 'success',
-                    'filename' => $upload['filename'],
-                    'sharepoint_path' => $upload['path'],
-                    'processed_at' => now(),
-                ]);
-
-                $rule->forceFill(['last_run_at' => now()])->save();
-
-                WebhookLog::logSuccess([
-                    'origen' => 'kizeo',
-                    'form_id' => $formId,
-                    'data_id' => $dataId,
-                    'tipo' => 'automation_' . $rule->id,
-                    'resumen' => "Automatización {$rule->name}",
-                    'archivo' => $upload['filename'],
-                    'sharepoint_path' => $upload['path'],
-                    'email_enviado' => false,
-                    'destinatarios' => [],
-                    'metadata' => [
-                        'rule_id' => $rule->id,
-                        'rule_name' => $rule->name,
-                        'form_name' => $context['form_name'] ?? null,
-                    ],
-                    'ip' => $ip,
-                ]);
-
+            if ($runResult['success']) {
                 $result['succeeded']++;
-            } catch (\Throwable $e) {
-                $run->update([
-                    'status' => 'error',
-                    'error_message' => $e->getMessage(),
-                    'processed_at' => now(),
-                ]);
-
-                WebhookLog::logError([
-                    'origen' => 'kizeo',
-                    'form_id' => $formId,
-                    'data_id' => $dataId,
-                    'tipo' => 'automation_' . $rule->id,
-                    'resumen' => "Error automatización {$rule->name}",
-                    'error_message' => $e->getMessage(),
-                    'metadata' => [
-                        'rule_id' => $rule->id,
-                        'rule_name' => $rule->name,
-                        'form_name' => $context['form_name'] ?? null,
-                    ],
-                    'ip' => $ip,
-                ]);
-
-                Log::error('Kizeo Automation: error procesando regla', [
-                    'rule_id' => $rule->id,
-                    'formId' => $formId,
-                    'dataId' => $dataId,
-                    'error' => $e->getMessage(),
-                ]);
-
+            } else {
                 $result['failed']++;
-                $result['errors'][] = $e->getMessage();
+                $result['errors'][] = $runResult['error'];
             }
         }
 
         return $result;
+    }
+
+    public function retryRun(KizeoAutomationRun $sourceRun, ?string $ip = null): array
+    {
+        $rule = $sourceRun->rule;
+
+        if (!$rule) {
+            throw new \RuntimeException('La regla original ya no está disponible para reintentar.');
+        }
+
+        $formId = (string) $sourceRun->form_id;
+        $dataId = (string) $sourceRun->data_id;
+
+        if ($formId === '' || $dataId === '') {
+            throw new \RuntimeException('La ejecución no tiene Form ID o Data ID válido.');
+        }
+
+        $record = $this->resolveRecord($formId, $dataId, []);
+        $context = $this->buildContext($formId, $dataId, [], $record);
+        $result = $this->runRule($rule, $formId, $dataId, $context, $ip, $sourceRun);
+
+        return [
+            'success' => $result['success'],
+            'run_id' => $result['run']->id,
+            'filename' => $result['run']->filename,
+            'sharepoint_path' => $result['run']->sharepoint_path,
+            'error' => $result['error'] ?? null,
+        ];
     }
 
     private function emptyResult(bool $hasRules): array
@@ -193,6 +158,98 @@ class KizeoAutomationService
         }
 
         return ['filename' => basename($remotePath), 'path' => $remotePath];
+    }
+
+    private function runRule(
+        KizeoAutomationRule $rule,
+        string $formId,
+        string $dataId,
+        array $context,
+        ?string $ip = null,
+        ?KizeoAutomationRun $retryOf = null
+    ): array {
+        $runContext = $this->compactContext($context);
+
+        if ($retryOf) {
+            $runContext['manual_retry'] = true;
+            $runContext['retry_of_run_id'] = $retryOf->id;
+        }
+
+        $run = KizeoAutomationRun::create([
+            'kizeo_automation_rule_id' => $rule->id,
+            'form_id' => $formId,
+            'data_id' => $dataId,
+            'status' => 'processing',
+            'context' => $runContext,
+        ]);
+
+        try {
+            $upload = $this->executeRule($rule, $formId, $dataId, $context);
+
+            $run->update([
+                'status' => 'success',
+                'filename' => $upload['filename'],
+                'sharepoint_path' => $upload['path'],
+                'processed_at' => now(),
+            ]);
+
+            $rule->forceFill(['last_run_at' => now()])->save();
+
+            WebhookLog::logSuccess([
+                'origen' => 'kizeo',
+                'form_id' => $formId,
+                'data_id' => $dataId,
+                'tipo' => 'automation_' . $rule->id,
+                'resumen' => ($retryOf ? 'Reintento ' : '') . "Automatización {$rule->name}",
+                'archivo' => $upload['filename'],
+                'sharepoint_path' => $upload['path'],
+                'email_enviado' => false,
+                'destinatarios' => [],
+                'metadata' => [
+                    'rule_id' => $rule->id,
+                    'rule_name' => $rule->name,
+                    'form_name' => $context['form_name'] ?? null,
+                    'manual_retry' => (bool) $retryOf,
+                    'retry_of_run_id' => $retryOf?->id,
+                ],
+                'ip' => $ip,
+            ]);
+
+            return ['success' => true, 'run' => $run->fresh()];
+        } catch (\Throwable $e) {
+            $run->update([
+                'status' => 'error',
+                'error_message' => $e->getMessage(),
+                'processed_at' => now(),
+            ]);
+
+            WebhookLog::logError([
+                'origen' => 'kizeo',
+                'form_id' => $formId,
+                'data_id' => $dataId,
+                'tipo' => 'automation_' . $rule->id,
+                'resumen' => ($retryOf ? 'Error reintento ' : 'Error ') . "automatización {$rule->name}",
+                'error_message' => $e->getMessage(),
+                'metadata' => [
+                    'rule_id' => $rule->id,
+                    'rule_name' => $rule->name,
+                    'form_name' => $context['form_name'] ?? null,
+                    'manual_retry' => (bool) $retryOf,
+                    'retry_of_run_id' => $retryOf?->id,
+                ],
+                'ip' => $ip,
+            ]);
+
+            Log::error('Kizeo Automation: error procesando regla', [
+                'rule_id' => $rule->id,
+                'formId' => $formId,
+                'dataId' => $dataId,
+                'retry_of_run_id' => $retryOf?->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['success' => false, 'run' => $run->fresh(), 'error' => $e->getMessage()];
+        }
     }
 
     private function resolveRecord(string $formId, string $dataId, array $payload): array

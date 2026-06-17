@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\KizeoAutomationRule;
 use App\Models\KizeoAutomationRun;
+use App\Services\KizeoAutomationService;
 use App\Services\KizeoService;
 use Illuminate\Http\Request;
 
@@ -29,7 +30,13 @@ class KizeoAutomationController extends Controller
             ->with('latestRun')
             ->orderBy('form_id')
             ->orderBy('priority')
-            ->paginate(20);
+            ->paginate(20, ['*'], 'rules_page')
+            ->withQueryString();
+
+        $recentRuns = KizeoAutomationRun::with('rule')
+            ->latest()
+            ->paginate(20, ['*'], 'runs_page')
+            ->withQueryString();
 
         $stats = [
             'rules' => KizeoAutomationRule::count(),
@@ -39,7 +46,7 @@ class KizeoAutomationController extends Controller
             'errors_today' => KizeoAutomationRun::whereDate('created_at', today())->where('status', 'error')->count(),
         ];
 
-        return view('kizeo_automations.index', compact('rules', 'stats', 'legacyAutomations'));
+        return view('kizeo_automations.index', compact('rules', 'recentRuns', 'stats', 'legacyAutomations'));
     }
 
     public function create(KizeoService $kizeo)
@@ -108,6 +115,21 @@ class KizeoAutomationController extends Controller
         $kizeoAutomation->update(['enabled' => !$kizeoAutomation->enabled]);
 
         return back()->with('success', 'Estado de automatización actualizado.');
+    }
+
+    public function retryRun(KizeoAutomationRun $run, KizeoAutomationService $automationService, Request $request)
+    {
+        try {
+            $result = $automationService->retryRun($run, $request->ip());
+        } catch (\Throwable $e) {
+            return back()->with('error', 'No se pudo reintentar la ejecución: ' . $e->getMessage());
+        }
+
+        if (!$result['success']) {
+            return back()->with('error', 'Reintento ejecutado con error: ' . ($result['error'] ?? 'sin detalle'));
+        }
+
+        return back()->with('success', 'Reintento completado. Archivo: ' . ($result['filename'] ?? 'PDF generado'));
     }
 
     public function lookupForm(Request $request, KizeoService $kizeo)
