@@ -6,11 +6,15 @@ use App\Models\KizeoAutomationRule;
 use App\Models\KizeoAutomationRun;
 use App\Models\WebhookLog;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class KizeoAutomationService
 {
+    private array $formFieldDefinitions = [];
+    private array $advancedListLabels = [];
+
     private const MESES = [
         '01' => 'Enero',
         '02' => 'Febrero',
@@ -176,7 +180,8 @@ class KizeoAutomationService
         $folder = $this->renderTemplate($rule->folder_template ?: '', $context);
         $baseFolder = $this->renderTemplate($rule->sharepoint_folder ?: '', $context);
         $filename = $this->ensurePdfFilename($this->renderTemplate($rule->filename_template ?: '', $context));
-        $remotePath = $this->cleanSharePointPath(trim($baseFolder . '/' . $folder . '/' . $filename, '/'));
+        $folderPath = $this->cleanSharePointPath(trim($baseFolder . '/' . $folder, '/'));
+        $remotePath = trim($folderPath . '/' . $filename, '/');
 
         $uploaded = $rule->sharepoint_site
             ? $this->oneDrive->uploadFileToSite($rule->sharepoint_site, $pdfContent, $remotePath, 'application/pdf')
@@ -214,7 +219,8 @@ class KizeoAutomationService
     private function buildContext(string $formId, string $dataId, array $payload, array $record): array
     {
         $fields = $record['fields'] ?? $payload['data']['fields'] ?? [];
-        $context = $this->flattenFields($fields);
+        $formFields = $this->formFieldDefinitions($formId);
+        $context = $this->flattenFields($fields, $formFields);
 
         $formName = $record['form_name']
             ?? $payload['data']['form_name']
@@ -224,6 +230,8 @@ class KizeoAutomationService
         $context = array_merge($context, [
             'form_id' => $formId,
             'data_id' => $dataId,
+            'record_number' => (string) ($record['record_number'] ?? $payload['data']['record_number'] ?? $dataId),
+            'form_unique_id' => (string) ($record['form_unique_id'] ?? $payload['data']['form_unique_id'] ?? $dataId),
             'form_name' => $formName,
             'record_id' => $dataId,
         ]);
@@ -250,13 +258,20 @@ class KizeoAutomationService
         ]);
     }
 
-    private function flattenFields(array $fields): array
+    private function flattenFields(array $fields, array $formFields = []): array
     {
         $flat = [];
 
         foreach ($fields as $key => $field) {
-            $value = $this->extractValue($field);
+            $definition = is_array($formFields[$key] ?? null) ? $formFields[$key] : [];
+            $value = $this->extractValue($field, $definition);
+            $rawValue = $this->extractRawValue($field);
             $flat[(string) $key] = $value;
+
+            if ($rawValue !== '' && $rawValue !== $value) {
+                $flat[(string) $key . '_id'] = $rawValue;
+                $flat[(string) $key . '_raw'] = $rawValue;
+            }
 
             if (is_array($field) && !empty($field['label'])) {
                 $flat[Str::slug((string) $field['label'], '_')] = $value;
@@ -266,7 +281,7 @@ class KizeoAutomationService
         return $flat;
     }
 
-    private function extractValue(mixed $value): string
+    private function extractValue(mixed $value, array $definition = []): string
     {
         if (is_bool($value)) {
             return $value ? 'Si' : 'No';
@@ -278,6 +293,11 @@ class KizeoAutomationService
 
         if (!is_array($value)) {
             return '';
+        }
+
+        $selectLabel = $this->extractAdvancedSelectLabel($value, $definition);
+        if ($selectLabel !== null) {
+            return $selectLabel;
         }
 
         if (array_key_exists('result', $value)) {
@@ -312,6 +332,104 @@ class KizeoAutomationService
         }
 
         return trim(json_encode($value, JSON_UNESCAPED_UNICODE) ?: '');
+    }
+
+    private function extractRawValue(mixed $value): string
+    {
+        if (is_scalar($value) || $value === null) {
+            return trim((string) $value);
+        }
+
+        if (!is_array($value)) {
+            return '';
+        }
+
+        if (array_key_exists('value', $value)) {
+            return $this->extractRawValue($value['value']);
+        }
+
+        if (!empty($value['valuesAsArray']) && is_array($value['valuesAsArray'])) {
+            return collect($value['valuesAsArray'])
+                ->map(fn ($item) => $this->extractRawValue($item))
+                ->filter(fn ($item) => $item !== '')
+                ->implode(', ');
+        }
+
+        if (array_key_exists('result', $value)) {
+            return $this->extractRawValue($value['result']);
+        }
+
+        return '';
+    }
+
+    private function extractAdvancedSelectLabel(array $field, array $definition): ?string
+    {
+        $fieldType = (string) ($field['type'] ?? $definition['type'] ?? '');
+        $isAdvancedList = filter_var($definition['list_is_advanced'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $listId = (string) ($definition['list_id'] ?? $field['list_id'] ?? '');
+
+        if ($fieldType !== 'select' || !$isAdvancedList || $listId === '') {
+            return null;
+        }
+
+        $values = $field['valuesAsArray'] ?? [$field['value'] ?? null];
+        $labels = $this->advancedListLabels($listId);
+
+        $resolved = collect($values)
+            ->map(fn ($id) => $labels[(string) $id] ?? null)
+            ->filter()
+            ->values()
+            ->all();
+
+        return $resolved ? implode(', ', $resolved) : null;
+    }
+
+    private function formFieldDefinitions(string $formId): array
+    {
+        if (array_key_exists($formId, $this->formFieldDefinitions)) {
+            return $this->formFieldDefinitions[$formId];
+        }
+
+        try {
+            $this->formFieldDefinitions[$formId] = Cache::remember(
+                "kizeo_form_field_definitions_{$formId}",
+                3600,
+                fn () => $this->kizeo->rawGet("forms/{$formId}", 20)['form']['fields'] ?? []
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Kizeo Automation: no se pudo obtener definición del formulario', [
+                'formId' => $formId,
+                'error' => $e->getMessage(),
+            ]);
+
+            $this->formFieldDefinitions[$formId] = [];
+        }
+
+        return $this->formFieldDefinitions[$formId];
+    }
+
+    private function advancedListLabels(string $listId): array
+    {
+        if (array_key_exists($listId, $this->advancedListLabels)) {
+            return $this->advancedListLabels[$listId];
+        }
+
+        try {
+            $items = $this->kizeo->getListItems($listId);
+            $this->advancedListLabels[$listId] = collect($items)
+                ->mapWithKeys(fn ($item) => [(string) ($item['id'] ?? '') => (string) ($item['label'] ?? '')])
+                ->filter(fn ($label, $id) => $id !== '' && $label !== '')
+                ->all();
+        } catch (\Throwable $e) {
+            Log::warning('Kizeo Automation: no se pudo resolver lista avanzada', [
+                'listId' => $listId,
+                'error' => $e->getMessage(),
+            ]);
+
+            $this->advancedListLabels[$listId] = [];
+        }
+
+        return $this->advancedListLabels[$listId];
     }
 
     private function matchesConditions(array $conditions, array $context): bool
@@ -363,9 +481,10 @@ class KizeoAutomationService
 
     private function ensurePdfFilename(string $filename): string
     {
-        $filename = $this->cleanPathSegment($filename ?: 'documento.pdf', 180);
+        $filename = preg_replace('/\.pdf$/i', '', $filename ?: 'documento') ?? 'documento';
+        $filename = $this->cleanPathSegment($filename, 176);
 
-        return Str::endsWith(Str::lower($filename), '.pdf') ? $filename : $filename . '.pdf';
+        return $filename . '.pdf';
     }
 
     private function cleanSharePointPath(string $path): string
