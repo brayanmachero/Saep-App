@@ -569,7 +569,7 @@ class KizeoAutomationService
     private function compactContext(array $context): array
     {
         return collect($context)
-            ->only(['form_id', 'data_id', 'form_name', 'fecha', 'anio', 'mes', 'mes_nombre'])
+            ->only(['form_id', 'data_id', 'record_number', 'form_unique_id', 'form_name', 'fecha', 'anio', 'mes', 'mes_nombre'])
             ->all();
     }
 }
