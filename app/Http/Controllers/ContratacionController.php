@@ -13,6 +13,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use setasign\Fpdi\Fpdi;
@@ -20,6 +22,20 @@ use ZipArchive;
 
 class ContratacionController extends Controller
 {
+    private const DOCUMENT_MAX_KB = 102400; // 100 MB
+    private const DOCUMENT_MAX_MB = 100;
+    private const PDF_MEMORY_LIMIT = '1024M';
+    private const PRIVACY_VERSION = 'contratacion-manual-v2026-06-17';
+    private const PRIVACY_TEXT = 'RRHH declara que el postulante autorizo el tratamiento de sus datos personales y documentos exclusivamente para fines de reclutamiento, seleccion, contratacion, verificacion documental, comunicacion con RRHH y archivo del proceso, incluyendo la generacion y almacenamiento de una ficha PDF consolidada en SharePoint.';
+    private const DOCUMENT_FIELDS = [
+        'carnet_frontal',
+        'carnet_reverso',
+        'certificado_afp',
+        'certificado_fonasa',
+        'licencia_conducir_frontal',
+        'licencia_conducir_reverso',
+    ];
+
     // ─── Listado ─────────────────────────────────────────────────
     public function index(Request $request)
     {
@@ -66,7 +82,9 @@ class ContratacionController extends Controller
     // ─── Ingreso manual (guardar) ─────────────────────────────────
     public function storeManual(Request $request)
     {
-        $request->validate([
+        $documentRules = array_fill_keys(self::DOCUMENT_FIELDS, $this->documentRule(false));
+
+        $request->validate(array_merge([
             'nombre'             => 'required|string|max:200',
             'rut'                => ['required', 'string', 'max:20', function ($attr, $val, $fail) {
                 if (!PostulanteContratacion::validarRut($val)) {
@@ -74,34 +92,32 @@ class ContratacionController extends Controller
                 }
             }],
             'email'              => 'required|email|max:200',
-            'carnet_frontal'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
-            'carnet_reverso'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
-            'certificado_afp'            => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
-            'certificado_fonasa'         => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
-            'licencia_conducir_frontal'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
-            'licencia_conducir_reverso'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
+            'consentimiento_datos' => 'accepted',
+        ], $documentRules), [
+            'consentimiento_datos.accepted' => 'Debes confirmar que el postulante autorizó el tratamiento de sus datos personales.',
+            '*.mimes'                       => 'Solo se permiten archivos JPG, PNG o PDF.',
+            '*.max'                         => 'El archivo no puede superar los ' . self::DOCUMENT_MAX_MB . ' MB.',
         ]);
 
         $rutLimpio     = preg_replace('/[^0-9kK]/', '', strtoupper($request->rut));
         $rutFormateado = PostulanteContratacion::formatearRut($rutLimpio);
         $rutCarpeta    = strtolower(preg_replace('/\./', '', $rutLimpio));
 
-        $datos = [
+        if (PostulanteContratacion::where('rut', $rutFormateado)->exists()) {
+            throw ValidationException::withMessages([
+                'rut' => 'Este RUT ya tiene una postulación registrada.',
+            ]);
+        }
+
+        $datos = array_merge([
             'nombre' => $request->nombre,
             'rut'    => $rutFormateado,
             'email'  => $request->email,
-        ];
+        ], $this->manualConsentPayload($request));
 
-        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
-        foreach ($camposDocs as $campo) {
+        foreach (self::DOCUMENT_FIELDS as $campo) {
             if ($request->hasFile($campo)) {
-                $ext  = $request->file($campo)->getClientOriginalExtension();
-                $path = $request->file($campo)->storeAs(
-                    "contratacion/{$rutCarpeta}",
-                    "{$campo}.{$ext}",
-                    'local'
-                );
-                $datos[$campo] = $path;
+                $datos[$campo] = $this->storeDocument($request, $campo, $rutCarpeta);
             }
         }
 
@@ -225,33 +241,22 @@ class ContratacionController extends Controller
     // ─── Actualizar documentos desde admin ───────────────────────
     public function updateDocumentos(Request $request, PostulanteContratacion $postulante)
     {
-        $request->validate([
-            'carnet_frontal'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
-            'carnet_reverso'             => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
-            'certificado_afp'            => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
-            'certificado_fonasa'         => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
-            'licencia_conducir_frontal'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
-            'licencia_conducir_reverso'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:20480',
+        $request->validate(array_fill_keys(self::DOCUMENT_FIELDS, $this->documentRule(false)), [
+            '*.mimes' => 'Solo se permiten archivos JPG, PNG o PDF.',
+            '*.max'   => 'El archivo no puede superar los ' . self::DOCUMENT_MAX_MB . ' MB.',
         ]);
 
         $rutLimpio  = preg_replace('/[^0-9kK]/', '', strtoupper($postulante->rut));
         $rutCarpeta = strtolower(preg_replace('/\./', '', $rutLimpio));
 
-        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
         $actualizado = false;
-        foreach ($camposDocs as $campo) {
+        $rutasAnteriores = [];
+        foreach (self::DOCUMENT_FIELDS as $campo) {
             if ($request->hasFile($campo)) {
-                // Eliminar archivo anterior si existe (disco privado)
                 if ($postulante->$campo) {
-                    Storage::disk('local')->delete($postulante->$campo);
+                    $rutasAnteriores[] = $postulante->$campo;
                 }
-                $ext  = $request->file($campo)->getClientOriginalExtension();
-                $path = $request->file($campo)->storeAs(
-                    "contratacion/{$rutCarpeta}",
-                    "{$campo}.{$ext}",
-                    'local'
-                );
-                $postulante->$campo = $path;
+                $postulante->$campo = $this->storeDocument($request, $campo, $rutCarpeta);
                 $actualizado = true;
             }
         }
@@ -261,6 +266,7 @@ class ContratacionController extends Controller
         }
 
         $postulante->save();
+        $this->deleteOldDocuments($rutasAnteriores, $postulante->only(self::DOCUMENT_FIELDS));
 
         // Re-sincronizar ficha en SharePoint
         try {
@@ -270,6 +276,49 @@ class ContratacionController extends Controller
         }
 
         return back()->with('success', 'Documentos actualizados y ficha PDF sincronizada en SharePoint.');
+    }
+
+    private function documentRule(bool $required): string
+    {
+        return ($required ? 'required' : 'nullable') . '|file|mimes:jpg,jpeg,png,pdf|max:' . self::DOCUMENT_MAX_KB;
+    }
+
+    private function manualConsentPayload(Request $request): array
+    {
+        return [
+            'consentimiento_datos'      => true,
+            'consentimiento_at'         => now(),
+            'consentimiento_version'    => self::PRIVACY_VERSION,
+            'consentimiento_texto'      => self::PRIVACY_TEXT,
+            'consentimiento_ip'         => $request->ip(),
+            'consentimiento_user_agent' => Str::limit('Ingreso manual RRHH por usuario ' . auth()->id() . ' - ' . (string) $request->userAgent(), 500, ''),
+        ];
+    }
+
+    private function storeDocument(Request $request, string $campo, string $rutCarpeta): string
+    {
+        $file = $request->file($campo);
+        $ext = strtolower($file->getClientOriginalExtension());
+        $filename = $campo . '_' . now()->format('YmdHis') . '_' . Str::lower(Str::random(8)) . '.' . $ext;
+        $path = $file->storeAs("contratacion/{$rutCarpeta}", $filename, 'local');
+
+        if (!$path) {
+            throw ValidationException::withMessages([
+                $campo => 'No se pudo guardar el documento. Intenta nuevamente.',
+            ]);
+        }
+
+        return $path;
+    }
+
+    private function deleteOldDocuments(array $oldPaths, array $newPaths): void
+    {
+        $newPaths = array_filter($newPaths);
+        foreach (array_unique(array_filter($oldPaths)) as $oldPath) {
+            if (!in_array($oldPath, $newPaths, true)) {
+                Storage::disk('local')->delete($oldPath);
+            }
+        }
     }
 
     // ─── Descargar un documento ───────────────────────────────────
@@ -532,17 +581,10 @@ class ContratacionController extends Controller
             }
 
             if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
-                $contenido    = Storage::disk('local')->get($ruta);
-                $mime         = match($ext) {
-                    'png'  => 'image/png',
-                    'gif'  => 'image/gif',
-                    'webp' => 'image/webp',
-                    default => 'image/jpeg',
-                };
                 $documentos[] = [
                     'label' => $label,
                     'tipo'  => 'imagen',
-                    'data'  => 'data:' . $mime . ';base64,' . base64_encode($contenido),
+                    'data'  => $this->imageDataUriForPdf($ruta, $ext),
                     'ext'   => $ext,
                 ];
             } else {
@@ -558,7 +600,7 @@ class ContratacionController extends Controller
         }
 
         $memPrev    = ini_get('memory_limit');
-        ini_set('memory_limit', '384M');
+        ini_set('memory_limit', self::PDF_MEMORY_LIMIT);
 
         $fichaBytes = Pdf::loadView('pdf.contratacion_ficha', compact('postulante', 'documentos'))
             ->setPaper('a4', 'portrait')
@@ -752,6 +794,55 @@ class ContratacionController extends Controller
         $seq = (int) substr(strrchr($postulante->folio, '-'), 1);
         $num = str_pad($seq, 3, '0', STR_PAD_LEFT);
         return $postulante->rut . ' - FICHA ' . $num . ' - ' . $postulante->nombre . '.pdf';
+    }
+
+    private function imageDataUriForPdf(string $ruta, string $ext): string
+    {
+        $contenido = Storage::disk('local')->get($ruta);
+        $mime = match($ext) {
+            'png'  => 'image/png',
+            'gif'  => 'image/gif',
+            'webp' => 'image/webp',
+            default => 'image/jpeg',
+        };
+
+        if (strlen($contenido) <= 5 * 1024 * 1024 || !function_exists('imagecreatefromstring')) {
+            return 'data:' . $mime . ';base64,' . base64_encode($contenido);
+        }
+
+        try {
+            $src = @imagecreatefromstring($contenido);
+            if (!$src) {
+                return 'data:' . $mime . ';base64,' . base64_encode($contenido);
+            }
+
+            $width = imagesx($src);
+            $height = imagesy($src);
+            $maxWidth = 1600;
+            $maxHeight = 2200;
+            $scale = min($maxWidth / max($width, 1), $maxHeight / max($height, 1), 1);
+            $newWidth = max(1, (int) round($width * $scale));
+            $newHeight = max(1, (int) round($height * $scale));
+
+            $dst = imagecreatetruecolor($newWidth, $newHeight);
+            $white = imagecolorallocate($dst, 255, 255, 255);
+            imagefilledrectangle($dst, 0, 0, $newWidth, $newHeight, $white);
+            imagecopyresampled($dst, $src, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+
+            ob_start();
+            imagejpeg($dst, null, 82);
+            $reduced = ob_get_clean();
+            imagedestroy($src);
+            imagedestroy($dst);
+
+            if ($reduced && strlen($reduced) < strlen($contenido)) {
+                return 'data:image/jpeg;base64,' . base64_encode($reduced);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Contratacion: no se pudo reducir imagen para PDF', ['ruta' => $ruta, 'error' => $e->getMessage()]);
+        }
+
+        return 'data:' . $mime . ';base64,' . base64_encode($contenido);
     }
 
     // ─── Helper: encontrar ruta de Ghostscript ────────────────────────────────

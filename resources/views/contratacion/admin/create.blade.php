@@ -104,7 +104,7 @@
                     <h3 style="margin:0;font-size:1rem;font-weight:700;display:flex;align-items:center;gap:.5rem;">
                         <i class="bi bi-folder-fill" style="color:#f59e0b;"></i> Documentos
                     </h3>
-                    <span style="font-size:.75rem;color:var(--text-muted);">JPG, PNG o PDF · máx. 20 MB por archivo · todos opcionales</span>
+                    <span style="font-size:.75rem;color:var(--text-muted);">JPG, PNG o PDF · máx. 100 MB por archivo · todos opcionales</span>
                 </div>
             </div>
             <div style="padding:0 1.5rem 1.5rem;">
@@ -141,6 +141,25 @@
                     @endforeach
 
                 </div>
+            </div>
+        </div>
+
+        <div class="glass-card" style="margin-bottom:1.5rem;">
+            <div style="padding:1.1rem 1.5rem;border-bottom:1px solid var(--border);margin-bottom:1.25rem;">
+                <h3 style="margin:0;font-size:1rem;font-weight:700;display:flex;align-items:center;gap:.5rem;">
+                    <i class="bi bi-shield-check" style="color:#0ea5e9;"></i> Autorización de datos personales
+                </h3>
+            </div>
+            <div style="padding:0 1.5rem 1.5rem;">
+                <label style="display:flex;gap:.65rem;align-items:flex-start;font-size:.86rem;color:var(--text-main);line-height:1.45;">
+                    <input type="checkbox" name="consentimiento_datos" value="1" {{ old('consentimiento_datos') ? 'checked' : '' }} required style="margin-top:.2rem;flex-shrink:0;">
+                    <span>
+                        Confirmo que el postulante autorizó el tratamiento de sus datos personales y documentos exclusivamente para fines de reclutamiento, selección, contratación, verificación documental, comunicación con RRHH y archivo del proceso, incluyendo la generación y almacenamiento de una ficha PDF consolidada en SharePoint.
+                    </span>
+                </label>
+                @error('consentimiento_datos')
+                    <div class="invalid-feedback" style="display:block;margin-top:.5rem;">{{ $message }}</div>
+                @enderror
             </div>
         </div>
 

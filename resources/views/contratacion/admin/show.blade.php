@@ -5,6 +5,9 @@
 <div class="page-container">
 
     @include('partials._alerts')
+    @php
+        $puedeEditar = auth()->user()->tieneAcceso('contratacion', 'puede_editar');
+    @endphp
 
     <!-- Header -->
     <div class="page-header">
@@ -22,7 +25,7 @@
             <a href="{{ route('contratacion.index') }}" class="btn-ghost">
                 <i class="bi bi-arrow-left"></i> Volver
             </a>
-            @if(!empty($postulante->documentosSubidos()))
+            @if($puedeEditar && !empty($postulante->documentosSubidos()))
             <a href="{{ route('contratacion.zip', $postulante) }}" class="btn-ghost">
                 <i class="bi bi-file-zip-fill" style="color:#f59e0b;"></i> Descargar ZIP
             </a>
@@ -30,6 +33,7 @@
                 <i class="bi bi-file-earmark-pdf-fill" style="color:#ef4444;"></i> Ficha PDF
             </a>
             @endif
+            @if($puedeEditar)
             <form method="POST" action="{{ route('contratacion.resincronizar', $postulante) }}" style="display:inline;">
                 @csrf
                 <button type="submit" class="btn-ghost"
@@ -38,6 +42,7 @@
                     <i class="bi bi-cloud-upload" style="color:#0ea5e9;"></i> Sincronizar SharePoint
                 </button>
             </form>
+            @endif
         </div>
     </div>
 
@@ -124,10 +129,12 @@
                             <div style="display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:#166534;">
                                 <i class="bi bi-check-circle-fill"></i> Subido
                             </div>
-                            <a href="{{ route('contratacion.documento', [$postulante, $campo]) }}"
-                               class="btn-icon" title="Descargar" style="font-size:.9rem;">
-                                <i class="bi bi-download"></i>
-                            </a>
+                            @if($puedeEditar)
+                                <a href="{{ route('contratacion.documento', [$postulante, $campo]) }}"
+                                   class="btn-icon" title="Descargar" style="font-size:.9rem;">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                            @endif
                         </div>
                         @else
                         <div style="font-size:.8rem;color:{{ $info['req'] ? '#92400e' : '#94a3b8' }};display:flex;align-items:center;gap:.4rem;">
@@ -139,6 +146,7 @@
                     @endforeach
                 </div>
 
+                @if($puedeEditar)
                 <!-- Formulario de carga/reemplazo de documentos -->
                 <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border);">
                     <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:1rem;display:flex;align-items:center;gap:.4rem;">
@@ -160,6 +168,7 @@
                                        accept=".jpg,.jpeg,.png,.pdf"
                                        class="form-control form-control-sm"
                                        style="font-size:.78rem;">
+                                <div style="font-size:.68rem;color:var(--text-muted);margin-top:.25rem;">JPG, PNG o PDF · máx. 100 MB</div>
                             </div>
                             @endforeach
                         </div>
@@ -168,6 +177,7 @@
                         </button>
                     </form>
                 </div>
+                @endif
             </div>
 
             <!-- Historial de sincronización SharePoint -->
@@ -256,6 +266,7 @@
                     ">{{ $postulante->estado_label }}</span>
                 </div>
 
+                @if($puedeEditar)
                 <!-- Form actualizar -->
                 <form method="POST" action="{{ route('contratacion.update', $postulante) }}">
                     @csrf
@@ -286,6 +297,11 @@
                         <i class="bi bi-check-lg"></i> Guardar Cambios
                     </button>
                 </form>
+                @else
+                <div style="font-size:.82rem;color:var(--text-muted);line-height:1.5;text-align:center;">
+                    Tienes acceso de solo lectura para este módulo.
+                </div>
+                @endif
 
                 <!-- Línea de tiempo de estado -->
                 <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border);">

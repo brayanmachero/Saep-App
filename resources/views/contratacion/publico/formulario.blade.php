@@ -178,6 +178,23 @@
             padding: .85rem 1rem; margin-bottom: 1.5rem;
             font-size: .85rem; color: #166534;
         }
+        .privacy-box {
+            background: #f8fafc;
+            border: 1px solid #dbe3ef;
+            border-radius: 12px;
+            padding: 1rem 1.15rem;
+            font-size: .84rem;
+            color: #334155;
+        }
+        .privacy-box label {
+            display: flex;
+            gap: .65rem;
+            align-items: flex-start;
+            cursor: pointer;
+            line-height: 1.45;
+        }
+        .privacy-box input { margin-top: .2rem; flex-shrink: 0; }
+        .privacy-box a { color: #0369a1; font-weight: 700; }
 
         @media (max-width: 680px) {
             .page { padding: 0 .5rem 3rem; }
@@ -201,9 +218,12 @@
         <img src="{{ $googleUser['avatar'] }}" alt="">
         @endif
         <span>{{ $googleUser['name'] }}</span>
-        <a href="{{ route('contratacion-publico.logout') }}" class="btn-logout">
-            <i class="bi bi-box-arrow-right"></i> Salir
-        </a>
+        <form method="POST" action="{{ route('contratacion-publico.logout') }}" style="display:inline;">
+            @csrf
+            <button type="submit" class="btn-logout">
+                <i class="bi bi-box-arrow-right"></i> Salir
+            </button>
+        </form>
     </div>
 </div>
 
@@ -288,7 +308,7 @@
                 <i class="bi bi-file-earmark-arrow-up-fill"></i> Documentos Requeridos
             </div>
             <p style="font-size:.85rem;color:#6b7280;margin-bottom:1rem;">
-                Acepta archivos <strong>JPG, PNG o PDF</strong> de máximo <strong>20 MB</strong> cada uno.
+                Acepta archivos <strong>JPG, PNG o PDF</strong> de máximo <strong>100 MB</strong> cada uno.
                 Los documentos marcados con <span style="color:#ef4444;font-weight:600;">Requerido</span>
                 son obligatorios para completar tu postulación.
             </p>
@@ -323,7 +343,7 @@
                         <div class="file-drop__icon"><i class="bi bi-cloud-upload"></i></div>
                         <div class="file-drop__text">
                             <strong>Seleccionar archivo</strong> o arrastrar aquí<br>
-                            <span>JPG, PNG, PDF · Máx. 20 MB</span>
+                            <span>JPG, PNG, PDF · Máx. 100 MB</span>
                         </div>
                     </div>
                     @if($postulante && $postulante->{$doc['campo']})
@@ -369,7 +389,7 @@
                             <div class="file-drop__icon"><i class="bi bi-cloud-upload"></i></div>
                             <div class="file-drop__text">
                                 <strong>Seleccionar archivo</strong> o arrastrar aquí<br>
-                                <span>JPG, PNG, PDF · Máx. 20 MB</span>
+                                <span>JPG, PNG, PDF · Máx. 100 MB</span>
                             </div>
                         </div>
                         @if($postulante && $postulante->{$lic['campo']})
@@ -388,6 +408,23 @@
                     </div>
                     @endforeach
                 </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card__title">
+                <i class="bi bi-shield-check"></i> Tratamiento de Datos Personales
+            </div>
+            <div class="privacy-box">
+                <label>
+                    <input type="checkbox" name="consentimiento_datos" value="1" {{ old('consentimiento_datos') ? 'checked' : '' }} required>
+                    <span>
+                        Autorizo a SAEP el tratamiento de mis datos personales y documentos de postulación exclusivamente para fines de reclutamiento, selección, contratación, verificación documental, comunicación con RRHH y archivo del proceso, incluyendo la generación y almacenamiento de una ficha PDF consolidada en SharePoint. Conozco que puedo ejercer mis derechos de acceso, rectificación, cancelación, oposición y demás derechos aplicables según la política de datos personales.
+                        <br>
+                        <a href="{{ route('proteccion-datos.politica-privacidad') }}" target="_blank" rel="noopener">Ver política de privacidad</a>
+                    </span>
+                </label>
+                @error('consentimiento_datos') <div class="invalid-feedback" style="display:block;margin-top:.6rem;">{{ $message }}</div> @enderror
             </div>
         </div>
 
@@ -415,7 +452,7 @@ document.getElementById('rut').addEventListener('input', function () {
 });
 
 // ─── Preview de archivos ─────────────────────────────────────────
-const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
+const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
 
 function mostrarErrorArchivo(campo, mensaje) {
     let errorEl = document.getElementById('file-error-' + campo);
@@ -447,7 +484,7 @@ function mostrarArchivo(input) {
         if (file.size > MAX_FILE_BYTES) {
             input.value = '';
             if (preview) preview.style.display = 'none';
-            mostrarErrorArchivo(campo, '⚠️ El archivo "' + file.name + '" supera el límite de 20 MB. Por favor selecciona un archivo más pequeño.');
+            mostrarErrorArchivo(campo, '⚠️ El archivo "' + file.name + '" supera el límite de 100 MB. Por favor selecciona un archivo más pequeño.');
             return;
         }
         ocultarErrorArchivo(campo);
@@ -514,7 +551,7 @@ document.getElementById('form-postulacion').addEventListener('submit', function 
     fileInputs.forEach(function (input) {
         if (input.files && input.files[0] && input.files[0].size > MAX_FILE_BYTES) {
             const campo = input.dataset.campo || input.name;
-            mostrarErrorArchivo(campo, '⚠️ El archivo "' + input.files[0].name + '" supera el límite de 20 MB. Por favor selecciona un archivo más pequeño.');
+            mostrarErrorArchivo(campo, '⚠️ El archivo "' + input.files[0].name + '" supera el límite de 100 MB. Por favor selecciona un archivo más pequeño.');
             input.value = '';
             hayError = true;
         }

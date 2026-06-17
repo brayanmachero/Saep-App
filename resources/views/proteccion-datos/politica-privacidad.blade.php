@@ -155,7 +155,7 @@
 
         <h2 id="s2"><i class="bi bi-file-earmark-text"></i> 2. Objeto y Alcance</h2>
         <p>La presente Política de Tratamiento de Datos Personales tiene por objeto informar a los titulares de datos personales sobre las prácticas de SAEP SpA en relación con la recolección, tratamiento, almacenamiento, comunicación y eliminación de sus datos personales, en cumplimiento de la Ley N° 19.628, reformada por la Ley N° 21.719.</p>
-        <p>Esta política aplica a todos los datos personales tratados a través de la plataforma SAEP y sus módulos: gestión de formularios, seguridad y salud en el trabajo (SST), charlas, auditorías, inspecciones, accidentes laborales y Ley Karin.</p>
+        <p>Esta política aplica a todos los datos personales tratados a través de la plataforma SAEP y sus módulos: gestión de formularios, seguridad y salud en el trabajo (SST), charlas, auditorías, inspecciones, accidentes laborales, Ley Karin y procesos de reclutamiento/contratación.</p>
 
         <h2 id="s3"><i class="bi bi-database"></i> 3. Datos Personales que Tratamos</h2>
 
@@ -191,6 +191,12 @@
         <div class="highlight-box warning">
             <strong>⚠ Datos Sensibles:</strong> En el módulo de Accidentes SST y Ley Karin se pueden tratar datos relativos a la salud y situaciones de acoso laboral/sexual. Estos datos reciben protección reforzada conforme al artículo 16 bis de la ley reformada.
         </div>
+        <h3>3.5 Documentos de postulación y contratación</h3>
+        <ul>
+            <li>Documentos de identidad, certificados previsionales y de salud, licencias de conducir y otros antecedentes requeridos para el proceso de reclutamiento.</li>
+            <li>Archivos en formato imagen o PDF aportados por el postulante o registrados por RRHH.</li>
+            <li>Ficha PDF consolidada generada por la plataforma para revisión documental y archivo del proceso.</li>
+        </ul>
 
         <h2 id="s4"><i class="bi bi-bullseye"></i> 4. Finalidad del Tratamiento</h2>
         <p>Los datos personales son tratados para las siguientes finalidades específicas, explícitas y lícitas:</p>
@@ -206,6 +212,7 @@
                 <tr><td>Registro de auditorías de seguridad</td><td>Auditorías SST</td></tr>
                 <tr><td>Investigación y registro de accidentes laborales</td><td>Accidentes SST</td></tr>
                 <tr><td>Gestión de denuncias de Ley Karin</td><td>Ley Karin</td></tr>
+                <tr><td>Recolección documental, verificación de antecedentes y gestión de postulantes</td><td>Contratación RRHH</td></tr>
                 <tr><td>Generación de reportes y documentos PDF</td><td>Exportaciones</td></tr>
                 <tr><td>Firma electrónica de documentos</td><td>Firmas</td></tr>
             </tbody>
@@ -226,6 +233,7 @@
             <li><strong>Organismos reguladores:</strong> Inspección del Trabajo, Seremi de Salud, Superintendencia de Seguridad Social, cuando la ley así lo exija.</li>
             <li><strong>Mutualidades:</strong> Para la gestión de accidentes laborales y enfermedades profesionales.</li>
             <li><strong>Proveedores de servicios tecnológicos:</strong> Hosting, correo electrónico y servicios cloud necesarios para la operación del sistema.</li>
+            <li><strong>Microsoft SharePoint / Microsoft Graph:</strong> Almacenamiento documental interno autorizado para la ficha consolidada y documentos del proceso de contratación.</li>
         </ul>
         <p>SAEP no vende, arrienda ni comercializa datos personales a terceros.</p>
 

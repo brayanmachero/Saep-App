@@ -15,11 +15,26 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Socialite\Facades\Socialite;
 
 class ContratacionPublicoController extends Controller
 {
+    private const DOCUMENT_MAX_KB = 102400; // 100 MB
+    private const DOCUMENT_MAX_MB = 100;
+    private const PDF_MEMORY_LIMIT = '1024M';
+    private const PRIVACY_VERSION = 'contratacion-v2026-06-17';
+    private const PRIVACY_TEXT = 'Autorizo a SAEP el tratamiento de mis datos personales y documentos de postulacion exclusivamente para fines de reclutamiento, seleccion, contratacion, verificacion documental, comunicacion con RRHH y archivo del proceso, incluyendo la generacion y almacenamiento de una ficha PDF consolidada en SharePoint.';
+    private const DOCUMENT_FIELDS = [
+        'carnet_frontal',
+        'carnet_reverso',
+        'certificado_afp',
+        'certificado_fonasa',
+        'licencia_conducir_frontal',
+        'licencia_conducir_reverso',
+    ];
+
     // ─── Paso 1: Landing ────────────────────────────────────────
     public function inicio()
     {
@@ -93,14 +108,14 @@ class ContratacionPublicoController extends Controller
         $docRules = [];
         foreach ($requeridosObligatorios as $campo) {
             $yaTiene = $postulante && !empty($postulante->$campo);
-            $docRules[$campo] = ($yaTiene ? 'nullable' : 'required') . '|file|mimes:jpg,jpeg,png,pdf|max:20480';
+            $docRules[$campo] = $this->documentRule(!$yaTiene);
         }
 
         // Licencia: opcional, pero si se tiene/sube uno de los dos el otro se vuelve obligatorio
         $tendraLicF = ($postulante && !empty($postulante->licencia_conducir_frontal)) || $request->hasFile('licencia_conducir_frontal');
         $tendraLicR = ($postulante && !empty($postulante->licencia_conducir_reverso)) || $request->hasFile('licencia_conducir_reverso');
-        $docRules['licencia_conducir_frontal'] = ($tendraLicR && !$tendraLicF ? 'required' : 'nullable') . '|file|mimes:jpg,jpeg,png,pdf|max:20480';
-        $docRules['licencia_conducir_reverso'] = ($tendraLicF && !$tendraLicR ? 'required' : 'nullable') . '|file|mimes:jpg,jpeg,png,pdf|max:20480';
+        $docRules['licencia_conducir_frontal'] = $this->documentRule($tendraLicR && !$tendraLicF);
+        $docRules['licencia_conducir_reverso'] = $this->documentRule($tendraLicF && !$tendraLicR);
 
         $request->validate(array_merge([
             'nombre' => 'required|string|max:200',
@@ -109,6 +124,7 @@ class ContratacionPublicoController extends Controller
                     $fail('El RUT ingresado no es válido.');
                 }
             }],
+            'consentimiento_datos' => 'accepted',
         ], $docRules), [
             'carnet_frontal.required'              => 'El Carnet de Identidad (Frontal) es obligatorio.',
             'carnet_reverso.required'              => 'El Carnet de Identidad (Reverso) es obligatorio.',
@@ -116,13 +132,26 @@ class ContratacionPublicoController extends Controller
             'certificado_fonasa.required'          => 'El Certificado FONASA es obligatorio.',
             'licencia_conducir_frontal.required'   => 'Debes subir el frontal de la Licencia de Conducir (ya tienes el reverso).',
             'licencia_conducir_reverso.required'   => 'Debes subir el reverso de la Licencia de Conducir (ya tienes el frontal).',
+            'consentimiento_datos.accepted'        => 'Debes autorizar el tratamiento de tus datos personales para enviar la postulación.',
             '*.mimes'                              => 'Solo se permiten archivos JPG, PNG o PDF.',
-            '*.max'                                => 'El archivo no puede superar los 20 MB.',
+            '*.max'                                => 'El archivo no puede superar los ' . self::DOCUMENT_MAX_MB . ' MB.',
         ]);
 
         $rutLimpio = preg_replace('/[^0-9kK]/', '', strtoupper($request->rut));
         $rutFormateado = PostulanteContratacion::formatearRut($rutLimpio);
         $rutCarpeta    = strtolower(preg_replace('/\./', '', $rutLimpio));
+
+        if ($esNuevo && PostulanteContratacion::where('rut', $rutFormateado)->exists()) {
+            throw ValidationException::withMessages([
+                'rut' => 'Este RUT ya tiene una postulación registrada. Ingresa con la misma cuenta de Google usada inicialmente o contacta a RRHH.',
+            ]);
+        }
+
+        if (!$esNuevo && $rutFormateado !== $postulante->rut) {
+            throw ValidationException::withMessages([
+                'rut' => 'El RUT de una postulación existente no puede modificarse desde el portal público.',
+            ]);
+        }
 
         // En registro NUEVO se aceptan nombre/rut del request.
         // En re-postulación se preservan los datos originales del primer envío
@@ -144,21 +173,16 @@ class ContratacionPublicoController extends Controller
             ];
             $rutCarpeta = strtolower(preg_replace('/\./', '', preg_replace('/[^0-9kK]/', '', strtoupper($postulante->rut))));
         }
+        $datos = array_merge($datos, $this->consentPayload($request));
 
         // Subir documentos que lleguen en este request (disco PRIVADO: storage/app/private)
-        $camposDocs = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa', 'licencia_conducir_frontal', 'licencia_conducir_reverso'];
-        foreach ($camposDocs as $campo) {
+        $rutasAnteriores = [];
+        foreach (self::DOCUMENT_FIELDS as $campo) {
             if ($request->hasFile($campo)) {
-                // Borrar el anterior si existe
                 if ($postulante && $postulante->$campo) {
-                    Storage::disk('local')->delete($postulante->$campo);
+                    $rutasAnteriores[] = $postulante->$campo;
                 }
-                $ext  = $request->file($campo)->getClientOriginalExtension();
-                $path = $request->file($campo)->storeAs(
-                    "contratacion/{$rutCarpeta}",
-                    "{$campo}.{$ext}",
-                    'local'
-                );
+                $path = $this->storeDocument($request, $campo, $rutCarpeta);
                 $datos[$campo] = $path;
             }
         }
@@ -168,6 +192,7 @@ class ContratacionPublicoController extends Controller
         } else {
             $postulante->update($datos);
         }
+        $this->deleteOldDocuments($rutasAnteriores, array_intersect_key($datos, array_flip(self::DOCUMENT_FIELDS)));
 
         // Enviar emails solo en la primera postulación
         if ($esNuevo) {
@@ -199,7 +224,16 @@ class ContratacionPublicoController extends Controller
     // ─── Paso 6: Confirmación ────────────────────────────────────
     public function confirmacion(string $folio)
     {
-        $postulante = PostulanteContratacion::where('folio', $folio)->firstOrFail();
+        $googleUser = Session::get('contratacion_google_user');
+        if (!$googleUser) {
+            return redirect()->route('contratacion-publico.inicio')
+                ->with('error', 'Debes iniciar sesión con Google para revisar tu confirmación.');
+        }
+
+        $postulante = PostulanteContratacion::where('folio', $folio)
+            ->where('google_id', $googleUser['id'])
+            ->firstOrFail();
+
         return view('contratacion.publico.confirmacion', compact('postulante'));
     }
 
@@ -271,17 +305,10 @@ class ContratacionPublicoController extends Controller
                 }
 
                 if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
-                    $contenido    = Storage::disk('local')->get($ruta);
-                    $mime         = match($ext) {
-                        'png'  => 'image/png',
-                        'gif'  => 'image/gif',
-                        'webp' => 'image/webp',
-                        default => 'image/jpeg',
-                    };
                     $documentos[] = [
                         'label' => $label,
                         'tipo'  => 'imagen',
-                        'data'  => 'data:' . $mime . ';base64,' . base64_encode($contenido),
+                        'data'  => $this->imageDataUriForPdf($ruta, $ext),
                         'ext'   => $ext,
                     ];
                 } else {
@@ -307,7 +334,7 @@ class ContratacionPublicoController extends Controller
 
             // Aumentar límite de memoria
             $memPrev = ini_get('memory_limit');
-            ini_set('memory_limit', '384M');
+            ini_set('memory_limit', self::PDF_MEMORY_LIMIT);
 
             // Paso A: DomPDF genera la ficha con datos personales + imágenes
             $fichaBytes = Pdf::loadView('pdf.contratacion_ficha', compact('postulante', 'documentos'))
@@ -569,6 +596,98 @@ class ContratacionPublicoController extends Controller
                 'finished_at'   => now(),
             ]);
         }
+    }
+
+    private function documentRule(bool $required): string
+    {
+        return ($required ? 'required' : 'nullable') . '|file|mimes:jpg,jpeg,png,pdf|max:' . self::DOCUMENT_MAX_KB;
+    }
+
+    private function consentPayload(Request $request): array
+    {
+        return [
+            'consentimiento_datos'      => true,
+            'consentimiento_at'         => now(),
+            'consentimiento_version'    => self::PRIVACY_VERSION,
+            'consentimiento_texto'      => self::PRIVACY_TEXT,
+            'consentimiento_ip'         => $request->ip(),
+            'consentimiento_user_agent' => Str::limit((string) $request->userAgent(), 500, ''),
+        ];
+    }
+
+    private function storeDocument(Request $request, string $campo, string $rutCarpeta): string
+    {
+        $file = $request->file($campo);
+        $ext = strtolower($file->getClientOriginalExtension());
+        $filename = $campo . '_' . now()->format('YmdHis') . '_' . Str::lower(Str::random(8)) . '.' . $ext;
+        $path = $file->storeAs("contratacion/{$rutCarpeta}", $filename, 'local');
+
+        if (!$path) {
+            throw ValidationException::withMessages([
+                $campo => 'No se pudo guardar el documento. Intenta nuevamente.',
+            ]);
+        }
+
+        return $path;
+    }
+
+    private function deleteOldDocuments(array $oldPaths, array $newPaths): void
+    {
+        $newPaths = array_filter($newPaths);
+        foreach (array_unique(array_filter($oldPaths)) as $oldPath) {
+            if (!in_array($oldPath, $newPaths, true)) {
+                Storage::disk('local')->delete($oldPath);
+            }
+        }
+    }
+
+    private function imageDataUriForPdf(string $ruta, string $ext): string
+    {
+        $contenido = Storage::disk('local')->get($ruta);
+        $mime = match($ext) {
+            'png'  => 'image/png',
+            'gif'  => 'image/gif',
+            'webp' => 'image/webp',
+            default => 'image/jpeg',
+        };
+
+        if (strlen($contenido) <= 5 * 1024 * 1024 || !function_exists('imagecreatefromstring')) {
+            return 'data:' . $mime . ';base64,' . base64_encode($contenido);
+        }
+
+        try {
+            $src = @imagecreatefromstring($contenido);
+            if (!$src) {
+                return 'data:' . $mime . ';base64,' . base64_encode($contenido);
+            }
+
+            $width = imagesx($src);
+            $height = imagesy($src);
+            $maxWidth = 1600;
+            $maxHeight = 2200;
+            $scale = min($maxWidth / max($width, 1), $maxHeight / max($height, 1), 1);
+            $newWidth = max(1, (int) round($width * $scale));
+            $newHeight = max(1, (int) round($height * $scale));
+
+            $dst = imagecreatetruecolor($newWidth, $newHeight);
+            $white = imagecolorallocate($dst, 255, 255, 255);
+            imagefilledrectangle($dst, 0, 0, $newWidth, $newHeight, $white);
+            imagecopyresampled($dst, $src, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+
+            ob_start();
+            imagejpeg($dst, null, 82);
+            $reduced = ob_get_clean();
+            imagedestroy($src);
+            imagedestroy($dst);
+
+            if ($reduced && strlen($reduced) < strlen($contenido)) {
+                return 'data:image/jpeg;base64,' . base64_encode($reduced);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Contratacion: no se pudo reducir imagen para PDF', ['ruta' => $ruta, 'error' => $e->getMessage()]);
+        }
+
+        return 'data:' . $mime . ';base64,' . base64_encode($contenido);
     }
 
     // ─── Notificación RRHH ───────────────────────────────────────

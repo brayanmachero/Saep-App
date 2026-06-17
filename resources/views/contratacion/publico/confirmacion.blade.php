@@ -78,7 +78,7 @@
             background: #f1f5f9; color: #475569;
             padding: .75rem 2rem; border-radius: 10px;
             border: none; font-size: .9rem; font-weight: 600;
-            text-decoration: none; display: block;
+            text-decoration: none; display: block; width: 100%; cursor: pointer;
         }
         .btn-secondary:hover { background: #e2e8f0; }
 
@@ -152,9 +152,12 @@
             <i class="bi bi-arrow-up-circle"></i> Completar Documentos
         </a>
         @endif
-        <a href="{{ route('contratacion-publico.logout') }}" class="btn-secondary">
-            <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
-        </a>
+        <form method="POST" action="{{ route('contratacion-publico.logout') }}">
+            @csrf
+            <button type="submit" class="btn-secondary">
+                <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+            </button>
+        </form>
     </div>
 
     <p class="footer-note">

@@ -17,7 +17,16 @@ class PostulanteContratacion extends Model
         'certificado_afp', 'certificado_fonasa',
         'licencia_conducir_frontal', 'licencia_conducir_reverso',
         'estado', 'observaciones',
+        'consentimiento_datos', 'consentimiento_at', 'consentimiento_version',
+        'consentimiento_texto', 'consentimiento_ip', 'consentimiento_user_agent',
     ];
+
+    protected $casts = [
+        'consentimiento_datos' => 'boolean',
+        'consentimiento_at'    => 'datetime',
+    ];
+
+    public const DOCUMENTOS_OBLIGATORIOS = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa'];
 
     // ── Folio automático (atómico: lock pesimista para evitar duplicados) ─
     protected static function booted(): void
@@ -82,14 +91,17 @@ class PostulanteContratacion extends Model
 
     public function documentosFaltantes(): array
     {
-        // Solo carnet y certificados son obligatorios
-        $obligatorios = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa'];
-        return array_filter($obligatorios, fn($c) => empty($this->$c));
+        return array_filter(self::DOCUMENTOS_OBLIGATORIOS, fn($c) => empty($this->$c));
     }
 
     public function documentosCompletos(): bool
     {
         return count($this->documentosFaltantes()) === 0;
+    }
+
+    public function documentosObligatoriosSubidos(): int
+    {
+        return count(array_filter(self::DOCUMENTOS_OBLIGATORIOS, fn($c) => !empty($this->$c)));
     }
 
     // ── Relaciones ────────────────────────────────────────────────

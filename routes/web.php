@@ -80,7 +80,7 @@ Route::prefix('postulacion')->middleware('throttle:30,1')->group(function () {
     Route::get('/formulario',      [ContratacionPublicoController::class, 'formulario'])->name('contratacion-publico.formulario');
     Route::post('/enviar',         [ContratacionPublicoController::class, 'store'])->middleware('throttle:6,1')->name('contratacion-publico.store');
     Route::get('/confirmacion/{folio}', [ContratacionPublicoController::class, 'confirmacion'])->name('contratacion-publico.confirmacion');
-    Route::get('/logout',          [ContratacionPublicoController::class, 'logout'])->name('contratacion-publico.logout');
+    Route::post('/logout',         [ContratacionPublicoController::class, 'logout'])->name('contratacion-publico.logout');
 });
 
 // App (requiere autenticación)
@@ -467,19 +467,19 @@ Route::middleware('auth')->group(function () {
     // --- CONTRATACIÓN RRHH (panel admin) ---
     Route::middleware('modulo:contratacion')->prefix('contratacion')->name('contratacion.')->group(function () {
         Route::get('/',                              [ContratacionController::class, 'index'])->name('index');
-        Route::get('/crear',                         [ContratacionController::class, 'create'])->name('crear');
-        Route::post('/crear',                        [ContratacionController::class, 'storeManual'])->name('store-manual');
-        Route::get('/exportar/excel',                [ContratacionController::class, 'exportarExcel'])->name('exportar.excel');
-        Route::get('/configuracion/emails',          [ContratacionController::class, 'configuracion'])->name('configuracion');
-        Route::patch('/configuracion/emails',        [ContratacionController::class, 'guardarConfiguracion'])->name('guardar-configuracion');
+        Route::get('/crear',                         [ContratacionController::class, 'create'])->middleware('modulo:contratacion,puede_crear')->name('crear');
+        Route::post('/crear',                        [ContratacionController::class, 'storeManual'])->middleware('modulo:contratacion,puede_crear')->name('store-manual');
+        Route::get('/exportar/excel',                [ContratacionController::class, 'exportarExcel'])->middleware('modulo:contratacion,puede_editar')->name('exportar.excel');
+        Route::get('/configuracion/emails',          [ContratacionController::class, 'configuracion'])->middleware('modulo:contratacion,puede_editar')->name('configuracion');
+        Route::patch('/configuracion/emails',        [ContratacionController::class, 'guardarConfiguracion'])->middleware('modulo:contratacion,puede_editar')->name('guardar-configuracion');
         Route::get('/{postulante}',                  [ContratacionController::class, 'show'])->name('show');
-        Route::patch('/{postulante}',                [ContratacionController::class, 'update'])->name('update');
-        Route::delete('/{postulante}',               [ContratacionController::class, 'destroy'])->name('destroy');
-        Route::get('/{postulante}/zip',              [ContratacionController::class, 'descargarZip'])->name('zip');
-        Route::get('/{postulante}/doc/{campo}',      [ContratacionController::class, 'descargarDocumento'])->name('documento');
-        Route::get('/{postulante}/ficha-pdf',        [ContratacionController::class, 'fichaPdf'])->name('ficha-pdf');
-        Route::post('/{postulante}/documentos',      [ContratacionController::class, 'updateDocumentos'])->name('update-documentos');
-        Route::post('/{postulante}/resincronizar',   [ContratacionController::class, 'resincronizarSharePoint'])->name('resincronizar');
+        Route::patch('/{postulante}',                [ContratacionController::class, 'update'])->middleware('modulo:contratacion,puede_editar')->name('update');
+        Route::delete('/{postulante}',               [ContratacionController::class, 'destroy'])->middleware('modulo:contratacion,puede_eliminar')->name('destroy');
+        Route::get('/{postulante}/zip',              [ContratacionController::class, 'descargarZip'])->middleware('modulo:contratacion,puede_editar')->name('zip');
+        Route::get('/{postulante}/doc/{campo}',      [ContratacionController::class, 'descargarDocumento'])->middleware('modulo:contratacion,puede_editar')->name('documento');
+        Route::get('/{postulante}/ficha-pdf',        [ContratacionController::class, 'fichaPdf'])->middleware('modulo:contratacion,puede_editar')->name('ficha-pdf');
+        Route::post('/{postulante}/documentos',      [ContratacionController::class, 'updateDocumentos'])->middleware('modulo:contratacion,puede_editar')->name('update-documentos');
+        Route::post('/{postulante}/resincronizar',   [ContratacionController::class, 'resincronizarSharePoint'])->middleware('modulo:contratacion,puede_editar')->name('resincronizar');
     });
 
     // --- GRAFANA: ANALYTICS TALANA (solo SUPER_ADMIN — beta) ---

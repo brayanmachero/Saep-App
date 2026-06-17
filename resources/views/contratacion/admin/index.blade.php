@@ -5,6 +5,11 @@
 <div class="page-container">
 
     @include('partials._alerts')
+    @php
+        $puedeCrear = auth()->user()->tieneAcceso('contratacion', 'puede_crear');
+        $puedeEditar = auth()->user()->tieneAcceso('contratacion', 'puede_editar');
+        $puedeEliminar = auth()->user()->tieneAcceso('contratacion', 'puede_eliminar');
+    @endphp
 
     <!-- Header -->
     <div class="page-header">
@@ -18,15 +23,19 @@
             <a href="{{ route('contratacion-publico.inicio') }}" target="_blank" class="btn-ghost">
                 <i class="bi bi-box-arrow-up-right"></i> Formulario Público
             </a>
+            @if($puedeEditar)
             <a href="{{ route('contratacion.exportar.excel') }}" class="btn-ghost">
                 <i class="bi bi-file-earmark-excel-fill" style="color:#22c55e"></i> Exportar Excel
             </a>
             <a href="{{ route('contratacion.configuracion') }}" class="btn-ghost">
                 <i class="bi bi-gear-fill"></i> Configuración
             </a>
+            @endif
+            @if($puedeCrear)
             <a href="{{ route('contratacion.crear') }}" class="btn-premium">
                 <i class="bi bi-person-plus-fill"></i> Ingresar manual
             </a>
+            @endif
         </div>
     </div>
 
@@ -138,7 +147,7 @@
                         <td style="font-family:monospace;font-size:.85rem;">{{ $p->rut }}</td>
                         <td style="font-size:.85rem;">{{ $p->email }}</td>
                         <td style="text-align:center;">
-                            @php $subidos = count($p->documentosSubidos()); @endphp
+                            @php $subidos = $p->documentosObligatoriosSubidos(); @endphp
                             <span style="
                                 padding:.25rem .6rem;border-radius:6px;font-size:.75rem;font-weight:700;
                                 background:{{ $p->documentosCompletos() ? '#dcfce7' : '#fefce8' }};
@@ -176,12 +185,12 @@
                             <a href="{{ route('contratacion.show', $p) }}" class="btn-icon" title="Ver detalle">
                                 <i class="bi bi-eye-fill"></i>
                             </a>
-                            @if(!empty($p->documentosSubidos()))
+                            @if($puedeEditar && !empty($p->documentosSubidos()))
                             <a href="{{ route('contratacion.zip', $p) }}" class="btn-icon" title="Descargar ZIP">
                                 <i class="bi bi-file-zip-fill" style="color:#f59e0b;"></i>
                             </a>
                             @endif
-                            @if(auth()->user()->tieneAcceso('contratacion', 'puede_eliminar'))
+                            @if($puedeEliminar)
                             <button type="button" class="btn-icon" title="Eliminar registro"
                                 onclick="confirmarEliminar('{{ $p->id }}', '{{ addslashes($p->folio) }}', '{{ addslashes($p->nombre) }}')"
                                 style="color:#ef4444;">
@@ -206,7 +215,7 @@
 </div>
 
 {{-- Modal eliminar --}}
-@if(auth()->user()->tieneAcceso('contratacion', 'puede_eliminar'))
+@if($puedeEliminar)
 <div id="modal-eliminar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;justify-content:center;align-items:center;backdrop-filter:blur(3px)">
     <div class="glass-card" style="max-width:440px;width:90%;padding:1.75rem;">
         <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;">
