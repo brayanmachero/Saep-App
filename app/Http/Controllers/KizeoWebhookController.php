@@ -52,7 +52,14 @@ class KizeoWebhookController extends Controller
     {
         // Verificar secreto del webhook si está configurado
         $secret = config('services.kizeo.webhook_secret');
-        if ($secret && !hash_equals($secret, (string) $request->header('X-Webhook-Secret', ''))) {
+        $providedSecret = (string) (
+            $request->header('X-Webhook-Secret')
+            ?: $request->route('secret')
+            ?: $request->query('secret', '')
+            ?: $request->input('secret', '')
+        );
+
+        if ($secret && !hash_equals($secret, $providedSecret)) {
             Log::warning('Kizeo Webhook rechazado: secreto inválido', ['ip' => $request->ip()]);
             return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 403);
         }
@@ -60,15 +67,18 @@ class KizeoWebhookController extends Controller
         try {
             $payload = $request->all();
 
-            // Log completo del payload para debugging
-            Log::info('Kizeo Webhook recibido (payload completo)', $payload);
-
             // Extraer form_id y data_id del webhook notification
             $formId = $payload['data']['form_id'] ?? $payload['form_id'] ?? null;
             $dataId = $payload['data']['id'] ?? $payload['id'] ?? $payload['data_id'] ?? null;
             $eventType = $payload['eventType'] ?? $payload['event'] ?? 'unknown';
 
-            Log::info("Webhook parseado", ['formId' => $formId, 'dataId' => $dataId, 'event' => $eventType]);
+            Log::info('Kizeo Webhook recibido', [
+                'formId' => $formId,
+                'dataId' => $dataId,
+                'event' => $eventType,
+                'payload_keys' => array_keys($payload),
+                'ip' => $request->ip(),
+            ]);
 
             if (!$formId || !$dataId) {
                 Log::warning('Webhook sin formId o dataId', ['payload_keys' => array_keys($payload)]);
@@ -311,19 +321,10 @@ class KizeoWebhookController extends Controller
             $pdfContent = $pdf->output();
 
             // Subir PDF a OneDrive (carpeta por patente)
-            $sharepointPath = null;
-            try {
-                $oneDrive = app(OneDriveService::class);
-                if ($oneDrive->isConfigured()) {
-                    $conductorSlug = preg_replace('/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/u', '', $data['conductor_nombre']);
-                    $fechaSlug = date('Y-m-d');
-                    $remotePath = "{$data['patente']}/{$tipoActa}_{$fechaSlug}_{$conductorSlug}.pdf";
-                    $oneDrive->uploadFile($pdfContent, $remotePath);
-                    $sharepointPath = $remotePath;
-                }
-            } catch (\Throwable $e) {
-                Log::warning('OneDrive upload falló (no crítico): ' . $e->getMessage());
-            }
+            $conductorSlug = $this->cleanPathSegment($data['conductor_nombre'], 'Sin conductor', 80);
+            $fechaSlug = date('Y-m-d');
+            $remotePath = "{$data['patente']}/{$tipoActa}_{$fechaSlug}_{$conductorSlug}.pdf";
+            $sharepointPath = $this->uploadPdfToSharePoint($pdfContent, $remotePath, "Acta de {$tipoActa}", false);
 
             // Enviar correo con PDF adjunto
             $emailEnviado = false;
@@ -489,21 +490,9 @@ class KizeoWebhookController extends Controller
             $filename = "{$fechaSlug} - " . substr(trim($tituloClean), 0, 60) . " ({$relatorClean}).pdf";
 
             // Estructura: Charlas SST / 2026 / 03 - Marzo / CD Santiago / Capacitación / archivo.pdf
-            $sharepointPath = null;
-            try {
-                $oneDrive = app(OneDriveService::class);
-                if ($oneDrive->isConfigured()) {
-                    $rootFolder = config('services.kizeo.charla_sharepoint_folder', 'Charlas SST');
-                    $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$lugarFolder}/{$actividadFolder}/{$filename}";
-                    $oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', true);
-                    $sharepointPath = $remotePath;
-                    Log::info("Charla SST subida a SharePoint", ['path' => $remotePath]);
-                } else {
-                    Log::warning('SharePoint no configurado, PDF de Charla SST no se pudo subir');
-                }
-            } catch (\Throwable $e) {
-                Log::warning('SharePoint upload de Charla SST falló (no crítico): ' . $e->getMessage());
-            }
+            $rootFolder = config('services.kizeo.charla_sharepoint_folder', 'Charlas SST');
+            $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$lugarFolder}/{$actividadFolder}/{$filename}";
+            $sharepointPath = $this->uploadPdfToSharePoint($pdfContent, $remotePath, 'Charla SST');
 
             // Enviar email con PDF adjunto (desactivado por defecto, activar desde Configuración)
             $emailEnviado = false;
@@ -669,21 +658,9 @@ class KizeoWebhookController extends Controller
             $filename = "{$fechaSlug} - " . substr(trim($observadorClean), 0, 60) . " ({$tipoClean}).pdf";
 
             // Estructura: Observaciones Conducta / 2026 / 04 - Abril / CD Santiago / archivo.pdf
-            $sharepointPath = null;
-            try {
-                $oneDrive = app(OneDriveService::class);
-                if ($oneDrive->isConfigured()) {
-                    $rootFolder = config('services.kizeo.observacion_sharepoint_folder', 'Observaciones Conducta');
-                    $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
-                    $oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', true);
-                    $sharepointPath = $remotePath;
-                    Log::info("Observación de Conducta subida a SharePoint", ['path' => $remotePath]);
-                } else {
-                    Log::warning('SharePoint no configurado, PDF de Observación no se pudo subir');
-                }
-            } catch (\Throwable $e) {
-                Log::warning('SharePoint upload de Observación falló (no crítico): ' . $e->getMessage());
-            }
+            $rootFolder = config('services.kizeo.observacion_sharepoint_folder', 'Observaciones Conducta');
+            $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
+            $sharepointPath = $this->uploadPdfToSharePoint($pdfContent, $remotePath, 'Observación de Conducta');
 
             // Registrar en webhook_logs
             WebhookLog::logSuccess([
@@ -812,21 +789,9 @@ class KizeoWebhookController extends Controller
             $filename = "{$fechaSlug} - " . substr(trim($areasClean), 0, 60) . " ({$inspectorClean}).pdf";
 
             // Estructura: Inspecciones SST / 2026 / 04 - Abril / CD Santiago / archivo.pdf
-            $sharepointPath = null;
-            try {
-                $oneDrive = app(OneDriveService::class);
-                if ($oneDrive->isConfigured()) {
-                    $rootFolder = config('services.kizeo.inspeccion_sharepoint_folder', 'Inspecciones SST');
-                    $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
-                    $oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', true);
-                    $sharepointPath = $remotePath;
-                    Log::info("Inspección SST subida a SharePoint", ['path' => $remotePath]);
-                } else {
-                    Log::warning('SharePoint no configurado, PDF de Inspección no se pudo subir');
-                }
-            } catch (\Throwable $e) {
-                Log::warning('SharePoint upload de Inspección falló (no crítico): ' . $e->getMessage());
-            }
+            $rootFolder = config('services.kizeo.inspeccion_sharepoint_folder', 'Inspecciones SST');
+            $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
+            $sharepointPath = $this->uploadPdfToSharePoint($pdfContent, $remotePath, 'Inspección SST');
 
             // Registrar en webhook_logs
             WebhookLog::logSuccess([
@@ -952,21 +917,9 @@ class KizeoWebhookController extends Controller
             $filename = "{$fechaSlug} - " . substr(trim($seccionClean), 0, 60) . " ({$realizadorClean}).pdf";
 
             // Estructura: Visitas Terreno / 2026 / 04 - Abril / CD Santiago / archivo.pdf
-            $sharepointPath = null;
-            try {
-                $oneDrive = app(OneDriveService::class);
-                if ($oneDrive->isConfigured()) {
-                    $rootFolder = config('services.kizeo.visita_sharepoint_folder', 'Visitas Terreno');
-                    $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
-                    $oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', true);
-                    $sharepointPath = $remotePath;
-                    Log::info("Visita Terreno subida a SharePoint", ['path' => $remotePath]);
-                } else {
-                    Log::warning('SharePoint no configurado, PDF de Visita no se pudo subir');
-                }
-            } catch (\Throwable $e) {
-                Log::warning('SharePoint upload de Visita falló (no crítico): ' . $e->getMessage());
-            }
+            $rootFolder = config('services.kizeo.visita_sharepoint_folder', 'Visitas Terreno');
+            $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
+            $sharepointPath = $this->uploadPdfToSharePoint($pdfContent, $remotePath, 'Visita Terreno');
 
             // Registrar en webhook_logs
             WebhookLog::logSuccess([
@@ -1090,21 +1043,9 @@ class KizeoWebhookController extends Controller
             $filename = "{$fechaSlug} - " . substr(trim($lesionadoClean), 0, 60) . " ({$tipoClean}).pdf";
 
             // Estructura: Accidentes SST / 2026 / 04 - Abril / CD Santiago / archivo.pdf
-            $sharepointPath = null;
-            try {
-                $oneDrive = app(OneDriveService::class);
-                if ($oneDrive->isConfigured()) {
-                    $rootFolder = config('services.kizeo.accidente_sharepoint_folder', 'Accidentes SST');
-                    $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
-                    $oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', true);
-                    $sharepointPath = $remotePath;
-                    Log::info("Accidente SST subido a SharePoint", ['path' => $remotePath]);
-                } else {
-                    Log::warning('SharePoint no configurado, PDF de Accidente no se pudo subir');
-                }
-            } catch (\Throwable $e) {
-                Log::warning('SharePoint upload de Accidente falló (no crítico): ' . $e->getMessage());
-            }
+            $rootFolder = config('services.kizeo.accidente_sharepoint_folder', 'Accidentes SST');
+            $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
+            $sharepointPath = $this->uploadPdfToSharePoint($pdfContent, $remotePath, 'Accidente SST');
 
             // Registrar en webhook_logs
             WebhookLog::logSuccess([
@@ -1234,21 +1175,9 @@ class KizeoWebhookController extends Controller
             $filename = "{$fechaSlug} - " . substr(trim($trabajadorClean), 0, 60) . " (Declaracion Incidente).pdf";
 
             // Estructura: Declaraciones SST / 2026 / 04 - Abril / CD Santiago / archivo.pdf
-            $sharepointPath = null;
-            try {
-                $oneDrive = app(OneDriveService::class);
-                if ($oneDrive->isConfigured()) {
-                    $rootFolder = config('services.kizeo.declaracion_sharepoint_folder', 'Declaraciones SST');
-                    $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
-                    $oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', true);
-                    $sharepointPath = $remotePath;
-                    Log::info("Declaración de Incidente subida a SharePoint", ['path' => $remotePath]);
-                } else {
-                    Log::warning('SharePoint no configurado, PDF de Declaración no se pudo subir');
-                }
-            } catch (\Throwable $e) {
-                Log::warning('SharePoint upload de Declaración falló (no crítico): ' . $e->getMessage());
-            }
+            $rootFolder = config('services.kizeo.declaracion_sharepoint_folder', 'Declaraciones SST');
+            $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$cdFolder}/{$filename}";
+            $sharepointPath = $this->uploadPdfToSharePoint($pdfContent, $remotePath, 'Declaración de Incidente');
 
             // Registrar en webhook_logs
             WebhookLog::logSuccess([
@@ -1383,21 +1312,9 @@ class KizeoWebhookController extends Controller
             $filename    = "{$fechaSlug} - Reunion CPHS - " . substr(trim($centroClean), 0, 50) . " ({$mesLabel}).pdf";
 
             // Estructura SharePoint: Reuniones CPHS / 2026 / 04 - Abril / Centro Santiago / archivo.pdf
-            $sharepointPath = null;
-            try {
-                $oneDrive = app(OneDriveService::class);
-                if ($oneDrive->isConfigured()) {
-                    $rootFolder = config('services.kizeo.cphs_sharepoint_folder', 'Reuniones CPHS');
-                    $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$centroFolder}/{$filename}";
-                    $oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', true);
-                    $sharepointPath = $remotePath;
-                    Log::info("Reunión CPHS subida a SharePoint", ['path' => $remotePath]);
-                } else {
-                    Log::warning('SharePoint no configurado, PDF de Reunión CPHS no se pudo subir');
-                }
-            } catch (\Throwable $e) {
-                Log::warning('SharePoint upload de Reunión CPHS falló (no crítico): ' . $e->getMessage());
-            }
+            $rootFolder = config('services.kizeo.cphs_sharepoint_folder', 'Reuniones CPHS');
+            $remotePath = "{$rootFolder}/{$anio}/{$mesNombre}/{$centroFolder}/{$filename}";
+            $sharepointPath = $this->uploadPdfToSharePoint($pdfContent, $remotePath, 'Reunión CPHS');
 
             // Registrar en webhook_logs
             WebhookLog::logSuccess([
@@ -1437,6 +1354,52 @@ class KizeoWebhookController extends Controller
             ]);
             return response()->json(['status' => 'error', 'message' => 'Internal processing error'], 500);
         }
+    }
+
+    private function uploadPdfToSharePoint(string $pdfContent, string $remotePath, string $label, bool $absolute = true): string
+    {
+        $remotePath = $this->cleanSharePointPath($remotePath);
+        $oneDrive = app(OneDriveService::class);
+
+        if (!$oneDrive->isConfigured()) {
+            throw new \RuntimeException("SharePoint no configurado para {$label}");
+        }
+
+        if (!$oneDrive->uploadFile($pdfContent, $remotePath, 'application/pdf', $absolute)) {
+            $lastError = $oneDrive->getLastError();
+            $detail = $lastError['message'] ?? 'sin detalle';
+            throw new \RuntimeException("SharePoint upload falló para {$label}: {$detail}");
+        }
+
+        Log::info("{$label} subido a SharePoint", ['path' => $remotePath]);
+
+        return $remotePath;
+    }
+
+    private function cleanSharePointPath(string $path): string
+    {
+        $path = str_replace('\\', '/', $path);
+        $segments = array_map(
+            fn (string $segment) => $this->cleanPathSegment($segment),
+            explode('/', $path)
+        );
+
+        return trim(implode('/', $segments), '/');
+    }
+
+    private function cleanPathSegment(?string $value, string $fallback = 'Sin especificar', int $maxLength = 120): string
+    {
+        $value = (string) ($value ?? '');
+        $value = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $value) ?? $value;
+        $value = str_replace(['\\', '/', ':', '*', '?', '"', '<', '>', '|', '#', '%', '{', '}', '~', '&'], '_', $value);
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = trim($value, " \t\n\r\0\x0B.");
+
+        if ($value === '') {
+            $value = $fallback;
+        }
+
+        return substr($value, 0, $maxLength);
     }
 
     /**

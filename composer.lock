@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f63b653282b62c58245f7d5a0f804151",
+    "content-hash": "dd3a797926cbda56f4f3225921ba3e59",
     "packages": [
         {
             "name": "barryvdh/laravel-dompdf",
@@ -824,12 +824,12 @@
             "version": "v7.0.3",
             "source": {
                 "type": "git",
-                "url": "https://github.com/firebase/php-jwt.git",
+                "url": "https://github.com/googleapis/php-jwt.git",
                 "reference": "28aa0694bcfdfa5e2959c394d5a1ee7a5083629e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/firebase/php-jwt/zipball/28aa0694bcfdfa5e2959c394d5a1ee7a5083629e",
+                "url": "https://api.github.com/repos/googleapis/php-jwt/zipball/28aa0694bcfdfa5e2959c394d5a1ee7a5083629e",
                 "reference": "28aa0694bcfdfa5e2959c394d5a1ee7a5083629e",
                 "shasum": ""
             },
@@ -4835,17 +4835,21 @@
         },
         {
             "name": "setasign/fpdf",
-            "version": "1.8",
+            "version": "1.9.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/Setasign/FPDF.git",
-                "reference": "a8a76e8cfc1db7b1a18c096a021a0cdff70db6b5"
+                "reference": "051b70e4c57dedc88df41b1eff1c62894e5f9ed0"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/Setasign/FPDF/zipball/a8a76e8cfc1db7b1a18c096a021a0cdff70db6b5",
-                "reference": "a8a76e8cfc1db7b1a18c096a021a0cdff70db6b5",
+                "url": "https://api.github.com/repos/Setasign/FPDF/zipball/051b70e4c57dedc88df41b1eff1c62894e5f9ed0",
+                "reference": "051b70e4c57dedc88df41b1eff1c62894e5f9ed0",
                 "shasum": ""
+            },
+            "require": {
+                "ext-gd": "*",
+                "ext-zlib": "*"
             },
             "type": "library",
             "autoload": {
@@ -4855,7 +4859,7 @@
             },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
-                "no usage restriction"
+                "MIT"
             ],
             "authors": [
                 {
@@ -4871,9 +4875,9 @@
                 "pdf"
             ],
             "support": {
-                "source": "https://github.com/Setasign/FPDF/tree/1.8"
+                "source": "https://github.com/Setasign/FPDF/tree/1.9.0"
             },
-            "time": "2015-11-30T09:05:35+00:00"
+            "time": "2026-05-31T14:25:29+00:00"
         },
         {
             "name": "setasign/fpdi",
