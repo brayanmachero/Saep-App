@@ -14,6 +14,7 @@ class OneDriveService
     private string $sharepointHost;
     private string $sharepointSite;
     private string $rootFolder;
+    private ?array $lastError = null;
 
     public function __construct()
     {
@@ -33,6 +34,11 @@ class OneDriveService
     {
         return $this->tenantId && $this->clientId && $this->clientSecret
             && $this->sharepointHost && $this->sharepointSite;
+    }
+
+    public function getLastError(): ?array
+    {
+        return $this->lastError;
     }
 
     /**
@@ -109,18 +115,22 @@ class OneDriveService
      */
     public function uploadFile(string $content, string $remotePath, string $contentType = 'application/pdf', bool $absolute = false): bool
     {
+        $this->lastError = null;
+
         if (!$this->isConfigured()) {
-            Log::warning('SharePoint: Servicio no configurado, se omite subida');
+            $this->recordUploadError('SharePoint: Servicio no configurado, se omite subida');
             return false;
         }
 
         $token = $this->getAccessToken();
         if (!$token) {
+            $this->recordUploadError('SharePoint: No se pudo obtener token de acceso');
             return false;
         }
 
         $siteId = $this->getSiteId();
         if (!$siteId) {
+            $this->recordUploadError('SharePoint: No se pudo resolver Site ID');
             return false;
         }
 
@@ -128,52 +138,7 @@ class OneDriveService
         $fullPath = $absolute ? ltrim($remotePath, '/') : $this->rootFolder . '/' . ltrim($remotePath, '/');
         $fullPath = $this->sanitizePath($fullPath);
 
-        // Endpoint SharePoint: /sites/{siteId}/drive/root:/{path}:/content
-        $url = "https://graph.microsoft.com/v1.0/sites/{$siteId}/drive/root:/{$fullPath}:/content";
-
-        $fileSize = strlen($content);
-
-        if ($fileSize > 4 * 1024 * 1024) {
-            return $this->uploadLargeFile($token, $siteId, $fullPath, $content, $contentType);
-        }
-
-        $response = Http::withToken($token)
-            ->withHeaders(['Content-Type' => $contentType])
-            ->withBody($content, $contentType)
-            ->put($url);
-
-        if ($response->successful()) {
-            Log::info('SharePoint: Archivo subido exitosamente', [
-                'path'   => $fullPath,
-                'size'   => $fileSize,
-                'itemId' => $response->json('id'),
-            ]);
-            return true;
-        }
-
-        Log::error('SharePoint: Error subiendo archivo', [
-            'path'   => $fullPath,
-            'status' => $response->status(),
-            'body'   => $response->body(),
-        ]);
-
-        // Si el token expiró, limpiar cache e intentar una vez más
-        if ($response->status() === 401) {
-            Cache::forget('msgraph_access_token');
-            $newToken = $this->getAccessToken();
-            if ($newToken) {
-                $retry = Http::withToken($newToken)
-                    ->withHeaders(['Content-Type' => $contentType])
-                    ->withBody($content, $contentType)
-                    ->put($url);
-                if ($retry->successful()) {
-                    Log::info('SharePoint: Archivo subido en reintento', ['path' => $fullPath]);
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return $this->uploadToSiteId($token, $siteId, $fullPath, $content, $contentType, 'SharePoint');
     }
 
     /**
@@ -181,14 +146,18 @@ class OneDriveService
      */
     private function uploadLargeFile(string $token, string $siteId, string $fullPath, string $content, string $contentType): bool
     {
-        $url = "https://graph.microsoft.com/v1.0/sites/{$siteId}/drive/root:/{$fullPath}:/createUploadSession";
+        $url = $this->driveRootUrl($siteId, $fullPath, ':/createUploadSession');
 
         $session = Http::withToken($token)->post($url, [
             'item' => ['@microsoft.graph.conflictBehavior' => 'replace'],
         ]);
 
         if ($session->failed()) {
-            Log::error('SharePoint: Error creando upload session', ['body' => $session->body()]);
+            $this->recordUploadError('SharePoint: Error creando upload session', [
+                'path'   => $fullPath,
+                'status' => $session->status(),
+                'body'   => $session->body(),
+            ]);
             return false;
         }
 
@@ -206,9 +175,11 @@ class OneDriveService
             ])->withBody($chunk, $contentType)->put($uploadUrl);
 
             if ($response->failed() && $response->status() !== 202) {
-                Log::error('SharePoint: Error en chunk upload', [
+                $this->recordUploadError('SharePoint: Error en chunk upload', [
+                    'path'   => $fullPath,
                     'offset' => $offset,
                     'status' => $response->status(),
+                    'body'   => $response->body(),
                 ]);
                 return false;
             }
@@ -255,65 +226,27 @@ class OneDriveService
      */
     public function uploadFileToSite(string $site, string $content, string $remotePath, string $contentType = 'application/pdf'): bool
     {
+        $this->lastError = null;
+
         if (!$this->isConfigured()) {
-            Log::warning('SharePoint: Servicio no configurado, se omite subida');
+            $this->recordUploadError('SharePoint: Servicio no configurado, se omite subida');
             return false;
         }
 
         $token = $this->getAccessToken();
         if (!$token) {
+            $this->recordUploadError('SharePoint: No se pudo obtener token de acceso');
             return false;
         }
 
         $siteId = $this->getSiteIdForSite($site);
         if (!$siteId) {
+            $this->recordUploadError('SharePoint: No se pudo resolver Site ID para ' . $site);
             return false;
         }
 
         $fullPath = $this->sanitizePath($remotePath);
-        $url      = "https://graph.microsoft.com/v1.0/sites/{$siteId}/drive/root:/{$fullPath}:/content";
-        $fileSize = strlen($content);
-
-        if ($fileSize > 4 * 1024 * 1024) {
-            return $this->uploadLargeFile($token, $siteId, $fullPath, $content, $contentType);
-        }
-
-        $response = Http::withToken($token)
-            ->withHeaders(['Content-Type' => $contentType])
-            ->withBody($content, $contentType)
-            ->put($url);
-
-        if ($response->successful()) {
-            Log::info('SharePoint: Archivo subido a ' . $site . ' exitosamente', [
-                'path'   => $fullPath,
-                'size'   => $fileSize,
-                'itemId' => $response->json('id'),
-            ]);
-            return true;
-        }
-
-        Log::error('SharePoint: Error subiendo archivo a ' . $site, [
-            'path'   => $fullPath,
-            'status' => $response->status(),
-            'body'   => $response->body(),
-        ]);
-
-        if ($response->status() === 401) {
-            Cache::forget('msgraph_access_token');
-            $newToken = $this->getAccessToken();
-            if ($newToken) {
-                $retry = Http::withToken($newToken)
-                    ->withHeaders(['Content-Type' => $contentType])
-                    ->withBody($content, $contentType)
-                    ->put($url);
-                if ($retry->successful()) {
-                    Log::info('SharePoint: Archivo subido a ' . $site . ' en reintento', ['path' => $fullPath]);
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return $this->uploadToSiteId($token, $siteId, $fullPath, $content, $contentType, 'SharePoint ' . $site);
     }
 
     /**
@@ -321,8 +254,107 @@ class OneDriveService
      */
     private function sanitizePath(string $path): string
     {
-        $path = str_replace(['*', ':', '<', '>', '?', '|', '#', '%', '"'], '_', $path);
+        $path = str_replace('\\', '/', $path);
+        $path = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $path) ?? $path;
+        $path = str_replace(['*', ':', '<', '>', '?', '|', '#', '%', '"', '{', '}', '~', '&'], '_', $path);
         $path = preg_replace('#/+#', '/', $path);
-        return trim($path, '/');
+
+        $segments = array_map(function (string $segment) {
+            $segment = preg_replace('/\s+/u', ' ', $segment) ?? $segment;
+            $segment = trim($segment, " \t\n\r\0\x0B.");
+            return $segment !== '' ? $segment : 'Sin especificar';
+        }, explode('/', $path));
+
+        return trim(implode('/', $segments), '/');
+    }
+
+    private function uploadToSiteId(string $token, string $siteId, string $fullPath, string $content, string $contentType, string $context): bool
+    {
+        $fileSize = strlen($content);
+
+        if ($fileSize > 4 * 1024 * 1024) {
+            return $this->uploadLargeFile($token, $siteId, $fullPath, $content, $contentType);
+        }
+
+        $url = $this->driveRootUrl($siteId, $fullPath, ':/content?@microsoft.graph.conflictBehavior=replace');
+        $response = $this->putSmallFile($token, $url, $content, $contentType);
+
+        if ($response->successful()) {
+            Log::info($context . ': Archivo subido exitosamente', [
+                'path'   => $fullPath,
+                'size'   => $fileSize,
+                'itemId' => $response->json('id'),
+            ]);
+            return true;
+        }
+
+        if ($response->status() === 401) {
+            Cache::forget('msgraph_access_token');
+            $token = $this->getAccessToken();
+            if ($token) {
+                $response = $this->putSmallFile($token, $url, $content, $contentType);
+                if ($response->successful()) {
+                    Log::info($context . ': Archivo subido en reintento', ['path' => $fullPath]);
+                    return true;
+                }
+            }
+        }
+
+        if ($response->status() === 409 && $this->isNameAlreadyExists($response)) {
+            usleep(500000);
+            $retry = $this->putSmallFile($token, $url, $content, $contentType);
+            if ($retry->successful()) {
+                Log::info($context . ': Archivo subido tras conflicto temporal', ['path' => $fullPath]);
+                return true;
+            }
+
+            if ($this->fileExists($token, $siteId, $fullPath)) {
+                Log::warning($context . ': Archivo ya existía, se trata como subida idempotente', ['path' => $fullPath]);
+                return true;
+            }
+
+            $response = $retry;
+        }
+
+        $this->recordUploadError($context . ': Error subiendo archivo', [
+            'path'   => $fullPath,
+            'status' => $response->status(),
+            'body'   => $response->body(),
+        ]);
+
+        return false;
+    }
+
+    private function putSmallFile(string $token, string $url, string $content, string $contentType)
+    {
+        return Http::withToken($token)
+            ->withHeaders(['Content-Type' => $contentType])
+            ->withBody($content, $contentType)
+            ->put($url);
+    }
+
+    private function fileExists(string $token, string $siteId, string $fullPath): bool
+    {
+        return Http::withToken($token)
+            ->get($this->driveRootUrl($siteId, $fullPath))
+            ->successful();
+    }
+
+    private function isNameAlreadyExists($response): bool
+    {
+        return ($response->json('error.code') === 'nameAlreadyExists')
+            || str_contains($response->body(), 'nameAlreadyExists');
+    }
+
+    private function driveRootUrl(string $siteId, string $fullPath, string $suffix = ''): string
+    {
+        $encodedPath = implode('/', array_map('rawurlencode', explode('/', $fullPath)));
+        return "https://graph.microsoft.com/v1.0/sites/{$siteId}/drive/root:/{$encodedPath}{$suffix}";
+    }
+
+    private function recordUploadError(string $message, array $context = []): void
+    {
+        $this->lastError = ['message' => $message] + $context;
+        Log::error($message, $context);
     }
 }

@@ -40,7 +40,7 @@ use App\Http\Controllers\ContratacionController;
 use Illuminate\Support\Facades\Route;
 
 // --- WEBHOOK KIZEO (público, sin auth ni CSRF) ---
-Route::post('/api/kizeo/webhook', [KizeoWebhookController::class, 'handle'])
+Route::post('/api/kizeo/webhook/{secret?}', [KizeoWebhookController::class, 'handle'])
     ->name('kizeo.webhook')
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 
