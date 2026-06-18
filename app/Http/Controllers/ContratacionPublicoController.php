@@ -26,6 +26,9 @@ class ContratacionPublicoController extends Controller
     private const PDF_MEMORY_LIMIT = '1024M';
     private const PRIVACY_VERSION = 'contratacion-v2026-06-17';
     private const PRIVACY_TEXT = 'Autorizo a SAEP el tratamiento de mis datos personales y documentos de postulacion exclusivamente para fines de reclutamiento, seleccion, contratacion, verificacion documental, comunicacion con RRHH y archivo del proceso, incluyendo la generacion y almacenamiento de una ficha PDF consolidada en SharePoint.';
+    private const TEMP_UPLOAD_SESSION_KEY = 'contratacion_temp_uploads';
+    private const TEMP_UPLOAD_DIR = 'contratacion_tmp';
+    private const TEMP_UPLOAD_TTL_SECONDS = 28800; // 8 horas
     private const DOCUMENT_FIELDS = [
         'carnet_frontal',
         'carnet_reverso',
@@ -86,8 +89,87 @@ class ContratacionPublicoController extends Controller
 
         // Si ya tiene postulación, llevar a edición
         $postulante = PostulanteContratacion::where('google_id', $googleUser['id'])->first();
+        $this->purgeExpiredTempUploads();
+        $tempUploadsByField = $this->tempUploadsByField($googleUser['id']);
 
-        return view('contratacion.publico.formulario', compact('googleUser', 'postulante'));
+        return view('contratacion.publico.formulario', compact('googleUser', 'postulante', 'tempUploadsByField'));
+    }
+
+    public function preuploadDocumento(Request $request)
+    {
+        $googleUser = Session::get('contratacion_google_user');
+        if (!$googleUser) {
+            return response()->json(['message' => 'Sesión expirada. Inicia sesión con Google nuevamente.'], 401);
+        }
+
+        $this->purgeExpiredTempUploads();
+
+        $request->validate([
+            'campo'     => 'required|string|in:' . implode(',', self::DOCUMENT_FIELDS),
+            'documento' => $this->documentRule(true),
+        ], [
+            'campo.in'            => 'El tipo de documento no es válido.',
+            'documento.required'  => 'Selecciona un archivo para subir.',
+            'documento.mimes'     => 'Solo se permiten archivos JPG, PNG o PDF.',
+            'documento.max'       => 'El archivo no puede superar los ' . self::DOCUMENT_MAX_MB . ' MB.',
+        ]);
+
+        $campo = (string) $request->input('campo');
+        $file = $request->file('documento');
+        $ext = strtolower($file->getClientOriginalExtension());
+        $token = Str::random(48);
+        $folder = self::TEMP_UPLOAD_DIR . '/' . hash('sha256', $googleUser['id'] . '|' . Session::getId());
+        $filename = $campo . '_' . now()->format('YmdHis') . '_' . Str::lower(Str::random(8)) . '.' . $ext;
+        $path = $file->storeAs($folder, $filename, 'local');
+
+        if (!$path) {
+            return response()->json(['message' => 'No se pudo guardar el documento temporal. Intenta nuevamente.'], 422);
+        }
+
+        $uploads = Session::get(self::TEMP_UPLOAD_SESSION_KEY, []);
+        $uploads[$token] = [
+            'token'         => $token,
+            'campo'         => $campo,
+            'google_id'     => $googleUser['id'],
+            'path'          => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'extension'     => $ext,
+            'mime'          => $file->getMimeType(),
+            'size'          => $file->getSize(),
+            'uploaded_at'   => now()->timestamp,
+        ];
+        Session::put(self::TEMP_UPLOAD_SESSION_KEY, $uploads);
+        $this->discardTempUploadForField($campo, $googleUser['id'], '', $token);
+
+        return response()->json([
+            'ok'            => true,
+            'token'         => $token,
+            'campo'         => $campo,
+            'original_name' => $file->getClientOriginalName(),
+            'size'          => $file->getSize(),
+            'size_label'    => $this->formatBytes((int) $file->getSize()),
+        ]);
+    }
+
+    public function descartarPreuploadDocumento(Request $request)
+    {
+        $googleUser = Session::get('contratacion_google_user');
+        if (!$googleUser) {
+            return response()->json(['message' => 'Sesión expirada. Inicia sesión con Google nuevamente.'], 401);
+        }
+
+        $request->validate([
+            'campo' => 'required|string|in:' . implode(',', self::DOCUMENT_FIELDS),
+            'token' => 'nullable|string|max:120',
+        ]);
+
+        $removed = $this->discardTempUploadForField(
+            (string) $request->input('campo'),
+            $googleUser['id'],
+            (string) $request->input('token', '')
+        );
+
+        return response()->json(['ok' => true, 'removed' => $removed]);
     }
 
     // ─── Paso 5: Guardar / actualizar postulación ────────────────
@@ -102,18 +184,21 @@ class ContratacionPublicoController extends Controller
         // Buscar postulación existente ANTES de validar para aplicar reglas condicionales
         $postulante = PostulanteContratacion::where('google_id', $googleUser['id'])->first();
         $esNuevo    = !$postulante;
+        $this->purgeExpiredTempUploads();
+        $tempUploads = $this->validTempUploadsFromRequest($request, $googleUser['id']);
 
         // Documentos obligatorios: required si no existe registro previo O si aún no han sido subidos
         $requeridosObligatorios = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa'];
         $docRules = [];
         foreach ($requeridosObligatorios as $campo) {
             $yaTiene = $postulante && !empty($postulante->$campo);
-            $docRules[$campo] = $this->documentRule(!$yaTiene);
+            $tieneTemporal = isset($tempUploads[$campo]);
+            $docRules[$campo] = $this->documentRule(!$yaTiene && !$tieneTemporal);
         }
 
         // Licencia: opcional, pero si se tiene/sube uno de los dos el otro se vuelve obligatorio
-        $tendraLicF = ($postulante && !empty($postulante->licencia_conducir_frontal)) || $request->hasFile('licencia_conducir_frontal');
-        $tendraLicR = ($postulante && !empty($postulante->licencia_conducir_reverso)) || $request->hasFile('licencia_conducir_reverso');
+        $tendraLicF = ($postulante && !empty($postulante->licencia_conducir_frontal)) || $request->hasFile('licencia_conducir_frontal') || isset($tempUploads['licencia_conducir_frontal']);
+        $tendraLicR = ($postulante && !empty($postulante->licencia_conducir_reverso)) || $request->hasFile('licencia_conducir_reverso') || isset($tempUploads['licencia_conducir_reverso']);
         $docRules['licencia_conducir_frontal'] = $this->documentRule($tendraLicR && !$tendraLicF);
         $docRules['licencia_conducir_reverso'] = $this->documentRule($tendraLicF && !$tendraLicR);
 
@@ -125,6 +210,8 @@ class ContratacionPublicoController extends Controller
                 }
             }],
             'consentimiento_datos' => 'accepted',
+            'uploaded_documents' => 'nullable|array',
+            'uploaded_documents.*' => 'nullable|string|max:120',
         ], $docRules), [
             'carnet_frontal.required'              => 'El Carnet de Identidad (Frontal) es obligatorio.',
             'carnet_reverso.required'              => 'El Carnet de Identidad (Reverso) es obligatorio.',
@@ -184,6 +271,11 @@ class ContratacionPublicoController extends Controller
                 }
                 $path = $this->storeDocument($request, $campo, $rutCarpeta);
                 $datos[$campo] = $path;
+            } elseif (isset($tempUploads[$campo])) {
+                if ($postulante && $postulante->$campo) {
+                    $rutasAnteriores[] = $postulante->$campo;
+                }
+                $datos[$campo] = $this->moveTempDocument($tempUploads[$campo], $rutCarpeta);
             }
         }
 
@@ -217,6 +309,8 @@ class ContratacionPublicoController extends Controller
         } catch (\Throwable $e) {
             Log::warning('SharePoint contratacion upload falló (no crítico): ' . $e->getMessage());
         }
+
+        $this->clearTempUploadsForGoogle($googleUser['id']);
 
         return redirect()->route('contratacion-publico.confirmacion', $postulante->folio);
     }
@@ -601,6 +695,199 @@ class ContratacionPublicoController extends Controller
     private function documentRule(bool $required): string
     {
         return ($required ? 'required' : 'nullable') . '|file|mimes:jpg,jpeg,png,pdf|max:' . self::DOCUMENT_MAX_KB;
+    }
+
+    private function tempUploadsByField(string $googleId): array
+    {
+        $uploads = Session::get(self::TEMP_UPLOAD_SESSION_KEY, []);
+        $byField = [];
+
+        foreach ($uploads as $token => $upload) {
+            if (($upload['google_id'] ?? null) !== $googleId) {
+                continue;
+            }
+
+            $campo = $upload['campo'] ?? '';
+            if (!in_array($campo, self::DOCUMENT_FIELDS, true)) {
+                continue;
+            }
+
+            if (empty($upload['path']) || !Storage::disk('local')->exists($upload['path'])) {
+                continue;
+            }
+
+            $upload['token'] = $token;
+            $previous = $byField[$campo]['uploaded_at'] ?? 0;
+            if (($upload['uploaded_at'] ?? 0) >= $previous) {
+                $byField[$campo] = $upload;
+            }
+        }
+
+        return $byField;
+    }
+
+    private function validTempUploadsFromRequest(Request $request, string $googleId): array
+    {
+        $requested = $request->input('uploaded_documents', []);
+        if (!is_array($requested)) {
+            return [];
+        }
+
+        $uploads = Session::get(self::TEMP_UPLOAD_SESSION_KEY, []);
+        $valid = [];
+
+        foreach (self::DOCUMENT_FIELDS as $campo) {
+            $token = (string) ($requested[$campo] ?? '');
+            if ($token === '' || empty($uploads[$token])) {
+                continue;
+            }
+
+            $upload = $uploads[$token];
+            if (($upload['google_id'] ?? null) !== $googleId || ($upload['campo'] ?? null) !== $campo) {
+                continue;
+            }
+
+            if (empty($upload['path']) || !Storage::disk('local')->exists($upload['path'])) {
+                continue;
+            }
+
+            $upload['token'] = $token;
+            $valid[$campo] = $upload;
+        }
+
+        return $valid;
+    }
+
+    private function moveTempDocument(array $upload, string $rutCarpeta): string
+    {
+        $campo = $upload['campo'];
+        $ext = strtolower($upload['extension'] ?? pathinfo((string) $upload['path'], PATHINFO_EXTENSION));
+        $filename = $campo . '_' . now()->format('YmdHis') . '_' . Str::lower(Str::random(8)) . '.' . $ext;
+        $dest = "contratacion/{$rutCarpeta}/{$filename}";
+
+        if (empty($upload['path']) || !Storage::disk('local')->exists($upload['path'])) {
+            throw ValidationException::withMessages([
+                $campo => 'El documento temporal ya no está disponible. Vuelve a seleccionarlo.',
+            ]);
+        }
+
+        Storage::disk('local')->makeDirectory("contratacion/{$rutCarpeta}");
+        $moved = Storage::disk('local')->move($upload['path'], $dest);
+
+        if (!$moved) {
+            $copied = Storage::disk('local')->copy($upload['path'], $dest);
+            if ($copied) {
+                Storage::disk('local')->delete($upload['path']);
+            }
+            $moved = $copied;
+        }
+
+        if (!$moved) {
+            throw ValidationException::withMessages([
+                $campo => 'No se pudo confirmar el documento subido. Intenta nuevamente.',
+            ]);
+        }
+
+        $this->forgetTempUploadToken((string) ($upload['token'] ?? ''), false);
+
+        return $dest;
+    }
+
+    private function discardTempUploadForField(string $campo, string $googleId, string $token = '', string $exceptToken = ''): bool
+    {
+        $uploads = Session::get(self::TEMP_UPLOAD_SESSION_KEY, []);
+        $removed = false;
+
+        foreach ($uploads as $currentToken => $upload) {
+            if ($exceptToken !== '' && $currentToken === $exceptToken) {
+                continue;
+            }
+
+            if (($upload['google_id'] ?? null) !== $googleId || ($upload['campo'] ?? null) !== $campo) {
+                continue;
+            }
+
+            if ($token !== '' && $currentToken !== $token) {
+                continue;
+            }
+
+            if (!empty($upload['path'])) {
+                Storage::disk('local')->delete($upload['path']);
+            }
+            unset($uploads[$currentToken]);
+            $removed = true;
+        }
+
+        Session::put(self::TEMP_UPLOAD_SESSION_KEY, $uploads);
+
+        return $removed;
+    }
+
+    private function clearTempUploadsForGoogle(string $googleId): void
+    {
+        $uploads = Session::get(self::TEMP_UPLOAD_SESSION_KEY, []);
+
+        foreach ($uploads as $token => $upload) {
+            if (($upload['google_id'] ?? null) !== $googleId) {
+                continue;
+            }
+
+            if (!empty($upload['path'])) {
+                Storage::disk('local')->delete($upload['path']);
+            }
+            unset($uploads[$token]);
+        }
+
+        Session::put(self::TEMP_UPLOAD_SESSION_KEY, $uploads);
+    }
+
+    private function purgeExpiredTempUploads(): void
+    {
+        $uploads = Session::get(self::TEMP_UPLOAD_SESSION_KEY, []);
+        $now = now()->timestamp;
+
+        foreach ($uploads as $token => $upload) {
+            $uploadedAt = (int) ($upload['uploaded_at'] ?? 0);
+            $expired = $uploadedAt <= 0 || ($now - $uploadedAt) > self::TEMP_UPLOAD_TTL_SECONDS;
+            $missing = empty($upload['path']) || !Storage::disk('local')->exists($upload['path']);
+
+            if ($expired || $missing) {
+                if (!empty($upload['path'])) {
+                    Storage::disk('local')->delete($upload['path']);
+                }
+                unset($uploads[$token]);
+            }
+        }
+
+        Session::put(self::TEMP_UPLOAD_SESSION_KEY, $uploads);
+    }
+
+    private function forgetTempUploadToken(string $token, bool $deleteFile = true): void
+    {
+        if ($token === '') {
+            return;
+        }
+
+        $uploads = Session::get(self::TEMP_UPLOAD_SESSION_KEY, []);
+        if (!isset($uploads[$token])) {
+            return;
+        }
+
+        if ($deleteFile && !empty($uploads[$token]['path'])) {
+            Storage::disk('local')->delete($uploads[$token]['path']);
+        }
+
+        unset($uploads[$token]);
+        Session::put(self::TEMP_UPLOAD_SESSION_KEY, $uploads);
+    }
+
+    private function formatBytes(int $bytes): string
+    {
+        if ($bytes >= 1048576) {
+            return number_format($bytes / 1048576, 1, ',', '.') . ' MB';
+        }
+
+        return number_format(max($bytes, 0) / 1024, 1, ',', '.') . ' KB';
     }
 
     private function consentPayload(Request $request): array

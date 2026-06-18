@@ -143,7 +143,21 @@
         .file-preview.existing {
             background: #f0fdf4; border-color: #86efac; color: #166534;
         }
+        .file-preview.uploading {
+            background: #eff6ff; border-color: #93c5fd; color: #1d4ed8;
+        }
+        .file-preview.uploaded {
+            background: #ecfdf5; border-color: #86efac; color: #166534;
+        }
+        .file-preview.error {
+            background: #fef2f2; border-color: #fecaca; color: #991b1b;
+        }
         .file-preview .name { display: flex; align-items: center; gap: .4rem; }
+        .file-preview .actions { display: flex; align-items: center; gap: .4rem; flex-shrink: 0; }
+        .file-preview .retry {
+            background: #fff; border: 1px solid currentColor; cursor: pointer;
+            color: inherit; font-size: .75rem; border-radius: 6px; padding: .2rem .45rem;
+        }
         .file-preview .remove {
             background: none; border: none; cursor: pointer;
             color: #ef4444; font-size: .9rem; padding: 0 .2rem;
@@ -328,6 +342,12 @@
                 @endphp
 
                 @foreach($docsCampos as $doc)
+                @php
+                    $tempDoc = $tempUploadsByField[$doc['campo']] ?? null;
+                    $tempToken = old("uploaded_documents.{$doc['campo']}", $tempDoc['token'] ?? '');
+                    $tempName = $tempDoc['original_name'] ?? 'Documento listo para enviar';
+                    $tempSize = isset($tempDoc['size']) ? number_format($tempDoc['size'] / 1048576, 1, ',', '.') . ' MB' : null;
+                @endphp
                 <div class="file-group">
                     <div class="file-label">
                         {{ $doc['label'] }}
@@ -339,24 +359,32 @@
                         <input type="file" name="{{ $doc['campo'] }}" id="{{ $doc['campo'] }}"
                             accept=".jpg,.jpeg,.png,.pdf"
                             data-campo="{{ $doc['campo'] }}"
+                            data-required="{{ $doc['req'] ? '1' : '0' }}"
+                            data-existing="{{ $postulante && $postulante->{$doc['campo']} ? '1' : '0' }}"
                             onchange="mostrarArchivo(this)">
+                        <input type="hidden" name="uploaded_documents[{{ $doc['campo'] }}]" id="uploaded-{{ $doc['campo'] }}" value="{{ $tempToken }}">
                         <div class="file-drop__icon"><i class="bi bi-cloud-upload"></i></div>
                         <div class="file-drop__text">
                             <strong>Seleccionar archivo</strong> o arrastrar aquí<br>
                             <span>JPG, PNG, PDF · Máx. 100 MB</span>
                         </div>
                     </div>
-                    @if($postulante && $postulante->{$doc['campo']})
+                    @if($postulante && $postulante->{$doc['campo']} && !$tempToken)
                     <div class="file-preview existing" id="preview-existing-{{ $doc['campo'] }}">
                         <div class="name"><i class="bi bi-check-circle-fill"></i> Documento ya subido</div>
                         <small>Se reemplazará si subes uno nuevo</small>
                     </div>
                     @endif
-                    <div id="preview-{{ $doc['campo'] }}" style="display:none;" class="file-preview">
-                        <div class="name"><i class="bi bi-file-earmark-check"></i> <span></span></div>
-                        <button type="button" class="remove" onclick="quitarArchivo('{{ $doc['campo'] }}')">
-                            <i class="bi bi-x-circle"></i>
-                        </button>
+                    <div id="preview-{{ $doc['campo'] }}" style="{{ $tempToken ? 'display:flex;' : 'display:none;' }}" class="file-preview {{ $tempToken ? 'uploaded' : '' }}">
+                        <div class="name"><i class="bi bi-file-earmark-check"></i> <span>{{ $tempToken ? ('Subido: ' . $tempName . ($tempSize ? ' (' . $tempSize . ')' : '')) : '' }}</span></div>
+                        <div class="actions">
+                            <button type="button" class="retry" style="display:none;" onclick="reintentarArchivo('{{ $doc['campo'] }}')">
+                                Reintentar
+                            </button>
+                            <button type="button" class="remove" onclick="quitarArchivo('{{ $doc['campo'] }}')">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </div>
                     </div>
                     @error($doc['campo']) <div class="invalid-feedback" style="display:block;">{{ $message }}</div> @enderror
                 </div>
@@ -376,6 +404,12 @@
                         ['campo' => 'licencia_conducir_frontal', 'label' => 'Licencia (Frontal)'],
                         ['campo' => 'licencia_conducir_reverso', 'label' => 'Licencia (Reverso)'],
                     ] as $lic)
+                    @php
+                        $tempLic = $tempUploadsByField[$lic['campo']] ?? null;
+                        $tempLicToken = old("uploaded_documents.{$lic['campo']}", $tempLic['token'] ?? '');
+                        $tempLicName = $tempLic['original_name'] ?? 'Documento listo para enviar';
+                        $tempLicSize = isset($tempLic['size']) ? number_format($tempLic['size'] / 1048576, 1, ',', '.') . ' MB' : null;
+                    @endphp
                     <div class="file-group" style="margin-bottom:0;">
                         <div class="file-label" id="label-{{ $lic['campo'] }}">
                             {{ $lic['label'] }}
@@ -385,24 +419,32 @@
                             <input type="file" name="{{ $lic['campo'] }}" id="{{ $lic['campo'] }}"
                                 accept=".jpg,.jpeg,.png,.pdf"
                                 data-campo="{{ $lic['campo'] }}"
+                                data-required="0"
+                                data-existing="{{ $postulante && $postulante->{$lic['campo']} ? '1' : '0' }}"
                                 onchange="mostrarArchivo(this); actualizarBadgeLicencia();">
+                            <input type="hidden" name="uploaded_documents[{{ $lic['campo'] }}]" id="uploaded-{{ $lic['campo'] }}" value="{{ $tempLicToken }}">
                             <div class="file-drop__icon"><i class="bi bi-cloud-upload"></i></div>
                             <div class="file-drop__text">
                                 <strong>Seleccionar archivo</strong> o arrastrar aquí<br>
                                 <span>JPG, PNG, PDF · Máx. 100 MB</span>
                             </div>
                         </div>
-                        @if($postulante && $postulante->{$lic['campo']})
+                        @if($postulante && $postulante->{$lic['campo']} && !$tempLicToken)
                         <div class="file-preview existing" id="preview-existing-{{ $lic['campo'] }}">
                             <div class="name"><i class="bi bi-check-circle-fill"></i> Documento ya subido</div>
                             <small>Se reemplazará si subes uno nuevo</small>
                         </div>
                         @endif
-                        <div id="preview-{{ $lic['campo'] }}" style="display:none;" class="file-preview">
-                            <div class="name"><i class="bi bi-file-earmark-check"></i> <span></span></div>
-                            <button type="button" class="remove" onclick="quitarArchivo('{{ $lic['campo'] }}'); actualizarBadgeLicencia();">
-                                <i class="bi bi-x-circle"></i>
-                            </button>
+                        <div id="preview-{{ $lic['campo'] }}" style="{{ $tempLicToken ? 'display:flex;' : 'display:none;' }}" class="file-preview {{ $tempLicToken ? 'uploaded' : '' }}">
+                            <div class="name"><i class="bi bi-file-earmark-check"></i> <span>{{ $tempLicToken ? ('Subido: ' . $tempLicName . ($tempLicSize ? ' (' . $tempLicSize . ')' : '')) : '' }}</span></div>
+                            <div class="actions">
+                                <button type="button" class="retry" style="display:none;" onclick="reintentarArchivo('{{ $lic['campo'] }}')">
+                                    Reintentar
+                                </button>
+                                <button type="button" class="remove" onclick="quitarArchivo('{{ $lic['campo'] }}'); actualizarBadgeLicencia();">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                            </div>
                         </div>
                         @error($lic['campo']) <div class="invalid-feedback" style="display:block;">{{ $message }}</div> @enderror
                     </div>
@@ -451,8 +493,29 @@ document.getElementById('rut').addEventListener('input', function () {
     this.value = val;
 });
 
-// ─── Preview de archivos ─────────────────────────────────────────
+// ─── Subida individual de archivos ───────────────────────────────
 const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
+const PREUPLOAD_URL = @json(route('contratacion-publico.documento.preupload'));
+const DISCARD_UPLOAD_URL = @json(route('contratacion-publico.documento.descartar'));
+const CSRF_TOKEN = @json(csrf_token());
+const uploadActivos = new Set();
+let envioEnCurso = false;
+
+function inputArchivo(campo) {
+    return document.getElementById(campo);
+}
+
+function hiddenUpload(campo) {
+    return document.getElementById('uploaded-' + campo);
+}
+
+function previewArchivo(campo) {
+    return document.getElementById('preview-' + campo);
+}
+
+function existingPreview(campo) {
+    return document.getElementById('preview-existing-' + campo);
+}
 
 function mostrarErrorArchivo(campo, mensaje) {
     let errorEl = document.getElementById('file-error-' + campo);
@@ -476,31 +539,208 @@ function ocultarErrorArchivo(campo) {
     if (errorEl) errorEl.style.display = 'none';
 }
 
-function mostrarArchivo(input) {
-    const campo = input.dataset.campo;
-    const preview = document.getElementById('preview-' + campo);
-    if (input.files && input.files[0]) {
-        const file = input.files[0];
-        if (file.size > MAX_FILE_BYTES) {
-            input.value = '';
-            if (preview) preview.style.display = 'none';
-            mostrarErrorArchivo(campo, '⚠️ El archivo "' + file.name + '" supera el límite de 100 MB. Por favor selecciona un archivo más pequeño.');
-            return;
+function iconoEstado(estado) {
+    if (estado === 'uploading') return 'bi-cloud-arrow-up-fill';
+    if (estado === 'error') return 'bi-exclamation-triangle-fill';
+    return 'bi-file-earmark-check-fill';
+}
+
+function setEstadoArchivo(campo, estado, texto, opciones = {}) {
+    const preview = previewArchivo(campo);
+    if (!preview) return;
+
+    preview.className = 'file-preview ' + estado;
+    preview.style.display = 'flex';
+    const icon = preview.querySelector('.name i');
+    const span = preview.querySelector('.name span');
+    const retry = preview.querySelector('.retry');
+    const remove = preview.querySelector('.remove');
+
+    if (icon) icon.className = 'bi ' + iconoEstado(estado);
+    if (span) span.textContent = texto;
+    if (retry) retry.style.display = opciones.retry ? 'inline-flex' : 'none';
+    if (remove) remove.style.display = opciones.remove === false ? 'none' : 'inline-flex';
+}
+
+function ocultarPreviewTemporal(campo) {
+    const preview = previewArchivo(campo);
+    if (preview) {
+        preview.style.display = 'none';
+        preview.className = 'file-preview';
+        const span = preview.querySelector('.name span');
+        if (span) span.textContent = '';
+    }
+}
+
+function actualizarBotonEnvio() {
+    const btn = document.getElementById('btn-submit');
+    if (!btn || envioEnCurso) return;
+    btn.disabled = uploadActivos.size > 0;
+}
+
+function archivoListo(campo) {
+    const hidden = hiddenUpload(campo);
+    const input = inputArchivo(campo);
+    const existing = existingPreview(campo);
+    return Boolean(hidden && hidden.value)
+        || Boolean(input && input.files && input.files.length > 0)
+        || Boolean(existing && existing.style.display !== 'none');
+}
+
+async function archivoEsLegible(file) {
+    if (!file || !file.slice || !file.arrayBuffer) {
+        return true;
+    }
+
+    try {
+        if (file.size > 0) {
+            await file.slice(0, Math.min(file.size, 1024)).arrayBuffer();
         }
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
+function mensajeErrorUpload(xhr) {
+    try {
+        const data = JSON.parse(xhr.responseText || '{}');
+        if (data.errors) {
+            const first = Object.values(data.errors)[0];
+            if (Array.isArray(first) && first[0]) return first[0];
+        }
+        if (data.message) return data.message;
+    } catch (error) {
+        // El servidor puede devolver HTML en errores no controlados.
+    }
+    return 'No se pudo subir el archivo. Revisa tu conexión e inténtalo nuevamente.';
+}
+
+function subirDocumento(input) {
+    const campo = input.dataset.campo || input.name;
+    const file = input.files && input.files[0] ? input.files[0] : null;
+    const hidden = hiddenUpload(campo);
+
+    if (!file) {
+        return Promise.resolve(Boolean(hidden && hidden.value));
+    }
+
+    if (file.size > MAX_FILE_BYTES) {
+        input.value = '';
+        mostrarErrorArchivo(campo, 'El archivo "' + file.name + '" supera el límite de 100 MB. Selecciona un archivo más pequeño.');
+        setEstadoArchivo(campo, 'error', 'Archivo demasiado grande', { retry: false });
+        return Promise.resolve(false);
+    }
+
+    return archivoEsLegible(file).then(function (legible) {
+        if (!legible) {
+            mostrarErrorArchivo(campo, 'Chrome no pudo leer este archivo. Vuelve a seleccionarlo desde Galería o Archivos/Descargas y evita moverlo o editarlo antes de enviar.');
+            setEstadoArchivo(campo, 'error', 'Archivo no disponible en el teléfono', { retry: true });
+            return false;
+        }
+
         ocultarErrorArchivo(campo);
-        preview.querySelector('span').textContent = file.name;
-        preview.style.display = 'flex';
-    } else {
-        ocultarErrorArchivo(campo);
-        if (preview) preview.style.display = 'none';
+        uploadActivos.add(campo);
+        actualizarBotonEnvio();
+        setEstadoArchivo(campo, 'uploading', 'Subiendo ' + file.name + '...', { remove: false });
+
+        return new Promise(function (resolve) {
+            const xhr = new XMLHttpRequest();
+            const formData = new FormData();
+            formData.append('_token', CSRF_TOKEN);
+            formData.append('campo', campo);
+            formData.append('documento', file);
+
+            xhr.open('POST', PREUPLOAD_URL, true);
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+            xhr.setRequestHeader('Accept', 'application/json');
+
+            xhr.upload.onprogress = function (event) {
+                if (!event.lengthComputable) return;
+                const pct = Math.max(1, Math.min(99, Math.round((event.loaded / event.total) * 100)));
+                setEstadoArchivo(campo, 'uploading', 'Subiendo ' + file.name + '... ' + pct + '%', { remove: false });
+            };
+
+            xhr.onload = function () {
+                uploadActivos.delete(campo);
+                actualizarBotonEnvio();
+
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    const data = JSON.parse(xhr.responseText || '{}');
+                    if (hidden) hidden.value = data.token || '';
+                    input.value = '';
+                    const existing = existingPreview(campo);
+                    if (existing) existing.style.display = 'none';
+                    setEstadoArchivo(campo, 'uploaded', 'Subido: ' + (data.original_name || file.name) + (data.size_label ? ' (' + data.size_label + ')' : ''), { retry: false });
+                    ocultarErrorArchivo(campo);
+                    actualizarBadgeLicencia();
+                    resolve(true);
+                    return;
+                }
+
+                const msg = mensajeErrorUpload(xhr);
+                mostrarErrorArchivo(campo, msg);
+                setEstadoArchivo(campo, 'error', 'Error al subir: ' + file.name, { retry: true });
+                resolve(false);
+            };
+
+            xhr.onerror = function () {
+                uploadActivos.delete(campo);
+                actualizarBotonEnvio();
+                mostrarErrorArchivo(campo, 'No se pudo conectar para subir el archivo. Revisa la señal e intenta nuevamente.');
+                setEstadoArchivo(campo, 'error', 'Error de conexión: ' + file.name, { retry: true });
+                resolve(false);
+            };
+
+            xhr.send(formData);
+        });
+    });
+}
+
+function mostrarArchivo(input) {
+    subirDocumento(input);
+}
+
+function reintentarArchivo(campo) {
+    const input = inputArchivo(campo);
+    if (input && input.files && input.files[0]) {
+        subirDocumento(input);
+        return;
+    }
+
+    if (input) {
+        input.click();
     }
 }
 
 function quitarArchivo(campo) {
-    const input   = document.getElementById(campo);
-    const preview = document.getElementById('preview-' + campo);
-    input.value   = '';
-    preview.style.display = 'none';
+    const input = inputArchivo(campo);
+    const hidden = hiddenUpload(campo);
+    const token = hidden ? hidden.value : '';
+
+    if (input) input.value = '';
+    if (hidden) hidden.value = '';
+    ocultarErrorArchivo(campo);
+    ocultarPreviewTemporal(campo);
+
+    const existing = existingPreview(campo);
+    if (existing && input && input.dataset.existing === '1') {
+        existing.style.display = 'flex';
+    }
+
+    actualizarBadgeLicencia();
+
+    if (!token) return;
+
+    const formData = new FormData();
+    formData.append('_token', CSRF_TOKEN);
+    formData.append('campo', campo);
+    formData.append('token', token);
+    fetch(DISCARD_UPLOAD_URL, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+        body: formData
+    }).catch(function () {});
 }
 
 // ─── Licencia: badge opcional/requerido dinámico ─────────────────
@@ -510,7 +750,9 @@ function tieneValorLicencia(campo) {
     // Hay archivo seleccionado en el input O ya existía en BD (preview existing visible)
     const input     = document.getElementById(campo);
     const existing  = document.getElementById('preview-existing-' + campo);
+    const hidden    = hiddenUpload(campo);
     return (input && input.files && input.files.length > 0)
+        || (hidden && hidden.value)
         || (existing && existing.style.display !== 'none');
 }
 
@@ -543,31 +785,6 @@ document.querySelectorAll('.file-drop').forEach(function (zone) {
     zone.addEventListener('drop', function () { zone.classList.remove('dragover'); });
 });
 
-async function archivoEsLegible(input) {
-    if (!input.files || !input.files[0]) return true;
-
-    const file = input.files[0];
-    const campo = input.dataset.campo || input.name;
-
-    if (!file.slice || !file.arrayBuffer) {
-        return true;
-    }
-
-    try {
-        if (file.size > 0) {
-            await file.slice(0, Math.min(file.size, 1024)).arrayBuffer();
-        }
-        return true;
-    } catch (error) {
-        input.value = '';
-        const preview = document.getElementById('preview-' + campo);
-        if (preview) preview.style.display = 'none';
-        mostrarErrorArchivo(campo, 'Chrome no pudo leer este archivo. Vuelve a seleccionarlo desde Galería o Archivos/Descargas y evita moverlo, editarlo o tomar una nueva foto sobre el mismo archivo antes de enviar.');
-        return false;
-    }
-}
-
-let envioEnCurso = false;
 const submitButton = document.getElementById('btn-submit');
 const submitButtonHtml = submitButton ? submitButton.innerHTML : '';
 
@@ -603,11 +820,62 @@ document.getElementById('form-postulacion').addEventListener('submit', async fun
     btn.innerHTML = '<span style="display:inline-block;animation:spin 1s linear infinite;font-size:1rem;">⏳</span> Verificando archivos...';
 
     for (const input of fileInputs) {
-        const legible = await archivoEsLegible(input);
-        if (!legible) {
+        if (input.files && input.files[0]) {
+            const subido = await subirDocumento(input);
+            if (!subido) {
+                btn.disabled = false;
+                btn.innerHTML = submitButtonHtml;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+        }
+    }
+
+    for (const input of fileInputs) {
+        const campo = input.dataset.campo || input.name;
+        if (input.dataset.required === '1' && !archivoListo(campo)) {
+            mostrarErrorArchivo(campo, 'Este documento es obligatorio. Selecciona el archivo y espera a que aparezca como subido.');
+            hayError = true;
+        }
+    }
+
+    const licenciaFrontalLista = archivoListo('licencia_conducir_frontal');
+    const licenciaReversoLista = archivoListo('licencia_conducir_reverso');
+    if (licenciaFrontalLista && !licenciaReversoLista) {
+        mostrarErrorArchivo('licencia_conducir_reverso', 'Si subes el frontal de la licencia, también debes subir el reverso.');
+        hayError = true;
+    }
+    if (licenciaReversoLista && !licenciaFrontalLista) {
+        mostrarErrorArchivo('licencia_conducir_frontal', 'Si subes el reverso de la licencia, también debes subir el frontal.');
+        hayError = true;
+    }
+
+    if (hayError) {
+        const firstError = document.querySelector('[id^="file-error-"][style*="block"]');
+        if (firstError) {
+            firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        btn.disabled = false;
+        btn.innerHTML = submitButtonHtml;
+        return;
+    }
+
+    if (uploadActivos.size > 0) {
+        for (const campo of uploadActivos) {
+            mostrarErrorArchivo(campo, 'Espera a que este archivo termine de subir antes de enviar.');
+        }
+        btn.disabled = false;
+        btn.innerHTML = submitButtonHtml;
+        return;
+    }
+
+    for (const input of fileInputs) {
+        if (input.files && input.files[0]) {
             btn.disabled = false;
             btn.innerHTML = submitButtonHtml;
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            mostrarErrorArchivo(input.dataset.campo || input.name, 'Este archivo todavía no quedó confirmado. Presiona reintentar o vuelve a seleccionarlo.');
             return;
         }
     }

@@ -78,6 +78,8 @@ Route::prefix('postulacion')->middleware('throttle:30,1')->group(function () {
     Route::get('/auth/google',     [ContratacionPublicoController::class, 'redirectGoogle'])->name('contratacion-publico.google');
     Route::get('/auth/callback',   [ContratacionPublicoController::class, 'callbackGoogle'])->name('contratacion-publico.callback');
     Route::get('/formulario',      [ContratacionPublicoController::class, 'formulario'])->name('contratacion-publico.formulario');
+    Route::post('/documentos/preupload', [ContratacionPublicoController::class, 'preuploadDocumento'])->middleware('throttle:20,1')->name('contratacion-publico.documento.preupload');
+    Route::post('/documentos/descartar', [ContratacionPublicoController::class, 'descartarPreuploadDocumento'])->middleware('throttle:20,1')->name('contratacion-publico.documento.descartar');
     Route::post('/enviar',         [ContratacionPublicoController::class, 'store'])->middleware('throttle:6,1')->name('contratacion-publico.store');
     Route::get('/confirmacion/{folio}', [ContratacionPublicoController::class, 'confirmacion'])->name('contratacion-publico.confirmacion');
     Route::post('/logout',         [ContratacionPublicoController::class, 'logout'])->name('contratacion-publico.logout');
