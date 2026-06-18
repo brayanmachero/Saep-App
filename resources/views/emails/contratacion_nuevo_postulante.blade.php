@@ -21,6 +21,25 @@
                 Se ha registrado un nuevo postulante en el Portal de Contratación. La documentación debe revisarse
                 desde el panel interno; no se adjuntan documentos en este correo.
             </p>
+            @php
+                $formatMailDate = function ($value): ?string {
+                    if (empty($value)) {
+                        return null;
+                    }
+
+                    if ($value instanceof \Carbon\CarbonInterface) {
+                        return $value->format('d/m/Y H:i');
+                    }
+
+                    try {
+                        return \Illuminate\Support\Carbon::parse($value)->format('d/m/Y H:i');
+                    } catch (\Throwable $e) {
+                        return is_scalar($value) ? (string) $value : null;
+                    }
+                };
+
+                $postulacionFecha = $formatMailDate($postulante->created_at);
+            @endphp
 
             <!-- Folio -->
             <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9ff;border-radius:10px;margin-bottom:24px;">
@@ -49,7 +68,7 @@
                 </tr>
                 <tr>
                     <td style="padding:12px 16px;font-size:12px;color:#6b7280;">Fecha postulación</td>
-                    <td style="padding:12px 16px;font-size:13px;color:#1e1e2e;">{{ $postulante->created_at->format('d/m/Y H:i') }}</td>
+                    <td style="padding:12px 16px;font-size:13px;color:#1e1e2e;">{{ $postulacionFecha ?? 'No registrada' }}</td>
                 </tr>
             </table>
 
@@ -92,9 +111,7 @@
 
             @php
                 $politicaUrl = route('proteccion-datos.politica-privacidad');
-                $consentimientoFecha = $postulante->consentimiento_at
-                    ? $postulante->consentimiento_at->format('d/m/Y H:i')
-                    : null;
+                $consentimientoFecha = $formatMailDate($postulante->consentimiento_at);
             @endphp
 
             <!-- Privacy and confidentiality -->
