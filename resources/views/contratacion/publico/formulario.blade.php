@@ -314,7 +314,7 @@
             </p>
             <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:.75rem 1rem;margin-bottom:1.5rem;font-size:.82rem;color:#92400e;display:flex;gap:.6rem;align-items:flex-start;">
                 <span style="font-size:1rem;flex-shrink:0;">📱</span>
-                <span><strong>Desde el celular:</strong> si la foto de cámara es muy pesada y el dispositivo no puede procesarla, <strong>usa PDF</strong> o toma la foto en <strong>menor resolución</strong> desde la configuración de tu cámara. Los archivos PDF son más livianos y funcionan mejor en dispositivos con poca memoria.</span>
+                <span><strong>Desde el celular:</strong> si la foto de cámara es muy pesada y el dispositivo no puede procesarla, <strong>usa PDF</strong> o toma la foto en <strong>menor resolución</strong> desde la configuración de tu cámara. Si Chrome indica que el archivo cambió o no se puede leer, vuelve a seleccionarlo desde <strong>Galería</strong> o <strong>Archivos/Descargas</strong> y evita moverlo o editarlo antes de enviar.</span>
             </div>
 
             <div class="row-2">
@@ -543,8 +543,45 @@ document.querySelectorAll('.file-drop').forEach(function (zone) {
     zone.addEventListener('drop', function () { zone.classList.remove('dragover'); });
 });
 
+async function archivoEsLegible(input) {
+    if (!input.files || !input.files[0]) return true;
+
+    const file = input.files[0];
+    const campo = input.dataset.campo || input.name;
+
+    if (!file.slice || !file.arrayBuffer) {
+        return true;
+    }
+
+    try {
+        if (file.size > 0) {
+            await file.slice(0, Math.min(file.size, 1024)).arrayBuffer();
+        }
+        return true;
+    } catch (error) {
+        input.value = '';
+        const preview = document.getElementById('preview-' + campo);
+        if (preview) preview.style.display = 'none';
+        mostrarErrorArchivo(campo, 'Chrome no pudo leer este archivo. Vuelve a seleccionarlo desde Galería o Archivos/Descargas y evita moverlo, editarlo o tomar una nueva foto sobre el mismo archivo antes de enviar.');
+        return false;
+    }
+}
+
+let envioEnCurso = false;
+const submitButton = document.getElementById('btn-submit');
+const submitButtonHtml = submitButton ? submitButton.innerHTML : '';
+
 // ─── Submit con loading ──────────────────────────────────────────
-document.getElementById('form-postulacion').addEventListener('submit', function (e) {
+document.getElementById('form-postulacion').addEventListener('submit', async function (e) {
+    if (envioEnCurso) return;
+
+    e.preventDefault();
+
+    if (!this.checkValidity()) {
+        this.reportValidity();
+        return;
+    }
+
     // Validar tamaño de todos los inputs de archivo antes de enviar
     const fileInputs = this.querySelectorAll('input[type="file"]');
     let hayError = false;
@@ -557,13 +594,27 @@ document.getElementById('form-postulacion').addEventListener('submit', function 
         }
     });
     if (hayError) {
-        e.preventDefault();
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
     }
+
     const btn = document.getElementById('btn-submit');
     btn.disabled = true;
+    btn.innerHTML = '<span style="display:inline-block;animation:spin 1s linear infinite;font-size:1rem;">⏳</span> Verificando archivos...';
+
+    for (const input of fileInputs) {
+        const legible = await archivoEsLegible(input);
+        if (!legible) {
+            btn.disabled = false;
+            btn.innerHTML = submitButtonHtml;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+        }
+    }
+
+    envioEnCurso = true;
     btn.innerHTML = '<span style="display:inline-block;animation:spin 1s linear infinite;font-size:1rem;">⏳</span> Enviando...';
+    this.submit();
 });
 </script>
 </body>
