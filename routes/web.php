@@ -72,15 +72,16 @@ Route::prefix('denuncia-ley-karin')->group(function () {
 });
 
 // --- PORTAL PÚBLICO CONTRATACIÓN (sin autenticación SAEP, requiere Google OAuth) ---
-// throttle:30,1 = máx 30 req/min por IP en navegación; el POST /enviar con un throttle más estricto.
-Route::prefix('postulacion')->middleware('throttle:30,1')->group(function () {
+// Portal público con margen para postulantes desde redes compartidas.
+// El POST final mantiene un límite más estricto que la navegación y pre-subida.
+Route::prefix('postulacion')->middleware('throttle:180,1')->group(function () {
     Route::get('/',                [ContratacionPublicoController::class, 'inicio'])->name('contratacion-publico.inicio');
     Route::get('/auth/google',     [ContratacionPublicoController::class, 'redirectGoogle'])->name('contratacion-publico.google');
     Route::get('/auth/callback',   [ContratacionPublicoController::class, 'callbackGoogle'])->name('contratacion-publico.callback');
     Route::get('/formulario',      [ContratacionPublicoController::class, 'formulario'])->name('contratacion-publico.formulario');
-    Route::post('/documentos/preupload', [ContratacionPublicoController::class, 'preuploadDocumento'])->middleware('throttle:20,1')->name('contratacion-publico.documento.preupload');
-    Route::post('/documentos/descartar', [ContratacionPublicoController::class, 'descartarPreuploadDocumento'])->middleware('throttle:20,1')->name('contratacion-publico.documento.descartar');
-    Route::post('/enviar',         [ContratacionPublicoController::class, 'store'])->middleware('throttle:6,1')->name('contratacion-publico.store');
+    Route::post('/documentos/preupload', [ContratacionPublicoController::class, 'preuploadDocumento'])->middleware('throttle:120,1')->name('contratacion-publico.documento.preupload');
+    Route::post('/documentos/descartar', [ContratacionPublicoController::class, 'descartarPreuploadDocumento'])->middleware('throttle:120,1')->name('contratacion-publico.documento.descartar');
+    Route::post('/enviar',         [ContratacionPublicoController::class, 'store'])->middleware('throttle:20,1')->name('contratacion-publico.store');
     Route::get('/confirmacion/{folio}', [ContratacionPublicoController::class, 'confirmacion'])->name('contratacion-publico.confirmacion');
     Route::post('/logout',         [ContratacionPublicoController::class, 'logout'])->name('contratacion-publico.logout');
 });
