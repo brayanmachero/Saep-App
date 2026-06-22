@@ -32,10 +32,11 @@ Route::middleware(['auth', 'consentimiento', 'force.password', 'modulo:comercial
     Route::get('cotizaciones/create', [CotizacionController::class, 'create'])->middleware('modulo:comercial,puede_crear')->name('cotizaciones.create');
     Route::post('cotizaciones', [CotizacionController::class, 'store'])->middleware('modulo:comercial,puede_crear')->name('cotizaciones.store');
     Route::post('cotizaciones/previsualizar', [CotizacionController::class, 'previsualizar'])->name('cotizaciones.preview');
+    Route::post('cotizaciones/{cotizacion}/duplicar', [CotizacionController::class, 'duplicar'])->middleware('modulo:comercial,puede_crear')->name('cotizaciones.duplicar');
     Route::get('cotizaciones/{cotizacion}', [CotizacionController::class, 'show'])->name('cotizaciones.show');
     Route::get('cotizaciones/{cotizacion}/edit', [CotizacionController::class, 'edit'])->middleware('modulo:comercial,puede_editar')->name('cotizaciones.edit');
     Route::match(['put', 'patch'], 'cotizaciones/{cotizacion}', [CotizacionController::class, 'update'])->middleware('modulo:comercial,puede_editar')->name('cotizaciones.update');
-    Route::delete('cotizaciones/{cotizacion}', [CotizacionController::class, 'destroy'])->middleware('modulo:comercial,puede_eliminar')->name('cotizaciones.destroy');
+    Route::delete('cotizaciones/{cotizacion}', [CotizacionController::class, 'destroy'])->middleware(['modulo:comercial,puede_eliminar', 'role:SUPER_ADMIN,ADMIN,ADMINISTRADOR'])->name('cotizaciones.destroy');
     Route::patch('cotizaciones/{cotizacion}/aprobar', [CotizacionController::class, 'aprobar'])->middleware('permission:puede_aprobar')->name('cotizaciones.aprobar');
     Route::patch('cotizaciones/{cotizacion}/hacer-vigente', [CotizacionController::class, 'hacerVigente'])->middleware('permission:puede_aprobar')->name('cotizaciones.hacer-vigente');
     Route::patch('cotizaciones/{cotizacion}/rechazar', [CotizacionController::class, 'rechazar'])->middleware('permission:puede_aprobar')->name('cotizaciones.rechazar');
@@ -57,6 +58,7 @@ Route::middleware(['auth', 'consentimiento', 'force.password', 'modulo:comercial
     // Centros de Costo
     Route::get('centros-costo', [CentroCostoController::class, 'index'])->name('centros-costo.index');
     Route::get('centros-costo/create', [CentroCostoController::class, 'create'])->middleware('modulo:comercial,puede_crear')->name('centros-costo.create');
+    Route::post('centros-costo/importar', [CentroCostoController::class, 'importar'])->middleware('modulo:comercial,puede_crear')->name('centros-costo.importar');
     Route::post('centros-costo', [CentroCostoController::class, 'store'])->middleware('modulo:comercial,puede_crear')->name('centros-costo.store');
     Route::get('centros-costo/{centroCosto}', [CentroCostoController::class, 'show'])->name('centros-costo.show');
     Route::get('centros-costo/{centroCosto}/edit', [CentroCostoController::class, 'edit'])->middleware('modulo:comercial,puede_editar')->name('centros-costo.edit');

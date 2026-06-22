@@ -1,5 +1,26 @@
 @extends('layouts.app')
 @section('title', 'Reporte de Cotizaciones')
+@php
+    $estadoOperativo = function ($estado) {
+        return match ($estado) {
+            'aprobada' => 'vigente',
+            'rechazada', 'cancelada' => 'no_vigente',
+            default => $estado,
+        };
+    };
+    $estadoLabels = [
+        'en_cotizacion' => 'En cotización',
+        'vigente' => 'Vigente/Aprobado',
+        'no_vigente' => 'No vigente',
+    ];
+    $estadoBadge = function ($estado) use ($estadoOperativo) {
+        return match ($estadoOperativo($estado)) {
+            'vigente' => 'badge-success',
+            'en_cotizacion' => 'badge-warning',
+            default => 'badge-secondary',
+        };
+    };
+@endphp
 @section('content')
 <div class="page-container">
     <div class="page-header">
@@ -40,12 +61,9 @@
                 <label style="display:block;font-size:.875rem;margin-bottom:.5rem"><i class="bi bi-file-earmark"></i> Estado</label>
                 <select name="estado" class="form-control" onchange="this.form.submit()">
                     <option value="">-- Todos --</option>
-                    <option value="en_cotizacion" {{ request('estado') === 'en_cotizacion' ? 'selected' : '' }}>En Cotización</option>
-                    <option value="aprobada" {{ request('estado') === 'aprobada' ? 'selected' : '' }}>Aprobada</option>
-                    <option value="vigente" {{ request('estado') === 'vigente' ? 'selected' : '' }}>Vigente</option>
-                    <option value="no_vigente" {{ request('estado') === 'no_vigente' ? 'selected' : '' }}>No Vigente</option>
-                    <option value="rechazada" {{ request('estado') === 'rechazada' ? 'selected' : '' }}>Rechazada</option>
-                    <option value="cancelada" {{ request('estado') === 'cancelada' ? 'selected' : '' }}>Cancelada</option>
+                    @foreach($estadoLabels as $estado => $label)
+                    <option value="{{ $estado }}" {{ request('estado') === $estado ? 'selected' : '' }}>{{ $label }}</option>
+                    @endforeach
                 </select>
             </div>
 
@@ -121,12 +139,9 @@
                         <td>${{ number_format($cotizacion->total_provisiones, 0, ',', '.') }}</td>
                         <td style="font-weight:600;color:var(--accent-primary)">${{ number_format($cotizacion->precio_venta, 0, ',', '.') }}</td>
                         <td>
-                            <span class="badge {{
-                                $cotizacion->estado === 'vigente' ? 'badge-success' :
-                                ($cotizacion->estado === 'aprobada' ? 'badge-info' :
-                                (in_array($cotizacion->estado, ['rechazada', 'cancelada'], true) ? 'badge-danger' : 'badge-warning'))
-                            }}">
-                                {{ ucfirst(str_replace('_', ' ', $cotizacion->estado)) }}
+                            @php($estadoCotizacion = $estadoOperativo($cotizacion->estado))
+                            <span class="badge {{ $estadoBadge($cotizacion->estado) }}">
+                                {{ $estadoLabels[$estadoCotizacion] ?? ucfirst(str_replace('_', ' ', $estadoCotizacion)) }}
                             </span>
                         </td>
                         <td style="font-size:.9rem">{{ $cotizacion->fecha_cotizacion->format('d/m/Y') }}</td>

@@ -72,8 +72,24 @@
 @endpush
 @section('content')
 @php
+    $puedeCrearComercial = auth()->user()->tieneAcceso('comercial', 'puede_crear');
     $puedeEditarComercial = auth()->user()->tieneAcceso('comercial', 'puede_editar');
-    $puedeEliminarComercial = auth()->user()->tieneAcceso('comercial', 'puede_eliminar');
+    $puedeEliminarComercial = auth()->user()->tieneAcceso('comercial', 'puede_eliminar') && auth()->user()->esAdminSistema();
+    $estadoOperativo = match ($cotizacion->estado) {
+        'aprobada' => 'vigente',
+        'rechazada', 'cancelada' => 'no_vigente',
+        default => $cotizacion->estado,
+    };
+    $estadoLabels = [
+        'en_cotizacion' => 'En cotización',
+        'vigente' => 'Vigente/Aprobado',
+        'no_vigente' => 'No vigente',
+    ];
+    $estadoBadge = match ($estadoOperativo) {
+        'vigente' => 'badge-success',
+        'en_cotizacion' => 'badge-warning',
+        default => 'badge-secondary',
+    };
 @endphp
 <div class="page-container">
     <div class="page-header">
@@ -90,10 +106,18 @@
             <a href="{{ route('comercial.cotizaciones.pdf', $cotizacion) }}" class="btn-secondary" target="_blank">
                 <i class="bi bi-file-pdf-fill"></i> Descargar PDF
             </a>
-            @if($cotizacion->estado === 'vigente' && $puedeEditarComercial)
+            @if($estadoOperativo === 'vigente' && $puedeEditarComercial)
             <button type="button" class="btn-secondary" onclick="enviarPorEmail()">
                 <i class="bi bi-envelope-fill"></i> Enviar Email
             </button>
+            @endif
+            @if($puedeCrearComercial)
+            <form method="POST" action="{{ route('comercial.cotizaciones.duplicar', $cotizacion) }}" style="display:inline">
+                @csrf
+                <button type="submit" class="btn-secondary" onclick="return confirm('¿Crear una copia editable de esta cotización?')">
+                    <i class="bi bi-files"></i> Duplicar
+                </button>
+            </form>
             @endif
             @if($cotizacion->estado === 'en_cotizacion' && $puedeEditarComercial)
             <a href="{{ route('comercial.cotizaciones.edit', $cotizacion) }}" class="btn-secondary">
@@ -190,6 +214,18 @@
                 ['Hora extra 100%', $horas['extra_100'] ?? ($resumen['horaExtra100'] ?? 0), 'Hora normal HHEE x 2'],
             ],
         ];
+        $diferenciaVigente = $vigenteRelacionada
+            ? ((float) $cotizacion->precio_venta - (float) $vigenteRelacionada->precio_venta)
+            : null;
+        $diferenciaVigentePct = $vigenteRelacionada && (float) $vigenteRelacionada->precio_venta > 0
+            ? ($diferenciaVigente / (float) $vigenteRelacionada->precio_venta) * 100
+            : null;
+        $textoComparacionVigente = $vigenteRelacionada
+            ? (($diferenciaVigente >= 0 ? '+' : '-') . $valor(abs($diferenciaVigente)) . ' (' . ($diferenciaVigentePct >= 0 ? '+' : '') . $porcentaje($diferenciaVigentePct) . ')')
+            : null;
+        $confirmarHacerVigente = $vigenteRelacionada
+            ? "Esta cotización quedará vigente/aprobada y reemplazará a {$vigenteRelacionada->numero}. Diferencia: {$textoComparacionVigente}. ¿Confirmas la aprobación?"
+            : '¿Aprobar y dejar vigente esta cotización?';
     @endphp
 
     {{-- Estado y Acciones --}}
@@ -198,12 +234,8 @@
             <div style="display:flex;align-items:center;gap:2rem;flex-wrap:wrap">
                 <div>
                     <div style="font-size:.85rem;color:var(--text-muted)">Estado Actual</div>
-                    <span class="badge {{
-                        $cotizacion->estado === 'vigente' ? 'badge-success' :
-                        ($cotizacion->estado === 'aprobada' ? 'badge-info' :
-                        ($cotizacion->estado === 'en_cotizacion' ? 'badge-warning' : 'badge-danger'))
-                    }}" style="font-size:1rem;padding:.5rem 1rem">
-                        {{ ucfirst(str_replace('_', ' ', $cotizacion->estado)) }}
+                    <span class="badge {{ $estadoBadge }}" style="font-size:1rem;padding:.5rem 1rem">
+                        {{ $estadoLabels[$estadoOperativo] ?? ucfirst(str_replace('_', ' ', $estadoOperativo)) }}
                     </span>
                 </div>
                 <div>
@@ -213,7 +245,7 @@
             </div>
 
             <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-                @if(! $puedeAprobar && in_array($cotizacion->estado, ['en_cotizacion', 'aprobada'], true))
+                @if(! $puedeAprobar && $estadoOperativo === 'en_cotizacion')
                     <span class="badge badge-secondary">Pendiente de aprobador</span>
                 @endif
 
@@ -221,32 +253,24 @@
                 @if($cotizacion->estado === 'en_cotizacion')
                 <form method="POST" action="{{ route('comercial.cotizaciones.aprobar', $cotizacion) }}" style="display:inline">
                     @csrf @method('PATCH')
-                    <button type="submit" class="btn-premium" onclick="return confirm('¿Aprobar esta cotización?')">
-                        <i class="bi bi-check-circle-fill"></i> Aprobar
+                    <button type="submit" class="btn-premium" onclick="return confirm(@js($confirmarHacerVigente))">
+                        <i class="bi bi-check-circle-fill"></i> Aprobar/Vigente
                     </button>
                 </form>
                 @endif
 
-                @if(in_array($cotizacion->estado, ['en_cotizacion', 'aprobada'], true))
+                @if($estadoOperativo === 'en_cotizacion')
                 <button type="button" class="btn-secondary" onclick="document.getElementById('rechazoModal').style.display='flex'">
-                    <i class="bi bi-x-circle-fill"></i> Rechazar
+                    <i class="bi bi-archive-fill"></i> No vigente
                 </button>
                 @endif
 
-                @if($cotizacion->estado === 'aprobada')
-                <form method="POST" action="{{ route('comercial.cotizaciones.hacer-vigente', $cotizacion) }}" style="display:inline">
-                    @csrf @method('PATCH')
-                    <button type="submit" class="btn-premium" onclick="return confirm('¿Hacer vigente esta cotización?')">
-                        <i class="bi bi-play-circle-fill"></i> Hacer Vigente
-                    </button>
-                </form>
-                @endif
-
-                @if($cotizacion->estado === 'vigente')
+                @if($estadoOperativo === 'vigente')
                 <form method="POST" action="{{ route('comercial.cotizaciones.cancelar', $cotizacion) }}" style="display:inline">
                     @csrf @method('PATCH')
-                    <button type="submit" class="btn-secondary" onclick="return confirm('¿Cancelar la vigencia de esta cotización?')">
-                        <i class="bi bi-stop-circle-fill"></i> Cancelar vigencia
+                    <input type="hidden" name="motivo">
+                    <button type="submit" class="btn-secondary" onclick="return solicitarMotivo(this, 'Indica el motivo para marcar esta cotización como no vigente:')">
+                        <i class="bi bi-archive-fill"></i> Marcar no vigente
                     </button>
                 </form>
                 @endif
@@ -256,7 +280,8 @@
                 @if($puedeEliminarComercial)
                 <form method="POST" action="{{ route('comercial.cotizaciones.destroy', $cotizacion) }}" style="display:inline">
                     @csrf @method('DELETE')
-                    <button type="submit" class="btn-secondary" style="color:var(--danger-color)" onclick="return confirm('¿Eliminar esta cotización? Esta acción ocultará el registro del listado.')">
+                    <input type="hidden" name="motivo">
+                    <button type="submit" class="btn-secondary" style="color:var(--danger-color)" onclick="return solicitarMotivo(this, 'Indica el motivo administrativo de eliminación:')">
                         <i class="bi bi-trash-fill"></i> Eliminar
                     </button>
                 </form>
@@ -264,6 +289,33 @@
             </div>
         </div>
     </div>
+
+    @if($vigenteRelacionada)
+    <div class="glass-card" style="margin-bottom:1.5rem;border-left:4px solid var(--accent-primary)">
+        <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap">
+            <div>
+                <h3 style="margin:0 0 .35rem 0;font-size:1rem">Tarifa vigente relacionada</h3>
+                <p style="margin:0;color:var(--text-muted);font-size:.9rem">
+                    {{ $vigenteRelacionada->numero }} está vigente para el mismo cliente, centro de costo, modalidad y cargo.
+                </p>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(130px,1fr));gap:.8rem;min-width:min(100%,460px)">
+                <div>
+                    <div style="font-size:.78rem;color:var(--text-muted)">Vigente actual</div>
+                    <strong>{{ $valor($vigenteRelacionada->precio_venta) }}</strong>
+                </div>
+                <div>
+                    <div style="font-size:.78rem;color:var(--text-muted)">Esta cotización</div>
+                    <strong>{{ $valor($cotizacion->precio_venta) }}</strong>
+                </div>
+                <div>
+                    <div style="font-size:.78rem;color:var(--text-muted)">Diferencia</div>
+                    <strong style="color:{{ $diferenciaVigente >= 0 ? 'var(--success-color)' : 'var(--danger-color)' }}">{{ $textoComparacionVigente }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
 
     {{-- Datos de la Cotización --}}
     <div class="glass-card" style="margin-bottom:1.5rem">
@@ -436,11 +488,11 @@
     @endif
 </div>
 
-{{-- Modal para Rechazar --}}
+{{-- Modal para marcar no vigente --}}
 <div id="rechazoModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:1rem">
     <div style="background:var(--surface-color);border:1px solid var(--surface-border);border-radius:14px;padding:1.5rem;max-width:520px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.2)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-            <h3 style="margin:0;font-size:1.1rem"><i class="bi bi-x-circle-fill"></i> Rechazar Cotización</h3>
+            <h3 style="margin:0;font-size:1.1rem"><i class="bi bi-archive-fill"></i> Marcar como no vigente</h3>
             <button type="button" onclick="document.getElementById('rechazoModal').style.display='none'"
                     style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted)">&times;</button>
         </div>
@@ -448,15 +500,15 @@
         <form method="POST" action="{{ route('comercial.cotizaciones.rechazar', $cotizacion) }}">
             @csrf @method('PATCH')
             <div class="form-group">
-                <label>Motivo del rechazo <span class="required">*</span></label>
-                <textarea name="motivo" class="form-control" rows="4" maxlength="1000" required placeholder="Ej: tarifa requiere ajuste de margen, cliente rechazó condiciones, datos incompletos...">{{ old('motivo') }}</textarea>
+                <label>Motivo <span class="required">*</span></label>
+                <textarea name="motivo" class="form-control" rows="4" minlength="5" maxlength="1000" required placeholder="Ej: cliente no avanzó, tarifa reemplazada, datos incompletos...">{{ old('motivo') }}</textarea>
                 @error('motivo')<span class="form-error">{{ $message }}</span>@enderror
             </div>
 
             <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.5rem">
                 <button type="button" class="btn-secondary" onclick="document.getElementById('rechazoModal').style.display='none'">Cancelar</button>
-                <button type="submit" class="btn-premium" onclick="return confirm('¿Rechazar esta cotización?')">
-                    <i class="bi bi-x-lg"></i> Confirmar rechazo
+                <button type="submit" class="btn-premium" onclick="return confirm('¿Marcar esta cotización como no vigente?')">
+                    <i class="bi bi-check-lg"></i> Confirmar
                 </button>
             </div>
         </form>
@@ -500,6 +552,25 @@
 <script>
 function enviarPorEmail() {
     document.getElementById('emailModal').style.display = 'flex';
+}
+
+function solicitarMotivo(button, mensaje) {
+    const form = button.closest('form');
+    const motivo = window.prompt(mensaje);
+
+    if (motivo === null) {
+        return false;
+    }
+
+    const limpio = motivo.trim();
+    if (limpio.length < 5) {
+        alert('El motivo debe tener al menos 5 caracteres.');
+        return false;
+    }
+
+    form.querySelector('input[name="motivo"]').value = limpio;
+
+    return confirm('¿Confirmas esta acción? El motivo quedará registrado en la bitácora.');
 }
 </script>
 @endsection

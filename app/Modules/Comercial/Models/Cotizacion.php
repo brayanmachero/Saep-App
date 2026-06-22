@@ -11,6 +11,19 @@ class Cotizacion extends Model
 {
     use SoftDeletes;
 
+    public const ESTADO_EN_COTIZACION = 'en_cotizacion';
+    public const ESTADO_VIGENTE = 'vigente';
+    public const ESTADO_NO_VIGENTE = 'no_vigente';
+
+    public const ESTADOS_OPERATIVOS = [
+        self::ESTADO_EN_COTIZACION,
+        self::ESTADO_VIGENTE,
+        self::ESTADO_NO_VIGENTE,
+    ];
+
+    public const ESTADOS_VIGENTES_COMPATIBLES = ['vigente', 'aprobada'];
+    public const ESTADOS_NO_VIGENTES_COMPATIBLES = ['no_vigente', 'rechazada', 'cancelada'];
+
     protected $table = 'comercial_cotizaciones';
 
     protected $fillable = [
@@ -137,7 +150,7 @@ class Cotizacion extends Model
      */
     public function scopePorEstado($query, $estado)
     {
-        return $query->where('estado', $estado);
+        return $query->whereIn('estado', self::estadosParaFiltro($estado));
     }
 
     /**
@@ -153,7 +166,7 @@ class Cotizacion extends Model
      */
     public function scopeVigentes($query)
     {
-        return $query->where('estado', 'vigente')
+        return $query->whereIn('estado', self::ESTADOS_VIGENTES_COMPATIBLES)
                      ->where(function ($subQuery) {
                          $subQuery->whereNull('fecha_vigencia_hasta')
                              ->orWhere('fecha_vigencia_hasta', '>=', now());
@@ -192,7 +205,7 @@ class Cotizacion extends Model
      */
     public function esAprovable(): bool
     {
-        return $this->estado === 'en_cotizacion';
+        return $this->estadoOperativo() === self::ESTADO_EN_COTIZACION;
     }
 
     /**
@@ -200,7 +213,49 @@ class Cotizacion extends Model
      */
     public function esVigente(): bool
     {
-        return $this->estado === 'vigente'
+        return $this->estadoOperativo() === self::ESTADO_VIGENTE
             && ($this->fecha_vigencia_hasta === null || $this->fecha_vigencia_hasta >= now());
+    }
+
+    public function estadoOperativo(): string
+    {
+        return self::normalizarEstado($this->estado);
+    }
+
+    public static function normalizarEstado(?string $estado): string
+    {
+        return match ($estado) {
+            'aprobada' => self::ESTADO_VIGENTE,
+            'rechazada', 'cancelada' => self::ESTADO_NO_VIGENTE,
+            self::ESTADO_EN_COTIZACION, self::ESTADO_VIGENTE, self::ESTADO_NO_VIGENTE => $estado,
+            default => self::ESTADO_NO_VIGENTE,
+        };
+    }
+
+    public static function estadosParaFiltro(?string $estado): array
+    {
+        return match (self::normalizarEstado($estado)) {
+            self::ESTADO_VIGENTE => self::ESTADOS_VIGENTES_COMPATIBLES,
+            self::ESTADO_NO_VIGENTE => self::ESTADOS_NO_VIGENTES_COMPATIBLES,
+            self::ESTADO_EN_COTIZACION => [self::ESTADO_EN_COTIZACION],
+        };
+    }
+
+    public static function etiquetaEstado(?string $estado): string
+    {
+        return match (self::normalizarEstado($estado)) {
+            self::ESTADO_EN_COTIZACION => 'En cotización',
+            self::ESTADO_VIGENTE => 'Vigente/Aprobado',
+            self::ESTADO_NO_VIGENTE => 'No vigente',
+        };
+    }
+
+    public static function badgeEstado(?string $estado): string
+    {
+        return match (self::normalizarEstado($estado)) {
+            self::ESTADO_VIGENTE => 'badge-success',
+            self::ESTADO_EN_COTIZACION => 'badge-warning',
+            self::ESTADO_NO_VIGENTE => 'badge-secondary',
+        };
     }
 }

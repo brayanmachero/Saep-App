@@ -1,5 +1,26 @@
 @extends('layouts.app')
 @section('title', 'Histórico - ' . $cotizacion->numero)
+@php
+    $estadoOperativo = function ($estado) {
+        return match ($estado) {
+            'aprobada' => 'vigente',
+            'rechazada', 'cancelada' => 'no_vigente',
+            default => $estado,
+        };
+    };
+    $estadoLabels = [
+        'en_cotizacion' => 'En cotización',
+        'vigente' => 'Vigente/Aprobado',
+        'no_vigente' => 'No vigente',
+    ];
+    $estadoBadge = function ($estado) use ($estadoOperativo) {
+        return match ($estadoOperativo($estado)) {
+            'vigente' => 'badge-success',
+            'en_cotizacion' => 'badge-warning',
+            default => 'badge-secondary',
+        };
+    };
+@endphp
 @section('content')
 <div class="page-container">
     <div class="page-header">
@@ -116,13 +137,11 @@
 
                     {{-- Estado --}}
                     @if($version->estado)
+                    @php($estadoVersion = $estadoOperativo($version->estado))
                     <div style="margin-top:.75rem;padding:.5rem .75rem;background:var(--bg-tertiary);border-radius:.35rem;font-size:.85rem;display:inline-block">
                         <strong>Estado:</strong>
-                        <span class="badge {{
-                            $version->estado === 'vigente' ? 'badge-success' :
-                            ($version->estado === 'aprobada' ? 'badge-info' : 'badge-warning')
-                        }}" style="margin-left:.5rem">
-                            {{ ucfirst(str_replace('_', ' ', $version->estado)) }}
+                        <span class="badge {{ $estadoBadge($version->estado) }}" style="margin-left:.5rem">
+                            {{ $estadoLabels[$estadoVersion] ?? ucfirst(str_replace('_', ' ', $estadoVersion)) }}
                         </span>
                     </div>
                     @endif

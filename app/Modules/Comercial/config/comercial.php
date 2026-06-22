@@ -53,7 +53,7 @@ return [
         'enabled' => env('COMERCIAL_API_ENABLED', true),
         'token' => env('COMERCIAL_API_TOKEN'),
         'allow_query_token' => env('COMERCIAL_API_ALLOW_QUERY_TOKEN', false),
-        'default_estados' => ['vigente', 'aprobada'],
+        'default_estados' => ['vigente'],
         'default_limit' => 500,
     ],
 

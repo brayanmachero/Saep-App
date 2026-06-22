@@ -29,7 +29,7 @@
         </div>
 
         <div class="glass-card" style="border-left:4px solid var(--accent-secondary)">
-            <div style="font-size:.85rem;color:var(--text-muted)">Cotizaciones Vigentes</div>
+            <div style="font-size:.85rem;color:var(--text-muted)">Cotizaciones Vigentes/Aprobadas</div>
             <div style="font-size:2rem;font-weight:700;margin-top:.5rem">{{ $cotizacionesVigentes }}</div>
         </div>
     </div>
@@ -47,7 +47,7 @@
                         <th>Estado</th>
                         <th>Centros de Costo</th>
                         <th>Cotizaciones</th>
-                        <th>Vigentes</th>
+                        <th>Vigentes/Aprobadas</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
@@ -73,7 +73,9 @@
                         </td>
                         <td>
                             @php
-                                $vigentes = $cliente->cotizaciones()->where('estado', 'vigente')->count();
+                                $vigentes = $cliente->cotizaciones()
+                                    ->whereIn('estado', \App\Modules\Comercial\Models\Cotizacion::estadosParaFiltro(\App\Modules\Comercial\Models\Cotizacion::ESTADO_VIGENTE))
+                                    ->count();
                             @endphp
                             <span class="badge badge-success">{{ $vigentes }}</span>
                         </td>

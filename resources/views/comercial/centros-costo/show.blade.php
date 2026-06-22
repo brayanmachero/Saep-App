@@ -1,5 +1,19 @@
 @extends('layouts.app')
 @section('title', 'Centro de Costo Comercial')
+@php
+    $estadoOperativoCotizacion = function ($estado) {
+        return match ($estado) {
+            'aprobada' => 'vigente',
+            'rechazada', 'cancelada' => 'no_vigente',
+            default => $estado,
+        };
+    };
+    $estadoLabelsCotizacion = [
+        'en_cotizacion' => 'En cotización',
+        'vigente' => 'Vigente/Aprobado',
+        'no_vigente' => 'No vigente',
+    ];
+@endphp
 @section('content')
 <div class="page-container">
     <div class="page-header">
@@ -34,7 +48,8 @@
                     <tr>
                         <td><a href="{{ route('comercial.cotizaciones.show', $cotizacion) }}">{{ $cotizacion->numero }}</a></td>
                         <td>{{ $cotizacion->cargo }}</td>
-                        <td><span class="badge badge-info">{{ ucfirst(str_replace('_', ' ', $cotizacion->estado)) }}</span></td>
+                        @php($estadoCotizacion = $estadoOperativoCotizacion($cotizacion->estado))
+                        <td><span class="badge {{ $estadoCotizacion === 'vigente' ? 'badge-success' : ($estadoCotizacion === 'en_cotizacion' ? 'badge-warning' : 'badge-secondary') }}">{{ $estadoLabelsCotizacion[$estadoCotizacion] ?? ucfirst(str_replace('_', ' ', $estadoCotizacion)) }}</span></td>
                         <td>${{ number_format($cotizacion->precio_venta, 0, ',', '.') }}</td>
                         <td>{{ $cotizacion->fecha_cotizacion?->format('d/m/Y') }}</td>
                     </tr>

@@ -139,7 +139,11 @@ class TarifaApiController
                 'cliente' => $request->query('cliente'),
                 'modalidad' => $request->query('modalidad'),
                 'centro_costo_id' => $request->query('centro_costo_id'),
-                'estados' => $estados,
+                'estados' => collect($estados)
+                    ->map(fn (string $estado) => Cotizacion::normalizarEstado($estado))
+                    ->unique()
+                    ->values()
+                    ->all(),
             ],
             'count' => $cotizaciones->count(),
             'data' => $cotizaciones,
@@ -219,20 +223,33 @@ class TarifaApiController
 
     private function estadosSolicitados(Request $request): array
     {
-        $permitidos = ['vigente', 'aprobada'];
+        $permitidos = Cotizacion::ESTADOS_OPERATIVOS;
         $valor = $request->query('estado', $request->query('estados'));
 
         if (! $valor || $valor === 'ambas') {
-            return config('comercial.api.default_estados', $permitidos);
+            return $this->expandirEstados(config('comercial.api.default_estados', [Cotizacion::ESTADO_VIGENTE]));
         }
 
         $estados = collect(explode(',', (string) $valor))
             ->map(fn (string $estado) => trim($estado))
+            ->map(fn (string $estado) => Cotizacion::normalizarEstado($estado))
             ->filter(fn (string $estado) => in_array($estado, $permitidos, true))
+            ->unique()
             ->values()
             ->all();
 
-        return $estados ?: config('comercial.api.default_estados', $permitidos);
+        return $estados
+            ? $this->expandirEstados($estados)
+            : $this->expandirEstados(config('comercial.api.default_estados', [Cotizacion::ESTADO_VIGENTE]));
+    }
+
+    private function expandirEstados(array $estados): array
+    {
+        return collect($estados)
+            ->flatMap(fn (string $estado) => Cotizacion::estadosParaFiltro($estado))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function limite(Request $request): int
@@ -261,7 +278,7 @@ class TarifaApiController
         return [
             'cotizacion_id' => $cotizacion->id,
             'cotizacion_numero' => $cotizacion->numero,
-            'estado' => $cotizacion->estado,
+            'estado' => Cotizacion::normalizarEstado($cotizacion->estado),
             'version' => $cotizacion->version,
             'titulo' => $cotizacion->titulo,
             'cargo' => $cotizacion->cargo,

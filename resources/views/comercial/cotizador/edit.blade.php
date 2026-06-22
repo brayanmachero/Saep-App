@@ -75,7 +75,13 @@
                         </tr>
                     </thead>
                     <tbody id="remuneracionesTable">
-                        @foreach($cotizacion->detalles->where('tipo', 'remuneracion') as $idx => $detalle)
+                        @foreach($cotizacion->detalles->where('tipo', 'remuneracion')->reject(function ($detalle) {
+                            $concepto = mb_strtolower((string) $detalle->concepto);
+
+                            return str_contains($concepto, 'gratific')
+                                || str_contains($concepto, 'moviliz')
+                                || str_contains($concepto, 'colaci');
+                        })->values() as $idx => $detalle)
                         <tr>
                             <td>
                                 <input type="text" name="remuneraciones[{{ $idx }}][concepto]" value="{{ $detalle->concepto }}" class="form-control" required>
