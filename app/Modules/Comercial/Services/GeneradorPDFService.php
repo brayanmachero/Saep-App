@@ -29,7 +29,7 @@ class GeneradorPDFService
         $pdf->setPaper('A4', 'portrait');
         $pdf->setOption('defaultFont', 'DejaVu Sans');
         $pdf->setOption('isHtml5ParserEnabled', true);
-        $pdf->setOption('isRemoteEnabled', true);
+        $pdf->setOption('isRemoteEnabled', false);
         $pdf->setOption('margin-top', 15);
         $pdf->setOption('margin-right', 15);
         $pdf->setOption('margin-left', 15);
@@ -52,10 +52,51 @@ class GeneradorPDFService
     }
 
     /**
+     * Guardar una copia final e inmutable para cotizaciones aprobadas o vigentes.
+     */
+    public function guardarPDFFinal(Cotizacion $cotizacion): array
+    {
+        $cotizacion->loadMissing(['cliente', 'centroCosto', 'modalidad', 'detalles', 'uniformes', 'usuario']);
+
+        $contenido = $this->generar($cotizacion)->output();
+        $filename = $this->rutaPDFFinal($cotizacion);
+
+        if (! Storage::disk('local')->put($filename, $contenido)) {
+            throw new \RuntimeException('No fue posible guardar el PDF final de la cotización.');
+        }
+
+        return [
+            'path' => $filename,
+            'hash' => hash('sha256', $contenido),
+            'generado_at' => now(),
+        ];
+    }
+
+    /**
+     * Obtener el PDF que debe enviarse o descargarse. Si existe copia final, se usa esa.
+     */
+    public function contenidoPDF(Cotizacion $cotizacion): string
+    {
+        if ($this->existePDFFinal($cotizacion)) {
+            return Storage::disk('local')->get($cotizacion->pdf_final_path);
+        }
+
+        return $this->generar($cotizacion)->output();
+    }
+
+    /**
      * Descargar PDF
      */
     public function descargar(Cotizacion $cotizacion)
     {
+        if ($this->existePDFFinal($cotizacion)) {
+            return Storage::disk('local')->download(
+                $cotizacion->pdf_final_path,
+                "cotizacion-{$cotizacion->numero}.pdf",
+                ['Content-Type' => 'application/pdf']
+            );
+        }
+
         return $this->generar($cotizacion)->download("cotizacion-{$cotizacion->numero}.pdf");
     }
 
@@ -119,7 +160,7 @@ class GeneradorPDFService
         $pdf->setPaper('A4', 'portrait');
         $pdf->setOption('defaultFont', 'DejaVu Sans');
         $pdf->setOption('isHtml5ParserEnabled', true);
-        $pdf->setOption('isRemoteEnabled', true);
+        $pdf->setOption('isRemoteEnabled', false);
 
         return $pdf;
     }
@@ -155,5 +196,26 @@ class GeneradorPDFService
         $zip->close();
 
         return $zipPath;
+    }
+
+    private function existePDFFinal(Cotizacion $cotizacion): bool
+    {
+        return is_string($cotizacion->pdf_final_path)
+            && $cotizacion->pdf_final_path !== ''
+            && Storage::disk('local')->exists($cotizacion->pdf_final_path);
+    }
+
+    private function rutaPDFFinal(Cotizacion $cotizacion): string
+    {
+        $numero = preg_replace('/[^A-Za-z0-9._-]/', '-', $cotizacion->numero ?: 'cotizacion-'.$cotizacion->id);
+        $estado = preg_replace('/[^A-Za-z0-9._-]/', '-', $cotizacion->estado ?: 'final');
+
+        return sprintf(
+            'cotizaciones/finales/%s/%s-%s-%s.pdf',
+            now()->format('Y'),
+            $numero,
+            $estado,
+            now()->format('YmdHis')
+        );
     }
 }

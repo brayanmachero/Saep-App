@@ -9,6 +9,8 @@ use App\Modules\Comercial\Models\Modalidad;
 use App\Modules\Comercial\Models\Parametro;
 use App\Modules\Comercial\Services\CalculadoraCotizacionService;
 use App\Modules\Comercial\Services\GeneradorPDFService;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -23,22 +25,76 @@ class CotizacionController
 
     public function index(Request $request)
     {
-        $query = Cotizacion::with(['cliente', 'centroCosto', 'modalidad'])
+        $baseQuery = Cotizacion::with(['cliente', 'centroCosto', 'modalidad']);
+        $this->aplicarFiltrosIndex($baseQuery, $request);
+
+        $vigentes = (clone $baseQuery)
+            ->where('estado', 'vigente')
+            ->latest('fecha_vigencia')
+            ->latest('id')
+            ->paginate(8, ['*'], 'vigentes_page')
+            ->withQueryString();
+
+        $enGestion = (clone $baseQuery)
+            ->whereIn('estado', ['en_cotizacion', 'aprobada'])
             ->latest('fecha_cotizacion')
-            ->latest('id');
+            ->latest('id')
+            ->paginate(8, ['*'], 'gestion_page')
+            ->withQueryString();
 
-        if ($request->filled('cliente_id')) {
-            $query->where('cliente_id', $request->integer('cliente_id'));
-        }
+        $historicas = (clone $baseQuery)
+            ->whereIn('estado', ['no_vigente', 'rechazada', 'cancelada'])
+            ->latest('updated_at')
+            ->latest('id')
+            ->paginate(8, ['*'], 'historicas_page')
+            ->withQueryString();
 
-        if ($request->filled('estado')) {
-            $query->where('estado', $request->input('estado'));
-        }
+        $resumenQuery = Cotizacion::query();
+        $this->aplicarFiltrosIndex($resumenQuery, $request);
 
-        $cotizaciones = $query->paginate(20)->withQueryString();
+        $resumenEstados = [
+            'vigentes' => (clone $resumenQuery)->where('estado', 'vigente')->count(),
+            'gestion' => (clone $resumenQuery)->whereIn('estado', ['en_cotizacion', 'aprobada'])->count(),
+            'historicas' => (clone $resumenQuery)->whereIn('estado', ['no_vigente', 'rechazada', 'cancelada'])->count(),
+            'precio_vigente' => (clone $resumenQuery)->where('estado', 'vigente')->sum('precio_venta'),
+        ];
+
+        $agrupadasQuery = Cotizacion::with(['cliente', 'centroCosto', 'modalidad'])
+            ->select([
+                'cliente_id',
+                'centro_costo_id',
+                'modalidad_id',
+                'cargo',
+            ])
+            ->selectRaw('COUNT(*) as total_cotizaciones')
+            ->selectRaw("SUM(CASE WHEN estado = 'vigente' THEN 1 ELSE 0 END) as total_vigentes")
+            ->selectRaw("SUM(CASE WHEN estado IN ('no_vigente', 'rechazada', 'cancelada') THEN 1 ELSE 0 END) as total_historicas")
+            ->selectRaw("MAX(CASE WHEN estado = 'vigente' THEN precio_venta ELSE NULL END) as precio_vigente")
+            ->selectRaw('MAX(COALESCE(fecha_vigencia, fecha_aprobacion, fecha_cotizacion)) as ultima_actividad')
+            ->groupBy('cliente_id', 'centro_costo_id', 'modalidad_id', 'cargo')
+            ->orderByDesc('ultima_actividad');
+
+        $this->aplicarFiltrosIndex($agrupadasQuery, $request);
+
+        $agrupadas = $agrupadasQuery
+            ->paginate(10, ['*'], 'agrupadas_page')
+            ->withQueryString();
+
         $clientes = Cliente::activos()->orderBy('nombre')->get();
+        $centrosCosto = CentroCosto::with('cliente')
+            ->activos()
+            ->orderBy('nombre')
+            ->get(['id', 'cliente_id', 'nombre', 'codigo']);
 
-        return view('comercial::cotizador.index', compact('cotizaciones', 'clientes'));
+        return view('comercial::cotizador.index', compact(
+            'vigentes',
+            'enGestion',
+            'historicas',
+            'agrupadas',
+            'clientes',
+            'centrosCosto',
+            'resumenEstados',
+        ));
     }
 
     public function create()
@@ -175,7 +231,34 @@ class CotizacionController
             'cotizacionesPosteriores',
         ]);
 
-        return view('comercial::cotizador.show', compact('cotizacion'));
+        $relacionadasQuery = Cotizacion::with(['cliente', 'centroCosto', 'modalidad'])
+            ->where('id', '!=', $cotizacion->id)
+            ->where('cliente_id', $cotizacion->cliente_id)
+            ->where('centro_costo_id', $cotizacion->centro_costo_id)
+            ->where('modalidad_id', $cotizacion->modalidad_id)
+            ->where('cargo', $cotizacion->cargo);
+
+        $vigenteComercialActual = (clone $relacionadasQuery)
+            ->where('estado', 'vigente')
+            ->latest('fecha_vigencia')
+            ->latest('id')
+            ->first();
+
+        $historicasComerciales = (clone $relacionadasQuery)
+            ->whereIn('estado', ['no_vigente', 'rechazada', 'cancelada'])
+            ->latest('updated_at')
+            ->latest('id')
+            ->limit(6)
+            ->get();
+
+        $relacionadasCount = (clone $relacionadasQuery)->count();
+
+        return view('comercial::cotizador.show', compact(
+            'cotizacion',
+            'vigenteComercialActual',
+            'historicasComerciales',
+            'relacionadasCount',
+        ));
     }
 
     public function edit(Cotizacion $cotizacion)
@@ -249,14 +332,17 @@ class CotizacionController
             return back()->with('error', 'Solo puedes aprobar cotizaciones en estado En Cotización.');
         }
 
-        $cotizacion->update([
-            'estado' => 'aprobada',
-            'fecha_aprobacion' => now(),
-        ]);
+        DB::transaction(function () use ($cotizacion) {
+            $cotizacion->update([
+                'estado' => 'aprobada',
+                'fecha_aprobacion' => now(),
+            ]);
 
-        $this->registrarAuditoria($cotizacion, 'aprobada', 'Cotización aprobada');
+            $this->registrarAuditoria($cotizacion, 'aprobada', 'Cotización aprobada');
+            $this->guardarPdfFinal($cotizacion, 'aprobada');
+        });
 
-        return back()->with('success', 'Cotización aprobada.');
+        return back()->with('success', 'Cotización aprobada y PDF final guardado.');
     }
 
     public function hacerVigente(Cotizacion $cotizacion)
@@ -274,6 +360,7 @@ class CotizacionController
                 ->where('estado', 'vigente')
                 ->update([
                     'estado' => 'no_vigente',
+                    'fecha_fin_vigencia_real' => now(),
                     'fecha_vigencia_hasta' => now(),
                     'updated_at' => now(),
                 ]);
@@ -281,12 +368,14 @@ class CotizacionController
             $cotizacion->update([
                 'estado' => 'vigente',
                 'fecha_vigencia' => now(),
+                'fecha_fin_vigencia_real' => null,
             ]);
 
             $this->registrarAuditoria($cotizacion, 'vigente', 'Cotización marcada como vigente');
+            $this->guardarPdfFinal($cotizacion, 'vigente');
         });
 
-        return back()->with('success', 'Cotización ahora es vigente.');
+        return back()->with('success', 'Cotización ahora es vigente y PDF final actualizado.');
     }
 
     public function rechazar(Cotizacion $cotizacion)
@@ -314,6 +403,7 @@ class CotizacionController
         $cotizacion->update([
             'estado' => 'cancelada',
             'fecha_cancelacion' => now(),
+            'fecha_fin_vigencia_real' => now(),
         ]);
 
         $this->registrarAuditoria($cotizacion, 'cancelada', 'Cotización cancelada');
@@ -343,7 +433,7 @@ class CotizacionController
         ]);
 
         try {
-            $pdf = $this->generadorPDF->generar($cotizacion)->output();
+            $pdf = $this->generadorPDF->contenidoPDF($cotizacion);
 
             Mail::send('emails.comercial_cotizacion', [
                 'cotizacion' => $cotizacion->load(['cliente', 'centroCosto', 'modalidad']),
@@ -418,6 +508,90 @@ class CotizacionController
         ]);
     }
 
+    private function aplicarFiltrosIndex(Builder $query, Request $request): void
+    {
+        if ($request->filled('cliente_id')) {
+            $query->where('cliente_id', $request->integer('cliente_id'));
+        }
+
+        if ($request->filled('centro_costo_id')) {
+            $query->where('centro_costo_id', $request->integer('centro_costo_id'));
+        }
+
+        if ($request->filled('cargo')) {
+            $cargo = trim((string) $request->query('cargo'));
+            $query->where('cargo', 'like', "%{$cargo}%");
+        }
+
+        if ($request->filled('estado')) {
+            $estado = (string) $request->query('estado');
+
+            match ($estado) {
+                'gestion' => $query->whereIn('estado', ['en_cotizacion', 'aprobada']),
+                'historico' => $query->whereIn('estado', ['no_vigente', 'rechazada', 'cancelada']),
+                default => $query->where('estado', $estado),
+            };
+        }
+
+        if ($request->filled('vigencia_desde') || $request->filled('vigencia_hasta')) {
+            $desde = $request->filled('vigencia_desde')
+                ? Carbon::parse($request->query('vigencia_desde'))->startOfDay()
+                : now()->subYears(50)->startOfDay();
+            $hasta = $request->filled('vigencia_hasta')
+                ? Carbon::parse($request->query('vigencia_hasta'))->endOfDay()
+                : now()->addYears(50)->endOfDay();
+
+            $query
+                ->where(function (Builder $builder) use ($hasta) {
+                    $builder
+                        ->where('fecha_vigencia', '<=', $hasta)
+                        ->orWhere(function (Builder $fallback) use ($hasta) {
+                            $fallback
+                                ->whereNull('fecha_vigencia')
+                                ->where('fecha_aprobacion', '<=', $hasta);
+                        })
+                        ->orWhere(function (Builder $fallback) use ($hasta) {
+                            $fallback
+                                ->whereNull('fecha_vigencia')
+                                ->whereNull('fecha_aprobacion')
+                                ->where('fecha_vigencia_desde', '<=', $hasta);
+                        })
+                        ->orWhere(function (Builder $fallback) use ($hasta) {
+                            $fallback
+                                ->whereNull('fecha_vigencia')
+                                ->whereNull('fecha_aprobacion')
+                                ->whereNull('fecha_vigencia_desde')
+                                ->where('fecha_cotizacion', '<=', $hasta);
+                        });
+                })
+                ->where(function (Builder $builder) use ($desde) {
+                    $builder
+                        ->whereNull('fecha_fin_vigencia_real')
+                        ->orWhere('fecha_fin_vigencia_real', '>=', $desde);
+                });
+        }
+
+        if ($request->filled('q')) {
+            $termino = trim((string) $request->query('q'));
+
+            $query->where(function (Builder $builder) use ($termino) {
+                $builder
+                    ->where('numero', 'like', "%{$termino}%")
+                    ->orWhere('cargo', 'like', "%{$termino}%")
+                    ->orWhere('titulo', 'like', "%{$termino}%")
+                    ->orWhereHas('cliente', function (Builder $cliente) use ($termino) {
+                        $cliente->where('nombre', 'like', "%{$termino}%")
+                            ->orWhere('nombre_comercial', 'like', "%{$termino}%")
+                            ->orWhere('rut', 'like', "%{$termino}%");
+                    })
+                    ->orWhereHas('centroCosto', function (Builder $centro) use ($termino) {
+                        $centro->where('nombre', 'like', "%{$termino}%")
+                            ->orWhere('codigo', 'like', "%{$termino}%");
+                    });
+            });
+        }
+    }
+
     private function registrarAuditoria(Cotizacion $cotizacion, string $accion, string $descripcion, array $cambios = []): void
     {
         $cotizacion->auditorias()->create([
@@ -427,6 +601,25 @@ class CotizacionController
             'cambios' => $cambios ?: null,
             'ip_address' => request()->ip(),
             'user_agent' => request()->header('User-Agent'),
+        ]);
+    }
+
+    private function guardarPdfFinal(Cotizacion $cotizacion, string $estado): void
+    {
+        $cotizacion->refresh();
+
+        $pdfFinal = $this->generadorPDF->guardarPDFFinal($cotizacion);
+
+        $cotizacion->forceFill([
+            'pdf_final_path' => $pdfFinal['path'],
+            'pdf_final_hash' => $pdfFinal['hash'],
+            'pdf_final_generado_at' => $pdfFinal['generado_at'],
+        ])->save();
+
+        $this->registrarAuditoria($cotizacion, 'pdf_final_guardado', "PDF final {$estado} guardado", [
+            'estado' => $estado,
+            'path' => $pdfFinal['path'],
+            'hash' => $pdfFinal['hash'],
         ]);
     }
 }

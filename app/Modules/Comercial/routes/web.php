@@ -10,6 +10,7 @@ use App\Modules\Comercial\Http\Controllers\TarifaApiController;
 
 Route::prefix('comercial/api')
     ->name('comercial.api.')
+    ->middleware('throttle:'.config('comercial.api.throttle', '60,1'))
     ->withoutMiddleware([
         \Illuminate\Cookie\Middleware\EncryptCookies::class,
         \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,

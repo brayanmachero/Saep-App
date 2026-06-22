@@ -7,6 +7,7 @@ use App\Modules\Comercial\Models\Cotizacion;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TarifaApiController
@@ -76,6 +77,7 @@ class TarifaApiController
     public function clientes(Request $request)
     {
         $this->validarToken($request);
+        $this->registrarAcceso($request, 'clientes');
 
         $query = Cliente::activos()
             ->select(['id', 'rut', 'nombre', 'nombre_comercial'])
@@ -101,6 +103,7 @@ class TarifaApiController
     {
         $this->validarToken($request);
         $this->validarFiltroCliente($request);
+        $this->registrarAcceso($request, 'tarifas-cotizadas');
 
         $estados = $this->estadosSolicitados($request);
         $limite = $this->limite($request);
@@ -147,12 +150,14 @@ class TarifaApiController
 
     private function validarToken(Request $request): void
     {
-        if (! config('comercial.api.enabled', true)) {
+        if (! config('comercial.api.enabled', false)) {
+            Log::notice('API comercial deshabilitada invocada.', $this->contextoRequest($request));
             $this->errorJson(404, 'API comercial deshabilitada.');
         }
 
         $esperado = (string) config('comercial.api.token', '');
         if ($esperado === '') {
+            Log::critical('API comercial habilitada sin token configurado.', $this->contextoRequest($request));
             $this->errorJson(503, 'API comercial no configurada.');
         }
 
@@ -161,6 +166,7 @@ class TarifaApiController
             ?: (config('comercial.api.allow_query_token', false) ? $request->query('api_key') : null);
 
         if (! is_string($recibido) || ! hash_equals($esperado, $recibido)) {
+            Log::warning('Token inválido en API comercial.', $this->contextoRequest($request));
             $this->errorJson(401, 'Token API invalido.');
         }
     }
@@ -358,5 +364,23 @@ class TarifaApiController
         }, $nombreArchivo, [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+    private function registrarAcceso(Request $request, string $endpoint): void
+    {
+        Log::info('API comercial consultada.', $this->contextoRequest($request, [
+            'endpoint' => $endpoint,
+        ]));
+    }
+
+    private function contextoRequest(Request $request, array $extra = []): array
+    {
+        return array_merge([
+            'ip' => $request->ip(),
+            'method' => $request->method(),
+            'path' => $request->path(),
+            'query_keys' => array_values(array_diff(array_keys($request->query()), ['api_key', 'token'])),
+            'user_agent' => $request->userAgent(),
+        ], $extra);
     }
 }

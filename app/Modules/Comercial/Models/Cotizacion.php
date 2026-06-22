@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Cotizacion extends Model
 {
@@ -39,7 +40,11 @@ class Cotizacion extends Model
         'detalles_json',
         'fecha_aprobacion',
         'fecha_vigencia',
+        'fecha_fin_vigencia_real',
         'fecha_cancelacion',
+        'pdf_final_path',
+        'pdf_final_hash',
+        'pdf_final_generado_at',
     ];
 
     protected $casts = [
@@ -57,7 +62,9 @@ class Cotizacion extends Model
         'fecha_vigencia_hasta' => 'date',
         'fecha_aprobacion' => 'datetime',
         'fecha_vigencia' => 'datetime',
+        'fecha_fin_vigencia_real' => 'datetime',
         'fecha_cancelacion' => 'datetime',
+        'pdf_final_generado_at' => 'datetime',
     ];
 
     /**
@@ -170,8 +177,38 @@ class Cotizacion extends Model
      */
     public static function generarNumero()
     {
-        $contador = self::whereYear('created_at', now()->year)->count() + 1;
-        return 'COTIZ-' . now()->format('Y') . '-' . str_pad($contador, 5, '0', STR_PAD_LEFT);
+        $anio = (int) now()->format('Y');
+
+        return DB::transaction(function () use ($anio) {
+            $ahora = now();
+
+            DB::table('comercial_cotizacion_secuencias')->insertOrIgnore([
+                'anio' => $anio,
+                'siguiente_numero' => 1,
+                'created_at' => $ahora,
+                'updated_at' => $ahora,
+            ]);
+
+            $secuencia = DB::table('comercial_cotizacion_secuencias')
+                ->where('anio', $anio)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $secuencia) {
+                throw new \RuntimeException("No fue posible reservar correlativo comercial para {$anio}.");
+            }
+
+            $correlativo = (int) $secuencia->siguiente_numero;
+
+            DB::table('comercial_cotizacion_secuencias')
+                ->where('anio', $anio)
+                ->update([
+                    'siguiente_numero' => $correlativo + 1,
+                    'updated_at' => $ahora,
+                ]);
+
+            return 'COTIZ-' . $anio . '-' . str_pad((string) $correlativo, 5, '0', STR_PAD_LEFT);
+        }, 5);
     }
 
     /**

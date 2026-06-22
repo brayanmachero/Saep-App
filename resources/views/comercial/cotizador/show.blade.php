@@ -63,8 +63,60 @@
         white-space: nowrap;
     }
 
+    .quote-context-grid {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr) minmax(260px, 1fr);
+        gap: .85rem;
+    }
+
+    .quote-context-panel {
+        border: 1px solid var(--surface-border);
+        border-radius: 8px;
+        background: var(--surface-color);
+        padding: .9rem;
+        min-height: 126px;
+    }
+
+    .quote-context-label {
+        color: var(--text-muted);
+        font-size: .72rem;
+        font-weight: 800;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .quote-context-main {
+        margin-top: .35rem;
+        color: var(--text-primary);
+        font-size: .95rem;
+        font-weight: 850;
+    }
+
+    .quote-context-copy,
+    .quote-context-list {
+        margin-top: .35rem;
+        color: var(--text-muted);
+        font-size: .82rem;
+        line-height: 1.4;
+    }
+
+    .quote-context-list {
+        display: grid;
+        gap: .35rem;
+    }
+
+    .quote-context-list a {
+        color: var(--accent-primary);
+        text-decoration: none;
+        font-weight: 700;
+    }
+
     @media (max-width: 900px) {
         .quote-detail-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .quote-context-grid {
             grid-template-columns: 1fr;
         }
     }
@@ -114,6 +166,21 @@
         $valor = fn($monto) => '$' . number_format((float) ($monto ?? 0), 0, ',', '.');
         $porcentaje = fn($pct) => number_format((float) ($pct ?? 0), 2, ',', '.') . '%';
         $numero = fn($valor, $decimales = 2) => number_format((float) ($valor ?? 0), $decimales, ',', '.');
+        $estadoTexto = fn($estado) => ucfirst(str_replace('_', ' ', (string) $estado));
+        $estadoBadge = fn($estado) => match ($estado) {
+            'vigente' => 'badge-success',
+            'aprobada' => 'badge-info',
+            'en_cotizacion' => 'badge-warning',
+            'no_vigente' => 'badge-secondary',
+            default => 'badge-danger',
+        };
+        $vigenciaInicio = $cotizacion->fecha_vigencia ?? $cotizacion->fecha_aprobacion ?? $cotizacion->fecha_vigencia_desde ?? $cotizacion->fecha_cotizacion;
+        $vigenciaFinReal = $cotizacion->fecha_fin_vigencia_real ?? ($cotizacion->estado === 'cancelada' ? $cotizacion->fecha_cancelacion : null);
+        $periodoActivo = ($vigenciaInicio ? $vigenciaInicio->format('d/m/Y') : '-') . ' - ' . (
+            $vigenciaFinReal
+                ? $vigenciaFinReal->format('d/m/Y')
+                : ($cotizacion->estado === 'vigente' ? 'activa' : ($cotizacion->estado === 'aprobada' ? 'aprobada' : 'sin activación'))
+        );
         $get = fn($item, $key) => is_array($item) ? ($item[$key] ?? null) : ($item->{$key} ?? null);
         $detallePor = fn($texto) => $detallesCalculo->first(fn($detalle) => str_contains(mb_strtolower((string) $get($detalle, 'concepto')), mb_strtolower($texto)));
         $detalleValor = fn($texto) => (float) ($get($detallePor($texto), 'valor') ?? 0);
@@ -190,6 +257,78 @@
             ],
         ];
     @endphp
+
+    <div class="glass-card" style="margin-bottom:1.5rem">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
+            <div>
+                <h3 style="margin:0;font-size:1rem">Contexto de vigencia comercial</h3>
+                <p style="margin:.25rem 0 0;color:var(--text-muted);font-size:.86rem">
+                    Cliente, centro de costo, modalidad y cargo forman la llave operativa para decidir qué tarifa queda activa.
+                </p>
+            </div>
+            <a href="{{ route('comercial.cotizaciones.index', ['cliente_id' => $cotizacion->cliente_id, 'q' => $cotizacion->cargo]) }}" class="btn-secondary">
+                <i class="bi bi-search"></i> Ver contexto
+            </a>
+        </div>
+
+        <div class="quote-context-grid">
+            <div class="quote-context-panel">
+                <div class="quote-context-label">Estado de esta cotización</div>
+                <div class="quote-context-main">
+                    <span class="badge {{ $estadoBadge($cotizacion->estado) }}">{{ $estadoTexto($cotizacion->estado) }}</span>
+                </div>
+                <div class="quote-context-copy">
+                    Periodo activo: <strong>{{ $periodoActivo }}</strong>
+                </div>
+                <div class="quote-context-copy">
+                    @if($cotizacion->estado === 'vigente')
+                        Esta cotización es la tarifa vigente para esta combinación comercial.
+                    @elseif($cotizacion->estado === 'no_vigente')
+                        Esta cotización quedó almacenada como histórico porque fue reemplazada o perdió vigencia.
+                    @elseif($cotizacion->estado === 'aprobada')
+                        Está aprobada y puede pasar a vigente. Al activarla, reemplazará una vigente equivalente si existe.
+                    @else
+                        Se conserva para trazabilidad y puede avanzar según su estado actual.
+                    @endif
+                </div>
+            </div>
+
+            <div class="quote-context-panel">
+                <div class="quote-context-label">Tarifa vigente relacionada</div>
+                @if($cotizacion->estado === 'vigente')
+                    <div class="quote-context-main">{{ $cotizacion->numero }}</div>
+                    <div class="quote-context-copy">{{ $valor($cotizacion->precio_venta) }} · vigente desde {{ $cotizacion->fecha_vigencia?->format('d/m/Y') ?? '-' }}</div>
+                @elseif($vigenteComercialActual)
+                    <div class="quote-context-main">
+                        <a href="{{ route('comercial.cotizaciones.show', $vigenteComercialActual) }}" style="color:var(--accent-primary);text-decoration:none">
+                            {{ $vigenteComercialActual->numero }}
+                        </a>
+                    </div>
+                    <div class="quote-context-copy">{{ $valor($vigenteComercialActual->precio_venta) }} · vigente desde {{ $vigenteComercialActual->fecha_vigencia?->format('d/m/Y') ?? '-' }}</div>
+                @else
+                    <div class="quote-context-main">Sin tarifa vigente</div>
+                    <div class="quote-context-copy">No hay otra cotización vigente para esta misma combinación comercial.</div>
+                @endif
+            </div>
+
+            <div class="quote-context-panel">
+                <div class="quote-context-label">Histórico relacionado</div>
+                <div class="quote-context-main">{{ number_format($relacionadasCount, 0, ',', '.') }} cotización(es) relacionadas</div>
+                @if($historicasComerciales->isNotEmpty())
+                    <div class="quote-context-list">
+                        @foreach($historicasComerciales->take(3) as $historica)
+                        <div>
+                            <a href="{{ route('comercial.cotizaciones.show', $historica) }}">{{ $historica->numero }}</a>
+                            <span> · {{ $estadoTexto($historica->estado) }} · {{ $valor($historica->precio_venta) }}</span>
+                        </div>
+                        @endforeach
+                    </div>
+                @else
+                    <div class="quote-context-copy">Aún no hay cotizaciones históricas equivalentes.</div>
+                @endif
+            </div>
+        </div>
+    </div>
 
     {{-- Estado y Acciones --}}
     <div class="glass-card" style="margin-bottom:1.5rem">
@@ -297,6 +436,12 @@
                 <div style="font-size:.85rem;color:var(--text-muted);font-weight:500;margin-bottom:.25rem">Creada por</div>
                 <strong>{{ $cotizacion->usuario->name ?? 'Sistema' }}</strong>
                 <div style="font-size:.85rem;color:var(--text-muted)">{{ $cotizacion->created_at->format('d/m/Y H:i') }}</div>
+            </div>
+
+            <div>
+                <div style="font-size:.85rem;color:var(--text-muted);font-weight:500;margin-bottom:.25rem">Periodo activo real</div>
+                <strong>{{ $periodoActivo }}</strong>
+                <div style="font-size:.85rem;color:var(--text-muted)">Base para búsquedas históricas de tarifa</div>
             </div>
         </div>
 

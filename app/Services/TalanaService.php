@@ -15,8 +15,8 @@ class TalanaService
 
     public function __construct()
     {
-        $this->baseUrl = rtrim(config('services.talana.base_url', 'https://talana.com/es/api'), '/');
-        $this->token   = config('services.talana.token', '');
+        $this->baseUrl = rtrim((string) config('services.talana.base_url', 'https://talana.com/es/api'), '/');
+        $this->token   = (string) config('services.talana.token', '');
     }
 
     // ─── HTTP ─────────────────────────────────────────────────────────────────
