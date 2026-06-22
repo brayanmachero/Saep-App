@@ -73,7 +73,9 @@
                         </td>
                         <td>
                             @php
-                                $vigentes = $cliente->cotizaciones()->where('estado', 'vigente')->count();
+                                $vigentes = $cliente->cotizaciones()
+                                    ->whereIn('estado', \App\Modules\Comercial\Models\Cotizacion::estadosParaFiltro(\App\Modules\Comercial\Models\Cotizacion::ESTADO_VIGENTE))
+                                    ->count();
                             @endphp
                             <span class="badge badge-success">{{ $vigentes }}</span>
                         </td>

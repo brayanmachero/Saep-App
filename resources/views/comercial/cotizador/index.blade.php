@@ -14,11 +14,19 @@
     }
 
     .quote-stat {
+        display: block;
         border: 1px solid var(--surface-border);
         border-radius: 8px;
         background: var(--surface-color);
         padding: 1rem;
         min-height: 92px;
+        text-decoration: none;
+        transition: border-color .15s ease, transform .15s ease;
+    }
+
+    .quote-stat:hover {
+        border-color: var(--accent-primary);
+        transform: translateY(-1px);
     }
 
     .quote-stat-label {
@@ -149,38 +157,30 @@
 @endpush
 @section('content')
 @php
+    $cotizacionEstado = \App\Modules\Comercial\Models\Cotizacion::class;
     $money = fn($amount) => '$' . number_format((float) ($amount ?? 0), 0, ',', '.');
     $date = fn($value) => $value ? $value->format('d/m/Y') : '-';
-    $estadoTexto = fn($estado) => ucfirst(str_replace('_', ' ', (string) $estado));
-    $estadoBadge = fn($estado) => match ($estado) {
-        'vigente' => 'badge-success',
-        'aprobada' => 'badge-info',
-        'en_cotizacion' => 'badge-warning',
-        'no_vigente' => 'badge-secondary',
-        default => 'badge-danger',
-    };
+    $estadoTexto = fn($estado) => $cotizacionEstado::etiquetaEstado($estado);
+    $estadoBadge = fn($estado) => $cotizacionEstado::badgeEstado($estado);
     $modalidadBadge = fn($cotizacion) => $cotizacion->modalidad?->codigo === 'EST' ? 'badge-info' : 'badge-warning';
     $vigenciaInicio = fn($cotizacion) => $cotizacion->fecha_vigencia ?? $cotizacion->fecha_aprobacion ?? $cotizacion->fecha_vigencia_desde ?? $cotizacion->fecha_cotizacion;
-    $vigenciaFinReal = fn($cotizacion) => $cotizacion->fecha_fin_vigencia_real ?? ($cotizacion->estado === 'cancelada' ? $cotizacion->fecha_cancelacion : null);
-    $periodoActivo = function ($cotizacion) use ($date, $vigenciaInicio, $vigenciaFinReal) {
+    $vigenciaFinReal = fn($cotizacion) => $cotizacion->fecha_fin_vigencia_real ?? ($cotizacionEstado::normalizarEstado($cotizacion->estado) === 'no_vigente' ? $cotizacion->fecha_cancelacion : null);
+    $periodoActivo = function ($cotizacion) use ($date, $vigenciaInicio, $vigenciaFinReal, $cotizacionEstado) {
         $inicio = $date($vigenciaInicio($cotizacion));
         $finReal = $vigenciaFinReal($cotizacion);
+        $estadoOperativo = $cotizacionEstado::normalizarEstado($cotizacion->estado);
 
         if ($finReal) {
             return "{$inicio} - {$date($finReal)}";
         }
 
-        if ($cotizacion->estado === 'vigente') {
+        if ($estadoOperativo === 'vigente') {
             return "{$inicio} - activa";
-        }
-
-        if ($cotizacion->estado === 'aprobada') {
-            return "{$inicio} - aprobada";
         }
 
         return "{$inicio} - sin activación";
     };
-    $hayFiltros = collect(['cliente_id', 'centro_costo_id', 'cargo', 'estado', 'vigencia_desde', 'vigencia_hasta', 'q'])
+    $hayFiltros = collect(['cliente_id', 'centro_costo_id', 'cargo', 'estado', 'vigencia_desde', 'vigencia_hasta', 'vence_hasta', 'q'])
         ->contains(fn($campo) => request()->filled($campo));
 @endphp
 
@@ -212,18 +212,28 @@
             <div class="quote-stat">
                 <div class="quote-stat-label">En gestión</div>
                 <div class="quote-stat-value">{{ number_format($resumenEstados['gestion'], 0, ',', '.') }}</div>
-                <div class="quote-stat-note">Borradores y aprobadas pendientes</div>
+                <div class="quote-stat-note">Cotizaciones en edición o revisión</div>
             </div>
             <div class="quote-stat">
                 <div class="quote-stat-label">Histórico</div>
                 <div class="quote-stat-value">{{ number_format($resumenEstados['historicas'], 0, ',', '.') }}</div>
-                <div class="quote-stat-note">No vigentes, rechazadas o canceladas</div>
+                <div class="quote-stat-note">Cotizaciones no vigentes</div>
             </div>
             <div class="quote-stat">
                 <div class="quote-stat-label">Valor vigente</div>
                 <div class="quote-stat-value">{{ $money($resumenEstados['precio_vigente']) }}</div>
                 <div class="quote-stat-note">Suma de precios activos filtrados</div>
             </div>
+            <a class="quote-stat" href="{{ route('comercial.cotizaciones.index', array_merge(request()->except(['gestion_page', 'vigentes_page', 'historicas_page', 'agrupadas_page', 'vence_hasta']), ['estado' => 'en_cotizacion'])) }}">
+                <div class="quote-stat-label">Por aprobar</div>
+                <div class="quote-stat-value">{{ number_format($resumenEstados['pendientes_aprobar'], 0, ',', '.') }}</div>
+                <div class="quote-stat-note">Borradores listos para revisión</div>
+            </a>
+            <a class="quote-stat" href="{{ route('comercial.cotizaciones.index', array_merge(request()->except(['gestion_page', 'vigentes_page', 'historicas_page', 'agrupadas_page', 'estado', 'vigencia_desde', 'vigencia_hasta']), ['vence_hasta' => now()->addDays(30)->format('Y-m-d')])) }}">
+                <div class="quote-stat-label">Por vencer</div>
+                <div class="quote-stat-value">{{ number_format($resumenEstados['vigentes_por_vencer'], 0, ',', '.') }}</div>
+                <div class="quote-stat-note">Vigentes con término dentro de 30 días</div>
+            </a>
         </div>
 
         <div class="glass-card">
@@ -271,9 +281,6 @@
                         <option value="gestion" {{ request('estado') === 'gestion' ? 'selected' : '' }}>En gestión</option>
                         <option value="historico" {{ request('estado') === 'historico' ? 'selected' : '' }}>Histórico completo</option>
                         <option value="en_cotizacion" {{ request('estado') === 'en_cotizacion' ? 'selected' : '' }}>En cotización</option>
-                        <option value="aprobada" {{ request('estado') === 'aprobada' ? 'selected' : '' }}>Aprobada</option>
-                        <option value="rechazada" {{ request('estado') === 'rechazada' ? 'selected' : '' }}>Rechazada</option>
-                        <option value="cancelada" {{ request('estado') === 'cancelada' ? 'selected' : '' }}>Cancelada</option>
                     </select>
                 </div>
                 <div>
@@ -423,7 +430,7 @@
             <div class="quote-section-head">
                 <div>
                     <h3 class="quote-section-title"><i class="bi bi-pencil-square"></i> Cotizaciones en gestión</h3>
-                    <p class="quote-section-copy">Trabajo comercial en curso: borradores en cotización y aprobadas listas para activar.</p>
+                    <p class="quote-section-copy">Trabajo comercial en curso: cotizaciones en edición o listas para aprobar y dejar vigentes.</p>
                 </div>
                 <span class="badge badge-warning">{{ $enGestion->total() }} en gestión</span>
             </div>
@@ -438,6 +445,7 @@
                             <th>Estado</th>
                             <th>Precio venta</th>
                             <th>Periodo activo</th>
+                            <th>Responsable / actualización</th>
                             <th style="text-align:right">Acciones</th>
                         </tr>
                     </thead>
@@ -456,9 +464,22 @@
                             <td><span class="badge {{ $estadoBadge($cotizacion->estado) }}">{{ $estadoTexto($cotizacion->estado) }}</span></td>
                             <td class="quote-price">{{ $money($cotizacion->precio_venta) }}</td>
                             <td class="quote-muted">{{ $periodoActivo($cotizacion) }}</td>
+                            <td class="quote-muted">
+                                {{ $cotizacion->usuario?->name ?? 'Sistema' }}
+                                <br>
+                                {{ $cotizacion->updated_at?->format('d/m/Y H:i') ?? '-' }}
+                            </td>
                             <td>
                                 <div class="quote-actions">
                                     <a href="{{ route('comercial.cotizaciones.show', $cotizacion) }}" class="icon-btn" title="Ver detalles"><i class="bi bi-eye-fill"></i></a>
+                                    @if(auth()->user()->tieneAcceso('comercial', 'puede_crear'))
+                                    <form method="POST" action="{{ route('comercial.cotizaciones.duplicar', $cotizacion) }}" style="display:inline">
+                                        @csrf
+                                        <button type="submit" class="icon-btn" title="Duplicar como borrador" onclick="return confirm('¿Duplicar esta cotización como nuevo borrador?')">
+                                            <i class="bi bi-files"></i>
+                                        </button>
+                                    </form>
+                                    @endif
                                     @if($cotizacion->estado === 'en_cotizacion')
                                     <a href="{{ route('comercial.cotizaciones.edit', $cotizacion) }}" class="icon-btn" title="Editar"><i class="bi bi-pencil-fill"></i></a>
                                     @endif
@@ -467,7 +488,7 @@
                             </td>
                         </tr>
                         @empty
-                        <tr><td colspan="7" class="quote-empty">No hay cotizaciones en gestión para los filtros actuales.</td></tr>
+                        <tr><td colspan="8" class="quote-empty">No hay cotizaciones en gestión para los filtros actuales.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -481,7 +502,7 @@
             <div class="quote-section-head">
                 <div>
                     <h3 class="quote-section-title"><i class="bi bi-archive-fill"></i> Histórico comercial</h3>
-                    <p class="quote-section-copy">Cotizaciones reemplazadas, no vigentes, rechazadas o canceladas. Permanecen disponibles para trazabilidad y auditoría.</p>
+                    <p class="quote-section-copy">Cotizaciones no vigentes. Permanecen disponibles para trazabilidad y auditoría.</p>
                 </div>
                 <span class="badge badge-secondary">{{ $historicas->total() }} históricas</span>
             </div>

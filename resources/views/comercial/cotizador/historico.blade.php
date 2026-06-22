@@ -13,6 +13,9 @@
     </div>
 
     @include('partials._alerts')
+    @php
+        $cotizacionEstado = \App\Modules\Comercial\Models\Cotizacion::class;
+    @endphp
 
     {{-- Timeline de Versiones --}}
     <div class="glass-card">
@@ -118,11 +121,8 @@
                     @if($version->estado)
                     <div style="margin-top:.75rem;padding:.5rem .75rem;background:var(--bg-tertiary);border-radius:.35rem;font-size:.85rem;display:inline-block">
                         <strong>Estado:</strong>
-                        <span class="badge {{
-                            $version->estado === 'vigente' ? 'badge-success' :
-                            ($version->estado === 'aprobada' ? 'badge-info' : 'badge-warning')
-                        }}" style="margin-left:.5rem">
-                            {{ ucfirst(str_replace('_', ' ', $version->estado)) }}
+                        <span class="badge {{ $cotizacionEstado::badgeEstado($version->estado) }}" style="margin-left:.5rem">
+                            {{ $cotizacionEstado::etiquetaEstado($version->estado) }}
                         </span>
                     </div>
                     @endif

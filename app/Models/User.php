@@ -87,6 +87,15 @@ class User extends Authenticatable
         return $this->rol?->codigo === 'SUPER_ADMIN';
     }
 
+    public function esAdminSistema(): bool
+    {
+        $codigo = strtoupper((string) ($this->rol?->codigo ?? ''));
+        $nombre = strtoupper((string) ($this->rol?->nombre ?? ''));
+
+        return in_array($codigo, ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRADOR'], true)
+            || in_array($nombre, ['SUPER ADMIN', 'ADMIN', 'ADMINISTRADOR'], true);
+    }
+
     /**
      * The attributes that should be hidden for serialization.
      *

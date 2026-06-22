@@ -17,7 +17,7 @@ class ReporteController
 
         $resumenQuery = clone $query;
         $totalCotizaciones = (clone $resumenQuery)->count();
-        $vigentes = (clone $resumenQuery)->where('estado', 'vigente')->count();
+        $vigentes = (clone $resumenQuery)->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_VIGENTE))->count();
         $valorTotal = (clone $resumenQuery)->sum('precio_venta');
         $valorPromedio = $totalCotizaciones > 0 ? $valorTotal / $totalCotizaciones : 0;
 
@@ -45,7 +45,7 @@ class ReporteController
         $totalClientes = (clone $query)->count();
         $clientesActivos = (clone $query)->where('estado', 'activo')->count();
         $totalCotizaciones = Cotizacion::count();
-        $cotizacionesVigentes = Cotizacion::where('estado', 'vigente')->count();
+        $cotizacionesVigentes = Cotizacion::whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_VIGENTE))->count();
         $clientes = $query->paginate(50)->withQueryString();
 
         return view('comercial::reportes.clientes', compact(
@@ -156,7 +156,7 @@ class ReporteController
         }
 
         if ($request->filled('estado')) {
-            $query->where('estado', $request->input('estado'));
+            $query->whereIn('estado', Cotizacion::estadosParaFiltro($request->input('estado')));
         }
 
         if ($request->filled('fecha_desde')) {

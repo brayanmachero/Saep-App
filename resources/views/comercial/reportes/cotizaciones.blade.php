@@ -20,6 +20,9 @@
     </div>
 
     @include('partials._alerts')
+    @php
+        $cotizacionEstado = \App\Modules\Comercial\Models\Cotizacion::class;
+    @endphp
 
     {{-- Filtros --}}
     <div class="glass-card" style="margin-bottom:1.5rem">
@@ -41,11 +44,8 @@
                 <select name="estado" class="form-control" onchange="this.form.submit()">
                     <option value="">-- Todos --</option>
                     <option value="en_cotizacion" {{ request('estado') === 'en_cotizacion' ? 'selected' : '' }}>En Cotización</option>
-                    <option value="aprobada" {{ request('estado') === 'aprobada' ? 'selected' : '' }}>Aprobada</option>
-                    <option value="vigente" {{ request('estado') === 'vigente' ? 'selected' : '' }}>Vigente</option>
+                    <option value="vigente" {{ request('estado') === 'vigente' ? 'selected' : '' }}>Vigente/Aprobado</option>
                     <option value="no_vigente" {{ request('estado') === 'no_vigente' ? 'selected' : '' }}>No Vigente</option>
-                    <option value="rechazada" {{ request('estado') === 'rechazada' ? 'selected' : '' }}>Rechazada</option>
-                    <option value="cancelada" {{ request('estado') === 'cancelada' ? 'selected' : '' }}>Cancelada</option>
                 </select>
             </div>
 
@@ -121,12 +121,8 @@
                         <td>${{ number_format($cotizacion->total_provisiones, 0, ',', '.') }}</td>
                         <td style="font-weight:600;color:var(--accent-primary)">${{ number_format($cotizacion->precio_venta, 0, ',', '.') }}</td>
                         <td>
-                            <span class="badge {{
-                                $cotizacion->estado === 'vigente' ? 'badge-success' :
-                                ($cotizacion->estado === 'aprobada' ? 'badge-info' :
-                                ($cotizacion->estado === 'en_cotizacion' ? 'badge-warning' : 'badge-danger'))
-                            }}">
-                                {{ ucfirst(str_replace('_', ' ', $cotizacion->estado)) }}
+                            <span class="badge {{ $cotizacionEstado::badgeEstado($cotizacion->estado) }}">
+                                {{ $cotizacionEstado::etiquetaEstado($cotizacion->estado) }}
                             </span>
                         </td>
                         <td style="font-size:.9rem">{{ $cotizacion->fecha_cotizacion->format('d/m/Y') }}</td>

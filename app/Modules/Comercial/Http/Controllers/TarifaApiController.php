@@ -224,20 +224,30 @@ class TarifaApiController
 
     private function estadosSolicitados(Request $request): array
     {
-        $permitidos = ['vigente', 'aprobada'];
+        $permitidos = array_merge(Cotizacion::ESTADOS_OPERATIVOS, ['aprobada', 'rechazada', 'cancelada']);
         $valor = $request->query('estado', $request->query('estados'));
 
         if (! $valor || $valor === 'ambas') {
-            return config('comercial.api.default_estados', $permitidos);
+            return collect(config('comercial.api.default_estados', [Cotizacion::ESTADO_VIGENTE]))
+                ->flatMap(fn (string $estado) => Cotizacion::estadosParaFiltro($estado))
+                ->unique()
+                ->values()
+                ->all();
         }
 
         $estados = collect(explode(',', (string) $valor))
             ->map(fn (string $estado) => trim($estado))
             ->filter(fn (string $estado) => in_array($estado, $permitidos, true))
+            ->flatMap(fn (string $estado) => Cotizacion::estadosParaFiltro($estado))
+            ->unique()
             ->values()
             ->all();
 
-        return $estados ?: config('comercial.api.default_estados', $permitidos);
+        return $estados ?: collect(config('comercial.api.default_estados', [Cotizacion::ESTADO_VIGENTE]))
+            ->flatMap(fn (string $estado) => Cotizacion::estadosParaFiltro($estado))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function limite(Request $request): int

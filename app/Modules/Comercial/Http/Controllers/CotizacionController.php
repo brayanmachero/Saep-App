@@ -25,25 +25,25 @@ class CotizacionController
 
     public function index(Request $request)
     {
-        $baseQuery = Cotizacion::with(['cliente', 'centroCosto', 'modalidad']);
+        $baseQuery = Cotizacion::with(['cliente', 'centroCosto', 'modalidad', 'usuario']);
         $this->aplicarFiltrosIndex($baseQuery, $request);
 
         $vigentes = (clone $baseQuery)
-            ->where('estado', 'vigente')
+            ->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_VIGENTE))
             ->latest('fecha_vigencia')
             ->latest('id')
             ->paginate(8, ['*'], 'vigentes_page')
             ->withQueryString();
 
         $enGestion = (clone $baseQuery)
-            ->whereIn('estado', ['en_cotizacion', 'aprobada'])
+            ->where('estado', Cotizacion::ESTADO_EN_COTIZACION)
             ->latest('fecha_cotizacion')
             ->latest('id')
             ->paginate(8, ['*'], 'gestion_page')
             ->withQueryString();
 
         $historicas = (clone $baseQuery)
-            ->whereIn('estado', ['no_vigente', 'rechazada', 'cancelada'])
+            ->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_NO_VIGENTE))
             ->latest('updated_at')
             ->latest('id')
             ->paginate(8, ['*'], 'historicas_page')
@@ -53,10 +53,16 @@ class CotizacionController
         $this->aplicarFiltrosIndex($resumenQuery, $request);
 
         $resumenEstados = [
-            'vigentes' => (clone $resumenQuery)->where('estado', 'vigente')->count(),
-            'gestion' => (clone $resumenQuery)->whereIn('estado', ['en_cotizacion', 'aprobada'])->count(),
-            'historicas' => (clone $resumenQuery)->whereIn('estado', ['no_vigente', 'rechazada', 'cancelada'])->count(),
-            'precio_vigente' => (clone $resumenQuery)->where('estado', 'vigente')->sum('precio_venta'),
+            'vigentes' => (clone $resumenQuery)->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_VIGENTE))->count(),
+            'gestion' => (clone $resumenQuery)->where('estado', Cotizacion::ESTADO_EN_COTIZACION)->count(),
+            'pendientes_aprobar' => (clone $resumenQuery)->where('estado', Cotizacion::ESTADO_EN_COTIZACION)->count(),
+            'vigentes_por_vencer' => (clone $resumenQuery)
+                ->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_VIGENTE))
+                ->whereNotNull('fecha_vigencia_hasta')
+                ->whereBetween('fecha_vigencia_hasta', [now()->startOfDay(), now()->addDays(30)->endOfDay()])
+                ->count(),
+            'historicas' => (clone $resumenQuery)->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_NO_VIGENTE))->count(),
+            'precio_vigente' => (clone $resumenQuery)->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_VIGENTE))->sum('precio_venta'),
         ];
 
         $agrupadasQuery = Cotizacion::with(['cliente', 'centroCosto', 'modalidad'])
@@ -67,9 +73,9 @@ class CotizacionController
                 'cargo',
             ])
             ->selectRaw('COUNT(*) as total_cotizaciones')
-            ->selectRaw("SUM(CASE WHEN estado = 'vigente' THEN 1 ELSE 0 END) as total_vigentes")
+            ->selectRaw("SUM(CASE WHEN estado IN ('vigente', 'aprobada') THEN 1 ELSE 0 END) as total_vigentes")
             ->selectRaw("SUM(CASE WHEN estado IN ('no_vigente', 'rechazada', 'cancelada') THEN 1 ELSE 0 END) as total_historicas")
-            ->selectRaw("MAX(CASE WHEN estado = 'vigente' THEN precio_venta ELSE NULL END) as precio_vigente")
+            ->selectRaw("MAX(CASE WHEN estado IN ('vigente', 'aprobada') THEN precio_venta ELSE NULL END) as precio_vigente")
             ->selectRaw('MAX(COALESCE(fecha_vigencia, fecha_aprobacion, fecha_cotizacion)) as ultima_actividad')
             ->groupBy('cliente_id', 'centro_costo_id', 'modalidad_id', 'cargo')
             ->orderByDesc('ultima_actividad');
@@ -151,7 +157,7 @@ class CotizacionController
                     'centro_costo_id' => $validated['centro_costo_id'],
                     'modalidad_id' => $validated['modalidad_id'],
                     'usuario_id' => auth()->id(),
-                    'estado' => 'en_cotizacion',
+                    'estado' => Cotizacion::ESTADO_EN_COTIZACION,
                     'fecha_cotizacion' => now(),
                     'fecha_vigencia_desde' => $validated['fecha_vigencia_desde'] ?? now(),
                     'fecha_vigencia_hasta' => $validated['fecha_vigencia_hasta'] ?? now()->addDays(config('comercial.quotation.default_validity_days', 30)),
@@ -174,6 +180,58 @@ class CotizacionController
             report($e);
 
             return back()->withInput()->with('error', 'Error al calcular la cotización: '.$e->getMessage());
+        }
+    }
+
+    public function duplicar(Cotizacion $cotizacion)
+    {
+        $cotizacion->load(['detalles', 'uniformes']);
+
+        try {
+            $nuevaCotizacion = DB::transaction(function () use ($cotizacion) {
+                $datosEntrada = $this->datosDesdeCotizacion($cotizacion);
+                $datosCalculo = $this->calculador->calcular($datosEntrada);
+
+                $nueva = new Cotizacion([
+                    'titulo' => $cotizacion->titulo,
+                    'cargo' => $cotizacion->cargo,
+                    'cliente_id' => $cotizacion->cliente_id,
+                    'centro_costo_id' => $cotizacion->centro_costo_id,
+                    'modalidad_id' => $cotizacion->modalidad_id,
+                    'usuario_id' => auth()->id(),
+                    'estado' => Cotizacion::ESTADO_EN_COTIZACION,
+                    'version' => ((int) $cotizacion->version) + 1,
+                    'cotizacion_anterior_id' => $cotizacion->id,
+                    'fecha_cotizacion' => now(),
+                    'fecha_vigencia_desde' => now(),
+                    'fecha_vigencia_hasta' => now()->addDays(config('comercial.quotation.default_validity_days', 30)),
+                    'observaciones' => $cotizacion->observaciones,
+                    'total_remuneraciones' => $datosCalculo['total_remuneraciones'],
+                    'total_cotizaciones' => $datosCalculo['total_cotizaciones'],
+                    'total_provisiones' => $datosCalculo['total_provisiones'],
+                    'total_gastos' => $datosCalculo['total_gastos'],
+                    'subtotal' => $datosCalculo['subtotal'],
+                    'margen' => $datosCalculo['margen'],
+                    'precio_venta' => $datosCalculo['precio_venta'],
+                ]);
+
+                $nueva = $this->calculador->guardar($nueva, $datosCalculo);
+                $this->registrarAuditoria($nueva, 'duplicada', "Cotización duplicada desde {$cotizacion->numero}", [
+                    'cotizacion_origen_id' => $cotizacion->id,
+                    'cotizacion_origen_numero' => $cotizacion->numero,
+                    'precio_origen' => $cotizacion->precio_venta,
+                    'precio_nuevo' => $nueva->precio_venta,
+                ]);
+
+                return $nueva;
+            });
+
+            return redirect()->route('comercial.cotizaciones.edit', $nuevaCotizacion)
+                ->with('success', "Cotización duplicada como borrador {$nuevaCotizacion->numero}. Ajusta los datos antes de aprobarla.");
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'No fue posible duplicar la cotización: '.$e->getMessage());
         }
     }
 
@@ -239,13 +297,13 @@ class CotizacionController
             ->where('cargo', $cotizacion->cargo);
 
         $vigenteComercialActual = (clone $relacionadasQuery)
-            ->where('estado', 'vigente')
+            ->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_VIGENTE))
             ->latest('fecha_vigencia')
             ->latest('id')
             ->first();
 
         $historicasComerciales = (clone $relacionadasQuery)
-            ->whereIn('estado', ['no_vigente', 'rechazada', 'cancelada'])
+            ->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_NO_VIGENTE))
             ->latest('updated_at')
             ->latest('id')
             ->limit(6)
@@ -263,7 +321,7 @@ class CotizacionController
 
     public function edit(Cotizacion $cotizacion)
     {
-        if ($cotizacion->estado !== 'en_cotizacion') {
+        if ($cotizacion->estadoOperativo() !== Cotizacion::ESTADO_EN_COTIZACION) {
             return back()->with('error', 'Solo puedes editar cotizaciones en estado En Cotización.');
         }
 
@@ -286,8 +344,8 @@ class CotizacionController
 
     public function update(Request $request, Cotizacion $cotizacion)
     {
-        if ($cotizacion->estado !== 'en_cotizacion') {
-            return back()->with('error', 'No se puede actualizar una cotización aprobada o vigente.');
+        if ($cotizacion->estadoOperativo() !== Cotizacion::ESTADO_EN_COTIZACION) {
+            return back()->with('error', 'Solo se puede actualizar una cotización en estado En cotización.');
         }
 
         $validated = $this->validarCotizacion($request, $cotizacion);
@@ -317,9 +375,19 @@ class CotizacionController
         }
     }
 
-    public function destroy(Cotizacion $cotizacion)
+    public function destroy(Request $request, Cotizacion $cotizacion)
     {
-        $this->registrarAuditoria($cotizacion, 'eliminada', 'Cotización eliminada');
+        if (! auth()->user()?->esAdminSistema()) {
+            abort(403, 'Solo un administrador o super administrador puede eliminar cotizaciones.');
+        }
+
+        $validated = $request->validate([
+            'motivo' => 'required|string|min:5|max:1000',
+        ]);
+
+        $this->registrarAuditoria($cotizacion, 'eliminada', 'Cotización eliminada', [
+            'motivo' => $validated['motivo'],
+        ]);
         $cotizacion->delete();
 
         return redirect()->route('comercial.cotizaciones.index')
@@ -328,87 +396,54 @@ class CotizacionController
 
     public function aprobar(Cotizacion $cotizacion)
     {
-        if ($cotizacion->estado !== 'en_cotizacion') {
+        if ($cotizacion->estadoOperativo() !== Cotizacion::ESTADO_EN_COTIZACION) {
             return back()->with('error', 'Solo puedes aprobar cotizaciones en estado En Cotización.');
         }
 
-        DB::transaction(function () use ($cotizacion) {
-            $cotizacion->update([
-                'estado' => 'aprobada',
-                'fecha_aprobacion' => now(),
-            ]);
+        $this->activarCotizacion($cotizacion);
 
-            $this->registrarAuditoria($cotizacion, 'aprobada', 'Cotización aprobada');
-            $this->guardarPdfFinal($cotizacion, 'aprobada');
-        });
-
-        return back()->with('success', 'Cotización aprobada y PDF final guardado.');
+        return back()->with('success', 'Cotización aprobada y marcada como vigente.');
     }
 
     public function hacerVigente(Cotizacion $cotizacion)
     {
-        if ($cotizacion->estado !== 'aprobada') {
-            return back()->with('error', 'La cotización debe estar aprobada antes de quedar vigente.');
+        if (! in_array($cotizacion->estado, [Cotizacion::ESTADO_EN_COTIZACION, 'aprobada'], true)) {
+            return back()->with('error', 'Solo puedes dejar vigente una cotización en estado En cotización.');
         }
 
-        DB::transaction(function () use ($cotizacion) {
-            Cotizacion::where('id', '!=', $cotizacion->id)
-                ->where('cliente_id', $cotizacion->cliente_id)
-                ->where('centro_costo_id', $cotizacion->centro_costo_id)
-                ->where('modalidad_id', $cotizacion->modalidad_id)
-                ->where('cargo', $cotizacion->cargo)
-                ->where('estado', 'vigente')
-                ->update([
-                    'estado' => 'no_vigente',
-                    'fecha_fin_vigencia_real' => now(),
-                    'fecha_vigencia_hasta' => now(),
-                    'updated_at' => now(),
-                ]);
-
-            $cotizacion->update([
-                'estado' => 'vigente',
-                'fecha_vigencia' => now(),
-                'fecha_fin_vigencia_real' => null,
-            ]);
-
-            $this->registrarAuditoria($cotizacion, 'vigente', 'Cotización marcada como vigente');
-            $this->guardarPdfFinal($cotizacion, 'vigente');
-        });
+        $this->activarCotizacion($cotizacion);
 
         return back()->with('success', 'Cotización ahora es vigente y PDF final actualizado.');
     }
 
-    public function rechazar(Cotizacion $cotizacion)
+    public function rechazar(Request $request, Cotizacion $cotizacion)
     {
-        if (! in_array($cotizacion->estado, ['en_cotizacion', 'aprobada'], true)) {
-            return back()->with('error', 'Solo puedes rechazar cotizaciones en estado En Cotización o Aprobada.');
+        if ($cotizacion->estadoOperativo() !== Cotizacion::ESTADO_EN_COTIZACION) {
+            return back()->with('error', 'Solo puedes marcar como no vigente una cotización en estado En cotización.');
         }
 
-        $cotizacion->update([
-            'estado' => 'rechazada',
-            'fecha_cancelacion' => now(),
+        $validated = $request->validate([
+            'motivo' => 'required|string|min:5|max:1000',
         ]);
 
-        $this->registrarAuditoria($cotizacion, 'rechazada', 'Cotización rechazada');
+        $this->marcarNoVigente($cotizacion, $validated['motivo'], 'Cotización marcada como no vigente desde En cotización');
 
-        return back()->with('success', 'Cotización rechazada.');
+        return back()->with('success', 'Cotización marcada como no vigente.');
     }
 
-    public function cancelar(Cotizacion $cotizacion)
+    public function cancelar(Request $request, Cotizacion $cotizacion)
     {
-        if (! in_array($cotizacion->estado, ['vigente'], true)) {
-            return back()->with('error', 'Esta cotización no puede cancelarse.');
+        if ($cotizacion->estadoOperativo() !== Cotizacion::ESTADO_VIGENTE) {
+            return back()->with('error', 'Solo puedes marcar como no vigente una cotización vigente/aprobada.');
         }
 
-        $cotizacion->update([
-            'estado' => 'cancelada',
-            'fecha_cancelacion' => now(),
-            'fecha_fin_vigencia_real' => now(),
+        $validated = $request->validate([
+            'motivo' => 'required|string|min:5|max:1000',
         ]);
 
-        $this->registrarAuditoria($cotizacion, 'cancelada', 'Cotización cancelada');
+        $this->marcarNoVigente($cotizacion, $validated['motivo'], 'Cotización vigente/aprobada marcada como no vigente');
 
-        return back()->with('success', 'Cotización cancelada.');
+        return back()->with('success', 'Cotización marcada como no vigente.');
     }
 
     public function historico(Cotizacion $cotizacion)
@@ -474,9 +509,71 @@ class CotizacionController
         return $this->generadorPDF->descargar($cotizacion);
     }
 
+    private function activarCotizacion(Cotizacion $cotizacion): void
+    {
+        DB::transaction(function () use ($cotizacion) {
+            $vigentesReemplazadas = Cotizacion::where('id', '!=', $cotizacion->id)
+                ->where('cliente_id', $cotizacion->cliente_id)
+                ->where('centro_costo_id', $cotizacion->centro_costo_id)
+                ->where('modalidad_id', $cotizacion->modalidad_id)
+                ->where('cargo', $cotizacion->cargo)
+                ->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_VIGENTE))
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($vigentesReemplazadas as $reemplazada) {
+                $reemplazada->update([
+                    'estado' => Cotizacion::ESTADO_NO_VIGENTE,
+                    'fecha_fin_vigencia_real' => now(),
+                    'fecha_vigencia_hasta' => now(),
+                ]);
+
+                $this->registrarAuditoria($reemplazada, 'no_vigente', 'Cotización reemplazada por una nueva vigente/aprobada', [
+                    'cotizacion_reemplazo_id' => $cotizacion->id,
+                    'cotizacion_reemplazo_numero' => $cotizacion->numero,
+                    'precio_reemplazo' => $cotizacion->precio_venta,
+                ]);
+            }
+
+            $cotizacion->update([
+                'estado' => Cotizacion::ESTADO_VIGENTE,
+                'fecha_aprobacion' => $cotizacion->fecha_aprobacion ?? now(),
+                'fecha_vigencia' => now(),
+                'fecha_fin_vigencia_real' => null,
+            ]);
+
+            $this->registrarAuditoria($cotizacion, 'vigente', 'Cotización aprobada y marcada como vigente', [
+                'cotizaciones_reemplazadas' => $vigentesReemplazadas
+                    ->map(fn (Cotizacion $reemplazada) => [
+                        'id' => $reemplazada->id,
+                        'numero' => $reemplazada->numero,
+                        'precio_venta' => $reemplazada->precio_venta,
+                    ])
+                    ->values()
+                    ->all(),
+            ]);
+
+            $this->guardarPdfFinal($cotizacion, Cotizacion::ESTADO_VIGENTE);
+        });
+    }
+
+    private function marcarNoVigente(Cotizacion $cotizacion, string $motivo, string $descripcion): void
+    {
+        $cotizacion->update([
+            'estado' => Cotizacion::ESTADO_NO_VIGENTE,
+            'fecha_cancelacion' => now(),
+            'fecha_fin_vigencia_real' => now(),
+            'fecha_vigencia_hasta' => now(),
+        ]);
+
+        $this->registrarAuditoria($cotizacion, 'no_vigente', $descripcion, [
+            'motivo' => $motivo,
+        ]);
+    }
+
     private function validarCotizacion(Request $request, ?Cotizacion $cotizacion = null): array
     {
-        return $request->validate([
+        $validated = $request->validate([
             'titulo' => 'nullable|string|max:180',
             'cargo' => 'required|string|max:180',
             'cliente_id' => 'required|exists:comercial_clientes,id',
@@ -499,6 +596,18 @@ class CotizacionController
             'otros_gastos' => 'nullable|numeric|min:0',
             'otros_beneficios' => 'nullable|numeric|min:0',
         ]);
+
+        $centroValido = CentroCosto::whereKey($validated['centro_costo_id'])
+            ->where('cliente_id', $validated['cliente_id'])
+            ->exists();
+
+        if (! $centroValido) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'centro_costo_id' => 'El centro de costo seleccionado no pertenece al cliente indicado.',
+            ]);
+        }
+
+        return $validated;
     }
 
     private function datosParaCalculo(array $validated, ?Cotizacion $cotizacion = null): array
@@ -506,6 +615,54 @@ class CotizacionController
         return array_merge($validated, [
             'usuario_id' => auth()->id(),
         ]);
+    }
+
+    private function datosDesdeCotizacion(Cotizacion $cotizacion): array
+    {
+        $detallePor = fn (string $concepto) => $cotizacion->detalles
+            ->first(fn ($detalle) => str_contains(mb_strtolower((string) $detalle->concepto), mb_strtolower($concepto)));
+
+        $remuneraciones = $cotizacion->detalles
+            ->where('tipo', 'remuneracion')
+            ->reject(function ($detalle) {
+                $concepto = mb_strtolower((string) $detalle->concepto);
+
+                return str_contains($concepto, 'gratific')
+                    || str_contains($concepto, 'moviliz')
+                    || str_contains($concepto, 'colaci')
+                    || str_contains($concepto, 'colacion');
+            })
+            ->map(fn ($detalle) => [
+                'concepto' => $detalle->concepto,
+                'valor' => (float) $detalle->valor_base,
+            ])
+            ->filter(fn ($item) => $item['concepto'] !== '' && $item['valor'] >= 0)
+            ->values()
+            ->all();
+
+        $valorDetalle = fn (string $concepto) => (float) (($detallePor($concepto)?->valor) ?? 0);
+
+        return [
+            'cliente_id' => $cotizacion->cliente_id,
+            'centro_costo_id' => $cotizacion->centro_costo_id,
+            'modalidad_id' => $cotizacion->modalidad_id,
+            'usuario_id' => auth()->id(),
+            'remuneraciones' => $remuneraciones,
+            'uniformes' => $cotizacion->uniformes
+                ->map(fn ($uniforme) => [
+                    'descripcion' => $uniforme->descripcion,
+                    'cantidad' => (int) $uniforme->cantidad,
+                    'precio_unitario' => (float) $uniforme->precio_unitario,
+                ])
+                ->values()
+                ->all(),
+            'asignacion_movilizacion' => $valorDetalle('Asignación Movilización'),
+            'asignacion_colacion' => $valorDetalle('Asignación Colación'),
+            'servicios_casino' => $valorDetalle('Servicios de Casino'),
+            'seguro_accidentes' => $valorDetalle('Seguro Accidentes'),
+            'otros_gastos' => $valorDetalle('Otros Gastos'),
+            'otros_beneficios' => $valorDetalle('Otros Beneficios'),
+        ];
     }
 
     private function aplicarFiltrosIndex(Builder $query, Request $request): void
@@ -527,10 +684,19 @@ class CotizacionController
             $estado = (string) $request->query('estado');
 
             match ($estado) {
-                'gestion' => $query->whereIn('estado', ['en_cotizacion', 'aprobada']),
-                'historico' => $query->whereIn('estado', ['no_vigente', 'rechazada', 'cancelada']),
-                default => $query->where('estado', $estado),
+                'gestion' => $query->where('estado', Cotizacion::ESTADO_EN_COTIZACION),
+                'historico' => $query->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_NO_VIGENTE)),
+                default => $query->whereIn('estado', Cotizacion::estadosParaFiltro($estado)),
             };
+        }
+
+        if ($request->filled('vence_hasta')) {
+            $hastaVencimiento = Carbon::parse($request->query('vence_hasta'))->endOfDay();
+
+            $query
+                ->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_VIGENTE))
+                ->whereNotNull('fecha_vigencia_hasta')
+                ->whereBetween('fecha_vigencia_hasta', [now()->startOfDay(), $hastaVencimiento]);
         }
 
         if ($request->filled('vigencia_desde') || $request->filled('vigencia_hasta')) {
