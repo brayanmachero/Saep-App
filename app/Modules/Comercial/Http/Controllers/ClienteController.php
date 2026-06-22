@@ -13,13 +13,66 @@ class ClienteController
     /**
      * Listar clientes
      */
-    public function index()
+    public function index(Request $request)
     {
-        $clientes = Cliente::withCount('centrosCosto')
-            ->orderBy('nombre')
-            ->paginate(20);
+        $termino = trim((string) $request->get('q', ''));
+        $estado = (string) $request->get('estado', '');
 
-        return view('comercial::clientes.index', compact('clientes'));
+        $clientesQuery = Cliente::with([
+            'centrosCosto' => fn ($query) => $query->orderBy('nombre'),
+        ])
+            ->withCount('centrosCosto')
+            ->orderBy('nombre');
+
+        if ($termino !== '') {
+            $clientesQuery->where(function ($query) use ($termino) {
+                $query->where('rut', 'like', "%{$termino}%")
+                    ->orWhere('nombre', 'like', "%{$termino}%")
+                    ->orWhere('nombre_comercial', 'like', "%{$termino}%")
+                    ->orWhere('email', 'like', "%{$termino}%")
+                    ->orWhereHas('centrosCosto', function ($centroQuery) use ($termino) {
+                        $centroQuery->where('nombre', 'like', "%{$termino}%")
+                            ->orWhere('codigo', 'like', "%{$termino}%");
+                    });
+            });
+        }
+
+        if (in_array($estado, ['activo', 'inactivo'], true)) {
+            $clientesQuery->where('estado', $estado);
+        }
+
+        $centrosQuery = CentroCosto::with('cliente')->orderBy('nombre');
+
+        if ($termino !== '') {
+            $centrosQuery->where(function ($query) use ($termino) {
+                $query->where('nombre', 'like', "%{$termino}%")
+                    ->orWhere('codigo', 'like', "%{$termino}%")
+                    ->orWhereHas('cliente', function ($clienteQuery) use ($termino) {
+                        $clienteQuery->where('rut', 'like', "%{$termino}%")
+                            ->orWhere('nombre', 'like', "%{$termino}%")
+                            ->orWhere('nombre_comercial', 'like', "%{$termino}%");
+                    });
+            });
+        }
+
+        if (in_array($estado, ['activo', 'inactivo'], true)) {
+            $centrosQuery->where('estado', $estado);
+        }
+
+        $clientes = $clientesQuery->paginate(12)->withQueryString();
+        $centrosCosto = $centrosQuery->paginate(12, ['*'], 'centros_page')->withQueryString();
+        $clientesSelect = Cliente::activos()
+            ->orderBy('nombre')
+            ->get(['id', 'nombre', 'nombre_comercial']);
+
+        $resumen = [
+            'clientes' => Cliente::count(),
+            'clientes_activos' => Cliente::where('estado', 'activo')->count(),
+            'centros' => CentroCosto::count(),
+            'centros_activos' => CentroCosto::where('estado', 'activo')->count(),
+        ];
+
+        return view('comercial::clientes.index', compact('clientes', 'centrosCosto', 'clientesSelect', 'resumen'));
     }
 
     /**
@@ -93,6 +146,7 @@ class ClienteController
                 $row = array_map('trim', str_getcsv($raw, $delimiter));
                 $clienteNombre = $row[0] ?? '';
                 $centroNombre = $row[1] ?? '';
+                $centroCodigo = trim((string) ($row[2] ?? ''));
 
                 if ($linea === 1 && in_array(mb_strtolower($clienteNombre), ['cliente', 'nombre', 'nombre_cliente'], true)) {
                     continue;
@@ -123,9 +177,13 @@ class ClienteController
                     ->exists();
 
                 if (! $centroExiste) {
+                    $codigoDisponible = $centroCodigo !== ''
+                        && ! CentroCosto::where('codigo', $centroCodigo)->exists();
+
                     CentroCosto::create([
                         'cliente_id' => $cliente->id,
                         'nombre' => $centroNombre,
+                        'codigo' => $codigoDisponible ? $centroCodigo : null,
                         'estado' => 'activo',
                     ]);
                     $centrosCreados++;

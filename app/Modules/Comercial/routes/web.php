@@ -57,6 +57,7 @@ Route::middleware(['auth', 'consentimiento', 'force.password', 'modulo:comercial
     // Centros de Costo
     Route::get('centros-costo', [CentroCostoController::class, 'index'])->name('centros-costo.index');
     Route::get('centros-costo/create', [CentroCostoController::class, 'create'])->middleware('modulo:comercial,puede_crear')->name('centros-costo.create');
+    Route::post('centros-costo/importar', [CentroCostoController::class, 'importar'])->middleware('modulo:comercial,puede_crear')->name('centros-costo.importar');
     Route::post('centros-costo', [CentroCostoController::class, 'store'])->middleware('modulo:comercial,puede_crear')->name('centros-costo.store');
     Route::get('centros-costo/{centroCosto}', [CentroCostoController::class, 'show'])->name('centros-costo.show');
     Route::get('centros-costo/{centroCosto}/edit', [CentroCostoController::class, 'edit'])->middleware('modulo:comercial,puede_editar')->name('centros-costo.edit');

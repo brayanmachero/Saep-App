@@ -5,6 +5,7 @@ namespace App\Modules\Comercial\Http\Controllers;
 use App\Modules\Comercial\Models\CentroCosto;
 use App\Modules\Comercial\Models\Cliente;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class CentroCostoController
@@ -14,11 +15,7 @@ class CentroCostoController
      */
     public function index()
     {
-        $centrosCosto = CentroCosto::with('cliente')
-            ->orderBy('nombre')
-            ->paginate(20);
-
-        return view('comercial::centros-costo.index', compact('centrosCosto'));
+        return redirect()->route('comercial.clientes.index', ['tab' => 'centros']);
     }
 
     /**
@@ -62,8 +59,85 @@ class CentroCostoController
             ], 201);
         }
 
-        return redirect()->route('comercial.centros-costo.index')
+        return redirect()->route('comercial.clientes.index', ['tab' => 'centros'])
             ->with('success', 'Centro de costo creado');
+    }
+
+    public function importar(Request $request)
+    {
+        $validated = $request->validate([
+            'archivo' => ['required', 'file', 'mimes:csv,txt', 'max:4096'],
+        ]);
+
+        $resultado = DB::transaction(function () use ($validated) {
+            $file = fopen($validated['archivo']->getRealPath(), 'r');
+            $clientesCreados = 0;
+            $centrosCreados = 0;
+            $linea = 0;
+
+            while (($raw = fgets($file)) !== false) {
+                $linea++;
+                $raw = trim($raw);
+
+                if ($raw === '') {
+                    continue;
+                }
+
+                $delimiter = str_contains($raw, ';') ? ';' : ',';
+                $row = array_map('trim', str_getcsv($raw, $delimiter));
+                $clienteNombre = $row[0] ?? '';
+                $centroNombre = $row[1] ?? '';
+                $centroCodigo = trim((string) ($row[2] ?? ''));
+
+                if ($linea === 1 && in_array(mb_strtolower($clienteNombre), ['cliente', 'nombre_cliente'], true)) {
+                    continue;
+                }
+
+                if ($clienteNombre === '' || $centroNombre === '') {
+                    continue;
+                }
+
+                $cliente = Cliente::where('nombre', $clienteNombre)
+                    ->orWhere('nombre_comercial', $clienteNombre)
+                    ->first();
+
+                if (! $cliente) {
+                    $cliente = Cliente::create([
+                        'nombre' => $clienteNombre,
+                        'estado' => 'activo',
+                    ]);
+                    $clientesCreados++;
+                }
+
+                $centroExiste = CentroCosto::where('cliente_id', $cliente->id)
+                    ->where('nombre', $centroNombre)
+                    ->exists();
+
+                if ($centroExiste) {
+                    continue;
+                }
+
+                $codigoDisponible = $centroCodigo !== ''
+                    && ! CentroCosto::where('codigo', $centroCodigo)->exists();
+
+                CentroCosto::create([
+                    'cliente_id' => $cliente->id,
+                    'nombre' => $centroNombre,
+                    'codigo' => $codigoDisponible ? $centroCodigo : null,
+                    'estado' => 'activo',
+                ]);
+                $centrosCreados++;
+            }
+
+            fclose($file);
+
+            return compact('clientesCreados', 'centrosCreados');
+        });
+
+        return redirect()->route('comercial.clientes.index', ['tab' => 'centros'])->with(
+            'success',
+            "Importación completada: {$resultado['clientesCreados']} clientes y {$resultado['centrosCreados']} centros creados."
+        );
     }
 
     /**
@@ -113,7 +187,7 @@ class CentroCostoController
     {
         $centroCosto->delete();
 
-        return redirect()->route('comercial.centros-costo.index')
+        return redirect()->route('comercial.clientes.index', ['tab' => 'centros'])
             ->with('success', 'Centro de costo eliminado');
     }
 }
