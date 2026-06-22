@@ -182,12 +182,12 @@
                     @if(auth()->user()->tieneAcceso('comercial', 'puede_editar'))
                     <a href="{{ route('comercial.parametros.index') }}" class="nav-item {{ request()->routeIs('comercial.parametros.*') ? 'active' : '' }}">
                         <i class="bi bi-sliders"></i>
-                        <span>Mantenedor Comercial</span>
+                        <span>Mantenedor</span>
                     </a>
                     @endif
                     <a href="{{ route('comercial.reportes.cotizaciones') }}" class="nav-item {{ request()->routeIs('comercial.reportes.*') ? 'active' : '' }}">
                         <i class="bi bi-bar-chart-fill"></i>
-                        <span>Reportes Comerciales</span>
+                        <span>Reportes</span>
                     </a>
                 </div>
             </div>
