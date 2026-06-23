@@ -201,6 +201,19 @@ class ClienteController
         );
     }
 
+    public function plantillaImportacion()
+    {
+        return response()->streamDownload(function () {
+            $salida = fopen('php://output', 'w');
+            fwrite($salida, "\xEF\xBB\xBF");
+            fputcsv($salida, ['cliente', 'centro_costo'], ';');
+            fputcsv($salida, ['Cliente Ejemplo', 'Centro de Costo Ejemplo'], ';');
+            fclose($salida);
+        }, 'plantilla-clientes-centros.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
     /**
      * Mostrar cliente
      */

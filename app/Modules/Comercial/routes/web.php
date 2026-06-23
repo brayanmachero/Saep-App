@@ -48,6 +48,7 @@ Route::middleware(['auth', 'consentimiento', 'force.password', 'modulo:comercial
     // Clientes
     Route::get('clientes', [ClienteController::class, 'index'])->name('clientes.index');
     Route::get('clientes/create', [ClienteController::class, 'create'])->middleware('modulo:comercial,puede_crear')->name('clientes.create');
+    Route::get('clientes/importar/plantilla', [ClienteController::class, 'plantillaImportacion'])->middleware('modulo:comercial,puede_crear')->name('clientes.importar.plantilla');
     Route::post('clientes/importar', [ClienteController::class, 'importar'])->middleware('modulo:comercial,puede_crear')->name('clientes.importar');
     Route::post('clientes', [ClienteController::class, 'store'])->middleware('modulo:comercial,puede_crear')->name('clientes.store');
     Route::get('clientes/{cliente}', [ClienteController::class, 'show'])->name('clientes.show');
@@ -58,6 +59,7 @@ Route::middleware(['auth', 'consentimiento', 'force.password', 'modulo:comercial
     // Centros de Costo
     Route::get('centros-costo', [CentroCostoController::class, 'index'])->name('centros-costo.index');
     Route::get('centros-costo/create', [CentroCostoController::class, 'create'])->middleware('modulo:comercial,puede_crear')->name('centros-costo.create');
+    Route::get('centros-costo/importar/plantilla', [CentroCostoController::class, 'plantillaImportacion'])->middleware('modulo:comercial,puede_crear')->name('centros-costo.importar.plantilla');
     Route::post('centros-costo/importar', [CentroCostoController::class, 'importar'])->middleware('modulo:comercial,puede_crear')->name('centros-costo.importar');
     Route::post('centros-costo', [CentroCostoController::class, 'store'])->middleware('modulo:comercial,puede_crear')->name('centros-costo.store');
     Route::get('centros-costo/{centroCosto}', [CentroCostoController::class, 'show'])->name('centros-costo.show');

@@ -281,8 +281,13 @@
     <div class="directory-grid">
         <section class="glass-card">
             <div class="section-heading">
-                <h3>Importar clientes + centros</h3>
-                <span>CSV o TXT</span>
+                <div>
+                    <h3>Importar clientes + centros</h3>
+                    <span>cliente + centro_costo</span>
+                </div>
+                <a href="{{ route('comercial.clientes.importar.plantilla') }}" class="btn-secondary">
+                    <i class="bi bi-download"></i> Plantilla CSV
+                </a>
             </div>
             <form method="POST" action="{{ route('comercial.clientes.importar') }}" enctype="multipart/form-data" class="quick-form">
                 @csrf
@@ -299,8 +304,13 @@
 
         <section class="glass-card">
             <div class="section-heading">
-                <h3>Importar centros por cliente</h3>
-                <span>CSV o TXT</span>
+                <div>
+                    <h3>Importar centros por cliente</h3>
+                    <span>cliente + centro_costo</span>
+                </div>
+                <a href="{{ route('comercial.centros-costo.importar.plantilla') }}" class="btn-secondary">
+                    <i class="bi bi-download"></i> Plantilla CSV
+                </a>
             </div>
             <form method="POST" action="{{ route('comercial.centros-costo.importar') }}" enctype="multipart/form-data" class="quick-form">
                 @csrf
