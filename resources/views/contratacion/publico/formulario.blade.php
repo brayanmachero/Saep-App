@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Formulario de Documentación de Ingreso — SAEP</title>
+    <link rel="icon" href="{{ asset('brand/wp/saep_favicon.svg') }}" type="image/svg+xml">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -224,7 +225,7 @@
 <!-- Top bar -->
 <div class="topbar">
     <div class="topbar__brand">
-        <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg" alt="SAEP">
+        <img src="{{ asset('brand/wp/Logo_Saep.svg') }}" alt="SAEP">
         <span>Portal de Contratación</span>
     </div>
     <div class="topbar__user">

@@ -7,7 +7,9 @@ use App\Mail\ContratacionNuevoPostulanteMail;
 use App\Models\Configuracion;
 use App\Models\ContratacionSyncLog;
 use App\Models\PostulanteContratacion;
+use App\Models\RegistroTratamientoDatos;
 use App\Services\OneDriveService;
+use App\Support\PrivacyPolicy;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use setasign\Fpdi\Fpdi;
@@ -285,6 +287,14 @@ class ContratacionPublicoController extends Controller
             $postulante->update($datos);
         }
         $this->deleteOldDocuments($rutasAnteriores, array_intersect_key($datos, array_flip(self::DOCUMENT_FIELDS)));
+
+        RegistroTratamientoDatos::registrar(
+            $esNuevo ? 'postulacion_publica_creada' : 'postulacion_publica_actualizada',
+            'postulantes_contratacion',
+            $postulante->id,
+            'personal',
+            "Postulación pública {$postulante->folio} recibida con consentimiento v" . PrivacyPolicy::VERSION
+        );
 
         // Enviar emails solo en la primera postulación
         if ($esNuevo) {
@@ -892,13 +902,16 @@ class ContratacionPublicoController extends Controller
 
     private function consentPayload(Request $request): array
     {
+        $acceptedAt = now();
+
         return [
-            'consentimiento_datos'      => true,
-            'consentimiento_at'         => now(),
-            'consentimiento_version'    => self::PRIVACY_VERSION,
-            'consentimiento_texto'      => self::PRIVACY_TEXT,
-            'consentimiento_ip'         => $request->ip(),
-            'consentimiento_user_agent' => Str::limit((string) $request->userAgent(), 500, ''),
+            'consentimiento_datos'        => true,
+            'consentimiento_at'           => $acceptedAt,
+            'consentimiento_aceptado_at'  => $acceptedAt,
+            'consentimiento_version'      => PrivacyPolicy::VERSION,
+            'consentimiento_texto'        => PrivacyPolicy::publicHiringConsentText(),
+            'consentimiento_ip'           => $request->ip(),
+            'consentimiento_user_agent'   => Str::limit((string) $request->userAgent(), 500, ''),
         ];
     }
 

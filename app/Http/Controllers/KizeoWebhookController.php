@@ -331,7 +331,7 @@ class KizeoWebhookController extends Controller
             $fechaRef = $esDevolucion ? $data['fecha_hora_devolucion'] : $data['fecha_hora'];
 
             // Generar PDF con DomPDF
-            $pdf = Pdf::loadView($pdfView, ['data' => $data, 'logoUrl' => 'https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg'])
+            $pdf = Pdf::loadView($pdfView, ['data' => $data, 'logoUrl' => public_path('brand/wp/Logo_Saep.svg')])
                 ->setPaper('a4', 'portrait')
                 ->setOptions([
                     'isRemoteEnabled'      => true,

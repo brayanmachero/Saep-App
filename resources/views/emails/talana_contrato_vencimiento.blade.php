@@ -8,7 +8,7 @@
 
     {{-- Header --}}
     <tr><td style="background:#0f1b4c;padding:28px 40px;text-align:center;">
-        <img src="https://saep.cl/wp-content/uploads/2023/11/Logo-Saep_footer.svg" alt="SAEP" width="100" style="display:inline-block;">
+        <img src="{{ asset('brand/wp/Logo-Saep_footer.svg') }}" alt="SAEP" width="100" style="display:inline-block;">
     </td></tr>
     <tr><td style="height:4px;background:linear-gradient(90deg,#f97316,#fb923c,#f97316);"></td></tr>
 

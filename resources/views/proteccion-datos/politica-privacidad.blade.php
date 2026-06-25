@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Política de Protección de Datos Personales — SAEP</title>
+    <link rel="icon" href="{{ asset('brand/wp/saep_favicon.svg') }}" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -16,21 +17,39 @@
             line-height: 1.7;
         }
         .policy-header {
-            background: linear-gradient(135deg, #0f1b4c 0%, #1e3a8a 100%);
+            position: relative;
+            overflow: hidden;
+            isolation: isolate;
+            background:
+                linear-gradient(135deg, rgba(15, 27, 76, 0.96) 0%, rgba(30, 58, 138, 0.84) 58%, rgba(249, 115, 22, 0.36) 100%),
+                url("{{ asset('brand/wp/optimized/header_servicios_digitalizacion.webp') }}") center/cover no-repeat;
             color: #fff;
-            padding: 3rem 2rem;
+            padding: 3.25rem 2rem 3.75rem;
             text-align: center;
+            box-shadow: inset 0 -80px 100px rgba(15, 27, 76, 0.45);
         }
-        .policy-header img { height: 48px; margin-bottom: 1.5rem; }
+        .policy-header::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            background:
+                linear-gradient(180deg, rgba(15, 27, 76, 0.05) 0%, rgba(15, 27, 76, 0.72) 100%),
+                url("data:image/svg+xml,%3Csvg width='72' height='72' viewBox='0 0 72 72' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.08'%3E%3Cpath d='M12 36h48M36 12v48'/%3E%3C/g%3E%3C/svg%3E");
+        }
+        .policy-header > * { position: relative; z-index: 1; }
+        .policy-header img { height: 56px; margin-bottom: 1.5rem; filter: drop-shadow(0 10px 24px rgba(0,0,0,0.22)); }
         .policy-header h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.5rem; }
-        .policy-header p { opacity: 0.8; font-size: 0.95rem; }
+        .policy-header p { color: rgba(255,255,255,0.84); font-size: 0.95rem; }
         .policy-meta {
             display: flex; gap: 2rem; justify-content: center;
             margin-top: 1.5rem; flex-wrap: wrap;
         }
         .policy-meta span {
-            background: rgba(255,255,255,0.15); padding: 0.4rem 1rem;
+            background: rgba(255,255,255,0.16); padding: 0.4rem 1rem;
+            border: 1px solid rgba(255,255,255,0.18);
             border-radius: 20px; font-size: 0.8rem;
+            backdrop-filter: blur(12px);
         }
         .policy-container {
             max-width: 860px; margin: -2rem auto 3rem; padding: 0 1.5rem;
@@ -109,11 +128,11 @@
 <body>
 
 <div class="policy-header">
-    <img src="https://saep.cl/wp-content/uploads/2023/11/Logo-Saep_footer.svg" alt="SAEP">
+    <img src="{{ asset('brand/wp/Logo-Saep_footer.svg') }}" alt="SAEP">
     <h1>Política de Protección de Datos Personales</h1>
     <p>Conforme a la Ley N° 21.719 y la Ley N° 19.628 reformada</p>
     <div class="policy-meta">
-        <span><i class="bi bi-calendar3"></i> Versión 1.0 — Marzo 2026</span>
+        <span><i class="bi bi-calendar3"></i> Versión 1.1 — Junio 2026</span>
         <span><i class="bi bi-building"></i> SAEP SpA</span>
         <span><i class="bi bi-shield-check"></i> Ley 21.719</span>
     </div>
@@ -155,7 +174,7 @@
 
         <h2 id="s2"><i class="bi bi-file-earmark-text"></i> 2. Objeto y Alcance</h2>
         <p>La presente Política de Tratamiento de Datos Personales tiene por objeto informar a los titulares de datos personales sobre las prácticas de SAEP SpA en relación con la recolección, tratamiento, almacenamiento, comunicación y eliminación de sus datos personales, en cumplimiento de la Ley N° 19.628, reformada por la Ley N° 21.719.</p>
-        <p>Esta política aplica a todos los datos personales tratados a través de la plataforma SAEP y sus módulos: gestión de formularios, seguridad y salud en el trabajo (SST), charlas, auditorías, inspecciones, accidentes laborales, Ley Karin y procesos de reclutamiento/contratación.</p>
+        <p>Esta política aplica a todos los datos personales tratados a través de la plataforma SAEP y sus módulos: gestión de formularios, seguridad y salud en el trabajo (SST), charlas, auditorías, inspecciones, accidentes laborales, Ley Karin y portales públicos de postulación o recepción de antecedentes.</p>
 
         <h2 id="s3"><i class="bi bi-database"></i> 3. Datos Personales que Tratamos</h2>
 
@@ -185,6 +204,7 @@
             <li>Información del navegador (user agent)</li>
             <li>Fecha y hora de último acceso</li>
             <li>Identificador Azure (si aplica SSO)</li>
+            <li>Identificador de autenticación Google en portales públicos, cuando el titular ingresa por ese medio</li>
         </ul>
 
         <h3>3.4 Datos sensibles</h3>
@@ -212,7 +232,7 @@
                 <tr><td>Registro de auditorías de seguridad</td><td>Auditorías SST</td></tr>
                 <tr><td>Investigación y registro de accidentes laborales</td><td>Accidentes SST</td></tr>
                 <tr><td>Gestión de denuncias de Ley Karin</td><td>Ley Karin</td></tr>
-                <tr><td>Recolección documental, verificación de antecedentes y gestión de postulantes</td><td>Contratación RRHH</td></tr>
+                <tr><td>Gestión de postulaciones, documentación de ingreso y revisión por RRHH</td><td>Contratación pública</td></tr>
                 <tr><td>Generación de reportes y documentos PDF</td><td>Exportaciones</td></tr>
                 <tr><td>Firma electrónica de documentos</td><td>Firmas</td></tr>
             </tbody>
@@ -270,7 +290,7 @@
 
         <div class="highlight-box">
             <strong><i class="bi bi-info-circle"></i> ¿Cómo ejercer sus derechos?</strong><br>
-            Puede ejercer sus derechos ARCO directamente desde la plataforma SAEP en la sección <strong>"Protección de Datos"</strong>, o enviando una solicitud a <strong>protecciondatos@saep.cl</strong>. El plazo máximo de respuesta es de <strong>30 días hábiles</strong> desde la recepción de su solicitud.
+            Puede ejercer sus derechos ARCO directamente desde la plataforma SAEP en la sección <strong>"Protección de Datos"</strong>, o enviando una solicitud a <strong>protecciondatos@saep.cl</strong>. El plazo máximo de respuesta es de <strong>30 días corridos</strong> desde la recepción de su solicitud.
         </div>
 
         <p>En caso de que su solicitud sea rechazada o no reciba respuesta oportuna, tiene derecho a recurrir ante la <strong>Agencia de Protección de Datos Personales</strong> conforme al artículo 41 de la ley reformada.</p>
@@ -288,7 +308,7 @@
         </ul>
 
         <h2 id="s9"><i class="bi bi-clock-history"></i> 9. Conservación de Datos</h2>
-        <p>Los datos personales serán conservados durante el tiempo necesario para cumplir con la finalidad para la cual fueron recopilados:</p>
+        <p>Los datos personales serán conservados durante el tiempo necesario para cumplir con la finalidad para la cual fueron recopilados. Cuando corresponda, la supresión se ejecutará mediante un flujo autorizado que evalúa causales legales, obligaciones de conservación y evidencia de ejecución:</p>
         <table>
             <thead><tr><th>Tipo de dato</th><th>Período de conservación</th></tr></thead>
             <tbody>
@@ -296,6 +316,7 @@
                 <tr><td>Registros SST (charlas, auditorías, inspecciones)</td><td>5 años desde su creación</td></tr>
                 <tr><td>Registros de accidentes laborales</td><td>10 años (obligación legal)</td></tr>
                 <tr><td>Registros Ley Karin</td><td>Según normativa legal vigente</td></tr>
+                <tr><td>Postulaciones y documentación de ingreso</td><td>Durante el proceso de selección/contratación y los plazos necesarios para obligaciones laborales, reclamos o auditoría</td></tr>
                 <tr><td>Logs de auditoría</td><td>3 años</td></tr>
                 <tr><td>Datos de usuario inactivo</td><td>3 años desde la desvinculación, luego se anonimizan</td></tr>
             </tbody>
@@ -329,7 +350,7 @@
 
         <h2 id="s14"><i class="bi bi-arrow-repeat"></i> 14. Modificaciones a la Política</h2>
         <p>SAEP se reserva el derecho de modificar esta política en cualquier momento. Cualquier cambio será notificado a los titulares a través de la plataforma y requerirá la renovación del consentimiento cuando los cambios sean sustanciales.</p>
-        <p>Última actualización: <strong>Marzo 2026</strong> | Versión: <strong>1.0</strong></p>
+        <p>Última actualización: <strong>Junio 2026</strong> | Versión: <strong>1.1</strong></p>
 
         <div style="text-align: center; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 2px solid #e5e7eb;">
             <a href="{{ url()->previous() !== url()->current() ? url()->previous() : url('/') }}" class="btn-back">

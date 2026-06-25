@@ -94,8 +94,8 @@
                 <tr style="border-bottom: 1px solid var(--border-color);">
                     <td style="padding: 0.75rem 1rem; font-weight: 600; color: var(--primary-color);">{{ $sol->numero_solicitud }}</td>
                     <td style="padding: 0.75rem 1rem; color: var(--text-main);">
-                        {{ $sol->user->nombre_completo }}
-                        <div style="font-size: 0.75rem; color: var(--text-muted);">{{ $sol->user->email }}</div>
+                        {{ $sol->user?->nombre_completo ?? 'Titular no disponible' }}
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">{{ $sol->user?->email ?? '—' }}</div>
                     </td>
                     <td style="padding: 0.75rem 1rem; color: var(--text-main);">{{ $sol->nombre_tipo }}</td>
                     <td style="padding: 0.75rem 1rem; color: var(--text-muted);">{{ $sol->fecha_solicitud->format('d/m/Y') }}</td>

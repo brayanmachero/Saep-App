@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Formulario de Denuncia — Ley Karin</title>
+    <link rel="icon" href="{{ asset('brand/wp/saep_favicon.svg') }}" type="image/svg+xml">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -285,7 +286,7 @@
 <!-- Top Bar -->
 <div class="topbar">
     <div class="topbar__left">
-        <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg" alt="SAEP">
+        <img src="{{ asset('brand/wp/Logo_Saep.svg') }}" alt="SAEP">
         <span>Canal de Denuncia — Ley Karin</span>
     </div>
     <div class="topbar__user">
@@ -691,7 +692,7 @@
                             <strong>Compartir mi ubicación (opcional)</strong><br>
                             <span style="font-size:.8rem;color:#64748b;">
                                 Autorizo compartir mi ubicación geográfica para fines de registro
-                                conforme al Art. 16 sexies de la Ley 21.719. Esta información es
+                                de esta denuncia conforme a la normativa de protección de datos. Esta información es
                                 estrictamente confidencial y no será compartida con terceros.
                             </span>
                         </div>
@@ -706,9 +707,10 @@
                             <strong>Acepto el tratamiento de datos personales <span style="color:#dc2626;">*</span></strong><br>
                             <span style="font-size:.8rem;color:#64748b;">
                                 Autorizo el tratamiento de mis datos personales para la gestión de esta
-                                denuncia conforme a la Ley 21.719 sobre Protección de Datos Personales.
+                                denuncia conforme a la Ley 19.628 y su reforma por Ley 21.719 sobre Protección de Datos Personales.
                                 Los datos serán tratados con estricta confidencialidad y serán utilizados
-                                únicamente para los fines de esta investigación.
+                                únicamente para los fines de esta investigación. Puedes revisar la
+                                <a href="{{ route('proteccion-datos.politica-privacidad') }}" target="_blank" style="color:#0f1b4c;font-weight:700;">política de privacidad</a>.
                             </span>
                         </div>
                     </label>

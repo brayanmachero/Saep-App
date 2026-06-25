@@ -8,8 +8,10 @@ use App\Models\ArchivoAdjunto;
 use App\Models\CentroCosto;
 use App\Models\LeyKarin;
 use App\Models\LeyKarinLog;
+use App\Models\RegistroTratamientoDatos;
 use App\Models\User;
 use App\Notifications\AppNotification;
+use App\Support\PrivacyPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Session;
@@ -167,6 +169,11 @@ class LeyKarinPublicoController extends Controller
             'es_tercero'               => $esTercero,
             'tercero_nombre'           => $esTercero ? ($data['tercero_nombre'] ?? null) : null,
             'tercero_rut'              => $esTercero ? ($data['tercero_rut'] ?? null) : null,
+            'consentimiento_version'    => PrivacyPolicy::VERSION,
+            'consentimiento_texto'      => PrivacyPolicy::publicLeyKarinConsentText(),
+            'consentimiento_aceptado_at'=> now(),
+            'consentimiento_ip'         => $request->ip(),
+            'consentimiento_user_agent' => $request->userAgent(),
         ]);
 
         // Subir evidencias (almacenamiento privado)
@@ -191,6 +198,14 @@ class LeyKarinPublicoController extends Controller
 
         // Audit log
         LeyKarinLog::registrar($caso->id, 'CREADA', 'Denuncia creada vía formulario web público' . ($esAnonima ? ' (anónima)' : ''), null);
+
+        RegistroTratamientoDatos::registrar(
+            'denuncia_publica_creada',
+            'ley_karin',
+            $caso->id,
+            'sensible',
+            "Denuncia pública {$caso->folio} recibida con consentimiento v" . PrivacyPolicy::VERSION
+        );
 
         // Notificaciones
         $caso->load('centroCosto');

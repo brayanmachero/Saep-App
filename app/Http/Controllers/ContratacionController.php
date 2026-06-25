@@ -7,6 +7,7 @@ use App\Mail\ContratacionNuevoPostulanteMail;
 use App\Models\Configuracion;
 use App\Models\ContratacionSyncLog;
 use App\Models\PostulanteContratacion;
+use App\Models\RegistroTratamientoDatos;
 use App\Services\OneDriveService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -122,6 +123,14 @@ class ContratacionController extends Controller
         }
 
         $postulante = PostulanteContratacion::create($datos);
+
+        RegistroTratamientoDatos::registrar(
+            'postulacion_manual_creada',
+            'postulantes_contratacion',
+            $postulante->id,
+            'personal',
+            "Postulante {$postulante->folio} creado manualmente por RRHH"
+        );
 
         // Acuse al postulante
         try {
@@ -437,6 +446,14 @@ class ContratacionController extends Controller
             'folio'      => $folio,
             'deleted_by' => auth()->id(),
         ]);
+
+        RegistroTratamientoDatos::registrar(
+            'eliminacion',
+            'postulantes_contratacion',
+            $postulante->id,
+            'personal',
+            "Postulante {$folio} eliminado por usuario autorizado"
+        );
 
         return redirect()->route('contratacion.index')
             ->with('success', "Registro {$folio} eliminado permanentemente.");

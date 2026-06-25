@@ -211,7 +211,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 
 @php
     $maxProg = max(1, collect($mesesData)->max('prog'));
-    $logoUrl = 'https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg';
+    $logoUrl = public_path('brand/wp/Logo_Saep.svg');
 
     // Category-level stats for chart
     $catStats = [];

@@ -396,6 +396,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('modulo:proteccion_datos,puede_editar')->group(function () {
         Route::get('/proteccion-datos/administrar', [ProteccionDatosController::class, 'administrar'])->name('proteccion-datos.administrar');
         Route::put('/proteccion-datos/solicitud/{solicitud}/responder', [ProteccionDatosController::class, 'responderSolicitud'])->name('proteccion-datos.responder-solicitud');
+        Route::post('/proteccion-datos/solicitud/{solicitud}/ejecutar-supresion', [ProteccionDatosController::class, 'ejecutarSupresion'])->name('proteccion-datos.ejecutar-supresion');
         Route::get('/proteccion-datos/registro-tratamiento', [ProteccionDatosController::class, 'registroTratamiento'])->name('proteccion-datos.registro-tratamiento');
     });
 

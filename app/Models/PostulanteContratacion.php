@@ -5,9 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PostulanteContratacion extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'postulantes_contratacion';
 
     protected $fillable = [
@@ -18,12 +21,16 @@ class PostulanteContratacion extends Model
         'licencia_conducir_frontal', 'licencia_conducir_reverso',
         'estado', 'observaciones',
         'consentimiento_datos', 'consentimiento_at', 'consentimiento_version',
-        'consentimiento_texto', 'consentimiento_ip', 'consentimiento_user_agent',
+        'consentimiento_texto',
+        'consentimiento_aceptado_at', 'consentimiento_ip', 'consentimiento_user_agent',
+        'anonimizado_at',
     ];
 
     protected $casts = [
         'consentimiento_datos' => 'boolean',
-        'consentimiento_at'    => 'datetime',
+        'consentimiento_at' => 'datetime',
+        'consentimiento_aceptado_at' => 'datetime',
+        'anonimizado_at' => 'datetime',
     ];
 
     public const DOCUMENTOS_OBLIGATORIOS = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa'];
