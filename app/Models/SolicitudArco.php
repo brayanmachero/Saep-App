@@ -14,6 +14,9 @@ class SolicitudArco extends Model
         'tipo',
         'descripcion',
         'datos_afectados',
+        'causal_invocada',
+        'antecedentes',
+        'solicita_bloqueo_temporal',
         'estado',
         'respuesta',
         'responsable_id',
@@ -21,22 +24,35 @@ class SolicitudArco extends Model
         'fecha_respuesta',
         'fecha_vencimiento',
         'motivo_rechazo',
+        'estado_ejecucion',
+        'resultado_ejecucion',
+        'observacion_ejecucion',
+        'fecha_ejecucion',
+        'ejecutada_por',
     ];
 
     protected $casts = [
         'fecha_solicitud' => 'datetime',
         'fecha_respuesta' => 'datetime',
         'fecha_vencimiento' => 'datetime',
+        'solicita_bloqueo_temporal' => 'boolean',
+        'resultado_ejecucion' => 'array',
+        'fecha_ejecucion' => 'datetime',
     ];
 
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withTrashed();
     }
 
     public function responsable()
     {
-        return $this->belongsTo(User::class, 'responsable_id');
+        return $this->belongsTo(User::class, 'responsable_id')->withTrashed();
+    }
+
+    public function ejecutor()
+    {
+        return $this->belongsTo(User::class, 'ejecutada_por')->withTrashed();
     }
 
     public static function generarNumero(): string

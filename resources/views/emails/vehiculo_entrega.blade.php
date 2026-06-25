@@ -8,7 +8,7 @@
     <tr>
         <td bgcolor="#1e3a8a" style="background-color:#1e3a8a;padding:35px 30px;text-align:center;color:#ffffff;border-bottom:4px solid #f97316;">
             <div style="margin-bottom:20px;">
-                <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg" alt="SAEP" width="160" style="max-height:48px;width:auto;display:inline-block;" />
+                <img src="{{ asset('brand/wp/Logo_Saep.svg') }}" alt="SAEP" width="160" style="max-height:48px;width:auto;display:inline-block;" />
             </div>
             <h1 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.025em;">Acta de Entrega de Vehículo</h1>
             <p style="margin:8px 0 0;font-size:15px;opacity:0.9;">Confirmación oficial de recepción y custodia</p>

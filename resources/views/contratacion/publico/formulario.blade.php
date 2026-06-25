@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Formulario de Documentación de Ingreso — SAEP</title>
+    <link rel="icon" href="{{ asset('brand/wp/saep_favicon.svg') }}" type="image/svg+xml">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -178,6 +179,16 @@
             padding: .85rem 1rem; margin-bottom: 1.5rem;
             font-size: .85rem; color: #166534;
         }
+        .consent-box {
+            background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px;
+            padding: 1.1rem 1.25rem; margin-bottom: 1.5rem;
+        }
+        .consent-box label {
+            display: flex; gap: .75rem; align-items: flex-start;
+            font-size: .84rem; color: #334155; line-height: 1.55; cursor: pointer;
+        }
+        .consent-box input { width: 20px; height: 20px; margin-top: 2px; flex-shrink: 0; accent-color: #0369a1; }
+        .consent-box a { color: #0369a1; font-weight: 700; text-decoration: none; }
 
         @media (max-width: 680px) {
             .page { padding: 0 .5rem 3rem; }
@@ -193,7 +204,7 @@
 <!-- Top bar -->
 <div class="topbar">
     <div class="topbar__brand">
-        <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg" alt="SAEP">
+        <img src="{{ asset('brand/wp/Logo_Saep.svg') }}" alt="SAEP">
         <span>Portal de Contratación</span>
     </div>
     <div class="topbar__user">
@@ -385,6 +396,19 @@
                     @endforeach
                 </div>
             </div>
+        </div>
+
+        <div class="consent-box">
+            <label>
+                <input type="checkbox" name="consentimiento_datos" value="1" required {{ old('consentimiento_datos') ? 'checked' : '' }}>
+                <span>
+                    <strong>Acepto el tratamiento de mis datos personales y documentos de postulación.</strong><br>
+                    Autorizo a SAEP a tratar mi nombre, RUT, correo verificado por Google y documentos adjuntos para gestionar este proceso de contratación, validar antecedentes laborales, contactar a RRHH y cumplir obligaciones legales aplicables.
+                    Conozco que puedo ejercer mis derechos de acceso, rectificación, supresión, oposición y portabilidad a través de
+                    <a href="{{ route('proteccion-datos.politica-privacidad') }}" target="_blank">la política de privacidad</a>.
+                </span>
+            </label>
+            @error('consentimiento_datos') <div class="invalid-feedback" style="display:block;margin-left:2rem;">{{ $message }}</div> @enderror
         </div>
 
         <!-- Enviar -->

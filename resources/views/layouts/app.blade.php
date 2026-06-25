@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'SAEP Platform')</title>
+    <link rel="icon" href="{{ asset('brand/wp/saep_favicon.svg') }}" type="image/svg+xml">
 
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
@@ -24,8 +25,8 @@
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="logo-container">
-                <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg" alt="SAEP" class="logo-img">
-                <img src="https://saep.cl/wp-content/uploads/2023/11/Logo-Saep_footer.svg" alt="SAEP" class="logo-img-collapsed">
+                <img src="{{ asset('brand/wp/Logo_Saep.svg') }}" alt="SAEP" class="logo-img">
+                <img src="{{ asset('brand/wp/Logo-Saep_footer.svg') }}" alt="SAEP" class="logo-img-collapsed">
             </div>
             <button class="toggle-btn" id="sidebar-toggle">
                 <i class="bi bi-list"></i>

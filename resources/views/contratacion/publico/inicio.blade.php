@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Formulario de Documentación de Ingreso — SAEP</title>
+    <link rel="icon" href="{{ asset('brand/wp/saep_favicon.svg') }}" type="image/svg+xml">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -30,11 +31,15 @@
         }
         .hero-side__bg {
             position: absolute; inset: 0;
-            background: linear-gradient(135deg, #0b1437 0%, #1a237e 50%, #0ea5e9 100%);
+            background:
+                linear-gradient(90deg, rgba(11, 20, 55, 0.97) 0%, rgba(11, 20, 55, 0.84) 48%, rgba(14, 165, 233, 0.62) 100%),
+                url("{{ asset('brand/wp/optimized/servicio-de-personal-a-medida-1520x800.webp') }}") center/cover no-repeat;
         }
         .hero-side__overlay {
             position: absolute; inset: 0;
-            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            background:
+                linear-gradient(180deg, rgba(11,20,55,.05), rgba(11,20,55,.74)),
+                url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
         }
         .hero-content { position: relative; z-index: 2; }
         .hero-content .logo { height: 50px; margin-bottom: 2.5rem; filter: brightness(0) invert(1); }
@@ -161,7 +166,7 @@
         <div class="hero-side__bg"></div>
         <div class="hero-side__overlay"></div>
         <div class="hero-content">
-            <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg" alt="SAEP" class="logo">
+            <img src="{{ asset('brand/wp/Logo_Saep.svg') }}" alt="SAEP" class="logo">
             <h1>Portal de<br><span>Contratación</span></h1>
             <p>
                 Completa tu proceso de postulación de forma rápida y segura.

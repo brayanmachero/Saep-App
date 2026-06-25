@@ -76,10 +76,36 @@
                     placeholder="Indique los datos específicos a los que se refiere su solicitud (ej: nombre, teléfono, dirección, etc.)">{{ old('datos_afectados') }}</textarea>
             </div>
 
+            <div style="margin-bottom: 1.5rem;">
+                <label for="causal_invocada" style="display: block; font-weight: 600; color: var(--text-main); margin-bottom: 0.5rem; font-size: 0.9rem;">
+                    Causal invocada <span style="color: var(--text-muted); font-weight: 400;">(requerida para supresión u oposición)</span>
+                </label>
+                <input type="text" name="causal_invocada" id="causal_invocada" maxlength="200"
+                    value="{{ old('causal_invocada') }}"
+                    style="width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.9rem; background: var(--bg-color); color: var(--text-main);"
+                    placeholder="Ej: datos ya no necesarios, revocación de consentimiento, datos inexactos, oposición a interés legítimo">
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <label for="antecedentes" style="display: block; font-weight: 600; color: var(--text-main); margin-bottom: 0.5rem; font-size: 0.9rem;">
+                    Antecedentes de respaldo <span style="color: var(--text-muted); font-weight: 400;">(opcional)</span>
+                </label>
+                <textarea name="antecedentes" id="antecedentes" rows="3" maxlength="2000"
+                    style="width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.9rem; font-family: inherit; resize: vertical; background: var(--bg-color); color: var(--text-main);"
+                    placeholder="Agregue antecedentes que ayuden a evaluar la solicitud, si corresponde.">{{ old('antecedentes') }}</textarea>
+            </div>
+
+            <label style="display: flex; gap: 0.7rem; align-items: flex-start; background: var(--bg-color); border: 1px solid var(--border-color); padding: 1rem; border-radius: 8px; margin-bottom: 2rem; cursor: pointer;">
+                <input type="checkbox" name="solicita_bloqueo_temporal" value="1" {{ old('solicita_bloqueo_temporal') ? 'checked' : '' }} style="margin-top: 0.25rem;">
+                <span style="font-size: 0.85rem; color: var(--text-main); line-height: 1.5;">
+                    Solicito bloqueo temporal del tratamiento mientras se resuelve esta solicitud de rectificación, supresión u oposición.
+                </span>
+            </label>
+
             <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 1rem; margin-bottom: 2rem;">
                 <p style="font-size: 0.85rem; color: #1e40af; margin: 0;">
                     <i class="bi bi-info-circle"></i>
-                    <strong>Plazo de respuesta:</strong> Su solicitud será atendida en un plazo máximo de <strong>30 días hábiles</strong>
+                    <strong>Plazo de respuesta:</strong> Su solicitud será atendida en un plazo máximo de <strong>30 días corridos</strong>
                     conforme al artículo 11 de la Ley 19.628 reformada. Si su solicitud es rechazada o no recibe respuesta,
                     puede recurrir ante la Agencia de Protección de Datos Personales.
                 </p>

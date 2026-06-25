@@ -58,7 +58,7 @@ return [
     ],
 
     'pdf' => [
-        'logo_path' => public_path('images/saep-logo.png'),
+        'logo_path' => public_path('brand/wp/Logo_Saep.svg'),
         'font_family' => 'Arial',
         'font_size' => 10,
         'page_orientation' => 'P', // P for Portrait, L for Landscape

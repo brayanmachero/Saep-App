@@ -20,6 +20,8 @@ class LeyKarin extends Model
         'fecha_resolucion', 'fecha_plazo_investigacion',
         'estado', 'anonima', 'confidencial',
         'consentimiento_datos', 'consentimiento_geolocalizacion',
+        'consentimiento_version', 'consentimiento_texto', 'consentimiento_aceptado_at',
+        'consentimiento_ip', 'consentimiento_user_agent',
         'metodo_contacto',
         'investigador_id',
     ];
@@ -32,6 +34,7 @@ class LeyKarin extends Model
         'confidencial'               => 'boolean',
         'consentimiento_datos'       => 'boolean',
         'consentimiento_geolocalizacion' => 'boolean',
+        'consentimiento_aceptado_at' => 'datetime',
         'denunciante_latitud'        => 'decimal:7',
         'denunciante_longitud'       => 'decimal:7',
     ];

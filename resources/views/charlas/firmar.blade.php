@@ -9,7 +9,7 @@
 
     <!-- SAEP Brand Header -->
     <div style="text-align:center;padding:1.5rem 0 1rem;margin-bottom:1rem;">
-        <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg"
+        <img src="{{ asset('brand/wp/Logo_Saep.svg') }}"
              alt="SAEP" style="height:48px;margin-bottom:0.75rem;"
              onerror="this.style.display='none';document.getElementById('saep-text-fallback').style.display='block';">
         <div id="saep-text-fallback" style="display:none;font-size:1.6rem;font-weight:900;color:#0056b3;letter-spacing:0.1em;">SAEP</div>

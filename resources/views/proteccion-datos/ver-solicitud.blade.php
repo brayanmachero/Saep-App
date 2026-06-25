@@ -72,6 +72,25 @@
         </div>
         @endif
 
+        @if($solicitud->causal_invocada || $solicitud->antecedentes || $solicitud->solicita_bloqueo_temporal)
+        <div style="margin-bottom: 1.5rem;">
+            <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.5rem;">
+                <i class="bi bi-shield-exclamation" style="color: var(--primary-color);"></i> Evaluación de la Solicitud
+            </h3>
+            <div style="background: var(--bg-color); padding: 1rem 1.25rem; border-radius: 8px; color: var(--text-main); font-size: 0.9rem; line-height: 1.6;">
+                @if($solicitud->causal_invocada)
+                    <div><strong>Causal invocada:</strong> {{ $solicitud->causal_invocada }}</div>
+                @endif
+                @if($solicitud->antecedentes)
+                    <div style="margin-top: 0.5rem;"><strong>Antecedentes:</strong><br>{{ $solicitud->antecedentes }}</div>
+                @endif
+                @if($solicitud->solicita_bloqueo_temporal)
+                    <div style="margin-top: 0.5rem; color: #1d4ed8;"><i class="bi bi-pause-circle"></i> El titular solicitó bloqueo temporal del tratamiento.</div>
+                @endif
+            </div>
+        </div>
+        @endif
+
         @if($solicitud->respuesta)
         <div style="margin-bottom: 1.5rem; border-left: 3px solid var(--primary-color); padding-left: 1.25rem;">
             <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.5rem;">
@@ -89,6 +108,53 @@
                 <i class="bi bi-x-circle"></i> Motivo del Rechazo
             </h3>
             <p style="color: #7f1d1d; font-size: 0.9rem; margin: 0;">{{ $solicitud->motivo_rechazo }}</p>
+        </div>
+        @endif
+
+        @if($solicitud->fecha_ejecucion)
+        <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem;">
+            <h3 style="font-size: 0.95rem; font-weight: 600; color: #166534; margin-bottom: 0.5rem;">
+                <i class="bi bi-check2-shield"></i> Ejecución de Supresión
+            </h3>
+            <p style="color: #166534; font-size: 0.9rem; margin-bottom: 0.75rem;">
+                Ejecutada el {{ $solicitud->fecha_ejecucion->format('d/m/Y H:i') }}
+                @if($solicitud->ejecutor)
+                    por {{ $solicitud->ejecutor->nombre_completo }}.
+                @endif
+                Estado: <strong>{{ str_replace('_', ' ', $solicitud->estado_ejecucion ?? 'registrada') }}</strong>.
+            </p>
+            @if($solicitud->resultado_ejecucion)
+                <details style="font-size: 0.85rem; color: #14532d;">
+                    <summary style="cursor: pointer; font-weight: 600;">Ver resultado técnico registrado</summary>
+                    <pre style="white-space: pre-wrap; background: #dcfce7; padding: 0.8rem; border-radius: 6px; margin-top: 0.75rem; overflow-x: auto;">{{ json_encode($solicitud->resultado_ejecucion, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
+                </details>
+            @endif
+            @if($solicitud->observacion_ejecucion)
+                <p style="color: #166534; font-size: 0.85rem; margin: 0.75rem 0 0;"><strong>Observación:</strong> {{ $solicitud->observacion_ejecucion }}</p>
+            @endif
+        </div>
+        @endif
+
+        @if(in_array(auth()->user()->rol->codigo, ['SUPER_ADMIN', 'PREVENCIONISTA']) && $solicitud->tipo === 'supresion' && $solicitud->estado === 'aprobada' && !$solicitud->fecha_ejecucion)
+        <div style="background: #fff7ed; border: 1px solid #fdba74; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem;">
+            <h3 style="font-size: 0.95rem; font-weight: 600; color: #9a3412; margin-bottom: 0.5rem;">
+                <i class="bi bi-trash3"></i> Ejecutar Supresión Autorizada
+            </h3>
+            <p style="font-size: 0.85rem; color: #9a3412; line-height: 1.5; margin-bottom: 1rem;">
+                Esta acción anonimiza la cuenta del titular, revoca consentimientos, elimina archivos controlados por la aplicación y registra el resultado en auditoría. Revise obligaciones legales de conservación antes de ejecutar.
+            </p>
+            <form action="{{ route('proteccion-datos.ejecutar-supresion', $solicitud) }}" method="POST"
+                  onsubmit="return confirm('¿Confirma que la supresión fue autorizada y debe ejecutarse ahora? Esta acción no se puede deshacer desde la aplicación.')">
+                @csrf
+                <textarea name="observacion_ejecucion" rows="3" maxlength="2000"
+                    style="width: 100%; padding: 0.6rem 1rem; border: 1px solid #fdba74; border-radius: 8px; font-size: 0.9rem; font-family: inherit; resize: vertical; background: #fff; color: var(--text-main); margin-bottom: 1rem;"
+                    placeholder="Observación de ejecución o fundamento interno (opcional)..."></textarea>
+                <div style="text-align: right;">
+                    <button type="submit" style="padding: 0.7rem 1.5rem; background: #c2410c; color: #fff; border: none; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer;">
+                        <i class="bi bi-shield-check"></i> Ejecutar supresión
+                    </button>
+                </div>
+            </form>
         </div>
         @endif
 

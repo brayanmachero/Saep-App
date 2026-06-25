@@ -89,6 +89,8 @@ class GeneradorPDFService
     private function obtenerLogo(): ?string
     {
         $logoCarpetas = [
+            public_path('brand/wp/Logo_Saep.svg'),
+            public_path('brand/wp/Logo-Saep_footer.svg'),
             public_path('images/saep-logo.png'),
             public_path('images/logo.png'),
             public_path('logo.png'),
@@ -97,7 +99,10 @@ class GeneradorPDFService
         foreach ($logoCarpetas as $path) {
             if (file_exists($path)) {
                 $data = file_get_contents($path);
-                return 'data:image/png;base64,' . base64_encode($data);
+                $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+                $mime = $extension === 'svg' ? 'image/svg+xml' : 'image/png';
+
+                return "data:{$mime};base64," . base64_encode($data);
             }
         }
 

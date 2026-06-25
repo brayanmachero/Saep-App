@@ -7,7 +7,9 @@ use App\Mail\ContratacionNuevoPostulanteMail;
 use App\Models\Configuracion;
 use App\Models\MailLog;
 use App\Models\PostulanteContratacion;
+use App\Models\RegistroTratamientoDatos;
 use App\Services\OneDriveService;
+use App\Support\PrivacyPolicy;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use setasign\Fpdi\Fpdi;
@@ -110,6 +112,7 @@ class ContratacionPublicoController extends Controller
                     $fail('El RUT ingresado no es válido.');
                 }
             }],
+            'consentimiento_datos' => 'accepted',
         ], $docRules), [
             'carnet_frontal.required'              => 'El Carnet de Identidad (Frontal) es obligatorio.',
             'carnet_reverso.required'              => 'El Carnet de Identidad (Reverso) es obligatorio.',
@@ -117,6 +120,7 @@ class ContratacionPublicoController extends Controller
             'certificado_fonasa.required'          => 'El Certificado FONASA es obligatorio.',
             'licencia_conducir_frontal.required'   => 'Debes subir el frontal de la Licencia de Conducir (ya tienes el reverso).',
             'licencia_conducir_reverso.required'   => 'Debes subir el reverso de la Licencia de Conducir (ya tienes el frontal).',
+            'consentimiento_datos.accepted'        => 'Debes aceptar el tratamiento de datos personales para enviar la postulación.',
             '*.mimes'                              => 'Solo se permiten archivos JPG, PNG o PDF.',
             '*.max'                                => 'El archivo no puede superar los 5 MB.',
         ]);
@@ -132,6 +136,12 @@ class ContratacionPublicoController extends Controller
             'google_id'   => $googleUser['id'],
             'google_name' => $googleUser['name'],
             'google_avatar'=> $googleUser['avatar'],
+            'consentimiento_datos' => true,
+            'consentimiento_version' => PrivacyPolicy::VERSION,
+            'consentimiento_texto' => PrivacyPolicy::publicHiringConsentText(),
+            'consentimiento_aceptado_at' => now(),
+            'consentimiento_ip' => $request->ip(),
+            'consentimiento_user_agent' => $request->userAgent(),
         ];
 
         // Subir documentos que lleguen en este request
@@ -157,6 +167,14 @@ class ContratacionPublicoController extends Controller
         } else {
             $postulante->update($datos);
         }
+
+        RegistroTratamientoDatos::registrar(
+            $esNuevo ? 'postulacion_publica_creada' : 'postulacion_publica_actualizada',
+            'postulantes_contratacion',
+            $postulante->id,
+            'personal',
+            "Postulación pública {$postulante->folio} recibida con consentimiento v" . PrivacyPolicy::VERSION
+        );
 
         // Enviar emails solo en la primera postulación
         if ($esNuevo) {

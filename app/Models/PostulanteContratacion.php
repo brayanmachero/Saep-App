@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PostulanteContratacion extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'postulantes_contratacion';
 
     protected $fillable = [
@@ -15,6 +18,15 @@ class PostulanteContratacion extends Model
         'certificado_afp', 'certificado_fonasa',
         'licencia_conducir_frontal', 'licencia_conducir_reverso',
         'estado', 'observaciones',
+        'consentimiento_datos', 'consentimiento_version', 'consentimiento_texto',
+        'consentimiento_aceptado_at', 'consentimiento_ip', 'consentimiento_user_agent',
+        'anonimizado_at',
+    ];
+
+    protected $casts = [
+        'consentimiento_datos' => 'boolean',
+        'consentimiento_aceptado_at' => 'datetime',
+        'anonimizado_at' => 'datetime',
     ];
 
     // ── Folio automático ─────────────────────────────────────────

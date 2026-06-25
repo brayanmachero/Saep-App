@@ -76,7 +76,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 <!-- Header -->
 <div class="header">
     <div class="hdr-logo">
-        <img src="https://saep.cl/wp-content/uploads/2023/11/Logo_Saep.svg" alt="SAEP">
+        <img src="{{ public_path('brand/wp/Logo_Saep.svg') }}" alt="SAEP">
     </div>
     <div class="hdr-title">
         <h1>Acta de Capacitación ODI</h1>
@@ -285,4 +285,3 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 
 </body>
 </html>
-

@@ -27,6 +27,10 @@
                 <option value="revocacion_consentimiento" {{ request('accion') === 'revocacion_consentimiento' ? 'selected' : '' }}>Revocación</option>
                 <option value="solicitud_arco" {{ request('accion') === 'solicitud_arco' ? 'selected' : '' }}>Solicitud ARCO</option>
                 <option value="respuesta_arco" {{ request('accion') === 'respuesta_arco' ? 'selected' : '' }}>Respuesta ARCO</option>
+                <option value="supresion_autorizada" {{ request('accion') === 'supresion_autorizada' ? 'selected' : '' }}>Supresión autorizada</option>
+                <option value="supresion_ejecutada" {{ request('accion') === 'supresion_ejecutada' ? 'selected' : '' }}>Supresión ejecutada</option>
+                <option value="postulacion_publica_creada" {{ request('accion') === 'postulacion_publica_creada' ? 'selected' : '' }}>Postulación pública</option>
+                <option value="denuncia_publica_creada" {{ request('accion') === 'denuncia_publica_creada' ? 'selected' : '' }}>Denuncia pública</option>
             </select>
         </div>
         <div>
@@ -91,6 +95,12 @@
                             'revocacion_consentimiento' => '#ef4444',
                             'solicitud_arco' => '#0f1b4c',
                             'respuesta_arco' => '#059669',
+                            'supresion_autorizada' => '#c2410c',
+                            'supresion_ejecutada' => '#dc2626',
+                            'postulacion_publica_creada' => '#0369a1',
+                            'postulacion_publica_actualizada' => '#0284c7',
+                            'postulacion_manual_creada' => '#475569',
+                            'denuncia_publica_creada' => '#b91c1c',
                             default => '#6b7280',
                         };
                         @endphp

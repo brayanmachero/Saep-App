@@ -6,6 +6,8 @@ use App\Models\ConsentimientoDatos;
 use App\Models\RegistroTratamientoDatos;
 use App\Models\SolicitudArco;
 use App\Models\User;
+use App\Services\DatosPersonalesSupresionService;
+use App\Support\PrivacyPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -46,6 +48,9 @@ class ProteccionDatosController extends Controller
             'tipo' => 'required|in:acceso,rectificacion,supresion,oposicion,portabilidad',
             'descripcion' => 'required|string|max:2000',
             'datos_afectados' => 'nullable|string|max:1000',
+            'causal_invocada' => 'required_if:tipo,supresion,oposicion|nullable|string|max:200',
+            'antecedentes' => 'nullable|string|max:2000',
+            'solicita_bloqueo_temporal' => 'nullable|boolean',
         ]);
 
         $solicitud = SolicitudArco::create([
@@ -54,9 +59,12 @@ class ProteccionDatosController extends Controller
             'tipo' => $request->tipo,
             'descripcion' => $request->descripcion,
             'datos_afectados' => $request->datos_afectados,
+            'causal_invocada' => $request->causal_invocada,
+            'antecedentes' => $request->antecedentes,
+            'solicita_bloqueo_temporal' => $request->boolean('solicita_bloqueo_temporal'),
             'estado' => 'pendiente',
             'fecha_solicitud' => now(),
-            'fecha_vencimiento' => now()->addWeekdays(30),
+            'fecha_vencimiento' => now()->addDays(30),
         ]);
 
         RegistroTratamientoDatos::registrar(
@@ -68,7 +76,7 @@ class ProteccionDatosController extends Controller
         );
 
         return redirect()->route('proteccion-datos.index')
-            ->with('success', "Solicitud {$solicitud->numero_solicitud} creada exitosamente. Será procesada en un plazo máximo de 30 días hábiles.");
+            ->with('success', "Solicitud {$solicitud->numero_solicitud} creada exitosamente. Será procesada en un plazo máximo de 30 días corridos.");
     }
 
     public function verSolicitud(SolicitudArco $solicitud)
@@ -149,8 +157,8 @@ class ProteccionDatosController extends Controller
 
         ConsentimientoDatos::create([
             'user_id' => $user->id,
-            'version_politica' => '1.0',
-            'texto_aceptado' => 'Acepto la política de tratamiento de datos personales de SAEP conforme a la Ley 21.719.',
+            'version_politica' => PrivacyPolicy::VERSION,
+            'texto_aceptado' => PrivacyPolicy::internalConsentText(),
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
             'fecha_aceptacion' => now(),
@@ -167,7 +175,7 @@ class ProteccionDatosController extends Controller
             'consentimientos_datos',
             null,
             'personal',
-            'Aceptación de política de datos personales v1.0'
+            'Aceptación de política de datos personales v' . PrivacyPolicy::VERSION
         );
 
         return redirect()->route('dashboard')->with('success', 'Política de datos aceptada correctamente.');
@@ -219,7 +227,7 @@ class ProteccionDatosController extends Controller
         $stats = [
             'pendientes' => SolicitudArco::where('estado', 'pendiente')->count(),
             'en_revision' => SolicitudArco::where('estado', 'en_revision')->count(),
-            'vencidas' => SolicitudArco::where('estado', 'pendiente')
+            'vencidas' => SolicitudArco::whereIn('estado', ['pendiente', 'en_revision'])
                 ->where('fecha_vencimiento', '<', now())->count(),
             'total_mes' => SolicitudArco::whereMonth('created_at', now()->month)
                 ->whereYear('created_at', now()->year)->count(),
@@ -235,6 +243,10 @@ class ProteccionDatosController extends Controller
             'respuesta' => 'required|string|max:2000',
             'motivo_rechazo' => 'required_if:estado,rechazada|nullable|string|max:1000',
         ]);
+
+        if ($solicitud->tipo === 'supresion' && $request->estado === 'completada' && !$solicitud->fecha_ejecucion) {
+            return back()->with('error', 'Una solicitud de supresión debe aprobarse y luego ejecutarse desde el flujo autorizado antes de marcarla como completada.');
+        }
 
         $solicitud->update([
             'estado' => $request->estado,
@@ -254,6 +266,58 @@ class ProteccionDatosController extends Controller
 
         return redirect()->route('proteccion-datos.administrar')
             ->with('success', "Solicitud {$solicitud->numero_solicitud} actualizada correctamente.");
+    }
+
+    public function ejecutarSupresion(Request $request, SolicitudArco $solicitud, DatosPersonalesSupresionService $service)
+    {
+        $request->validate([
+            'observacion_ejecucion' => 'nullable|string|max:2000',
+        ]);
+
+        if ($solicitud->tipo !== 'supresion') {
+            abort(404);
+        }
+
+        if ($solicitud->estado !== 'aprobada') {
+            return back()->with('error', 'La solicitud debe estar aprobada antes de ejecutar la supresión.');
+        }
+
+        if ($solicitud->fecha_ejecucion) {
+            return back()->with('info', 'La supresión ya fue ejecutada para esta solicitud.');
+        }
+
+        $titular = $solicitud->user;
+        if (!$titular) {
+            return back()->with('error', 'No se encontró el titular asociado a la solicitud.');
+        }
+
+        $resultado = $service->ejecutarParaUsuario($titular, $solicitud, Auth::user());
+        $estadoEjecucion = empty($resultado['advertencias']) ? 'completada' : 'completada_con_advertencias';
+
+        $solicitud->update([
+            'estado' => 'completada',
+            'respuesta' => trim(($solicitud->respuesta ? $solicitud->respuesta . "\n\n" : '') . 'Supresión ejecutada conforme a solicitud aprobada. Revise el resultado de ejecución y las advertencias registradas.'),
+            'responsable_id' => Auth::id(),
+            'fecha_respuesta' => now(),
+            'fecha_ejecucion' => now(),
+            'ejecutada_por' => Auth::id(),
+            'estado_ejecucion' => $estadoEjecucion,
+            'resultado_ejecucion' => $resultado,
+            'observacion_ejecucion' => $request->observacion_ejecucion,
+        ]);
+
+        RegistroTratamientoDatos::registrar(
+            'supresion_autorizada',
+            'solicitudes_arco',
+            $solicitud->id,
+            'personal',
+            "Flujo de supresión autorizado completado para {$solicitud->numero_solicitud}",
+            null,
+            $resultado
+        );
+
+        return redirect()->route('proteccion-datos.ver-solicitud', $solicitud)
+            ->with('success', 'Supresión ejecutada y registrada en auditoría.');
     }
 
     // ─── Registro de tratamiento (auditoría) ───

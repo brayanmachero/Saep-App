@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Demasiados intentos — SAEP Platform</title>
+    <link rel="icon" href="{{ asset('brand/wp/saep_favicon.svg') }}" type="image/svg+xml">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -35,7 +36,7 @@
         .login-hero__bg {
             position: absolute;
             inset: 0;
-            background: url('https://saep.cl/wp-content/uploads/2023/11/banner-vitrina-1.jpg') center/cover no-repeat;
+            background: url("{{ asset('brand/wp/optimized/banner-vitrina-1520x800.webp') }}") center/cover no-repeat;
         }
         .login-hero__overlay {
             position: absolute;
@@ -286,7 +287,7 @@
             <div class="login-hero__bg"></div>
             <div class="login-hero__overlay"></div>
             <div class="login-hero__content">
-                <img src="https://saep.cl/wp-content/uploads/2023/11/Logo-Saep_footer.svg"
+                <img src="{{ asset('brand/wp/Logo-Saep_footer.svg') }}"
                      alt="SAEP" class="login-hero__logo">
                 <h2 class="login-hero__title">
                     Servicios de personal <span>a tu medida</span>
