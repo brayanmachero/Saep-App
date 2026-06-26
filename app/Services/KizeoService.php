@@ -111,17 +111,47 @@ class KizeoService
         });
     }
 
+    private function recordDate(array $record): ?string
+    {
+        return $this->dateOnly($record['update_time'] ?? $record['create_time'] ?? null);
+    }
+
+    private function recordRawDateTime(array $record): string
+    {
+        return (string) ($record['update_time'] ?? $record['create_time'] ?? '');
+    }
+
+    private function dateOnly(mixed $value): ?string
+    {
+        if (!is_scalar($value)) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+        if (!preg_match('/(\d{4})-(\d{2})-(\d{2})/', $value, $matches)) {
+            return null;
+        }
+
+        $year = (int) $matches[1];
+        $month = (int) $matches[2];
+        $day = (int) $matches[3];
+
+        return checkdate($month, $day, $year)
+            ? sprintf('%04d-%02d-%02d', $year, $month, $day)
+            : null;
+    }
+
     /**
      * Obtener registros profundos (con campos) filtrados por rango de fechas.
      * Limita a $limit registros para proteger memoria.
      */
-    public function getDeepFormData(string $formId, ?string $startDate = null, ?string $endDate = null, int $limit = 300): array
+    public function getDeepFormData(string $formId, ?string $startDate = null, ?string $endDate = null, int $limit = 300, bool $forceRefresh = false): array
     {
-        $allMetadata = $this->getFormData($formId);
+        $allMetadata = $this->getFormData($formId, $forceRefresh);
 
         // Filtrar por rango
         $filtered = array_filter($allMetadata, function ($record) use ($startDate, $endDate) {
-            $d = explode(' ', $record['update_time'] ?? $record['create_time'] ?? '')[0] ?? '';
+            $d = $this->recordDate($record);
             if (!$d) return false;
             if ($startDate && $d < $startDate) return false;
             if ($endDate && $d > $endDate) return false;
@@ -291,18 +321,22 @@ class KizeoService
      */
     public function getDashboardData(?string $startDate = null, ?string $endDate = null, bool $forceRefresh = false): array
     {
-        $cacheKey = 'kizeo_dashboard_' . md5(($startDate ?? 'null') . '_' . ($endDate ?? 'null'));
-        if ($forceRefresh) Cache::forget($cacheKey);
+        $cacheKey = 'kizeo_dashboard_v2_' . md5(($startDate ?? 'null') . '_' . ($endDate ?? 'null'));
+        if ($forceRefresh) {
+            Cache::forget($cacheKey);
+            Cache::forget('kizeo_forms');
+            Cache::forget('kizeo_users');
+        }
 
-        return Cache::remember($cacheKey, 14400, function () use ($startDate, $endDate) {
-            return $this->buildDashboardData($startDate, $endDate);
+        return Cache::remember($cacheKey, 14400, function () use ($startDate, $endDate, $forceRefresh) {
+            return $this->buildDashboardData($startDate, $endDate, $forceRefresh);
         });
     }
 
     /**
      * Construir data del dashboard (interno, sin caché).
      */
-    private function buildDashboardData(?string $startDate, ?string $endDate): array
+    private function buildDashboardData(?string $startDate, ?string $endDate, bool $forceRefresh = false): array
     {
         $forms = $this->getPdrForms();
         $userDic = $this->getUserDictionary();
@@ -338,7 +372,7 @@ class KizeoService
         foreach ($forms as $form) {
             $formId   = $form['id'];
             $formName = $form['name'] ?? "Form-{$formId}";
-            $records  = $this->getFormData($formId);
+            $records  = $this->getFormData($formId, $forceRefresh);
 
             $nameLower = strtolower($formName);
 
@@ -356,7 +390,7 @@ class KizeoService
 
             // Process current period
             $filtered = array_filter($records, function ($r) use ($startDate, $endDate) {
-                $d = explode(' ', $r['update_time'] ?? $r['create_time'] ?? '')[0] ?? '';
+                $d = $this->recordDate($r);
                 if (!$d) return false;
                 if ($startDate && $d < $startDate) return false;
                 if ($endDate && $d > $endDate) return false;
@@ -375,8 +409,8 @@ class KizeoService
             }
 
             foreach ($filtered as $record) {
-                $dateRaw = $record['update_time'] ?? $record['create_time'] ?? '';
-                $date = explode(' ', $dateRaw)[0] ?? '';
+                $dateRaw = $this->recordRawDateTime($record);
+                $date = $this->recordDate($record);
 
                 if ($date) {
                     $dailyActivity[$date] = ($dailyActivity[$date] ?? 0) + 1;
@@ -433,7 +467,7 @@ class KizeoService
             // Process previous period for comparison
             if ($prevStartDate && $prevEndDate) {
                 $prevFiltered = array_filter($records, function ($r) use ($prevStartDate, $prevEndDate) {
-                    $d = explode(' ', $r['update_time'] ?? $r['create_time'] ?? '')[0] ?? '';
+                    $d = $this->recordDate($r);
                     if (!$d) return false;
                     return $d >= $prevStartDate && $d <= $prevEndDate;
                 });
@@ -458,13 +492,14 @@ class KizeoService
 
         // === COMPLIANCE METRICS ===
         $today = date('Y-m-d');
+        $referenceDate = $endDate && $endDate < $today ? $endDate : $today;
 
-        // Days without incidents: count from last incident to today (or end of period)
+        // Days without incidents: count from last incident to the active period end, or today for open/current periods.
         sort($incidentDates);
         $lastIncidentDate = !empty($incidentDates) ? end($incidentDates) : null;
         $diasSinAccidente = $lastIncidentDate
-            ? max(0, (int) round((strtotime($today) - strtotime($lastIncidentDate)) / 86400))
-            : ($startDate ? (int) round((strtotime($today) - strtotime($startDate)) / 86400) : 0);
+            ? max(0, (int) round((strtotime($referenceDate) - strtotime($lastIncidentDate)) / 86400))
+            : ($startDate ? max(0, (int) round((strtotime($referenceDate) - strtotime($startDate)) / 86400)) : 0);
 
         // Period comparison deltas
         $deltaTotal = $prevTotal > 0 ? round((($totalRecords - $prevTotal) / $prevTotal) * 100, 1) : null;
@@ -483,7 +518,7 @@ class KizeoService
         // Inactive auditors (>5 days)
         foreach ($auditorsData as $name => $d) {
             if (!$d['lastDate']) continue;
-            $daysSince = (int) round((strtotime($today) - strtotime($d['lastDate'])) / 86400);
+            $daysSince = (int) round((strtotime($referenceDate) - strtotime($d['lastDate'])) / 86400);
             if ($daysSince >= 5) {
                 $alerts[] = [
                     'type'    => 'warning',
@@ -531,7 +566,7 @@ class KizeoService
         // Days with no activity in the last 7 days
         $last7 = [];
         for ($i = 0; $i < 7; $i++) {
-            $d = date('Y-m-d', strtotime("-{$i} days"));
+            $d = date('Y-m-d', strtotime("{$referenceDate} -{$i} days"));
             if (!isset($dailyActivity[$d]) && $d >= ($startDate ?? '2000-01-01') && $d <= ($endDate ?? '2099-12-31')) {
                 $last7[] = $d;
             }
@@ -599,18 +634,22 @@ class KizeoService
      */
     public function getAllDeepData(?string $startDate = null, ?string $endDate = null, bool $forceRefresh = false, int $limitPerForm = 30): array
     {
-        $cacheKey = 'kizeo_deep_all_' . md5(($startDate ?? 'null') . '_' . ($endDate ?? 'null'));
-        if ($forceRefresh) Cache::forget($cacheKey);
+        $cacheKey = 'kizeo_deep_all_' . md5(($startDate ?? 'null') . '_' . ($endDate ?? 'null') . '_' . $limitPerForm);
+        if ($forceRefresh) {
+            Cache::forget($cacheKey);
+            Cache::forget('kizeo_forms');
+            Cache::forget('kizeo_users');
+        }
 
-        return Cache::remember($cacheKey, 14400, function () use ($startDate, $endDate, $limitPerForm) {
-            return $this->buildAllDeepData($startDate, $endDate, $limitPerForm);
+        return Cache::remember($cacheKey, 1800, function () use ($startDate, $endDate, $limitPerForm, $forceRefresh) {
+            return $this->buildAllDeepData($startDate, $endDate, $limitPerForm, $forceRefresh);
         });
     }
 
     /**
      * Construir deep data de todos los formularios (interno).
      */
-    private function buildAllDeepData(?string $startDate, ?string $endDate, int $limitPerForm): array
+    private function buildAllDeepData(?string $startDate, ?string $endDate, int $limitPerForm, bool $forceRefresh = false): array
     {
         $forms = $this->getPdrForms();
         $userDic = $this->getUserDictionary();
@@ -624,7 +663,7 @@ class KizeoService
             $formName = $form['name'] ?? "Form-{$formId}";
 
             try {
-                $records = $this->getDeepFormData($formId, $startDate, $endDate, $limitPerForm);
+                $records = $this->getDeepFormData($formId, $startDate, $endDate, $limitPerForm, $forceRefresh);
             } catch (\Exception $e) {
                 continue;
             }

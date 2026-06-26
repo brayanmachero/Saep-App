@@ -8,7 +8,7 @@
     <link rel="icon" href="{{ asset('brand/wp/saep_favicon.svg') }}" type="image/svg+xml">
 
     <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ asset('vendor/bootstrap-icons/bootstrap-icons.css') }}">
     
     <!-- Scripts & Styles via Vite -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -233,7 +233,6 @@
             @endif
 
             {{-- PROTECCIÓN DE DATOS (Ley 21.719) --}}
-            @if(auth()->user()->tieneAcceso('proteccion_datos'))
             <div class="nav-section-label">Protección de Datos</div>
             <a href="{{ route('proteccion-datos.index') }}" class="nav-item {{ request()->routeIs('proteccion-datos.index') || request()->routeIs('proteccion-datos.crear-solicitud') || request()->routeIs('proteccion-datos.ver-solicitud') ? 'active' : '' }}">
                 <i class="bi bi-shield-lock-fill"></i>
@@ -248,7 +247,10 @@
                 <i class="bi bi-journal-text"></i>
                 <span>Registro Tratamiento</span>
             </a>
-            @endif
+            <a href="{{ route('proteccion-datos.matriz-retencion') }}" class="nav-item {{ request()->routeIs('proteccion-datos.matriz-retencion') ? 'active' : '' }}">
+                <i class="bi bi-table"></i>
+                <span>Matriz Retención</span>
+            </a>
             @endif
 
             {{-- DOCUMENTACIÓN --}}

@@ -2,6 +2,28 @@
 @section('title', 'Dashboard Tarjeta STOP CCU')
 @section('content')
 <div class="page-container">
+    @php
+        $filterDisplayLabels = [
+            'empresa_observador' => 'Observador',
+            'empresa_observado' => 'Observado',
+            'tipo_observacion' => 'Tipo',
+            'centro' => 'Centro',
+            'clasificacion' => 'Clasificacion',
+            'fecha_desde' => 'Desde',
+            'fecha_hasta' => 'Hasta',
+            'mes' => 'Mes',
+            'anio' => 'Año',
+        ];
+        $activeFilterBadges = collect($filters ?? [])
+            ->filter(fn ($value) => $value !== null && $value !== '')
+            ->map(fn ($value, $key) => ($filterDisplayLabels[$key] ?? $key) . ': ' . $value)
+            ->values()
+            ->all();
+        $activeFilterSummary = !empty($activeFilterBadges)
+            ? implode(' · ', $activeFilterBadges)
+            : 'Sin filtros aplicados';
+        $sendReportConfirm = '¿Enviar el reporte STOP a los destinatarios configurados con estos filtros? ' . $activeFilterSummary;
+    @endphp
 
     {{-- Header --}}
     <div class="page-header">
@@ -24,11 +46,14 @@
                 @endif
             </p>
         </div>
-        <div style="display:flex;gap:.5rem;align-items:center">
-            <a href="{{ route('stop-dashboard.reporte.preview') }}" target="_blank" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;text-decoration:none">
+        <div class="stop-header-actions">
+            <a href="{{ route('stop-dashboard.reporte.preview', $filters ?? []) }}" target="_blank" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;text-decoration:none">
                 <i class="bi bi-envelope-open"></i> Vista Previa Email
             </a>
-            <form method="POST" action="{{ route('stop-dashboard.reporte.send-now') }}" style="display:inline" onsubmit="return confirm('¿Enviar el reporte STOP con los filtros actuales a todos los destinatarios configurados?')">
+            <a href="{{ route('stop-dashboard.reporte.excel', $filters ?? []) }}" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;text-decoration:none;background:#166534;color:#fff;border:none">
+                <i class="bi bi-file-earmark-excel"></i> Descargar Excel
+            </a>
+            <form method="POST" action="{{ route('stop-dashboard.reporte.send-now') }}" style="display:inline" onsubmit="return confirm(@js($sendReportConfirm))">
                 @csrf
                 @foreach(($filters ?? []) as $fk => $fv)
                     @if($fv)<input type="hidden" name="{{ $fk }}" value="{{ $fv }}">@endif
@@ -67,7 +92,15 @@
                     <span style="background:var(--accent-color);color:#fff;font-size:.68rem;padding:.1rem .45rem;border-radius:10px;font-weight:700">{{ $activeCount }} activo{{ $activeCount > 1 ? 's' : '' }}</span>
                 @endif
             </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.75rem;margin-bottom:.75rem">
+            @if(!empty($activeFilterBadges))
+            <div class="stop-active-filters">
+                <span class="stop-active-filters-label">Filtros activos</span>
+                @foreach($activeFilterBadges as $badge)
+                    <span class="stop-filter-chip">{{ $badge }}</span>
+                @endforeach
+            </div>
+            @endif
+            <div class="stop-filter-grid">
                 {{-- Empresa Observador --}}
                 <div>
                     <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">Empresa Observador</label>
@@ -90,7 +123,7 @@
                 </div>
                 {{-- Tipo Observacion --}}
                 <div>
-                    <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">Tipo Observacion</label>
+                    <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">Tipo Observación</label>
                     <select name="tipo_observacion" class="filter-select" onchange="this.form.submit()">
                         <option value="">Todos</option>
                         @foreach($filterOptions['tipos_observacion'] ?? [] as $opt)
@@ -154,10 +187,62 @@
     </div>
     @endif
 
+    @if(isset($stopActionLogs) && $stopActionLogs->isNotEmpty())
+    @php
+        $actionLabels = [
+            'sync' => 'Sincronizacion',
+            'report_test_send' => 'Prueba email',
+            'report_send_now' => 'Envio manual',
+            'report_scheduled_send' => 'Envio programado',
+            'report_excel_download' => 'Descarga Excel',
+        ];
+        $statusLabels = [
+            'success' => 'Correcto',
+            'failed' => 'Error',
+            'skipped' => 'Omitido',
+            'partial' => 'Parcial',
+        ];
+        $statusStyles = [
+            'success' => 'background:#dcfce7;color:#166534',
+            'failed' => 'background:#fee2e2;color:#991b1b',
+            'skipped' => 'background:#fef3c7;color:#92400e',
+            'partial' => 'background:#dbeafe;color:#1e40af',
+        ];
+    @endphp
+    <div class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:.75rem">
+            <div style="display:flex;align-items:center;gap:.5rem">
+                <i class="bi bi-activity" style="color:var(--accent-color)"></i>
+                <h3 style="font-size:.85rem;font-weight:700;margin:0;color:var(--text-primary)">Actividad reciente STOP</h3>
+            </div>
+            <span style="font-size:.68rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em">Auditoria de acciones</span>
+        </div>
+        <div class="stop-activity-list">
+            @foreach($stopActionLogs as $log)
+                <div class="stop-activity-row">
+                    <div>
+                        <strong style="display:block;font-size:.78rem;color:var(--text-primary)">{{ $actionLabels[$log->action] ?? $log->action }}</strong>
+                        <span style="font-size:.68rem;color:var(--text-muted)">{{ $log->user?->name ?? 'Sistema' }}</span>
+                    </div>
+                    <span style="{{ $statusStyles[$log->status] ?? 'background:#f1f5f9;color:#334155' }};justify-self:start;border-radius:999px;padding:.16rem .5rem;font-size:.68rem;font-weight:800">
+                        {{ $statusLabels[$log->status] ?? ucfirst($log->status) }}
+                    </span>
+                    <span class="stop-activity-summary">
+                        {{ $log->summary ?: 'Accion registrada' }}
+                    </span>
+                    <time title="{{ optional($log->created_at)->format('d/m/Y H:i') }}" style="font-size:.68rem;color:var(--text-muted);white-space:nowrap">
+                        {{ optional($log->created_at)->diffForHumans() }}
+                    </time>
+                </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
+
     @if(isset($error))
     <div class="glass-card" style="padding:2rem;text-align:center;margin-bottom:1rem;border-left:4px solid #ef4444">
         <i class="bi bi-exclamation-triangle-fill" style="font-size:2rem;color:#ef4444;display:block;margin-bottom:.75rem"></i>
-        <p style="color:#ef4444;font-weight:600;margin-bottom:.5rem">{{ str_contains($error, 'filtros') ? 'Sin resultados' : 'Error de conexion' }}</p>
+        <p style="color:#ef4444;font-weight:600;margin-bottom:.5rem">{{ str_contains($error, 'filtros') ? 'Sin resultados' : 'Error de conexión' }}</p>
         <p style="color:var(--text-muted);font-size:.85rem">{{ $error }}</p>
     </div>
     @endif
@@ -202,7 +287,7 @@
     @endphp
 
     {{-- KPIs principales --}}
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:1rem;margin-bottom:1.5rem">
+    <div class="stop-kpi-grid">
         <div class="glass-card" style="padding:1rem 1.25rem;border-left:4px solid #3b82f6">
             <div style="display:flex;justify-content:space-between;align-items:center">
                 <div>
@@ -264,7 +349,8 @@
         $ytdTotal = $ytd['total'] ?? 0;
         $ytdPos = $ytd['pos'] ?? 0;
         $ytdNeg = $ytd['neg'] ?? 0;
-        $prevYearLabel = $prev['year'] ?? ((int) date('Y') - 1);
+        $currentYearLabel = $comp['currentYear'] ?? (int) date('Y');
+        $prevYearLabel = $prev['year'] ?? ((int) $currentYearLabel - 1);
         $prevTotal = $prev['sameMonthTotal'] ?? 0;
         $prevPos = $prev['sameMonthPos'] ?? 0;
         $prevNeg = $prev['sameMonthNeg'] ?? 0;
@@ -288,6 +374,72 @@
         $pctChangeNeg = $prevNeg > 0 ? round((($negativas - $prevNeg) / $prevNeg) * 100, 1) : ($negativas > 0 ? 100 : 0);
         $pctChangeTotal = $prevTotal > 0 ? round((($totalRows - $prevTotal) / $prevTotal) * 100, 1) : ($totalRows > 0 ? 100 : 0);
         $pctChangeYtd = $prevYtdTotal > 0 ? round((($ytdTotal - $prevYtdTotal) / $prevYtdTotal) * 100, 1) : ($ytdTotal > 0 ? 100 : 0);
+
+        $meses = ['01'=>'Ene','02'=>'Feb','03'=>'Mar','04'=>'Abr','05'=>'May','06'=>'Jun','07'=>'Jul','08'=>'Ago','09'=>'Sep','10'=>'Oct','11'=>'Nov','12'=>'Dic'];
+        $prevByMonth = $prev['byMonth'] ?? [];
+        $prevByMonthNeg = $prev['byMonthNeg'] ?? [];
+        $prevByMonthPos = $prev['byMonthPos'] ?? [];
+        $currYear = (string) $currentYearLabel;
+        $prevYear = (string) $prevYearLabel;
+
+        if (!empty($filters['mes'])) {
+            $comparisonCutoffMonth = (int) substr($filters['mes'], 5, 2);
+        } elseif (!empty($filters['fecha_hasta'])) {
+            $comparisonCutoffMonth = (int) \Illuminate\Support\Carbon::parse($filters['fecha_hasta'])->format('n');
+        } elseif (!empty($filters['anio'])) {
+            $comparisonCutoffMonth = (int) $filters['anio'] === (int) date('Y') ? (int) date('n') : 12;
+        } else {
+            $comparisonCutoffMonth = (int) $currentYearLabel === (int) date('Y') ? (int) date('n') : 12;
+        }
+        $comparisonCutoffMonth = max(1, min(12, $comparisonCutoffMonth));
+
+        $comparisonRows = [];
+        $comparisonChartLabels = [];
+        $comparisonChartCurrentTotal = [];
+        $comparisonChartCurrentNeg = [];
+        $comparisonChartCurrentPos = [];
+        $comparisonChartPrevTotal = [];
+        $comparisonChartPrevNeg = [];
+        $comparisonChartPrevPos = [];
+        $compTotalCurr = 0; $compTotalNegCurr = 0; $compTotalPosCurr = 0;
+        $compTotalPrev = 0; $compTotalNegPrev = 0; $compTotalPosPrev = 0;
+
+        foreach ($meses as $mNum => $mName) {
+            if ((int) $mNum > $comparisonCutoffMonth) {
+                continue;
+            }
+
+            $curKey = $currYear . '-' . $mNum;
+            $prvKey = $prevYear . '-' . $mNum;
+            $cT = $ytd['byMonth'][$curKey] ?? 0;
+            $cN = $ytd['byMonthNeg'][$curKey] ?? 0;
+            $cP = $ytd['byMonthPos'][$curKey] ?? 0;
+            $pT = $prevByMonth[$prvKey] ?? 0;
+            $pN = $prevByMonthNeg[$prvKey] ?? 0;
+            $pP = $prevByMonthPos[$prvKey] ?? 0;
+
+            $comparisonRows[] = [
+                'monthNum' => $mNum,
+                'monthName' => $mName,
+                'currentTotal' => $cT,
+                'currentNeg' => $cN,
+                'currentPos' => $cP,
+                'prevTotal' => $pT,
+                'prevNeg' => $pN,
+                'prevPos' => $pP,
+            ];
+
+            $comparisonChartLabels[] = $mName;
+            $comparisonChartCurrentTotal[] = $cT;
+            $comparisonChartCurrentNeg[] = $cN;
+            $comparisonChartCurrentPos[] = $cP;
+            $comparisonChartPrevTotal[] = $pT;
+            $comparisonChartPrevNeg[] = $pN;
+            $comparisonChartPrevPos[] = $pP;
+
+            $compTotalCurr += $cT; $compTotalNegCurr += $cN; $compTotalPosCurr += $cP;
+            $compTotalPrev += $pT; $compTotalNegPrev += $pN; $compTotalPosPrev += $pP;
+        }
     @endphp
     <div class="glass-card" style="padding:1.25rem;margin-bottom:1rem">
         <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
@@ -301,7 +453,7 @@
                         <th style="text-align:center">Periodo Actual</th>
                         <th style="text-align:center">Mismo Periodo {{ $prevYearLabel }}</th>
                         <th style="text-align:center">Var.</th>
-                        <th style="text-align:center">Acum. {{ date('Y') }}</th>
+                        <th style="text-align:center">Acum. {{ $currentYearLabel }}</th>
                         <th style="text-align:center">Acum. {{ $prevYearLabel }}</th>
                     </tr>
                 </thead>
@@ -326,9 +478,9 @@
             </table>
         </div>
         {{-- KPI % deltas --}}
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-top:1rem">
+        <div class="stop-delta-grid">
             <div style="background:rgba(128,128,128,.04);border-radius:10px;padding:.75rem;text-align:center;border:1px solid rgba(128,128,128,.08)">
-                <p style="font-size:.68rem;text-transform:uppercase;color:var(--text-muted);margin:0">Var. Total Mes</p>
+                <p style="font-size:.68rem;text-transform:uppercase;color:var(--text-muted);margin:0">Var. Total Periodo</p>
                 <p style="font-size:1.5rem;font-weight:800;margin:.2rem 0 0;color:{{ $pctChangeTotal >= 0 ? '#ef4444' : '#16a34a' }}">{{ $pctChangeTotal >= 0 ? '+' : '' }}{{ $pctChangeTotal }}%</p>
             </div>
             <div style="background:rgba(128,128,128,.04);border-radius:10px;padding:.75rem;text-align:center;border:1px solid rgba(128,128,128,.08)">
@@ -344,11 +496,11 @@
 
     {{-- Top Trabajadores Negativos YTD + Tipos Falta Negativa YTD --}}
     @if(!empty($ytd['topNeg']) || !empty($ytd['negPorTipo']))
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="stop-grid stop-grid-2">
         @if(!empty($ytd['topNeg']))
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
-                <i class="bi bi-exclamation-diamond-fill" style="color:#991b1b"></i> Top Trabajadores Negativos — Acumulado {{ date('Y') }}
+                <i class="bi bi-exclamation-diamond-fill" style="color:#991b1b"></i> Top Trabajadores Negativos — Acumulado {{ $currentYearLabel }}
             </h3>
             <div style="max-height:320px;overflow-y:auto">
                 <table class="glass-table" style="font-size:.78rem">
@@ -369,7 +521,7 @@
         @if(!empty($ytd['negPorTipo']))
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
-                <i class="bi bi-search" style="color:#7f1d1d"></i> Tipos de Falta Negativa — Acumulado {{ date('Y') }}
+                <i class="bi bi-search" style="color:#7f1d1d"></i> Tipos de Falta Negativa — Acumulado {{ $currentYearLabel }}
             </h3>
             <div style="max-height:320px;overflow-y:auto">
                 <table class="glass-table" style="font-size:.78rem">
@@ -391,58 +543,44 @@
     @endif
 
     {{-- Tendencia Mensual Comparativa (año actual vs anterior) --}}
-    @if(!empty($ytd['byMonth']))
+    @if(!empty($comparisonRows))
     <div class="glass-card" style="padding:1.25rem;margin-bottom:1rem">
-        <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
-            <i class="bi bi-calendar3-range" style="color:#1B5E20"></i> Tendencia Mensual — {{ date('Y') }} vs {{ $prevYearLabel }}
-        </h3>
+        <div class="stop-section-heading">
+            <div>
+                <h3 style="font-size:.9rem;font-weight:600;margin:0;color:var(--text-primary)">
+                    <i class="bi bi-calendar3-range" style="color:#1B5E20"></i> Tendencia Mensual — {{ $currentYearLabel }} vs {{ $prevYearLabel }}
+                </h3>
+                <p style="font-size:.75rem;color:var(--text-muted);margin:.25rem 0 0">Evolutivo acumulado hasta {{ $comparisonRows[count($comparisonRows) - 1]['monthName'] }}</p>
+            </div>
+            <span style="font-size:.72rem;color:var(--text-muted);font-weight:700;text-transform:uppercase">Total, negativas y positivas</span>
+        </div>
+        <div class="stop-comparison-chart">
+            <canvas id="yearComparisonChart"></canvas>
+        </div>
         <div style="overflow-x:auto">
             <table class="glass-table" style="font-size:.78rem;min-width:650px">
                 <thead>
                     <tr>
                         <th>Mes</th>
-                        <th style="text-align:center">{{ date('Y') }} Total</th>
-                        <th style="text-align:center;color:#ef4444">{{ date('Y') }} Neg</th>
-                        <th style="text-align:center;color:#22c55e">{{ date('Y') }} Pos</th>
+                        <th style="text-align:center">{{ $currentYearLabel }} Total</th>
+                        <th style="text-align:center;color:#ef4444">{{ $currentYearLabel }} Neg</th>
+                        <th style="text-align:center;color:#22c55e">{{ $currentYearLabel }} Pos</th>
                         <th style="text-align:center">{{ $prevYearLabel }} Total</th>
                         <th style="text-align:center;color:#ef4444">{{ $prevYearLabel }} Neg</th>
                         <th style="text-align:center;color:#22c55e">{{ $prevYearLabel }} Pos</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @php
-                        $meses = ['01'=>'Ene','02'=>'Feb','03'=>'Mar','04'=>'Abr','05'=>'May','06'=>'Jun','07'=>'Jul','08'=>'Ago','09'=>'Sep','10'=>'Oct','11'=>'Nov','12'=>'Dic'];
-                        $prevByMonth = $prev['byMonth'] ?? [];
-                        $prevByMonthNeg = $prev['byMonthNeg'] ?? [];
-                        $prevByMonthPos = $prev['byMonthPos'] ?? [];
-                        $currYear = date('Y');
-                        $compTotalCurr = 0; $compTotalNegCurr = 0; $compTotalPosCurr = 0;
-                        $compTotalPrev = 0; $compTotalNegPrev = 0; $compTotalPosPrev = 0;
-                    @endphp
-                    @foreach($meses as $mNum => $mName)
-                    @php
-                        $curKey = $currYear . '-' . $mNum;
-                        $prvKey = $prevYearLabel . '-' . $mNum;
-                        $cT = $ytd['byMonth'][$curKey] ?? 0;
-                        $cN = $ytd['byMonthNeg'][$curKey] ?? 0;
-                        $cP = $ytd['byMonthPos'][$curKey] ?? 0;
-                        $pT = $prevByMonth[$prvKey] ?? 0;
-                        $pN = $prevByMonthNeg[$prvKey] ?? 0;
-                        $pP = $prevByMonthPos[$prvKey] ?? 0;
-                        $compTotalCurr += $cT; $compTotalNegCurr += $cN; $compTotalPosCurr += $cP;
-                        $compTotalPrev += $pT; $compTotalNegPrev += $pN; $compTotalPosPrev += $pP;
-                    @endphp
-                    @if($cT > 0 || $pT > 0)
-                    <tr>
-                        <td style="font-weight:700">{{ $mName }}</td>
-                        <td style="text-align:center;font-weight:600">{{ $cT > 0 ? number_format($cT) : '-' }}</td>
-                        <td style="text-align:center;color:#ef4444">{{ $cN > 0 ? number_format($cN) : '-' }}</td>
-                        <td style="text-align:center;color:#22c55e">{{ $cP > 0 ? number_format($cP) : '-' }}</td>
-                        <td style="text-align:center;color:var(--text-muted)">{{ $pT > 0 ? number_format($pT) : '-' }}</td>
-                        <td style="text-align:center;color:#ef4444">{{ $pN > 0 ? number_format($pN) : '-' }}</td>
-                        <td style="text-align:center;color:#22c55e">{{ $pP > 0 ? number_format($pP) : '-' }}</td>
+                    @foreach($comparisonRows as $row)
+                    <tr data-comparison-month="{{ $row['monthNum'] }}" data-current-total="{{ $row['currentTotal'] }}" data-prev-total="{{ $row['prevTotal'] }}">
+                        <td style="font-weight:700">{{ $row['monthName'] }}</td>
+                        <td style="text-align:center;font-weight:600">{{ $row['currentTotal'] > 0 ? number_format($row['currentTotal']) : '-' }}</td>
+                        <td style="text-align:center;color:#ef4444">{{ $row['currentNeg'] > 0 ? number_format($row['currentNeg']) : '-' }}</td>
+                        <td style="text-align:center;color:#22c55e">{{ $row['currentPos'] > 0 ? number_format($row['currentPos']) : '-' }}</td>
+                        <td style="text-align:center;color:var(--text-muted)">{{ $row['prevTotal'] > 0 ? number_format($row['prevTotal']) : '-' }}</td>
+                        <td style="text-align:center;color:#ef4444">{{ $row['prevNeg'] > 0 ? number_format($row['prevNeg']) : '-' }}</td>
+                        <td style="text-align:center;color:#22c55e">{{ $row['prevPos'] > 0 ? number_format($row['prevPos']) : '-' }}</td>
                     </tr>
-                    @endif
                     @endforeach
                     <tr style="font-weight:800;border-top:2px solid var(--border-color,#e2e8f0)">
                         <td>TOTAL</td>
@@ -461,7 +599,7 @@
     @endif
 
     {{-- Fila 1: Tendencia mensual + Clasificacion --}}
-    <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="stop-grid stop-grid-main-aside">
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
                 <i class="bi bi-graph-up" style="color:#3b82f6"></i> Tendencia Mensual
@@ -481,7 +619,7 @@
     </div>
 
     {{-- Fila 2: Trabajadores con mas tarjetas negativas + positivas --}}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="stop-grid stop-grid-2">
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
                 <i class="bi bi-person-x-fill" style="color:#ef4444"></i> Trabajadores con mas Tarjetas Negativas
@@ -543,23 +681,23 @@
     </div>
 
     {{-- Fila 3: Tipo de faltas negativas + felicitaciones positivas --}}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="stop-grid stop-grid-2">
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
-                <i class="bi bi-exclamation-triangle-fill" style="color:#ef4444"></i> Tipos de Falta � Tarjetas Negativas
+                <i class="bi bi-exclamation-triangle-fill" style="color:#ef4444"></i> Tipos de Falta - Tarjetas Negativas
             </h3>
             <div style="position:relative;height:250px"><canvas id="negPorTipoChart"></canvas></div>
         </div>
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
-                <i class="bi bi-star-fill" style="color:#22c55e"></i> Tipos de Felicitacion � Tarjetas Positivas
+                <i class="bi bi-star-fill" style="color:#22c55e"></i> Tipos de Felicitación - Tarjetas Positivas
             </h3>
             <div style="position:relative;height:250px"><canvas id="posPorTipoChart"></canvas></div>
         </div>
     </div>
 
     {{-- Fila 4: Centros + Areas --}}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="stop-grid stop-grid-2">
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
                 <i class="bi bi-building" style="color:#3b82f6"></i> Por Centro de Trabajo
@@ -609,10 +747,10 @@
     </div>
 
     {{-- Fila 5: Top Observadores + Empresa del observador --}}
-    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="stop-grid stop-grid-wide-aside">
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
-                <i class="bi bi-trophy-fill" style="color:#f59e0b"></i> Top 20 Observadores (quien paso la tarjeta)
+                <i class="bi bi-trophy-fill" style="color:#f59e0b"></i> Top 20 Observadores (quien pasó la tarjeta)
             </h3>
             <div style="max-height:380px;overflow-y:auto">
                 <table class="glass-table" style="font-size:.78rem">
@@ -658,11 +796,11 @@
         </div>
     </div>
 
-    {{-- Fila 6: Antiguedad + Cargo + Interno/Externo --}}
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1rem">
+    {{-- Fila 6: Antigüedad + Cargo + Interno/Externo --}}
+    <div class="stop-grid stop-grid-3">
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
-                <i class="bi bi-hourglass-split" style="color:#8b5cf6"></i> Antiguedad Observados
+                <i class="bi bi-hourglass-split" style="color:#8b5cf6"></i> Antigüedad Observados
             </h3>
             <div style="position:relative;height:260px"><canvas id="antiguedadChart"></canvas></div>
         </div>
@@ -686,7 +824,7 @@
     </div>
 
     {{-- Fila 7: Empresas Observados + Cargos + Timeline anual --}}
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="stop-grid stop-grid-3">
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)">
                 <i class="bi bi-briefcase-fill" style="color:#14b8a6"></i> Empresas Observados
@@ -729,7 +867,7 @@
         </div>
         <div class="glass-card" style="padding:1.25rem">
             <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
-                <i class="bi bi-calendar3" style="color:#14b8a6"></i> Observaciones por Ano
+                <i class="bi bi-calendar3" style="color:#14b8a6"></i> Observaciones por Año
             </h3>
             <div style="position:relative;height:220px"><canvas id="yearChart"></canvas></div>
         </div>
@@ -775,7 +913,7 @@
             <i class="bi bi-clipboard-data" style="color:#7f1d1d"></i> Detalle Evaluaciones Negativas por Trabajador
             <span style="font-size:.7rem;color:var(--text-muted);font-weight:400;margin-left:.5rem">({{ count($edWorkers) }} evaluaciones)</span>
         </h3>
-        <div style="max-height:600px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:.75rem">
+        <div class="stop-eval-grid">
             @foreach(array_slice($edWorkers, 0, 20) as $w)
             <div style="background:rgba(128,128,128,.03);border-radius:10px;padding:.85rem;border:1px solid rgba(128,128,128,.08)">
                 <div style="margin-bottom:.5rem">
@@ -823,7 +961,7 @@
         </h3>
         <p style="font-size:.85rem;color:var(--text-primary);line-height:1.7;margin:0">
             Durante el período se cursaron
-            <strong>{{ number_format($totalRows) }} tarjetas STO CCU</strong>, de las cuales
+            <strong>{{ number_format($totalRows) }} tarjetas STOP CCU</strong>, de las cuales
             <strong style="color:#22c55e">{{ number_format($positivas) }}</strong> son positivas y
             <strong style="color:#991b1b">{{ number_format($negativas) }}</strong> son negativas,
             lo que representa una tasa de observaciones positivas del <strong>{{ $pctPositiva }}%</strong>.
@@ -850,7 +988,7 @@
         <h3 style="font-size:.9rem;font-weight:600;margin-bottom:1rem;color:var(--text-primary)">
             <i class="bi bi-clipboard-check-fill" style="color:#22c55e"></i> Cumplimiento de Checklist
         </h3>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem">
+        <div class="stop-checklist-grid">
             @foreach($checklistCategories as $catName => $cat)
             <div style="background:rgba(128,128,128,.04);border-radius:10px;padding:1rem;border:1px solid rgba(128,128,128,.08)">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
@@ -912,6 +1050,195 @@
 }
 .filter-select:focus { border-color: var(--accent-color); }
 
+.stop-header-actions {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.stop-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: .75rem;
+    margin-bottom: .75rem;
+}
+
+.stop-active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+    margin: -.15rem 0 .85rem;
+}
+
+.stop-active-filters-label {
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.stop-filter-chip {
+    max-width: 100%;
+    border: 1px solid rgba(249,115,22,.22);
+    background: rgba(249,115,22,.08);
+    color: #9a3412;
+    border-radius: 999px;
+    padding: .16rem .55rem;
+    font-size: .7rem;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stop-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stop-delta-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .75rem;
+    margin-top: 1rem;
+}
+
+.stop-section-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.stop-comparison-chart {
+    position: relative;
+    height: 320px;
+    margin-bottom: 1rem;
+    padding-bottom: .25rem;
+}
+
+.stop-activity-list {
+    display: grid;
+    gap: .45rem;
+}
+
+.stop-activity-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 150px) 90px minmax(0, 1fr) auto;
+    gap: .75rem;
+    align-items: center;
+    border-top: 1px solid rgba(148,163,184,.22);
+    padding: .55rem 0;
+}
+
+.stop-activity-summary {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .74rem;
+    color: var(--text-muted);
+}
+
+.stop-grid {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    min-width: 0;
+}
+
+.stop-grid > * { min-width: 0; }
+.stop-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stop-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stop-grid-main-aside { grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); }
+.stop-grid-wide-aside { grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); }
+
+.stop-eval-grid {
+    max-height: 600px;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+    gap: .75rem;
+}
+
+.stop-checklist-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: 1rem;
+}
+
+.chart-fallback {
+    display: flex;
+    height: 100%;
+    min-height: 160px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1rem;
+    border-radius: 10px;
+    border: 1px dashed rgba(128,128,128,.25);
+    color: var(--text-muted);
+    font-size: .8rem;
+}
+
+@media (max-width: 1100px) {
+    .stop-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stop-grid-main-aside,
+    .stop-grid-wide-aside { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+    .stop-header-actions {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .stop-header-actions > a,
+    .stop-header-actions > form,
+    .stop-header-actions button {
+        width: 100%;
+    }
+
+    .stop-delta-grid,
+    .stop-grid-2,
+    .stop-grid-3 { grid-template-columns: 1fr; }
+
+    .stop-section-heading {
+        display: block;
+    }
+
+    .stop-section-heading > span {
+        display: block;
+        margin-top: .5rem;
+    }
+
+    .stop-comparison-chart {
+        height: 260px;
+    }
+
+    .stop-activity-row {
+        grid-template-columns: 1fr auto;
+        align-items: start;
+    }
+
+    .stop-activity-row time {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
+
+    .stop-activity-summary {
+        grid-column: 1 / -1;
+        white-space: normal;
+    }
+}
+
 /* Dark mode */
 body.dark-mode .filter-select {
     background: #1f2937;
@@ -929,6 +1256,10 @@ body.dark-mode .filter-select option {
 @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 #sync-icon { display:inline-block; }
 </style>
+@endpush
+
+@push('scripts')
+<script src="{{ asset('vendor/chartjs/chart.umd.js') }}"></script>
 <script>
 function clearDateFilters() {
     var d = document.getElementById('filter-fecha-desde');
@@ -944,15 +1275,11 @@ function showLoading() {
     var o = document.getElementById('loading-overlay');
     if (o) o.style.display = 'flex';
 }
-</script>
-@endpush
 
-@push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
+function initStopDashboard() {
     const colors = ['#3b82f6','#8b5cf6','#f59e0b','#22c55e','#ef4444','#06b6d4','#ec4899','#f97316','#14b8a6','#6366f1','#a855f7','#84cc16'];
     const gridColor = 'rgba(128,128,128,0.08)';
+    const formatInt = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format;
 
     // Loading spinner para filtros
     const filterForm = document.getElementById('filter-form');
@@ -971,6 +1298,123 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     @if(isset($analytics))
+    if (typeof Chart === 'undefined') {
+        document.querySelectorAll('canvas').forEach(function(canvas) {
+            const holder = canvas.parentElement;
+            if (!holder) return;
+            canvas.remove();
+            holder.innerHTML = '<div class="chart-fallback">No se pudo cargar el motor de gráficos. Actualice la página o revise el build de assets.</div>';
+        });
+        return;
+    }
+
+    // Comparativa anual mensual: total en area, positivas/negativas en lineas.
+    @if(!empty($comparisonChartLabels ?? []))
+    const yearComparisonCanvas = document.getElementById('yearComparisonChart');
+    if (yearComparisonCanvas) {
+        new Chart(yearComparisonCanvas, {
+            type: 'line',
+            data: {
+                labels: {!! json_encode($comparisonChartLabels) !!},
+                datasets: [
+                    {
+                        label: '{{ $currentYearLabel }} Total',
+                        data: {!! json_encode($comparisonChartCurrentTotal) !!},
+                        borderColor: '#2563eb',
+                        backgroundColor: 'rgba(37,99,235,0.16)',
+                        fill: true,
+                        tension: 0.32,
+                        borderWidth: 2.5,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                    },
+                    {
+                        label: '{{ $prevYearLabel }} Total',
+                        data: {!! json_encode($comparisonChartPrevTotal) !!},
+                        borderColor: '#64748b',
+                        backgroundColor: 'rgba(100,116,139,0.08)',
+                        fill: true,
+                        tension: 0.32,
+                        borderWidth: 2,
+                        borderDash: [6, 5],
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                    },
+                    {
+                        label: '{{ $currentYearLabel }} Neg',
+                        data: {!! json_encode($comparisonChartCurrentNeg) !!},
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239,68,68,0.08)',
+                        fill: false,
+                        tension: 0.32,
+                        borderWidth: 2,
+                        pointRadius: 2,
+                    },
+                    {
+                        label: '{{ $prevYearLabel }} Neg',
+                        data: {!! json_encode($comparisonChartPrevNeg) !!},
+                        borderColor: '#f97316',
+                        backgroundColor: 'rgba(249,115,22,0.06)',
+                        fill: false,
+                        tension: 0.32,
+                        borderWidth: 1.8,
+                        borderDash: [5, 4],
+                        pointRadius: 2,
+                    },
+                    {
+                        label: '{{ $currentYearLabel }} Pos',
+                        data: {!! json_encode($comparisonChartCurrentPos) !!},
+                        borderColor: '#16a34a',
+                        backgroundColor: 'rgba(22,163,74,0.08)',
+                        fill: false,
+                        tension: 0.32,
+                        borderWidth: 2,
+                        pointRadius: 2,
+                    },
+                    {
+                        label: '{{ $prevYearLabel }} Pos',
+                        data: {!! json_encode($comparisonChartPrevPos) !!},
+                        borderColor: '#14b8a6',
+                        backgroundColor: 'rgba(20,184,166,0.06)',
+                        fill: false,
+                        tension: 0.32,
+                        borderWidth: 1.8,
+                        borderDash: [5, 4],
+                        pointRadius: 2,
+                    },
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { usePointStyle: true, boxWidth: 8, padding: 14, font: { size: 11 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                return ctx.dataset.label + ': ' + formatInt(ctx.parsed.y || 0);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 },
+                        grid: { color: gridColor },
+                    },
+                    x: {
+                        grid: { display: false },
+                    }
+                }
+            }
+        });
+    }
+    @endif
 
     // 1. Timeline Mensual (barras apiladas Neg/Pos)
     @if(!empty($byMonth))
@@ -1074,7 +1518,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     @endif
 
-    // 7. Antiguedad
+    // 7. Antigüedad
     @if(!empty($antiguedades))
     new Chart(document.getElementById('antiguedadChart'), {
         type: 'bar',
@@ -1090,7 +1534,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     @endif
 
-    // 8. Por Ano
+    // 8. Por Año
     @if(!empty($byYear))
     new Chart(document.getElementById('yearChart'), {
         type: 'bar',
@@ -1107,7 +1551,13 @@ document.addEventListener('DOMContentLoaded', function() {
     @endif
 
     @endif
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initStopDashboard);
+} else {
+    initStopDashboard();
+}
 </script>
 @endpush
 @endsection

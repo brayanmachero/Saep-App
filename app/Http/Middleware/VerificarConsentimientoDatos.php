@@ -14,7 +14,7 @@ class VerificarConsentimientoDatos
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (auth()->check() && !auth()->user()->acepta_politica_datos) {
+        if (auth()->check() && !auth()->user()->tieneConsentimientoDatosVigente()) {
             // Permitir acceso a rutas esenciales sin consentimiento
             $rutasPermitidas = [
                 'proteccion-datos.aceptar-politica',

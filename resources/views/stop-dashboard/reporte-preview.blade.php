@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vista Previa — Reporte STO CCU {{ $frecuencia }}</title>
+<title>Vista Previa — Reporte STOP CCU {{ $frecuencia }}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -111,8 +111,11 @@
 
     <form action="{{ route('stop-dashboard.reporte.test-send') }}" method="POST" class="send-form" id="sendForm">
         @csrf
-        @if($mes)<input type="hidden" name="mes" value="{{ $mes }}">@endif
-        @if($anio)<input type="hidden" name="anio" value="{{ $anio }}">@endif
+        @foreach(($filters ?? []) as $filterKey => $filterValue)
+            @if($filterValue !== null && $filterValue !== '')
+                <input type="hidden" name="{{ $filterKey }}" value="{{ $filterValue }}">
+            @endif
+        @endforeach
 
         <select name="frecuencia">
             <option value="Semanal" {{ $frecuencia === 'Semanal' ? 'selected' : '' }}>Semanal</option>
@@ -128,7 +131,7 @@
         </button>
     </form>
 
-    <a href="{{ route('stop-dashboard') }}" class="btn-back">
+    <a href="{{ route('stop-dashboard', $filters ?? []) }}" class="btn-back">
         <i class="bi bi-arrow-left"></i> Dashboard
     </a>
 

@@ -2,6 +2,23 @@
 @section('title', 'Seguimiento Charlas SST')
 @section('content')
 <div class="page-container">
+    @php
+        $filterDisplayLabels = [
+            'desde' => 'Desde',
+            'hasta' => 'Hasta',
+            'estado' => 'Estado',
+            'buscar' => 'Buscar',
+        ];
+        $activeFilterBadges = collect($filters ?? [])
+            ->filter(fn ($value, $key) => $value !== null && $value !== '' && !($key === 'estado' && $value === 'todos'))
+            ->map(fn ($value, $key) => ($filterDisplayLabels[$key] ?? $key) . ': ' . $value)
+            ->values()
+            ->all();
+        $activeFilterSummary = !empty($activeFilterBadges)
+            ? implode(' · ', $activeFilterBadges)
+            : 'Sin filtros aplicados';
+        $sendReportConfirm = '¿Enviar el reporte de Charlas SST a los destinatarios configurados con estos filtros? ' . $activeFilterSummary;
+    @endphp
 
     {{-- Header --}}
     <div class="page-header">
@@ -16,12 +33,15 @@
                 @endif
             </p>
         </div>
-        <div style="display:flex;gap:.5rem;align-items:center">
-            <a href="{{ route('charla-tracking.email-preview') }}" target="_blank" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;text-decoration:none">
+        <div class="charla-header-actions">
+            <a href="{{ route('charla-tracking.email-preview', $filters ?? []) }}" target="_blank" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;text-decoration:none">
                 <i class="bi bi-envelope-open"></i> Vista Previa Email
             </a>
-            <form method="POST" action="{{ route('charla-tracking.send-report') }}" id="send-report-form" style="display:inline" onsubmit="return confirm('¿Enviar el reporte semanal ahora a todos los destinatarios configurados?')">
+            <form method="POST" action="{{ route('charla-tracking.send-report') }}" id="send-report-form" style="display:inline" onsubmit="return confirm(@js($sendReportConfirm))">
                 @csrf
+                @foreach(($filters ?? []) as $fk => $fv)
+                    @if($fv !== null && $fv !== '')<input type="hidden" name="{{ $fk }}" value="{{ $fv }}">@endif
+                @endforeach
                 <button type="submit" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;background:#1e40af;color:#fff;border:none;cursor:pointer">
                     <i class="bi bi-send-fill"></i> Enviar Reporte Ahora
                 </button>
@@ -34,6 +54,65 @@
             </form>
         </div>
     </div>
+
+    @if(!empty($activeFilterBadges))
+    <div class="charla-active-filters">
+        <span class="charla-active-filters-label">Filtros activos</span>
+        @foreach($activeFilterBadges as $badge)
+            <span class="charla-filter-chip">{{ $badge }}</span>
+        @endforeach
+    </div>
+    @endif
+
+    @if(isset($charlaActionLogs) && $charlaActionLogs->isNotEmpty())
+    @php
+        $actionLabels = [
+            'sync' => 'Sincronizacion',
+            'report_send_now' => 'Envio manual',
+            'report_scheduled_send' => 'Envio programado',
+        ];
+        $statusLabels = [
+            'success' => 'Correcto',
+            'failed' => 'Error',
+            'skipped' => 'Omitido',
+            'partial' => 'Parcial',
+        ];
+        $statusStyles = [
+            'success' => 'background:#dcfce7;color:#166534',
+            'failed' => 'background:#fee2e2;color:#991b1b',
+            'skipped' => 'background:#fef3c7;color:#92400e',
+            'partial' => 'background:#dbeafe;color:#1e40af',
+        ];
+    @endphp
+    <div class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:.75rem">
+            <div style="display:flex;align-items:center;gap:.5rem">
+                <i class="bi bi-activity" style="color:var(--accent-color)"></i>
+                <h3 style="font-size:.85rem;font-weight:700;margin:0;color:var(--text-primary)">Actividad reciente Charlas SST</h3>
+            </div>
+            <span style="font-size:.68rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em">Auditoria de acciones</span>
+        </div>
+        <div class="charla-activity-list">
+            @foreach($charlaActionLogs as $log)
+                <div class="charla-activity-row">
+                    <div>
+                        <strong style="display:block;font-size:.78rem;color:var(--text-primary)">{{ $actionLabels[$log->action] ?? $log->action }}</strong>
+                        <span style="font-size:.68rem;color:var(--text-muted)">{{ $log->user?->name ?? 'Sistema' }}</span>
+                    </div>
+                    <span style="{{ $statusStyles[$log->status] ?? 'background:#f1f5f9;color:#334155' }};justify-self:start;border-radius:999px;padding:.16rem .5rem;font-size:.68rem;font-weight:800">
+                        {{ $statusLabels[$log->status] ?? ucfirst($log->status) }}
+                    </span>
+                    <span class="charla-activity-summary">
+                        {{ $log->summary ?: 'Accion registrada' }}
+                    </span>
+                    <time title="{{ optional($log->created_at)->format('d/m/Y H:i') }}" style="font-size:.68rem;color:var(--text-muted);white-space:nowrap">
+                        {{ optional($log->created_at)->diffForHumans() }}
+                    </time>
+                </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
 
     {{-- Filtros --}}
     <form method="GET" action="{{ route('charla-tracking.index') }}" class="filter-form">
@@ -374,9 +453,19 @@
 </div>
 
 @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{{ asset('vendor/chartjs/chart.umd.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+
+    if (typeof Chart === 'undefined') {
+        document.querySelectorAll('canvas').forEach(function(canvas) {
+            const holder = canvas.parentElement;
+            if (!holder) return;
+            canvas.remove();
+            holder.innerHTML = '<div class="chart-fallback">No se pudo cargar el motor de gráficos. Actualice la página o revise el build de assets.</div>';
+        });
+        return;
+    }
 
     const isDark = document.documentElement.classList.contains('dark') ||
                    document.body.classList.contains('dark-mode');
@@ -570,6 +659,82 @@ document.addEventListener('DOMContentLoaded', function() {
     font-size:.82rem;color:var(--text-muted);text-transform:uppercase;
     letter-spacing:.06em;font-weight:700;margin-bottom:.75rem;
 }
+
+.charla-header-actions {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.charla-active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+    margin: -.25rem 0 1rem;
+}
+
+.charla-active-filters-label {
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.charla-filter-chip {
+    max-width: 100%;
+    border: 1px solid rgba(59,130,246,.22);
+    background: rgba(59,130,246,.08);
+    color: #1d4ed8;
+    border-radius: 999px;
+    padding: .16rem .55rem;
+    font-size: .7rem;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.charla-activity-list {
+    display: grid;
+    gap: .45rem;
+}
+
+.charla-activity-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 150px) 90px minmax(0, 1fr) auto;
+    gap: .75rem;
+    align-items: center;
+    border-top: 1px solid rgba(148,163,184,.22);
+    padding: .55rem 0;
+}
+
+.charla-activity-summary {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .74rem;
+    color: var(--text-muted);
+}
+
+.chart-fallback {
+    display: flex;
+    height: 100%;
+    min-height: 160px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1rem;
+    border-radius: 10px;
+    border: 1px dashed rgba(128,128,128,.25);
+    color: var(--text-muted);
+    font-size: .8rem;
+}
+
 .spin-animation { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
@@ -580,6 +745,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
 @media (max-width: 900px) {
     .page-container > div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+
+    .charla-header-actions {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .charla-header-actions > a,
+    .charla-header-actions > form,
+    .charla-header-actions button {
+        width: 100%;
+    }
+
+    .charla-activity-row {
+        grid-template-columns: 1fr auto;
+        align-items: start;
+    }
+
+    .charla-activity-row time {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
+
+    .charla-activity-summary {
+        grid-column: 1 / -1;
+        white-space: normal;
+    }
 }
 </style>
 @endpush

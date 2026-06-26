@@ -151,10 +151,10 @@
             </div>
         </div>
 
-        {{-- ══════════ INDICADORES DE CUMPLIMIENTO ══════════ --}}
+        {{-- ══════════ INDICADORES OPERATIVOS SST ══════════ --}}
         <div id="compliance-section" style="display:none;margin-bottom:1.5rem">
             <h3 style="font-size:.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:.75rem">
-                <i class="bi bi-shield-check" style="color:#22c55e"></i> Indicadores de Cumplimiento SST
+                <i class="bi bi-shield-check" style="color:#22c55e"></i> Indicadores Operativos SST
             </h3>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.75rem">
                 {{-- Días sin accidentes --}}
@@ -163,9 +163,9 @@
                     <h2 id="comp-dias-sin" style="font-size:2.5rem;font-weight:900;margin:.25rem 0 .15rem;line-height:1;color:#16a34a">0</h2>
                     <p id="comp-last-incident" style="font-size:.68rem;color:var(--text-muted);margin:0"></p>
                 </div>
-                {{-- Tasa de cobertura --}}
+                {{-- Días con actividad registrada --}}
                 <div class="glass-card" style="padding:1rem 1.25rem;border-left:4px solid #3b82f6">
-                    <p style="font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:700;margin:0">Cobertura del Periodo</p>
+                    <p style="font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:700;margin:0">Días con actividad SST</p>
                     <div style="display:flex;align-items:baseline;gap:.3rem;margin:.25rem 0 .15rem">
                         <h2 id="comp-coverage" style="font-size:2rem;font-weight:900;line-height:1;color:#2563eb;margin:0">0%</h2>
                     </div>
@@ -507,16 +507,75 @@ body.dark-mode .alert-card.alert-danger { background:rgba(239,68,68,.06); }
 body.dark-mode .alert-card.alert-warning { background:rgba(245,158,11,.06); }
 body.dark-mode .alert-card.alert-info { background:rgba(59,130,246,.06); }
 body.dark-mode .alert-card.alert-success { background:rgba(34,197,94,.06); }
+.kizeo-chart-fallback {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    height:100%; min-height:180px; text-align:center; color:var(--text-muted);
+    background:rgba(15,27,76,.03); border:1px dashed var(--border-color,#e2e8f0);
+    border-radius:8px; padding:1rem;
+}
+.kizeo-chart-fallback i { font-size:1.5rem; color:var(--accent-color); margin-bottom:.35rem; }
 </style>
 @endpush
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{{ asset('vendor/chartjs/chart.umd.js') }}"></script>
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
 const CHART_COLORS = ['#0f1b4c','#f97316','#22c55e','#8b5cf6','#14b8a6','#3b82f6','#ef4444','#eab308','#ec4899','#6366f1'];
 
 let trendChart = null, distChart = null, auditorsChart = null;
 let dashboardForms = [];
+let dashboardRequestSeq = 0;
+let deepRequestSeq = 0;
+
+function chartIsReady() {
+    return typeof Chart !== 'undefined';
+}
+
+function showChartFallback(canvasId, message = 'Gráfico no disponible. Revisa el recurso local de Chart.js.') {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || !canvas.parentElement) return;
+
+    canvas.parentElement.innerHTML = `<div class="kizeo-chart-fallback">
+        <i class="bi bi-bar-chart-line"></i>
+        <strong>Visualización no disponible</strong>
+        <span style="font-size:.74rem;margin-top:.2rem">${escapeHtml(message)}</span>
+    </div>`;
+}
+
+function escapeInlineJsAttr(value) {
+    return escapeHtml(String(value ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n')
+        .replace(/</g, '\\x3C')
+        .replace(/>/g, '\\x3E'));
+}
+
+function safeIconClass(icon) {
+    const normalized = String(icon || 'info-circle').toLowerCase();
+    return /^[a-z0-9-]+$/.test(normalized) ? normalized : 'info-circle';
+}
+
+function renderAlertIcon(icon) {
+    return `<i class="bi bi-${safeIconClass(icon)}"></i>`;
+}
+
+function localDateString(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function dateOnly(value) {
+    const match = String(value ?? '').match(/(\d{4})-(\d{2})-(\d{2})/);
+    return match ? `${match[1]}-${match[2]}-${match[3]}` : '';
+}
+
+function recordDate(record) {
+    return dateOnly(record?.update_time || record?.create_time || '');
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     // Default: mes actual
@@ -540,6 +599,7 @@ function forceRefreshAll() {
 }
 
 async function loadDashboard(forceRefresh = false) {
+    const requestId = ++dashboardRequestSeq;
     const startDate = document.getElementById('filter-start').value;
     const endDate = document.getElementById('filter-end').value;
 
@@ -567,19 +627,21 @@ async function loadDashboard(forceRefresh = false) {
 
         const json = await res.json();
         if (!json.success) throw new Error(json.error || 'Error desconocido');
+        if (requestId !== dashboardRequestSeq) return;
 
-        renderDashboard(json.data);
         document.getElementById('loading-zone').style.display = 'none';
         document.getElementById('dashboard-content').style.display = 'block';
+        renderDashboard(json.data, forceRefresh);
 
     } catch (e) {
+        if (requestId !== dashboardRequestSeq) return;
         document.getElementById('loading-zone').style.display = 'none';
         document.getElementById('error-zone').style.display = 'block';
         document.getElementById('error-text').textContent = e.message;
     }
 }
 
-function renderDashboard(data) {
+function renderDashboard(data, forceRefresh = false) {
     const s = data.stats;
     document.getElementById('kpi-total').textContent = s.total.toLocaleString();
     document.getElementById('kpi-incidentes').textContent = s.incidentes.toLocaleString();
@@ -613,7 +675,7 @@ function renderDashboard(data) {
     }
 
     // Auto-cargar deep analytics (todos los formularios)
-    loadDeepDataAll();
+    loadDeepDataAll(forceRefresh);
 
     // ── New sections: compliance, calendar, alerts ──
     renderCompliance(data.compliance || {});
@@ -622,6 +684,11 @@ function renderDashboard(data) {
 }
 
 function renderTrend(labels, values) {
+    if (!chartIsReady()) {
+        showChartFallback('trendChart');
+        return;
+    }
+
     if (trendChart) trendChart.destroy();
     trendChart = new Chart(document.getElementById('trendChart'), {
         type: 'line',
@@ -647,6 +714,11 @@ function renderTrend(labels, values) {
 }
 
 function renderDist(labels, values) {
+    if (!chartIsReady()) {
+        showChartFallback('distChart');
+        return;
+    }
+
     if (distChart) distChart.destroy();
     distChart = new Chart(document.getElementById('distChart'), {
         type: 'doughnut',
@@ -662,6 +734,11 @@ function renderDist(labels, values) {
 }
 
 function renderAuditors(labels, values) {
+    if (!chartIsReady()) {
+        showChartFallback('auditorsChart');
+        return;
+    }
+
     if (auditorsChart) auditorsChart.destroy();
     auditorsChart = new Chart(document.getElementById('auditorsChart'), {
         type: 'bar',
@@ -696,6 +773,11 @@ function renderAuditorsTable(auditors) {
         const diffDays = Math.ceil(Math.abs(maxDate - lastT) / 86400000);
         const initials = name.substring(0, 2).toUpperCase();
         const shortForm = d.lastForm.length > 30 ? d.lastForm.substring(0, 30) + '…' : d.lastForm;
+        const safeName = escapeHtml(name);
+        const safeInitials = escapeHtml(initials);
+        const safeLastDate = escapeHtml(d.lastDate || '');
+        const safeLastForm = escapeHtml(d.lastForm || '');
+        const safeShortForm = escapeHtml(shortForm || '');
 
         let badge;
         if (diffDays >= 7) {
@@ -707,14 +789,14 @@ function renderAuditorsTable(auditors) {
         tbody.innerHTML += `<tr>
             <td>
                 <div style="display:flex;align-items:center;gap:.5rem">
-                    <div style="width:24px;height:24px;border-radius:50%;background:rgba(249,115,22,.15);display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;color:#f97316">${initials}</div>
-                    <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px" title="${name}">${name}</span>
+                    <div style="width:24px;height:24px;border-radius:50%;background:rgba(249,115,22,.15);display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;color:#f97316">${safeInitials}</div>
+                    <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px" title="${safeName}">${safeName}</span>
                 </div>
             </td>
             <td style="text-align:center;font-weight:600;color:#3b82f6">${d.count}</td>
             <td style="text-align:center">
-                <div>${d.lastDate}</div>
-                <div style="font-size:.68rem;color:var(--text-muted)" title="${d.lastForm}">${shortForm}</div>
+                <div>${safeLastDate}</div>
+                <div style="font-size:.68rem;color:var(--text-muted)" title="${safeLastForm}">${safeShortForm}</div>
             </td>
             <td style="text-align:center">${badge}</td>
         </tr>`;
@@ -738,7 +820,7 @@ function renderCompliance(c) {
 
     const cov = c.coverageRate ?? 0;
     document.getElementById('comp-coverage').textContent = cov + '%';
-    document.getElementById('comp-coverage-detail').textContent = `${c.activeDays ?? 0} días activos de ${c.totalDays ?? 0}`;
+    document.getElementById('comp-coverage-detail').textContent = `${c.activeDays ?? 0} de ${c.totalDays ?? 0} días con registros`;
     document.getElementById('comp-coverage-bar').style.width = Math.min(cov, 100) + '%';
 }
 
@@ -755,12 +837,24 @@ function renderCalendar(cal) {
     calEvents = cal.events || [];
     calTypeByDay = cal.typeByDay || {};
 
-    // Start at the month of the first event or current month
-    const now = new Date();
-    calYear = now.getFullYear();
-    calMonth = now.getMonth();
+    const anchor = calendarAnchorDate(calEvents);
+    const [year, month] = anchor.split('-').map(n => parseInt(n, 10));
+    calYear = year;
+    calMonth = month - 1;
 
     drawCalendar();
+}
+
+function calendarAnchorDate(events) {
+    const selectedStart = dateOnly(document.getElementById('filter-start')?.value || '');
+    if (selectedStart) return selectedStart;
+
+    const eventDates = events
+        .map(e => dateOnly(e.date))
+        .filter(Boolean)
+        .sort();
+
+    return eventDates.length ? eventDates[eventDates.length - 1] : localDateString();
 }
 
 function calNav(dir) {
@@ -784,8 +878,7 @@ function drawCalendar() {
     const last = new Date(calYear, calMonth + 1, 0);
     let startDow = (first.getDay() + 6) % 7; // Monday = 0
 
-    const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10);
+    const todayStr = localDateString();
 
     // Empty cells before first day
     for (let i = 0; i < startDow; i++) {
@@ -828,10 +921,12 @@ function showCalDay(dateStr) {
     } else {
         body.innerHTML = dayEvents.map(ev => {
             const color = CAL_TYPE_COLORS[ev.category] || '#94a3b8';
+            const form = escapeHtml(ev.form || 'Formulario');
+            const user = escapeHtml(ev.user || 'Desconocido');
             return `<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid var(--border-color,#e2e8f0)">
                 <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
-                <span style="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev.form}</span>
-                <span style="color:var(--text-muted);font-size:.7rem;white-space:nowrap">${ev.user}</span>
+                <span style="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${form}</span>
+                <span style="color:var(--text-muted);font-size:.7rem;white-space:nowrap">${user}</span>
             </div>`;
         }).join('');
     }
@@ -859,15 +954,15 @@ function renderAlerts(alerts) {
     emptyEl.style.display = 'none';
     countEl.textContent = alerts.length;
 
-    const catMap = { danger:'alert-danger', warning:'alert-warning', info:'alert-info', success:'alert-success' };
+    const typeMap = { danger:'alert-danger', warning:'alert-warning', info:'alert-info', success:'alert-success' };
 
     container.innerHTML = alerts.map(a => {
-        const cls = catMap[a.category] || 'alert-info';
+        const cls = typeMap[a.type] || 'alert-info';
         return `<div class="alert-card ${cls}">
-            <div class="alert-icon">${a.icon || '<i class="bi bi-info-circle"></i>'}</div>
+            <div class="alert-icon">${renderAlertIcon(a.icon)}</div>
             <div class="alert-body">
-                <p class="alert-title">${a.title}</p>
-                <p class="alert-detail">${a.detail}</p>
+                <p class="alert-title">${escapeHtml(a.title || 'Alerta')}</p>
+                <p class="alert-detail">${escapeHtml(a.detail || '')}</p>
             </div>
         </div>`;
     }).join('');
@@ -882,6 +977,7 @@ const deepPageSize = 25;
 let activeSegmenter = 'all';
 
 async function loadDeepDataAll(forceRefresh = false) {
+    const requestId = ++deepRequestSeq;
     const startDate = document.getElementById('filter-start').value;
     const endDate = document.getElementById('filter-end').value;
 
@@ -908,15 +1004,19 @@ async function loadDeepDataAll(forceRefresh = false) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         if (!json.success) throw new Error(json.error);
+        if (requestId !== deepRequestSeq) return;
 
         allDeepRecords = json.data.records || [];
         renderDeepAll(json.data);
     } catch (e) {
+        if (requestId !== deepRequestSeq) return;
         document.getElementById('deep-empty').style.display = 'block';
         document.getElementById('deep-empty').textContent = 'Error al cargar deep analytics: ' + e.message;
+    } finally {
+        if (requestId === deepRequestSeq) {
+            document.getElementById('deep-loading').style.display = 'none';
+        }
     }
-
-    document.getElementById('deep-loading').style.display = 'none';
 }
 
 function forceRefreshDeep() {
@@ -937,7 +1037,7 @@ function renderDeepAll(data) {
     const sel = document.getElementById('deep-form-filter');
     sel.innerHTML = '<option value="">Todos los formularios</option>';
     formStats.forEach(fs => {
-        sel.innerHTML += `<option value="${fs.form_id}">${fs.form_name} (${fs.records})</option>`;
+        sel.innerHTML += `<option value="${escapeHtml(fs.form_id)}">${escapeHtml(fs.form_name)} (${fs.records})</option>`;
     });
     sel.onchange = () => { deepCurrentPage = 1; filterDeepTable(); };
 
@@ -961,8 +1061,8 @@ function renderDeepAll(data) {
     breakdown.innerHTML = '';
     formStats.forEach(fs => {
         const isActive = document.getElementById('deep-form-filter').value === String(fs.form_id);
-        breakdown.innerHTML += `<span onclick="quickFilterForm('${fs.form_id}')" style="cursor:pointer;background:${isActive ? 'rgba(249,115,22,.12)' : 'rgba(15,27,76,.06)'};border:1px solid ${isActive ? 'rgba(249,115,22,.3)' : 'rgba(15,27,76,.1)'};border-radius:20px;padding:.22rem .6rem;font-size:.68rem;font-weight:600;white-space:nowrap;transition:all .15s">
-            ${fs.form_name} <span style="color:var(--accent-color);font-weight:800;margin-left:.15rem">${fs.records}</span>
+        breakdown.innerHTML += `<span onclick="quickFilterForm('${escapeInlineJsAttr(fs.form_id)}')" style="cursor:pointer;background:${isActive ? 'rgba(249,115,22,.12)' : 'rgba(15,27,76,.06)'};border:1px solid ${isActive ? 'rgba(249,115,22,.3)' : 'rgba(15,27,76,.1)'};border-radius:20px;padding:.22rem .6rem;font-size:.68rem;font-weight:600;white-space:nowrap;transition:all .15s">
+            ${escapeHtml(fs.form_name)} <span style="color:var(--accent-color);font-weight:800;margin-left:.15rem">${fs.records}</span>
         </span>`;
     });
 
@@ -990,8 +1090,10 @@ function applySegmenter(seg) {
 function filterDeepTable() {
     const formFilter = document.getElementById('deep-form-filter').value;
     const searchTerm = (document.getElementById('deep-search').value || '').toLowerCase().trim();
-    const today = new Date().toISOString().split('T')[0];
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+    const today = localDateString();
+    const weekAgoDate = new Date();
+    weekAgoDate.setDate(weekAgoDate.getDate() - 7);
+    const weekAgo = localDateString(weekAgoDate);
 
     let filtered = allDeepRecords;
 
@@ -1004,7 +1106,7 @@ function filterDeepTable() {
     if (activeSegmenter !== 'all') {
         filtered = filtered.filter(r => {
             const fname = (r._form_name || '').toLowerCase();
-            const date = (r.update_time || r.create_time || '').split(' ')[0];
+            const date = recordDate(r);
             switch (activeSegmenter) {
                 case 'incidentes': return fname.includes('incidente') || fname.includes('accidente');
                 case 'charlas': return fname.includes('charla') || fname.includes('reunión') || fname.includes('reunion') || fname.includes('cphs');
@@ -1022,7 +1124,8 @@ function filterDeepTable() {
         filtered = filtered.filter(r => {
             const user = (r._user_display || r.user_name || '').toLowerCase();
             const form = (r._form_name || '').toLowerCase();
-            const date = (r.update_time || r.create_time || '').toLowerCase();
+            const date = recordDate(r);
+            const dateRaw = String(r.update_time || r.create_time || '').toLowerCase();
             // Search in top-level field values
             let fieldText = '';
             const fields = r.fields || {};
@@ -1032,7 +1135,7 @@ function filterDeepTable() {
             }
             // Search in attendee/signatory names (from sub-records)
             const attendees = (r._attendee_names || []).join(' ').toLowerCase();
-            return user.includes(searchTerm) || form.includes(searchTerm) || date.includes(searchTerm) || fieldText.includes(searchTerm) || attendees.includes(searchTerm);
+            return user.includes(searchTerm) || form.includes(searchTerm) || date.includes(searchTerm) || dateRaw.includes(searchTerm) || fieldText.includes(searchTerm) || attendees.includes(searchTerm);
         });
     }
 
@@ -1087,7 +1190,7 @@ function renderDeepTablePage() {
         <th style="font-size:.7rem;padding:.6rem .5rem">Formulario</th>
         <th style="font-size:.7rem;padding:.6rem .5rem">Usuario</th>
         <th style="text-align:center;font-size:.7rem;padding:.6rem .5rem;white-space:nowrap" title="Firmas / Asistentes"><i class="bi bi-pen"></i> Firmas</th>
-        ${keys.map(k => `<th style="white-space:nowrap;font-size:.7rem;max-width:140px;overflow:hidden;text-overflow:ellipsis;padding:.6rem .5rem" title="${formatFieldName(k)}">${formatFieldName(k)}</th>`).join('')}
+        ${keys.map(k => `<th style="white-space:nowrap;font-size:.7rem;max-width:140px;overflow:hidden;text-overflow:ellipsis;padding:.6rem .5rem" title="${escapeHtml(formatFieldName(k))}">${escapeHtml(formatFieldName(k))}</th>`).join('')}
         <th style="text-align:center;width:40px;font-size:.7rem;padding:.6rem .5rem"><i class="bi bi-eye"></i></th>
     </tr>`;
 
@@ -1097,15 +1200,18 @@ function renderDeepTablePage() {
 
     pageRecords.forEach(r => {
         const fields = r.fields || {};
-        const date = (r.update_time || r.create_time || '').split(' ')[0];
+        const date = recordDate(r);
         const user = r._user_display || r.user_name || `ID-${r.user_id || '?'}`;
         const shortUser = user.length > 20 ? user.substring(0, 20) + '…' : user;
         const recordId = r.id || '';
         const formId = r._form_id || r.form_id || '';
         const formName = r._form_name || 'Formulario';
         const shortForm = formName.length > 20 ? formName.substring(0, 20) + '…' : formName;
+        const recordIdJs = escapeInlineJsAttr(recordId);
+        const formIdJs = escapeInlineJsAttr(formId);
+        const formNameJs = escapeInlineJsAttr(formName);
 
-        let cells = `<td style="white-space:nowrap;font-size:.73rem;padding:.5rem">${date}</td>`;
+        let cells = `<td style="white-space:nowrap;font-size:.73rem;padding:.5rem">${escapeHtml(date)}</td>`;
         cells += `<td style="padding:.5rem" title="${escapeHtml(formName)}"><span class="badge secondary" style="font-size:.62rem;white-space:nowrap">${escapeHtml(shortForm)}</span></td>`;
         cells += `<td style="white-space:nowrap;font-size:.73rem;padding:.5rem" title="${escapeHtml(user)}">${escapeHtml(shortUser)}</td>`;
 
@@ -1134,10 +1240,11 @@ function renderDeepTablePage() {
             if (field) {
                 if (typeof field.value === 'string' || typeof field.value === 'number') {
                     let sv = String(field.value);
+                    const svJs = escapeInlineJsAttr(sv);
                     if (sv.match(/\.(jpg|jpeg|png|gif)$/i) || (field.type && field.type === 'photo')) {
-                        val = `<button onclick="event.stopPropagation();showMedia('${formId}','${r.id}','${sv}')" class="btn-ghost" style="padding:.1rem .35rem;font-size:.65rem"><i class="bi bi-image"></i></button>`;
+                        val = `<button onclick="event.stopPropagation();showMedia('${formIdJs}','${recordIdJs}','${svJs}')" class="btn-ghost" style="padding:.1rem .35rem;font-size:.65rem"><i class="bi bi-image"></i></button>`;
                     } else if (field.type === 'signature') {
-                        val = `<button onclick="event.stopPropagation();showMedia('${formId}','${r.id}','${sv}')" class="btn-ghost" style="padding:.1rem .35rem;font-size:.65rem"><i class="bi bi-pen"></i></button>`;
+                        val = `<button onclick="event.stopPropagation();showMedia('${formIdJs}','${recordIdJs}','${svJs}')" class="btn-ghost" style="padding:.1rem .35rem;font-size:.65rem"><i class="bi bi-pen"></i></button>`;
                     } else if (sv.length > 28) {
                         val = `<span title="${escapeHtml(sv)}" style="font-size:.72rem">${escapeHtml(sv.substring(0, 28))}…</span>`;
                     } else {
@@ -1153,11 +1260,11 @@ function renderDeepTablePage() {
         });
 
         const detailBtn = recordId
-            ? `<button class="btn-ghost" style="padding:.1rem .35rem;font-size:.65rem" onclick="event.stopPropagation();openSlideout('${formId}','${recordId}','${escapeHtml(formName)}')"><i class="bi bi-eye"></i></button>`
+            ? `<button class="btn-ghost" style="padding:.1rem .35rem;font-size:.65rem" onclick="event.stopPropagation();openSlideout('${formIdJs}','${recordIdJs}','${formNameJs}')"><i class="bi bi-eye"></i></button>`
             : '—';
         cells += `<td style="text-align:center;padding:.5rem">${detailBtn}</td>`;
 
-        const clickAttr = recordId ? `onclick="openSlideout('${formId}','${recordId}','${escapeHtml(formName)}')"` : '';
+        const clickAttr = recordId ? `onclick="openSlideout('${formIdJs}','${recordIdJs}','${formNameJs}')"` : '';
         const rowClass = recordId ? 'class="clickable-row"' : '';
         tbody.innerHTML += `<tr ${rowClass} ${clickAttr}>${cells}</tr>`;
     });
@@ -1210,7 +1317,7 @@ async function showMedia(formId, recordId, mediaId) {
     document.getElementById('modal-image').style.display = 'none';
 
     try {
-        const res = await fetch(`/kizeo/api/media/${formId}/${recordId}/${mediaId}`, {
+        const res = await fetch(`/kizeo/api/media/${encodeURIComponent(formId)}/${encodeURIComponent(recordId)}/${encodeURIComponent(mediaId)}`, {
             headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken }
         });
         const data = await res.json();
@@ -1251,7 +1358,7 @@ async function openSlideout(formId, recordId, formName) {
     document.body.style.overflow = 'hidden';
 
     try {
-        const res = await fetch(`/kizeo/api/record/${formId}/${recordId}`, {
+        const res = await fetch(`/kizeo/api/record/${encodeURIComponent(formId)}/${encodeURIComponent(recordId)}`, {
             headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken }
         });
 
@@ -1279,6 +1386,8 @@ function closeSlideout() {
 function renderSlideoutContent(record, formId) {
     const body = document.getElementById('slideout-body');
     let html = '';
+    const formIdJs = escapeInlineJsAttr(formId);
+    const recordIdJs = escapeInlineJsAttr(record.id || '');
 
     // Meta info card
     const createDate = record.create_time || '';
@@ -1291,9 +1400,9 @@ function renderSlideoutContent(record, formId) {
     html += `<div style="background:linear-gradient(135deg,rgba(15,27,76,.04),rgba(249,115,22,.03));border-radius:8px;padding:.85rem 1rem;margin-bottom:1rem;border:1px solid rgba(15,27,76,.08)">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
             <div><span style="font-size:.65rem;text-transform:uppercase;color:var(--text-muted);font-weight:700">Usuario</span><br><span style="font-size:.82rem;font-weight:600">${escapeHtml(fullName || userName)}</span></div>
-            <div><span style="font-size:.65rem;text-transform:uppercase;color:var(--text-muted);font-weight:700">Record #</span><br><span style="font-size:.82rem;font-weight:600">${record.record_number || record.id}</span></div>
-            <div><span style="font-size:.65rem;text-transform:uppercase;color:var(--text-muted);font-weight:700">Creado</span><br><span style="font-size:.82rem">${createDate}</span></div>
-            <div><span style="font-size:.65rem;text-transform:uppercase;color:var(--text-muted);font-weight:700">Actualizado</span><br><span style="font-size:.82rem">${updateDate}</span></div>
+            <div><span style="font-size:.65rem;text-transform:uppercase;color:var(--text-muted);font-weight:700">Record #</span><br><span style="font-size:.82rem;font-weight:600">${escapeHtml(record.record_number || record.id || '')}</span></div>
+            <div><span style="font-size:.65rem;text-transform:uppercase;color:var(--text-muted);font-weight:700">Creado</span><br><span style="font-size:.82rem">${escapeHtml(createDate)}</span></div>
+            <div><span style="font-size:.65rem;text-transform:uppercase;color:var(--text-muted);font-weight:700">Actualizado</span><br><span style="font-size:.82rem">${escapeHtml(updateDate)}</span></div>
         </div>
     </div>`;
 
@@ -1311,7 +1420,7 @@ function renderSlideoutContent(record, formId) {
 
             // Section headers
             if (type === 'section' || type === 'separator') {
-                html += `<div class="field-section"><i class="bi bi-dash-lg"></i> ${formatFieldName(key)}</div>`;
+                html += `<div class="field-section"><i class="bi bi-dash-lg"></i> ${escapeHtml(formatFieldName(key))}</div>`;
                 return;
             }
 
@@ -1326,7 +1435,7 @@ function renderSlideoutContent(record, formId) {
             } else if (type === 'photo' || type === 'signature') {
                 const mediaVal = typeof value === 'string' ? value : '';
                 if (mediaVal) {
-                    rendered = `<button onclick="showMedia('${formId}','${record.id}','${escapeHtml(mediaVal)}')" class="btn-premium" style="padding:.3rem .7rem;font-size:.75rem">
+                    rendered = `<button onclick="showMedia('${formIdJs}','${recordIdJs}','${escapeInlineJsAttr(mediaVal)}')" class="btn-premium" style="padding:.3rem .7rem;font-size:.75rem">
                         <i class="bi bi-${type === 'signature' ? 'pen' : 'camera'}"></i> ${type === 'signature' ? 'Ver firma' : 'Ver foto'}
                     </button>`;
                 } else {
@@ -1368,7 +1477,7 @@ function renderSlideoutContent(record, formId) {
             }
 
             html += `<div class="field-row">
-                <div class="field-label">${label}</div>
+                <div class="field-label">${escapeHtml(label)}</div>
                 <div class="field-value">${rendered}</div>
             </div>`;
         });
@@ -1473,6 +1582,8 @@ function renderSubRecords(arr, formId, recordId) {
  */
 function renderSubRecordCard(obj, idx, formId, recordId) {
     const keys = Object.keys(obj);
+    const formIdJs = escapeInlineJsAttr(formId);
+    const recordIdJs = escapeInlineJsAttr(recordId);
     let cardHtml = `<div style="background:var(--bg-color,#f8fafc);border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:.65rem .85rem;margin-bottom:.5rem;position:relative">`;
     cardHtml += `<div style="position:absolute;top:.4rem;right:.6rem;font-size:.62rem;font-weight:800;color:var(--text-muted);background:rgba(0,0,0,.04);border-radius:10px;padding:.1rem .45rem">#${idx + 1}</div>`;
 
@@ -1494,7 +1605,7 @@ function renderSubRecordCard(obj, idx, formId, recordId) {
         } else if (fType === 'signature') {
             const mediaVal = typeof fValue === 'string' ? fValue : '';
             if (mediaVal) {
-                fRendered = `<button onclick="event.stopPropagation();showMedia('${formId}','${recordId}','${escapeHtml(mediaVal)}')" class="btn-premium" style="padding:.2rem .55rem;font-size:.68rem">
+                fRendered = `<button onclick="event.stopPropagation();showMedia('${formIdJs}','${recordIdJs}','${escapeInlineJsAttr(mediaVal)}')" class="btn-premium" style="padding:.2rem .55rem;font-size:.68rem">
                     <i class="bi bi-pen"></i> Ver firma
                 </button>`;
             } else {
@@ -1503,7 +1614,7 @@ function renderSubRecordCard(obj, idx, formId, recordId) {
         } else if (fType === 'photo') {
             const mediaVal = typeof fValue === 'string' ? fValue : '';
             if (mediaVal) {
-                fRendered = `<button onclick="event.stopPropagation();showMedia('${formId}','${recordId}','${escapeHtml(mediaVal)}')" class="btn-premium" style="padding:.2rem .55rem;font-size:.68rem">
+                fRendered = `<button onclick="event.stopPropagation();showMedia('${formIdJs}','${recordIdJs}','${escapeInlineJsAttr(mediaVal)}')" class="btn-premium" style="padding:.2rem .55rem;font-size:.68rem">
                     <i class="bi bi-camera"></i> Ver foto
                 </button>`;
             } else {
@@ -1520,7 +1631,7 @@ function renderSubRecordCard(obj, idx, formId, recordId) {
         }
 
         cardHtml += `<div style="display:flex;gap:.5rem;align-items:baseline;padding:.2rem 0">
-            <span style="font-size:.65rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;min-width:100px;flex-shrink:0">${fLabel}</span>
+            <span style="font-size:.65rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;min-width:100px;flex-shrink:0">${escapeHtml(fLabel)}</span>
             <span style="flex:1">${fRendered}</span>
         </div>`;
     });

@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Laravel\Socialite\Facades\Socialite;
 
 class LeyKarinPublicoController extends Controller
@@ -192,7 +193,11 @@ class LeyKarinPublicoController extends Controller
         // Limpiar sesión de Google después de enviar
         Session::forget('google_user');
 
-        return redirect()->route('ley-karin-publico.confirmacion', $caso->folio);
+        return redirect(URL::temporarySignedRoute(
+            'ley-karin-publico.confirmacion',
+            now()->addDays(7),
+            ['folio' => $caso->folio]
+        ));
     }
 
     /**

@@ -13,7 +13,7 @@
             <i class="bi bi-plus-circle" style="color: var(--primary-color);"></i> Nueva Solicitud ARCO
         </h2>
         <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem;">
-            Ejerza sus derechos de Acceso, Rectificación, Supresión, Oposición o Portabilidad conforme a la Ley 21.719.
+            Ejerza sus derechos de Acceso, Rectificación, Supresión, Oposición, Portabilidad o Bloqueo conforme a la Ley 21.719.
         </p>
 
         @if($errors->any())
@@ -41,6 +41,7 @@
                         ['supresion', 'bi-trash3', 'Supresión', 'Solicitar la eliminación de datos cuando ya no sean necesarios.'],
                         ['oposicion', 'bi-hand-thumbs-down', 'Oposición', 'Oponerse al tratamiento de sus datos en ciertas circunstancias.'],
                         ['portabilidad', 'bi-box-arrow-right', 'Portabilidad', 'Recibir sus datos en formato electrónico estructurado.'],
+                        ['bloqueo', 'bi-pause-circle', 'Bloqueo', 'Suspender temporalmente el tratamiento de datos mientras se revisa.'],
                     ];
                     @endphp
                     @foreach($tipos as [$valor, $icono, $nombre, $desc])

@@ -58,6 +58,13 @@ Route::post('/password/reset', [PasswordResetController::class, 'reset'])->name(
 // Política de Privacidad (pública, accesible sin auth)
 Route::get('/politica-privacidad', [ProteccionDatosController::class, 'politicaPrivacidad'])
     ->name('proteccion-datos.politica-privacidad');
+Route::get('/solicitud-arco', [ProteccionDatosController::class, 'crearSolicitudPublica'])
+    ->name('proteccion-datos.publico.crear');
+Route::post('/solicitud-arco', [ProteccionDatosController::class, 'guardarSolicitudPublica'])
+    ->name('proteccion-datos.publico.guardar')
+    ->middleware('throttle:5,1');
+Route::get('/solicitud-arco/{numero}/{token}', [ProteccionDatosController::class, 'verSolicitudPublica'])
+    ->name('proteccion-datos.publico.ver');
 
 // --- DENUNCIA LEY KARIN PÚBLICA (sin autenticación SAEP, requiere Google OAuth) ---
 Route::prefix('denuncia-ley-karin')->group(function () {
@@ -65,8 +72,8 @@ Route::prefix('denuncia-ley-karin')->group(function () {
     Route::get('/auth/google',     [LeyKarinPublicoController::class, 'redirectGoogle'])->name('ley-karin-publico.google');
     Route::get('/auth/callback',   [LeyKarinPublicoController::class, 'callbackGoogle'])->name('ley-karin-publico.callback');
     Route::get('/formulario',      [LeyKarinPublicoController::class, 'formulario'])->name('ley-karin-publico.formulario');
-    Route::post('/enviar',         [LeyKarinPublicoController::class, 'store'])->name('ley-karin-publico.store');
-    Route::get('/confirmacion/{folio}', [LeyKarinPublicoController::class, 'confirmacion'])->name('ley-karin-publico.confirmacion');
+    Route::post('/enviar',         [LeyKarinPublicoController::class, 'store'])->name('ley-karin-publico.store')->middleware('throttle:5,1');
+    Route::get('/confirmacion/{folio}', [LeyKarinPublicoController::class, 'confirmacion'])->name('ley-karin-publico.confirmacion')->middleware('signed');
     Route::post('/logout',         [LeyKarinPublicoController::class, 'logout'])->name('ley-karin-publico.logout');
 });
 
@@ -76,8 +83,8 @@ Route::prefix('postulacion')->group(function () {
     Route::get('/auth/google',         [ContratacionPublicoController::class, 'redirectGoogle'])->name('contratacion-publico.google');
     Route::get('/auth/callback',       [ContratacionPublicoController::class, 'callbackGoogle'])->name('contratacion-publico.callback');
     Route::get('/formulario',          [ContratacionPublicoController::class, 'formulario'])->name('contratacion-publico.formulario');
-    Route::post('/enviar',             [ContratacionPublicoController::class, 'store'])->name('contratacion-publico.store');
-    Route::get('/confirmacion/{folio}',[ContratacionPublicoController::class, 'confirmacion'])->name('contratacion-publico.confirmacion');
+    Route::post('/enviar',             [ContratacionPublicoController::class, 'store'])->name('contratacion-publico.store')->middleware('throttle:5,1');
+    Route::get('/confirmacion/{folio}',[ContratacionPublicoController::class, 'confirmacion'])->name('contratacion-publico.confirmacion')->middleware('signed');
     Route::get('/logout',              [ContratacionPublicoController::class, 'logout'])->name('contratacion-publico.logout');
 });
 
@@ -282,6 +289,7 @@ Route::middleware('auth')->group(function () {
         Route::post('stop-dashboard/sync', [StopDashboardController::class, 'sync'])->name('stop-dashboard.sync');
         Route::get('stop-dashboard/api/data', [StopDashboardController::class, 'apiData'])->name('stop-dashboard.api.data');
         Route::get('stop-dashboard/reporte/preview', [StopDashboardController::class, 'reportePreview'])->name('stop-dashboard.reporte.preview');
+        Route::get('stop-dashboard/reporte/excel', [StopDashboardController::class, 'downloadExcelReport'])->name('stop-dashboard.reporte.excel');
         Route::post('stop-dashboard/reporte/test-send', [StopDashboardController::class, 'sendTestReport'])->name('stop-dashboard.reporte.test-send');
         Route::post('stop-dashboard/reporte/send-now', [StopDashboardController::class, 'sendReportNow'])->name('stop-dashboard.reporte.send-now');
     });
@@ -393,6 +401,7 @@ Route::middleware('auth')->group(function () {
         Route::put('/proteccion-datos/solicitud/{solicitud}/responder', [ProteccionDatosController::class, 'responderSolicitud'])->name('proteccion-datos.responder-solicitud');
         Route::post('/proteccion-datos/solicitud/{solicitud}/ejecutar-supresion', [ProteccionDatosController::class, 'ejecutarSupresion'])->name('proteccion-datos.ejecutar-supresion');
         Route::get('/proteccion-datos/registro-tratamiento', [ProteccionDatosController::class, 'registroTratamiento'])->name('proteccion-datos.registro-tratamiento');
+        Route::get('/proteccion-datos/matriz-retencion', [ProteccionDatosController::class, 'matrizRetencion'])->name('proteccion-datos.matriz-retencion');
     });
 
     // --- DOCUMENTACIÓN ---

@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Console\Commands\StopWeeklyReport;
 use App\Mail\StopReporteMail;
+use App\Models\StopActionLog;
 use App\Services\GoogleDriveService;
 use App\Services\StopAnalyticsService;
+use App\Services\StopExcelExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
@@ -16,6 +18,7 @@ class StopDashboardController extends Controller
     {
         $sql = new StopAnalyticsService();
         $useSql = $sql->hasSyncedData();
+        $stopActionLogs = $this->recentStopActionLogs();
 
         // Si no hay data en SQL, necesitamos Google Drive como fuente
         $drive = new GoogleDriveService();
@@ -23,6 +26,7 @@ class StopDashboardController extends Controller
         if (!$useSql && !$drive->isConfigured()) {
             return view('stop-dashboard.index', [
                 'error' => 'Google Drive no está configurado. Verifique las credenciales y el ID de carpeta en el archivo .env',
+                'stopActionLogs' => $stopActionLogs,
             ]);
         }
 
@@ -32,6 +36,7 @@ class StopDashboardController extends Controller
         if (!$useSql && !$fileInfo) {
             return view('stop-dashboard.index', [
                 'error' => 'No se encontraron archivos en la carpeta de Google Drive.',
+                'stopActionLogs' => $stopActionLogs,
             ]);
         }
 
@@ -68,11 +73,12 @@ class StopDashboardController extends Controller
                 'syncInfo'      => $syncInfo,
                 'filters'       => $filters,
                 'filterOptions' => $filterOptions,
+                'stopActionLogs' => $stopActionLogs,
             ]);
         }
 
         // Checklist
-        $checklist = $useSql ? $sql->getChecklistAnalytics() : $drive->getChecklistAnalytics();
+        $checklist = $useSql ? $sql->getChecklistAnalytics($filters) : $drive->getChecklistAnalytics();
 
         // Comparativa año anterior + acumulado YTD
         if ($useSql) {
@@ -87,11 +93,11 @@ class StopDashboardController extends Controller
             : ($drive->getEvaluationDetail($filters) ?? []);
 
         return view('stop-dashboard.index', compact(
-            'fileInfo', 'syncInfo', 'analytics', 'checklist', 'filters', 'filterOptions', 'comparison', 'evalDetail'
+            'fileInfo', 'syncInfo', 'analytics', 'checklist', 'filters', 'filterOptions', 'comparison', 'evalDetail', 'stopActionLogs'
         ));
     }
 
-    public function sync()
+    public function sync(Request $request)
     {
         $drive = new GoogleDriveService();
 
@@ -103,9 +109,17 @@ class StopDashboardController extends Controller
             // También limpiar caché de Google Drive
             $drive->clearCache();
 
+            $this->recordStopAction($request, 'sync', 'success', 'Sincronización manual de datos STOP completada.', [], [
+                'output' => trim($output),
+            ]);
+
             return back()->with('success', 'Datos sincronizados exitosamente desde Google Sheets. ' . trim($output));
-        } catch (\Exception $e) {
-            return back()->with('success', 'Error durante sincronización: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            $this->recordStopAction($request, 'sync', 'failed', 'Error durante sincronización manual de datos STOP.', [], [
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Error durante sincronización: ' . $e->getMessage());
         }
     }
 
@@ -131,7 +145,7 @@ class StopDashboardController extends Controller
 
         if ($useSql) {
             $analytics = $sql->getFilteredAnalytics($filters);
-            $checklist = $sql->getChecklistAnalytics();
+            $checklist = $sql->getChecklistAnalytics($filters);
         } else {
             $drive = new GoogleDriveService();
             $analytics = $drive->getFilteredAnalytics($filters);
@@ -153,11 +167,10 @@ class StopDashboardController extends Controller
      */
     public function reportePreview(Request $request)
     {
-        $mes  = $request->input('mes');
-        $anio = $request->input('anio');
+        $filters = $this->reportFiltersFromRequest($request);
         $freq = $request->input('frecuencia', 'Semanal');
 
-        $data = \App\Console\Commands\StopWeeklyReport::buildReportData($mes, $anio);
+        $data = StopWeeklyReport::buildReportDataFromFilters($filters);
 
         $mailable = new StopReporteMail(
             analytics: $data['analytics'],
@@ -172,14 +185,68 @@ class StopDashboardController extends Controller
 
         return view('stop-dashboard.reporte-preview', [
             'emailHtml'  => $emailHtml,
-            'mes'        => $mes,
-            'anio'       => $anio,
+            'filters'    => $data['filters'] ?? $filters,
             'frecuencia' => $freq,
             'periodo'    => $data['periodo'] ?? now()->format('d/m/Y'),
             'totalRows'  => $data['analytics']['totalRows'] ?? 0,
             'success'    => session('success'),
             'error'      => session('error'),
         ]);
+    }
+
+    public function downloadExcelReport(Request $request)
+    {
+        $filters = $this->reportFiltersFromRequest($request);
+        $frecuencia = $request->input('frecuencia', 'Semanal');
+        $path = null;
+
+        $data = StopWeeklyReport::buildReportDataFromFilters($filters);
+        $analytics = $data['analytics'] ?? ['totalRows' => 0];
+
+        if (!$analytics || ($analytics['totalRows'] ?? 0) === 0) {
+            $this->recordStopAction($request, 'report_excel_download', 'skipped', 'Descarga Excel STOP omitida por falta de datos.', $data['filters'] ?? $filters, [
+                'frecuencia' => $frecuencia,
+                'total_rows' => 0,
+            ]);
+
+            return back()->with('error', 'No hay datos con los filtros seleccionados para descargar el Excel.');
+        }
+
+        try {
+            $path = (new StopExcelExport())->generate(
+                $analytics,
+                $data['periodo'] ?? now()->format('d/m/Y'),
+                $frecuencia,
+                $data['comparison'] ?? [],
+                $data['evalDetail'] ?? [],
+            );
+
+            $filename = $this->excelFilename($data['periodo'] ?? null);
+
+            $this->recordStopAction($request, 'report_excel_download', 'success', 'Reporte STOP Excel descargado con filtros activos.', $data['filters'] ?? $filters, [
+                'frecuencia' => $frecuencia,
+                'periodo' => $data['periodo'] ?? null,
+                'filename' => $filename,
+                'total_rows' => $analytics['totalRows'] ?? 0,
+            ]);
+
+            return response()
+                ->download($path, $filename)
+                ->deleteFileAfterSend(true);
+        } catch (\Throwable $e) {
+            if ($path && file_exists($path)) {
+                @unlink($path);
+            }
+
+            $this->recordStopAction($request, 'report_excel_download', 'failed', 'Error al descargar reporte STOP Excel.', $data['filters'] ?? $filters, [
+                'frecuencia' => $frecuencia,
+                'periodo' => $data['periodo'] ?? null,
+                'total_rows' => $analytics['totalRows'] ?? 0,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', "Error al generar Excel STOP: {$e->getMessage()}");
+        }
     }
 
     /**
@@ -192,16 +259,19 @@ class StopDashboardController extends Controller
             'frecuencia' => 'in:Semanal,Mensual',
         ]);
 
-        $data = \App\Console\Commands\StopWeeklyReport::buildReportData(
-            $request->input('mes'),
-            $request->input('anio'),
-        );
+        $filters = $this->reportFiltersFromRequest($request);
+        $freq = $request->input('frecuencia', 'Semanal');
+        $data = StopWeeklyReport::buildReportDataFromFilters($filters);
 
         if (($data['analytics']['totalRows'] ?? 0) === 0) {
+            $this->recordStopAction($request, 'report_test_send', 'skipped', 'Reporte STOP de prueba omitido por falta de datos.', $data['filters'] ?? $filters, [
+                'recipient' => $request->input('email'),
+                'frecuencia' => $freq,
+                'total_rows' => 0,
+            ]);
+
             return back()->with('error', 'No hay datos para el período seleccionado.');
         }
-
-        $freq = $request->input('frecuencia', 'Semanal');
 
         $mailable = new StopReporteMail(
             analytics: $data['analytics'],
@@ -215,8 +285,23 @@ class StopDashboardController extends Controller
         try {
             Mail::to($request->input('email'))->send($mailable);
 
+            $this->recordStopAction($request, 'report_test_send', 'success', 'Reporte STOP de prueba enviado.', $data['filters'] ?? $filters, [
+                'recipient' => $request->input('email'),
+                'frecuencia' => $freq,
+                'periodo' => $data['periodo'] ?? null,
+                'total_rows' => $data['analytics']['totalRows'] ?? 0,
+            ]);
+
             return back()->with('success', "Reporte de prueba enviado a {$request->input('email')}");
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            $this->recordStopAction($request, 'report_test_send', 'failed', 'Error al enviar reporte STOP de prueba.', $data['filters'] ?? $filters, [
+                'recipient' => $request->input('email'),
+                'frecuencia' => $freq,
+                'periodo' => $data['periodo'] ?? null,
+                'total_rows' => $data['analytics']['totalRows'] ?? 0,
+                'error' => $e->getMessage(),
+            ]);
+
             return back()->with('error', "Error al enviar: {$e->getMessage()}");
         }
     }
@@ -229,6 +314,7 @@ class StopDashboardController extends Controller
     {
         $frecuencia = ucfirst($request->input('frecuencia', 'semanal'));
         $esMensual  = strtolower($frecuencia) === 'mensual';
+        $filters = $this->reportFiltersFromRequest($request);
 
         // Leer destinatarios desde configuración
         $configKey = $esMensual ? 'stop_report_mensual_destinatarios' : 'stop_report_destinatarios';
@@ -240,57 +326,34 @@ class StopDashboardController extends Controller
             ->values();
 
         if ($destinatarios->isEmpty()) {
+            $this->recordStopAction($request, 'report_send_now', 'skipped', 'Reporte STOP manual omitido por falta de destinatarios configurados.', $filters, [
+                'frecuencia' => $frecuencia,
+                'config_key' => $configKey,
+            ]);
+
             return back()->with('error', "No hay destinatarios configurados en «{$configKey}». Configure los emails en Ajustes.");
         }
 
-        // Construir filtros desde el request (los mismos del dashboard)
-        $filters = array_filter([
-            'empresa_observador' => $request->input('empresa_observador'),
-            'empresa_observado'  => $request->input('empresa_observado'),
-            'tipo_observacion'   => $request->input('tipo_observacion'),
-            'centro'             => $request->input('centro'),
-            'clasificacion'      => $request->input('clasificacion'),
-            'fecha_desde'        => $request->input('fecha_desde'),
-            'fecha_hasta'        => $request->input('fecha_hasta'),
-            'mes'                => $request->input('mes'),
-            'anio'               => $request->input('anio'),
-        ]);
-
-        // Obtener analíticas con los filtros activos
-        $sql = new StopAnalyticsService();
-        $useSql = $sql->hasSyncedData();
-
-        if ($useSql) {
-            $analytics = $sql->getFilteredAnalytics($filters);
-        } else {
-            $drive = new GoogleDriveService();
-            $analytics = $drive->getFilteredAnalytics($filters);
-        }
+        $data = StopWeeklyReport::buildReportDataFromFilters($filters);
+        $analytics = $data['analytics'] ?? ['totalRows' => 0];
 
         if (!$analytics || ($analytics['totalRows'] ?? 0) === 0) {
+            $this->recordStopAction($request, 'report_send_now', 'skipped', 'Reporte STOP manual omitido por falta de datos.', $data['filters'] ?? $filters, [
+                'frecuencia' => $frecuencia,
+                'recipients_count' => $destinatarios->count(),
+                'total_rows' => 0,
+            ]);
+
             return back()->with('error', 'No hay datos con los filtros seleccionados para generar el reporte.');
         }
 
-        // Comparativa
-        $comparison = $useSql
-            ? $sql->buildComparison($filters)
-            : StopWeeklyReport::buildComparison(new GoogleDriveService(), $filters);
-
-        // Detalle evaluación
-        $evalDetail = $useSql
-            ? ($sql->getEvaluationDetail($filters) ?? [])
-            : ((new GoogleDriveService())->getEvaluationDetail($filters) ?? []);
-
-        // Construir etiqueta de período
-        $periodo = $this->buildPeriodoLabel($filters);
-
         $mailable = new StopReporteMail(
             analytics: $analytics,
-            periodo: $periodo,
-            mesLabel: $filters['mes'] ?? null,
+            periodo: $data['periodo'] ?? now()->format('d/m/Y'),
+            mesLabel: $data['mesLabel'] ?? null,
             frecuencia: $frecuencia,
-            comparison: $comparison,
-            evalDetail: $evalDetail,
+            comparison: $data['comparison'] ?? [],
+            evalDetail: $data['evalDetail'] ?? [],
         );
 
         try {
@@ -299,32 +362,77 @@ class StopDashboardController extends Controller
                 ->send($mailable);
 
             $count = $destinatarios->count();
+
+            $this->recordStopAction($request, 'report_send_now', 'success', 'Reporte STOP manual enviado con filtros activos.', $data['filters'] ?? $filters, [
+                'frecuencia' => $frecuencia,
+                'periodo' => $data['periodo'] ?? null,
+                'recipients' => $destinatarios->all(),
+                'recipients_count' => $count,
+                'total_rows' => $analytics['totalRows'] ?? 0,
+            ]);
+
             return back()->with('success', "Reporte {$frecuencia} enviado a {$count} destinatario(s) con los filtros activos del dashboard.");
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            $this->recordStopAction($request, 'report_send_now', 'failed', 'Error al enviar reporte STOP manual.', $data['filters'] ?? $filters, [
+                'frecuencia' => $frecuencia,
+                'periodo' => $data['periodo'] ?? null,
+                'recipients' => $destinatarios->all(),
+                'recipients_count' => $destinatarios->count(),
+                'total_rows' => $analytics['totalRows'] ?? 0,
+                'error' => $e->getMessage(),
+            ]);
+
             return back()->with('error', "Error al enviar reporte: {$e->getMessage()}");
         }
     }
 
-    /**
-     * Construir etiqueta de período legible a partir de los filtros.
-     */
-    private function buildPeriodoLabel(array $filters): string
+    private function reportFiltersFromRequest(Request $request): array
     {
-        if (!empty($filters['fecha_desde']) && !empty($filters['fecha_hasta'])) {
-            return date('d/m/Y', strtotime($filters['fecha_desde'])) . ' — ' . date('d/m/Y', strtotime($filters['fecha_hasta']));
-        }
-        if (!empty($filters['mes'])) {
-            $meses = ['01'=>'Enero','02'=>'Febrero','03'=>'Marzo','04'=>'Abril','05'=>'Mayo','06'=>'Junio','07'=>'Julio','08'=>'Agosto','09'=>'Septiembre','10'=>'Octubre','11'=>'Noviembre','12'=>'Diciembre'];
-            $parts = explode('-', $filters['mes']);
-            return ($meses[$parts[1] ?? ''] ?? '') . ' ' . ($parts[0] ?? '');
-        }
-        if (!empty($filters['anio'])) {
-            return 'Año ' . $filters['anio'];
-        }
-        return now()->format('d/m/Y');
+        return array_filter(
+            $request->only(StopWeeklyReport::reportFilterKeys()),
+            fn ($value) => $value !== null && $value !== ''
+        );
     }
 
-    /**
-     * Build year-over-year comparison using SQL data.
-     */
+    private function recordStopAction(
+        Request $request,
+        string $action,
+        string $status,
+        ?string $summary = null,
+        array $filters = [],
+        array $metadata = []
+    ): void {
+        $userAgent = $request->userAgent();
+
+        StopActionLog::record([
+            'user_id' => $request->user()?->id,
+            'action' => $action,
+            'status' => $status,
+            'summary' => $summary,
+            'filters' => $filters ?: null,
+            'metadata' => $metadata ?: null,
+            'ip_address' => $request->ip(),
+            'user_agent' => $userAgent ? substr($userAgent, 0, 500) : null,
+        ]);
+    }
+
+    private function recentStopActionLogs()
+    {
+        try {
+            return StopActionLog::with('user')
+                ->latest()
+                ->limit(8)
+                ->get();
+        } catch (\Throwable) {
+            return collect();
+        }
+    }
+
+    private function excelFilename(?string $periodo): string
+    {
+        $slug = preg_replace('/[^A-Za-z0-9_-]+/', '-', $periodo ?: now()->format('Y-m-d'));
+        $slug = trim((string) $slug, '-');
+
+        return 'Reporte_STOP_CCU_' . ($slug ?: now()->format('Y-m-d')) . '.xlsx';
+    }
 }
