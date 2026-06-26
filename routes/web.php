@@ -59,6 +59,13 @@ Route::post('/password/reset', [PasswordResetController::class, 'reset'])->name(
 // Política de Privacidad (pública, accesible sin auth)
 Route::get('/politica-privacidad', [ProteccionDatosController::class, 'politicaPrivacidad'])
     ->name('proteccion-datos.politica-privacidad');
+Route::get('/solicitud-arco', [ProteccionDatosController::class, 'crearSolicitudPublica'])
+    ->name('proteccion-datos.publico.crear');
+Route::post('/solicitud-arco', [ProteccionDatosController::class, 'guardarSolicitudPublica'])
+    ->name('proteccion-datos.publico.guardar')
+    ->middleware('throttle:5,1');
+Route::get('/solicitud-arco/{numero}/{token}', [ProteccionDatosController::class, 'verSolicitudPublica'])
+    ->name('proteccion-datos.publico.ver');
 
 // --- DENUNCIA LEY KARIN PÚBLICA (sin autenticación SAEP, requiere Google OAuth) ---
 Route::prefix('denuncia-ley-karin')->group(function () {
@@ -66,8 +73,8 @@ Route::prefix('denuncia-ley-karin')->group(function () {
     Route::get('/auth/google',     [LeyKarinPublicoController::class, 'redirectGoogle'])->name('ley-karin-publico.google');
     Route::get('/auth/callback',   [LeyKarinPublicoController::class, 'callbackGoogle'])->name('ley-karin-publico.callback');
     Route::get('/formulario',      [LeyKarinPublicoController::class, 'formulario'])->name('ley-karin-publico.formulario');
-    Route::post('/enviar',         [LeyKarinPublicoController::class, 'store'])->name('ley-karin-publico.store');
-    Route::get('/confirmacion/{folio}', [LeyKarinPublicoController::class, 'confirmacion'])->name('ley-karin-publico.confirmacion');
+    Route::post('/enviar',         [LeyKarinPublicoController::class, 'store'])->name('ley-karin-publico.store')->middleware('throttle:5,1');
+    Route::get('/confirmacion/{folio}', [LeyKarinPublicoController::class, 'confirmacion'])->name('ley-karin-publico.confirmacion')->middleware('signed');
     Route::post('/logout',         [LeyKarinPublicoController::class, 'logout'])->name('ley-karin-publico.logout');
 });
 
