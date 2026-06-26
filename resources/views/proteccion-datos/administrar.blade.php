@@ -30,6 +30,14 @@
         <div style="font-size: 1.8rem; font-weight: 700; color: var(--primary-color);">{{ $stats['total_mes'] }}</div>
         <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Este Mes</div>
     </div>
+    <div class="card-glass" style="padding: 1.25rem; text-align: center;">
+        <div style="font-size: 1.8rem; font-weight: 700; color: #7c3aed;">{{ $stats['publicas'] }}</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Públicas</div>
+    </div>
+    <div class="card-glass" style="padding: 1.25rem; text-align: center;">
+        <div style="font-size: 1.8rem; font-weight: 700; color: #1d4ed8;">{{ $stats['bloqueos_activos'] }}</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Bloqueos activos</div>
+    </div>
 </div>
 
 {{-- Filtros --}}
@@ -55,12 +63,21 @@
                 <option value="supresion" {{ request('tipo') === 'supresion' ? 'selected' : '' }}>Supresión</option>
                 <option value="oposicion" {{ request('tipo') === 'oposicion' ? 'selected' : '' }}>Oposición</option>
                 <option value="portabilidad" {{ request('tipo') === 'portabilidad' ? 'selected' : '' }}>Portabilidad</option>
+                <option value="bloqueo" {{ request('tipo') === 'bloqueo' ? 'selected' : '' }}>Bloqueo</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.3rem; text-transform: uppercase; letter-spacing: 0.5px;">Canal</label>
+            <select name="canal" style="padding: 0.5rem 1rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; background: var(--bg-color); color: var(--text-main);">
+                <option value="">Todos</option>
+                <option value="interno" {{ request('canal') === 'interno' ? 'selected' : '' }}>Interno</option>
+                <option value="publico" {{ request('canal') === 'publico' ? 'selected' : '' }}>Público</option>
             </select>
         </div>
         <button type="submit" style="padding: 0.5rem 1.2rem; background: var(--primary-color); color: #fff; border: none; border-radius: 6px; font-size: 0.85rem; cursor: pointer; font-weight: 500;">
             <i class="bi bi-funnel"></i> Filtrar
         </button>
-        @if(request()->hasAny(['estado', 'tipo']))
+        @if(request()->hasAny(['estado', 'tipo', 'canal']))
         <a href="{{ route('proteccion-datos.administrar') }}" style="padding: 0.5rem 1rem; color: var(--text-muted); font-size: 0.85rem; text-decoration: none;">
             <i class="bi bi-x"></i> Limpiar
         </a>
@@ -82,6 +99,7 @@
                 <tr style="background: var(--bg-color);">
                     <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 600; color: var(--text-main); border-bottom: 2px solid var(--border-color);">N° Solicitud</th>
                     <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 600; color: var(--text-main); border-bottom: 2px solid var(--border-color);">Titular</th>
+                    <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 600; color: var(--text-main); border-bottom: 2px solid var(--border-color);">Canal</th>
                     <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 600; color: var(--text-main); border-bottom: 2px solid var(--border-color);">Tipo</th>
                     <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 600; color: var(--text-main); border-bottom: 2px solid var(--border-color);">Fecha</th>
                     <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 600; color: var(--text-main); border-bottom: 2px solid var(--border-color);">Vencimiento</th>
@@ -94,8 +112,22 @@
                 <tr style="border-bottom: 1px solid var(--border-color);">
                     <td style="padding: 0.75rem 1rem; font-weight: 600; color: var(--primary-color);">{{ $sol->numero_solicitud }}</td>
                     <td style="padding: 0.75rem 1rem; color: var(--text-main);">
-                        {{ $sol->user?->nombre_completo ?? 'Titular no disponible' }}
-                        <div style="font-size: 0.75rem; color: var(--text-muted);">{{ $sol->user?->email ?? '—' }}</div>
+                        {{ $sol->titular_nombre_mostrar }}
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">{{ $sol->titular_email_mostrar ?? '—' }}</div>
+                        @if($sol->titular_rut)
+                            <div style="font-size: 0.72rem; color: var(--text-muted);">RUT: {{ $sol->titular_rut }}</div>
+                        @endif
+                    </td>
+                    <td style="padding: 0.75rem 1rem; color: var(--text-main);">
+                        {{ $sol->canal_label }}
+                        @if($sol->titular_contexto)
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">{{ str_replace('_', ' ', $sol->titular_contexto) }}</div>
+                        @endif
+                        @if($sol->bloqueo_temporal_activo)
+                            <div style="display:inline-flex;margin-top:0.25rem;padding:0.15rem 0.45rem;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:0.7rem;font-weight:700;">
+                                <i class="bi bi-pause-circle"></i>&nbsp;Bloqueo
+                            </div>
+                        @endif
                     </td>
                     <td style="padding: 0.75rem 1rem; color: var(--text-main);">{{ $sol->nombre_tipo }}</td>
                     <td style="padding: 0.75rem 1rem; color: var(--text-muted);">{{ $sol->fecha_solicitud->format('d/m/Y') }}</td>

@@ -63,7 +63,8 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
         $ytdTotal = $ytd['total'] ?? 0;
         $ytdPos = $ytd['pos'] ?? 0;
         $ytdNeg = $ytd['neg'] ?? 0;
-        $prevYearLabel = $prev['year'] ?? ((int) date('Y') - 1);
+        $currentYearLabel = $comp['currentYear'] ?? (int) date('Y');
+        $prevYearLabel = $prev['year'] ?? ((int) $currentYearLabel - 1);
         $prevTotal = $prev['sameMonthTotal'] ?? 0;
         $prevPos = $prev['sameMonthPos'] ?? 0;
         $prevNeg = $prev['sameMonthNeg'] ?? 0;
@@ -185,9 +186,9 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
     <tr style="background-color:#f8fafc;">
         <th style="padding:6px 8px; font-size:11px; color:#334155; text-align:left; border:1px solid #e2e8f0;" width="28%">M&eacute;trica</th>
         <th style="padding:6px 8px; font-size:11px; color:#334155; text-align:center; border:1px solid #e2e8f0;" width="18%">Periodo Actual</th>
-        <th style="padding:6px 8px; font-size:11px; color:#334155; text-align:center; border:1px solid #e2e8f0;" width="18%">Mismo Mes {{ $prevYearLabel }}</th>
+        <th style="padding:6px 8px; font-size:11px; color:#334155; text-align:center; border:1px solid #e2e8f0;" width="18%">Mismo Periodo {{ $prevYearLabel }}</th>
         <th style="padding:6px 8px; font-size:11px; color:#334155; text-align:center; border:1px solid #e2e8f0;" width="12%">Var.</th>
-        <th style="padding:6px 8px; font-size:11px; color:#334155; text-align:center; border:1px solid #e2e8f0;" width="12%">Acum. {{ date('Y') }}</th>
+        <th style="padding:6px 8px; font-size:11px; color:#334155; text-align:center; border:1px solid #e2e8f0;" width="12%">Acum. {{ $currentYearLabel }}</th>
         <th style="padding:6px 8px; font-size:11px; color:#334155; text-align:center; border:1px solid #e2e8f0;" width="12%">Acum. {{ $prevYearLabel }}</th>
     </tr>
     @php
@@ -221,7 +222,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
         <td width="33%" style="padding:4px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f1f5f9; border-radius:6px; border:1px solid #e2e8f0;">
             <tr><td style="padding:10px 6px; text-align:center;">
-                <span style="font-size:10px; color:#64748b; text-transform:uppercase;">Var. Total Mes</span><br/>
+                <span style="font-size:10px; color:#64748b; text-transform:uppercase;">Var. Total Periodo</span><br/>
                 <span style="font-size:22px; font-weight:bold; color:{{ $pctChangeTotal >= 0 ? '#ef4444' : '#16a34a' }};">{{ $pctChangeTotal >= 0 ? '+' : '' }}{{ $pctChangeTotal }}%</span>
             </td></tr>
             </table>
@@ -253,7 +254,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr><td style="background-color:#991b1b; padding:8px 12px; text-align:center; border-radius:4px;">
-        <span style="color:#ffffff; font-size:14px; font-weight:bold;">&#128680; Top Trabajadores Negativos &mdash; Acumulado {{ date('Y') }}</span>
+        <span style="color:#ffffff; font-size:14px; font-weight:bold;">&#128680; Top Trabajadores Negativos &mdash; Acumulado {{ $currentYearLabel }}</span>
     </td></tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:4px; border:1px solid #e2e8f0; border-collapse:collapse;">
@@ -280,7 +281,7 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr><td style="background-color:#7f1d1d; padding:8px 12px; text-align:center; border-radius:4px;">
-        <span style="color:#ffffff; font-size:14px; font-weight:bold;">&#128269; Tipos de Falta Negativa &mdash; Acumulado {{ date('Y') }}</span>
+        <span style="color:#ffffff; font-size:14px; font-weight:bold;">&#128269; Tipos de Falta Negativa &mdash; Acumulado {{ $currentYearLabel }}</span>
     </td></tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:4px; border:1px solid #e2e8f0; border-collapse:collapse;">
@@ -307,15 +308,15 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <td style="padding:12px 24px 4px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr><td style="background-color:#1B5E20; padding:8px 12px; text-align:center; border-radius:4px;">
-        <span style="color:#ffffff; font-size:14px; font-weight:bold;">&#128200; Tendencia Mensual &mdash; {{ date('Y') }} vs {{ $prevYearLabel }}</span>
+        <span style="color:#ffffff; font-size:14px; font-weight:bold;">&#128200; Tendencia Mensual &mdash; {{ $currentYearLabel }} vs {{ $prevYearLabel }}</span>
     </td></tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:4px; border:1px solid #e2e8f0; border-collapse:collapse;">
     <tr style="background-color:#f8fafc;">
         <th style="padding:5px 8px; font-size:10px; color:#334155; text-align:left; border:1px solid #e2e8f0;">Mes</th>
-        <th style="padding:5px 8px; font-size:10px; color:#334155; text-align:center; border:1px solid #e2e8f0;">{{ date('Y') }} Total</th>
-        <th style="padding:5px 8px; font-size:10px; color:#ef4444; text-align:center; border:1px solid #e2e8f0;">{{ date('Y') }} Neg</th>
-        <th style="padding:5px 8px; font-size:10px; color:#22c55e; text-align:center; border:1px solid #e2e8f0;">{{ date('Y') }} Pos</th>
+        <th style="padding:5px 8px; font-size:10px; color:#334155; text-align:center; border:1px solid #e2e8f0;">{{ $currentYearLabel }} Total</th>
+        <th style="padding:5px 8px; font-size:10px; color:#ef4444; text-align:center; border:1px solid #e2e8f0;">{{ $currentYearLabel }} Neg</th>
+        <th style="padding:5px 8px; font-size:10px; color:#22c55e; text-align:center; border:1px solid #e2e8f0;">{{ $currentYearLabel }} Pos</th>
         <th style="padding:5px 8px; font-size:10px; color:#334155; text-align:center; border:1px solid #e2e8f0;">{{ $prevYearLabel }} Total</th>
         <th style="padding:5px 8px; font-size:10px; color:#ef4444; text-align:center; border:1px solid #e2e8f0;">{{ $prevYearLabel }} Neg</th>
         <th style="padding:5px 8px; font-size:10px; color:#22c55e; text-align:center; border:1px solid #e2e8f0;">{{ $prevYearLabel }} Pos</th>
@@ -325,17 +326,33 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
         $prevByMonth = $prev['byMonth'] ?? [];
         $prevByMonthNeg = $prev['byMonthNeg'] ?? [];
         $prevByMonthPos = $prev['byMonthPos'] ?? [];
-        $currYear = date('Y');
+        $currYear = (string) $currentYearLabel;
+        $comparisonMonths = [];
+        foreach (array_keys($ytd['byMonth'] ?? []) as $monthKey) {
+            if (is_string($monthKey) && preg_match('/^\d{4}-(\d{2})$/', $monthKey, $match)) {
+                $comparisonMonths[] = (int) $match[1];
+            }
+        }
+        foreach (array_keys($prevByMonth) as $monthKey) {
+            if (is_string($monthKey) && preg_match('/^\d{4}-(\d{2})$/', $monthKey, $match)) {
+                $comparisonMonths[] = (int) $match[1];
+            }
+        }
+        $comparisonCutoffMonth = !empty($comparisonMonths)
+            ? max(1, min(12, max($comparisonMonths)))
+            : ((int) $currentYearLabel === (int) date('Y') ? (int) date('n') : 12);
     @endphp
     @foreach($meses as $mNum => $mName)
     @php
+        if ((int) $mNum > $comparisonCutoffMonth) {
+            continue;
+        }
         $curKey = $currYear . '-' . $mNum;
         $prvKey = $prevYearLabel . '-' . $mNum;
         $cT = $ytd['byMonth'][$curKey] ?? 0;
         $cN = $ytd['byMonthNeg'][$curKey] ?? 0;
         $cP = $ytd['byMonthPos'][$curKey] ?? 0;
     @endphp
-    @if($cT > 0 || isset($prevByMonth[$prvKey]))
     <tr style="background-color:{{ $loop->index % 2 === 1 ? '#f8fafc' : '#ffffff' }};">
         <td style="padding:4px 8px; font-size:11px; color:#1e293b; font-weight:bold; border:1px solid #e2e8f0;">{{ $mName }}</td>
         <td style="padding:4px 8px; font-size:11px; color:#1e293b; text-align:center; border:1px solid #e2e8f0; font-weight:bold;">{{ $cT > 0 ? number_format($cT) : '-' }}</td>
@@ -345,7 +362,6 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
         <td style="padding:4px 8px; font-size:11px; color:#ef4444; text-align:center; border:1px solid #e2e8f0;">{{ ($prevByMonthNeg[$prvKey] ?? 0) > 0 ? number_format($prevByMonthNeg[$prvKey]) : '-' }}</td>
         <td style="padding:4px 8px; font-size:11px; color:#22c55e; text-align:center; border:1px solid #e2e8f0;">{{ ($prevByMonthPos[$prvKey] ?? 0) > 0 ? number_format($prevByMonthPos[$prvKey]) : '-' }}</td>
     </tr>
-    @endif
     @endforeach
     {{-- Fila totales --}}
     <tr style="background-color:#1B5E20;">
@@ -353,9 +369,9 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
         <td style="padding:5px 8px; font-size:11px; color:#ffffff; text-align:center; font-weight:bold; border:1px solid #e2e8f0;">{{ number_format($ytdTotal) }}</td>
         <td style="padding:5px 8px; font-size:11px; color:#fca5a5; text-align:center; font-weight:bold; border:1px solid #e2e8f0;">{{ number_format($ytdNeg) }}</td>
         <td style="padding:5px 8px; font-size:11px; color:#86efac; text-align:center; font-weight:bold; border:1px solid #e2e8f0;">{{ number_format($ytdPos) }}</td>
-        <td style="padding:5px 8px; font-size:11px; color:#ffffff; text-align:center; font-weight:bold; border:1px solid #e2e8f0;">{{ number_format($prev['total'] ?? 0) }}</td>
-        <td style="padding:5px 8px; font-size:11px; color:#fca5a5; text-align:center; font-weight:bold; border:1px solid #e2e8f0;">{{ number_format($prev['neg'] ?? 0) }}</td>
-        <td style="padding:5px 8px; font-size:11px; color:#86efac; text-align:center; font-weight:bold; border:1px solid #e2e8f0;">{{ number_format($prev['pos'] ?? 0) }}</td>
+        <td style="padding:5px 8px; font-size:11px; color:#ffffff; text-align:center; font-weight:bold; border:1px solid #e2e8f0;">{{ number_format($prevYtdTotal) }}</td>
+        <td style="padding:5px 8px; font-size:11px; color:#fca5a5; text-align:center; font-weight:bold; border:1px solid #e2e8f0;">{{ number_format($prevYtdNeg) }}</td>
+        <td style="padding:5px 8px; font-size:11px; color:#86efac; text-align:center; font-weight:bold; border:1px solid #e2e8f0;">{{ number_format($prevYtdPos) }}</td>
     </tr>
     </table>
 </td>

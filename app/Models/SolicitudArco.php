@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class SolicitudArco extends Model
 {
@@ -11,12 +12,23 @@ class SolicitudArco extends Model
     protected $fillable = [
         'numero_solicitud',
         'user_id',
+        'canal_origen',
+        'titular_nombre',
+        'titular_email',
+        'titular_rut',
+        'titular_telefono',
+        'titular_contexto',
+        'token_hash',
+        'token_expires_at',
         'tipo',
         'descripcion',
         'datos_afectados',
         'causal_invocada',
         'antecedentes',
         'solicita_bloqueo_temporal',
+        'bloqueo_temporal_activo',
+        'bloqueo_temporal_at',
+        'bloqueo_temporal_motivo',
         'estado',
         'respuesta',
         'responsable_id',
@@ -29,15 +41,24 @@ class SolicitudArco extends Model
         'observacion_ejecucion',
         'fecha_ejecucion',
         'ejecutada_por',
+        'consentimiento_version',
+        'consentimiento_texto',
+        'consentimiento_aceptado_at',
+        'consentimiento_ip',
+        'consentimiento_user_agent',
     ];
 
     protected $casts = [
+        'token_expires_at' => 'datetime',
         'fecha_solicitud' => 'datetime',
         'fecha_respuesta' => 'datetime',
         'fecha_vencimiento' => 'datetime',
         'solicita_bloqueo_temporal' => 'boolean',
+        'bloqueo_temporal_activo' => 'boolean',
+        'bloqueo_temporal_at' => 'datetime',
         'resultado_ejecucion' => 'array',
         'fecha_ejecucion' => 'datetime',
+        'consentimiento_aceptado_at' => 'datetime',
     ];
 
     public function user()
@@ -70,6 +91,7 @@ class SolicitudArco extends Model
             'supresion' => 'Supresión / Cancelación',
             'oposicion' => 'Oposición al tratamiento',
             'portabilidad' => 'Portabilidad de datos',
+            'bloqueo' => 'Bloqueo temporal',
             default => $this->tipo,
         };
     }
@@ -96,5 +118,51 @@ class SolicitudArco extends Model
             'completada' => '#6b7280',
             default => '#6b7280',
         };
+    }
+
+    public function getTitularNombreMostrarAttribute(): string
+    {
+        return $this->user?->nombre_completo
+            ?? $this->titular_nombre
+            ?? 'Titular externo';
+    }
+
+    public function getTitularEmailMostrarAttribute(): ?string
+    {
+        return $this->user?->email ?? $this->titular_email;
+    }
+
+    public function getCanalLabelAttribute(): string
+    {
+        return match ($this->canal_origen) {
+            'publico' => 'Público',
+            'interno' => 'Interno',
+            default => ucfirst((string) $this->canal_origen),
+        };
+    }
+
+    public function esPublica(): bool
+    {
+        return $this->canal_origen === 'publico' || $this->user_id === null;
+    }
+
+    public function tokenVigente(): bool
+    {
+        return $this->token_hash !== null
+            && ($this->token_expires_at === null || $this->token_expires_at->isFuture());
+    }
+
+    public function validarTokenPublico(?string $token): bool
+    {
+        if (!$token || !$this->tokenVigente()) {
+            return false;
+        }
+
+        return hash_equals($this->token_hash, hash('sha256', $token));
+    }
+
+    public static function generarTokenPublico(): string
+    {
+        return Str::random(64);
     }
 }

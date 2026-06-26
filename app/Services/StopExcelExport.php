@@ -15,7 +15,7 @@ class StopExcelExport
     private Spreadsheet $spreadsheet;
     private string $periodo;
     private string $frecuencia;
-    private array $comparison;
+    private array $comparison = [];
     private array $evalDetail;
 
     // CCU brand colors
@@ -36,7 +36,7 @@ class StopExcelExport
         $this->spreadsheet->getProperties()
             ->setCreator('SAEP')
             ->setTitle("Reporte {$frecuencia} Tarjeta STOP CCU — {$periodo}")
-            ->setSubject('Auditorías STO CCU');
+            ->setSubject('Auditorías STOP CCU');
 
         $this->buildResumen($analytics);
         // Evaluation detail sheets right after Resumen (prominent position)
@@ -84,7 +84,7 @@ class StopExcelExport
             ? ' — Semana ' . now()->subWeek()->isoFormat('W')
             : '';
         $sheet->mergeCells('A1:F1');
-        $sheet->setCellValue('A1', "AUDITORÍAS STO CCU — Reporte {$this->frecuencia}{$weekTag}");
+        $sheet->setCellValue('A1', "AUDITORÍAS STOP CCU — Reporte {$this->frecuencia}{$weekTag}");
         $this->styleHeader($sheet, 'A1:F1');
         $sheet->getRowDimension(1)->setRowHeight(36);
 
@@ -330,7 +330,7 @@ class StopExcelExport
         $centrosNeg = $a['centrosNeg'] ?? [];
         $centrosPos = $a['centrosPos'] ?? [];
 
-        $this->writeTitle($sheet, 'A1:E1', 'Tarjetas STO CCU por Centro de Trabajo');
+        $this->writeTitle($sheet, 'A1:E1', 'Tarjetas STOP CCU por Centro de Trabajo');
 
         $headers = ['Centro', 'Total', 'Negativas', 'Positivas', '% Positivas'];
         $this->writeTableHeader($sheet, 2, $headers);
@@ -368,7 +368,7 @@ class StopExcelExport
         $areasNeg = $a['areasNeg'] ?? [];
         $areasPos = $a['areasPos'] ?? [];
 
-        $this->writeTitle($sheet, 'A1:E1', 'Tarjetas STO CCU por Área o Proceso');
+        $this->writeTitle($sheet, 'A1:E1', 'Tarjetas STOP CCU por Área o Proceso');
 
         $headers = ['Área / Zona', 'Total', 'Negativas', 'Positivas', '% Positivas'];
         $this->writeTableHeader($sheet, 2, $headers);
@@ -453,7 +453,7 @@ class StopExcelExport
         $empresasNeg = $a['empresasNeg'] ?? [];
         $empresasPos = $a['empresasPos'] ?? [];
 
-        $this->writeTitle($sheet, 'A1:E1', 'Tarjetas STO CCU por Empresa (Observado)');
+        $this->writeTitle($sheet, 'A1:E1', 'Tarjetas STOP CCU por Empresa (Observado)');
 
         $headers = ['Empresa', 'Total', 'Negativas', 'Positivas', '% Positivas'];
         $this->writeTableHeader($sheet, 2, $headers);
@@ -515,7 +515,7 @@ class StopExcelExport
 
         // Top Negativos
         $topNeg = $a['topNegTrabajadores'] ?? [];
-        $this->writeTitle($sheet, 'A1:C1', 'Trabajadores con Mayor Tarjetas STO CCU Negativas');
+        $this->writeTitle($sheet, 'A1:C1', 'Trabajadores con Mayor Tarjetas STOP CCU Negativas');
 
         $headers = ['#', 'Trabajador', 'Negativas'];
         $this->writeTableHeader($sheet, 2, $headers);
@@ -539,7 +539,7 @@ class StopExcelExport
             $row += 2;
             $startRow = $row;
             $sheet->mergeCells("A{$row}:C{$row}");
-            $sheet->setCellValue("A{$row}", 'Trabajadores con Tarjetas STO CCU Positivas');
+            $sheet->setCellValue("A{$row}", 'Trabajadores con Tarjetas STOP CCU Positivas');
             $sheet->getStyle("A{$row}:C{$row}")->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['argb' => self::WHITE], 'size' => 11],
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::GREEN]],
@@ -610,7 +610,7 @@ class StopExcelExport
         $byMonthNeg = $a['byMonthNeg'] ?? [];
         $byMonthPos = $a['byMonthPos'] ?? [];
 
-        $this->writeTitle($sheet, 'A1:D1', 'Tendencia Mensual — Tarjetas STO CCU');
+        $this->writeTitle($sheet, 'A1:D1', 'Tendencia Mensual — Tarjetas STOP CCU');
 
         $this->writeTableHeader($sheet, 2, ['Mes', 'Total', 'Negativas', 'Positivas']);
 
@@ -730,8 +730,8 @@ class StopExcelExport
 
         $ytd  = $this->comparison['ytd'] ?? [];
         $prev = $this->comparison['prevYear'] ?? [];
-        $prevYear = $prev['year'] ?? ((int) date('Y') - 1);
-        $currYear = date('Y');
+        $currYear = $this->comparison['currentYear'] ?? (int) date('Y');
+        $prevYear = $prev['year'] ?? ((int) $currYear - 1);
 
         $total = $a['totalRows'] ?? 0;
         $clasif = $a['clasificacion'] ?? [];
@@ -748,7 +748,7 @@ class StopExcelExport
         $row = 3;
         $sheet->setCellValue("A{$row}", 'Métrica');
         $sheet->setCellValue("B{$row}", 'Periodo Actual');
-        $sheet->setCellValue("C{$row}", "Mismo Mes {$prevYear}");
+        $sheet->setCellValue("C{$row}", "Mismo Periodo {$prevYear}");
         $sheet->setCellValue("D{$row}", 'Variación');
         $sheet->setCellValue("E{$row}", "Acum. {$currYear}");
         $sheet->setCellValue("F{$row}", "Acum. {$prevYear} (mismo corte)");
@@ -806,12 +806,17 @@ class StopExcelExport
         $prevByMonthNeg = $prev['byMonthNeg'] ?? [];
         $prevByMonthPos = $prev['byMonthPos'] ?? [];
 
+        $cutoffMonth = $this->comparisonCutoffMonth($currYear, $ytdByMonth, $prevByMonth);
+
         foreach ($meses as $m => $name) {
+            if ((int) $m > $cutoffMonth) {
+                continue;
+            }
+
             $curKey = "{$currYear}-{$m}";
             $prvKey = "{$prevYear}-{$m}";
             $cT = $ytdByMonth[$curKey] ?? 0;
             $pT = $prevByMonth[$prvKey] ?? 0;
-            if ($cT === 0 && $pT === 0) continue;
 
             $sheet->setCellValue("A{$row}", $name);
             $sheet->setCellValue("B{$row}", $cT);
@@ -828,9 +833,9 @@ class StopExcelExport
         $sheet->setCellValue("B{$row}", $ytd['total'] ?? 0);
         $sheet->setCellValue("C{$row}", $ytd['neg'] ?? 0);
         $sheet->setCellValue("D{$row}", $ytd['pos'] ?? 0);
-        $sheet->setCellValue("E{$row}", $prev['total'] ?? 0);
-        $sheet->setCellValue("F{$row}", $prev['neg'] ?? 0);
-        $sheet->setCellValue("G{$row}", $prev['pos'] ?? 0);
+        $sheet->setCellValue("E{$row}", $prev['ytdTotal'] ?? 0);
+        $sheet->setCellValue("F{$row}", $prev['ytdNeg'] ?? 0);
+        $sheet->setCellValue("G{$row}", $prev['ytdPos'] ?? 0);
         $sheet->getStyle("A{$row}:G{$row}")->getFont()->setBold(true);
         $sheet->getStyle("A{$row}:G{$row}")->getFill()->setFillType(Fill::FILL_SOLID);
         $sheet->getStyle("A{$row}:G{$row}")->getFill()->getStartColor()->setARGB('FF' . self::CCU_GREEN);
@@ -884,6 +889,25 @@ class StopExcelExport
         }
 
         $this->autoWidth($sheet, 'A', 'G');
+    }
+
+    private function comparisonCutoffMonth(int $currentYear, array $currentByMonth, array $previousByMonth): int
+    {
+        $months = [];
+
+        foreach (array_keys($currentByMonth + $previousByMonth) as $key) {
+            if (!is_string($key) || !preg_match('/^\d{4}-(\d{2})$/', $key, $match)) {
+                continue;
+            }
+
+            $months[] = (int) $match[1];
+        }
+
+        if (!empty($months)) {
+            return max(1, min(12, max($months)));
+        }
+
+        return $currentYear === (int) date('Y') ? (int) date('n') : 12;
     }
 
     /* ━━━━━━ Styling helpers ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */

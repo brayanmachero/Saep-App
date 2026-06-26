@@ -40,6 +40,7 @@ return [
         'url'                      => env('KIZEO_API_URL', 'https://www.kizeoforms.com/rest/v3'),
         'notify_email'             => env('KIZEO_NOTIFY_EMAIL', 'bmachero@saep.cl'),
         'webhook_secret'           => env('KIZEO_WEBHOOK_SECRET'),
+        'webhook_require_secret'   => env('KIZEO_WEBHOOK_REQUIRE_SECRET', true),
         'vehicle_form_id'          => env('KIZEO_VEHICLE_FORM_ID'),
         'charla_form_id'              => env('KIZEO_CHARLA_FORM_ID'),
         'charla_sharepoint_folder'    => env('KIZEO_CHARLA_SHAREPOINT_FOLDER', 'Charlas SST'),

@@ -298,6 +298,10 @@
                         <i class="bi bi-journal-text"></i>
                         <span>Registro Tratamiento</span>
                     </a>
+                    <a href="{{ route('proteccion-datos.matriz-retencion') }}" class="nav-item {{ request()->routeIs('proteccion-datos.matriz-retencion') ? 'active' : '' }}">
+                        <i class="bi bi-table"></i>
+                        <span>Matriz Retención</span>
+                    </a>
                     @endif
                 </div>
             </div>

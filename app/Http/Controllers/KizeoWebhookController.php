@@ -53,8 +53,9 @@ class KizeoWebhookController extends Controller
      */
     public function handle(Request $request)
     {
-        // Verificar secreto del webhook si está configurado
-        $secret = config('services.kizeo.webhook_secret');
+        // El webhook es publico por diseño, por eso debe fallar cerrado si falta el secreto.
+        $secret = (string) config('services.kizeo.webhook_secret', '');
+        $requireSecret = (bool) config('services.kizeo.webhook_require_secret', true);
         $providedSecret = (string) (
             $request->header('X-Webhook-Secret')
             ?: $request->route('secret')
@@ -62,7 +63,12 @@ class KizeoWebhookController extends Controller
             ?: $request->input('secret', '')
         );
 
-        if ($secret && !hash_equals($secret, $providedSecret)) {
+        if ($requireSecret && $secret === '') {
+            Log::error('Kizeo Webhook rechazado: KIZEO_WEBHOOK_SECRET no configurado', ['ip' => $request->ip()]);
+            return response()->json(['status' => 'error', 'message' => 'Webhook secret not configured'], 503);
+        }
+
+        if ($secret !== '' && !hash_equals($secret, $providedSecret)) {
             Log::warning('Kizeo Webhook rechazado: secreto inválido', ['ip' => $request->ip()]);
             return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 403);
         }

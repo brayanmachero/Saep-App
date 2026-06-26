@@ -27,8 +27,7 @@ class KizeoDashboardController extends Controller
      */
     public function dashboardData(Request $request)
     {
-        $startDate    = $request->input('start_date');
-        $endDate      = $request->input('end_date');
+        [$startDate, $endDate] = $this->dateRangeFromRequest($request);
         $forceRefresh = $request->boolean('force_refresh');
 
         try {
@@ -46,8 +45,7 @@ class KizeoDashboardController extends Controller
     {
         set_time_limit(300); // Permitir hasta 5 min para cargar deep data
 
-        $startDate    = $request->input('start_date');
-        $endDate      = $request->input('end_date');
+        [$startDate, $endDate] = $this->dateRangeFromRequest($request);
         $forceRefresh = $request->boolean('force_refresh');
 
         try {
@@ -76,12 +74,12 @@ class KizeoDashboardController extends Controller
      */
     public function deepData(Request $request, string $formId)
     {
-        $startDate = $request->input('start_date');
-        $endDate   = $request->input('end_date');
-        $limit     = min((int) ($request->input('limit', 200)), 500);
+        [$startDate, $endDate] = $this->dateRangeFromRequest($request);
+        $forceRefresh = $request->boolean('force_refresh');
+        $limit = max(1, min((int) ($request->input('limit', 200)), 500));
 
         try {
-            $records = $this->kizeo->getDeepFormData($formId, $startDate, $endDate, $limit);
+            $records = $this->kizeo->getDeepFormData($formId, $startDate, $endDate, $limit, $forceRefresh);
             return response()->json(['success' => true, 'records' => $records]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
@@ -121,5 +119,33 @@ class KizeoDashboardController extends Controller
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
+    }
+
+    private function dateRangeFromRequest(Request $request): array
+    {
+        $startDate = $this->normalizeDateInput($request->input('start_date'));
+        $endDate = $this->normalizeDateInput($request->input('end_date'));
+
+        if ($startDate && $endDate && $startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        return [$startDate, $endDate];
+    }
+
+    private function normalizeDateInput(mixed $value): ?string
+    {
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $value = trim($value);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return null;
+        }
+
+        [$year, $month, $day] = array_map('intval', explode('-', $value));
+
+        return checkdate($month, $day, $year) ? $value : null;
     }
 }

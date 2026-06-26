@@ -26,6 +26,20 @@
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; padding: 1.25rem; background: var(--bg-color); border-radius: 10px;">
             <div>
+                <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">Titular</div>
+                <div style="font-weight: 600; color: var(--text-main); margin-top: 0.2rem;">{{ $solicitud->titular_nombre_mostrar }}</div>
+                @if($solicitud->titular_email_mostrar)
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem;">{{ $solicitud->titular_email_mostrar }}</div>
+                @endif
+            </div>
+            <div>
+                <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">Canal</div>
+                <div style="font-weight: 600; color: var(--text-main); margin-top: 0.2rem;">{{ $solicitud->canal_label }}</div>
+                @if($solicitud->titular_contexto)
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem;">{{ str_replace('_', ' ', $solicitud->titular_contexto) }}</div>
+                @endif
+            </div>
+            <div>
                 <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">Fecha solicitud</div>
                 <div style="font-weight: 600; color: var(--text-main); margin-top: 0.2rem;">{{ $solicitud->fecha_solicitud->format('d/m/Y H:i') }}</div>
             </div>
@@ -87,6 +101,9 @@
                 @if($solicitud->solicita_bloqueo_temporal)
                     <div style="margin-top: 0.5rem; color: #1d4ed8;"><i class="bi bi-pause-circle"></i> El titular solicitó bloqueo temporal del tratamiento.</div>
                 @endif
+                @if($solicitud->bloqueo_temporal_activo)
+                    <div style="margin-top: 0.5rem; color: #1d4ed8; font-weight: 600;"><i class="bi bi-shield-lock"></i> Bloqueo temporal activo en seguimiento interno.</div>
+                @endif
             </div>
         </div>
         @endif
@@ -141,7 +158,7 @@
                 <i class="bi bi-trash3"></i> Ejecutar Supresión Autorizada
             </h3>
             <p style="font-size: 0.85rem; color: #9a3412; line-height: 1.5; margin-bottom: 1rem;">
-                Esta acción anonimiza la cuenta del titular, revoca consentimientos, elimina archivos controlados por la aplicación y registra el resultado en auditoría. Revise obligaciones legales de conservación antes de ejecutar.
+                Esta acción ejecuta la supresión controlada por la aplicación y registra el resultado en auditoría. Para titulares públicos se buscarán coincidencias por email/RUT en módulos automatizables. Revise obligaciones legales de conservación antes de ejecutar.
             </p>
             <form action="{{ route('proteccion-datos.ejecutar-supresion', $solicitud) }}" method="POST"
                   onsubmit="return confirm('¿Confirma que la supresión fue autorizada y debe ejecutarse ahora? Esta acción no se puede deshacer desde la aplicación.')">

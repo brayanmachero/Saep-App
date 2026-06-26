@@ -21,6 +21,10 @@ class CheckPermission
             abort(403, 'No tienes permisos para realizar esta acción.');
         }
 
+        if ($user->esSuperAdmin()) {
+            return $next($request);
+        }
+
         if (!$user->rol->{$permission}) {
             abort(403, 'No tienes permisos para realizar esta acción.');
         }

@@ -24,7 +24,7 @@ Fecha de revision: 2026-06-25
 - Tablas: `formularios`, `respuestas`, `aprobaciones`, adjuntos en storage publico.
 - Datos: contenido dinamico en `datos_json`, archivos adjuntos, solicitante, aprobadores, estado, PDF/correos.
 - Riesgo principal: `datos_json` puede contener datos personales o sensibles no tipados por columna.
-- Mejora implementada: el flujo de supresion anonimiza respuestas asociadas al usuario, elimina archivos detectados en `datos_json` y deja advertencia de revision manual para texto libre.
+- Mejora implementada: el flujo de supresion anonimiza respuestas asociadas al usuario cuando corresponde, elimina archivos detectados en `datos_json`, preserva evidencias legales/SST detectadas y deja advertencia de revision manual para texto libre.
 
 ### Firmas electronicas
 
@@ -71,17 +71,49 @@ Fecha de revision: 2026-06-25
 ## Brechas pendientes
 
 - Completar politica de privacidad con representante legal, domicilio, telefono y encargado/delegado real.
-- Crear canal ARCO publico para postulantes/visitantes que no tienen cuenta interna.
-- Definir matriz formal de retencion por modulo y causal legal, especialmente Ley Karin, accidentes, SST y contratacion.
-- Implementar propagacion a terceros/encargados: SharePoint, correo, Kizeo, Google Drive, proveedores cloud.
-- Crear procedimiento de bloqueo temporal efectivo para solicitudes de rectificacion, supresion u oposicion.
+- Validar legalmente la matriz formal de retencion por modulo y causal legal, especialmente Ley Karin, accidentes, SST y contratacion.
+- Ejecutar propagacion real a terceros/encargados: SharePoint, correo, Kizeo, Google Drive, proveedores cloud.
+- Convertir el bloqueo temporal operativo en bloqueo tecnico por modulo cuando cada proceso lo soporte.
 - Revisar cifrado o proteccion adicional de archivos publicos en `storage/app/public` que contienen documentos de identidad/laborales.
 - Agregar pruebas automatizadas del flujo ARCO y del consentimiento publico.
 - Revisar logs de correo y errores para evitar exposicion innecesaria de datos personales.
 
 ## Proxima fase recomendada
 
-1. Canal ARCO publico por email + folio/token para postulantes y denunciantes externos.
-2. Matriz de retencion y job de vencimiento/anonimizacion programada.
-3. Inventario de encargados externos y acciones de propagacion.
+1. Validar plazos reales de la matriz de retencion con responsable legal/privacidad.
+2. Implementar job de vencimiento/anonimizacion programada por modulo.
+3. Integrar acciones reales de propagacion con SharePoint, Kizeo, Google Drive y correo.
 4. Pruebas Feature para consentimiento publico y ejecucion de supresion.
+
+## Backlog futuro priorizado
+
+- Completar datos reales de la politica: representante legal, domicilio, telefono, correo operativo y encargado/delegado de proteccion de datos.
+- Validar legalmente plazos de retencion por modulo: usuarios, contratacion, Ley Karin, SST, accidentes, formularios, firmas, correos, logs y respaldos.
+- Implementar bloqueo tecnico por modulo: impedir nuevas comunicaciones, exportaciones, uso operativo o modificaciones no obligatorias cuando una solicitud tenga bloqueo activo.
+- Automatizar propagacion a terceros/encargados: SharePoint, Kizeo, Google Drive, correo, backups y proveedores cloud, dejando evidencia de instruccion/respuesta.
+- Revisar storage sensible: mover documentos personales o probatorios a storage privado, con descarga autenticada, controles de permiso y expiracion si aplica.
+- Ampliar pruebas automatizadas: supresion interna, preservacion de evidencias legales/SST, administracion ARCO, bloqueo y auditoria de tratamiento.
+- Definir jobs programados de retencion: anonimizar, purgar o bloquear registros vencidos cuando la matriz legal este validada.
+
+## Fase 2 implementada
+
+- Canal publico `/solicitud-arco` para titulares sin cuenta interna, con folio y token privado de seguimiento.
+- Registro de consentimiento especifico para solicitudes ARCO publicas.
+- Soporte de derecho de bloqueo como tipo de solicitud y bandera operativa de bloqueo temporal.
+- Administracion interna con filtro por canal y visibilidad de titulares externos.
+- Supresion autorizada para solicitudes publicas con busqueda automatizada por email/RUT en postulaciones y Ley Karin.
+- Matriz de retencion y catalogo de encargados externos en `config/proteccion_datos.php`, visible desde `/proteccion-datos/matriz-retencion`.
+
+## Alcance del canal ARCO
+
+- La plataforma ejecuta acciones tecnicas sobre los datos que administra directamente en su base de datos y storage configurado.
+- Si una solicitud del titular apunta a datos tratados por SAEP en otros sistemas internos, repositorios documentales, correos, respaldos o proveedores tecnologicos, la solicitud debe evaluarse como requerimiento recibido por SAEP y derivarse a las areas o encargados correspondientes.
+- La existencia del canal en esta plataforma no implica supresion automatica de todos los datos de la empresa. La respuesta debe considerar base legal, finalidad, obligacion de conservacion, expedientes laborales, SST, Ley Karin, contabilidad, defensa de derechos y demas excepciones aplicables.
+- Cuando corresponda propagacion a terceros, debe quedar evidencia de la instruccion, respuesta o limitacion tecnica/legal del encargado externo.
+
+## Evidencias legales y documentos firmados
+
+- Documentos de capacitaciones, charlas, ODI, prevencion de riesgos, EPP, accidentes, actas, entregas de equipos/vehiculos y firmas electronicas pueden contener datos personales, pero tambien cumplen una finalidad probatoria o legal.
+- Ante una solicitud de supresion, estos documentos no deben eliminarse automaticamente si son necesarios para acreditar cumplimiento laboral, SST, investigacion, fiscalizacion, obligacion contractual o defensa de derechos.
+- La respuesta adecuada puede ser bloqueo/restriccion de uso no obligatorio, control de acceso, minimizacion en reportes y eliminacion de copias duplicadas o vencidas.
+- El servicio de supresion preserva automaticamente registros que detecta como evidencia legal/SST por categoria, entidad, proposito o nombre asociado, y deja el conteo en el resultado tecnico de ejecucion.

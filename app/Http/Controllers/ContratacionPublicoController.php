@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Socialite\Facades\Socialite;
@@ -322,7 +323,11 @@ class ContratacionPublicoController extends Controller
 
         $this->clearTempUploadsForGoogle($googleUser['id']);
 
-        return redirect()->route('contratacion-publico.confirmacion', $postulante->folio);
+        return redirect(URL::temporarySignedRoute(
+            'contratacion-publico.confirmacion',
+            now()->addDays(7),
+            ['folio' => $postulante->folio]
+        ));
     }
 
     // ─── Paso 6: Confirmación ────────────────────────────────────

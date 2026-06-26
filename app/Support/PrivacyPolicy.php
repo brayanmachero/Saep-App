@@ -20,4 +20,9 @@ class PrivacyPolicy
     {
         return 'Acepto que SAEP trate mis datos personales y antecedentes de la denuncia para gestionar, investigar y documentar el canal Ley Karin, con confidencialidad y acceso restringido.';
     }
+
+    public static function publicArcoConsentText(): string
+    {
+        return 'Acepto que SAEP trate los datos de contacto e identificación informados en esta solicitud para verificar mi identidad, tramitar el ejercicio de derechos de protección de datos y comunicar el resultado del proceso.';
+    }
 }

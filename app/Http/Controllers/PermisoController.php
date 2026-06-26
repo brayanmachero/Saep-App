@@ -12,8 +12,18 @@ class PermisoController extends Controller
 {
     public function index()
     {
-        $roles   = Rol::orderBy('nombre')->get();
-        $modulos = Modulo::where('activo', true)->orderBy('orden')->get()->groupBy('grupo');
+        $roles = Rol::withCount('users')
+            ->orderBy('nombre')
+            ->get()
+            ->sortByDesc(fn (Rol $rol) => $rol->esSuperAdmin())
+            ->values();
+
+        $modulos = Modulo::where('activo', true)
+            ->orderBy('grupo')
+            ->orderBy('orden')
+            ->get()
+            ->groupBy('grupo');
+
         $todosModulos = Modulo::where('activo', true)->orderBy('grupo')->orderBy('orden')->get();
         $grupos  = Modulo::where('activo', true)->distinct()->pluck('grupo')->sort()->values();
 
@@ -38,10 +48,10 @@ class PermisoController extends Controller
         foreach ($roles as $rol) {
             foreach ($modulos as $modulo) {
                 $key = "{$rol->id}_{$modulo->id}";
-                $puedeVer      = !empty($data[$key]['ver']);
-                $puedeCrear    = !empty($data[$key]['crear']);
-                $puedeEditar   = !empty($data[$key]['editar']);
-                $puedeEliminar = !empty($data[$key]['eliminar']);
+                $puedeVer      = $rol->esSuperAdmin() || !empty($data[$key]['ver']);
+                $puedeCrear    = $rol->esSuperAdmin() || !empty($data[$key]['crear']);
+                $puedeEditar   = $rol->esSuperAdmin() || !empty($data[$key]['editar']);
+                $puedeEliminar = $rol->esSuperAdmin() || !empty($data[$key]['eliminar']);
 
                 DB::table('rol_modulo')
                     ->updateOrInsert(
@@ -187,10 +197,10 @@ class PermisoController extends Controller
         $rows = $roles->map(fn ($r) => [
             'rol_id'          => $r->id,
             'modulo_id'       => $modulo->id,
-            'puede_ver'       => false,
-            'puede_crear'     => false,
-            'puede_editar'    => false,
-            'puede_eliminar'  => false,
+            'puede_ver'       => $r->esSuperAdmin(),
+            'puede_crear'     => $r->esSuperAdmin(),
+            'puede_editar'    => $r->esSuperAdmin(),
+            'puede_eliminar'  => $r->esSuperAdmin(),
             'created_at'      => now(),
             'updated_at'      => now(),
         ])->toArray();

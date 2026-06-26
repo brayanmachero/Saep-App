@@ -4,27 +4,32 @@ namespace App\Http\Controllers;
 
 use App\Console\Commands\KizeoCharlaWeeklyReport;
 use App\Mail\CharlaTrackingReporteMail;
+use App\Models\CharlaTrackingActionLog;
 use App\Models\KizeoCharlaTracking;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Cache;
 
 class CharlaTrackingController extends Controller
 {
     public function index(Request $request)
     {
-        // Filtros — por defecto: primer día del mes en curso al día de hoy
-        $desde  = $request->input('desde', now()->startOfMonth()->format('Y-m-d'));
-        $hasta  = $request->input('hasta', now()->format('Y-m-d'));
-        $estado = $request->input('estado', 'todos');
-        $buscar = $request->input('buscar');
+        $filters = KizeoCharlaWeeklyReport::normalizeReportFilters([
+            'desde' => $request->input('desde', now()->subDays(30)->format('Y-m-d')),
+            'hasta' => $request->input('hasta', now()->format('Y-m-d')),
+            'estado' => $request->input('estado', 'todos'),
+            'buscar' => $request->input('buscar'),
+        ]);
 
-        $desdeCarbon = Carbon::parse($desde)->startOfDay();
-        $hastaCarbon = Carbon::parse($hasta)->endOfDay();
+        $desde = $filters['desde'];
+        $hasta = $filters['hasta'];
+        $estado = $filters['estado'] ?? 'todos';
+        $buscar = $filters['buscar'] ?? null;
+
+        $charlaActionLogs = $this->recentActionLogs();
 
         // === KPIs ===
-        $baseQuery    = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon);
+        $baseQuery = $this->trackingQuery($filters);
         $total        = (clone $baseQuery)->count();
         $completadas  = (clone $baseQuery)->completados()->count();
         $transferidos = (clone $baseQuery)->transferidos()->count();
@@ -32,8 +37,8 @@ class CharlaTrackingController extends Controller
         $tasa         = $total > 0 ? round(($completadas / $total) * 100, 1) : 0;
 
         // Promedio días pendientes
-        $promDias = KizeoCharlaTracking::pendientes()
-            ->enPeriodo($desdeCarbon, $hastaCarbon)
+        $promDias = (clone $baseQuery)
+            ->pendientes()
             ->selectRaw('AVG(DATEDIFF(NOW(), COALESCE(fecha_asignacion, fecha_creacion))) as prom')
             ->value('prom');
         $promDias = $promDias ? round($promDias, 1) : 0;
@@ -41,7 +46,7 @@ class CharlaTrackingController extends Controller
         // === DATOS PARA GRÁFICOS ===
 
         // 1. Tendencia semanal
-        $tendencia = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
+        $tendencia = (clone $baseQuery)
             ->selectRaw("anio, semana,
                          COUNT(*) as total,
                          SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
@@ -62,14 +67,14 @@ class CharlaTrackingController extends Controller
             });
 
         // 2. Distribución por estatus Kizeo (doughnut)
-        $distribucion = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
+        $distribucion = (clone $baseQuery)
             ->selectRaw("estatus_kizeo, COUNT(*) as cantidad")
             ->groupBy('estatus_kizeo')
             ->pluck('cantidad', 'estatus_kizeo')
             ->toArray();
 
         // 3. Top asignadores (quién crea/asigna más charlas — incluye directas y transferidas)
-        $topAsignadores = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
+        $topAsignadores = (clone $baseQuery)
             ->selectRaw("asignado_por as usuario,
                          COUNT(*) as total_asignadas,
                          SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
@@ -80,7 +85,7 @@ class CharlaTrackingController extends Controller
             ->get();
 
         // 4. Cumplimiento por destinatario
-        $porDestinatario = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
+        $porDestinatario = (clone $baseQuery)
             ->whereNotNull('asignado_a')
             ->selectRaw("asignado_a as destinatario,
                          COUNT(*) as total_recibidas,
@@ -93,7 +98,7 @@ class CharlaTrackingController extends Controller
             ->get();
 
         // 5. Cumplimiento por usuario (creador)
-        $porUsuario = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
+        $porUsuario = (clone $baseQuery)
             ->selectRaw("asignado_por as usuario,
                          COUNT(*) as total,
                          SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
@@ -104,7 +109,7 @@ class CharlaTrackingController extends Controller
             ->get();
 
         // 6. Distribución por lugar/CD
-        $porLugar = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon)
+        $porLugar = (clone $baseQuery)
             ->whereNotNull('lugar')
             ->where('lugar', '!=', '')
             ->selectRaw("lugar, COUNT(*) as total,
@@ -116,8 +121,8 @@ class CharlaTrackingController extends Controller
             ->get();
 
         // 7. Top pendientes por responsable
-        $topPendientes = KizeoCharlaTracking::pendientes()
-            ->enPeriodo($desdeCarbon, $hastaCarbon)
+        $topPendientes = (clone $baseQuery)
+            ->pendientes()
             ->selectRaw("COALESCE(asignado_a, asignado_por) as responsable,
                          COUNT(*) as cantidad,
                          MIN(COALESCE(fecha_asignacion, fecha_creacion)) as mas_antigua,
@@ -128,55 +133,48 @@ class CharlaTrackingController extends Controller
             ->get();
 
         // 8. Tabla detalle filtrable
-        $queryDetalle = KizeoCharlaTracking::enPeriodo($desdeCarbon, $hastaCarbon);
-
-        if ($estado && $estado !== 'todos') {
-            if ($estado === 'pendiente') {
-                $queryDetalle->pendientes();
-            } elseif ($estado === 'completado') {
-                $queryDetalle->completados();
-            } elseif ($estado === 'transferido') {
-                $queryDetalle->transferidos();
-            }
-        }
-
-        if ($buscar) {
-            $queryDetalle->where(function ($q) use ($buscar) {
-                $q->where('asignado_por', 'like', "%{$buscar}%")
-                  ->orWhere('asignado_a', 'like', "%{$buscar}%")
-                  ->orWhere('titulo_actividad', 'like', "%{$buscar}%")
-                  ->orWhere('lugar', 'like', "%{$buscar}%");
-            });
-        }
+        $queryDetalle = $this->trackingQuery($filters);
 
         $registrosList = $queryDetalle
             ->orderByDesc('fecha_creacion')
             ->paginate(20)
             ->withQueryString();
 
-        // Última sincronización real (guardada en caché por el comando de sync)
-        $ultimaSync = Cache::get('charla_tracking_last_sync');
+        $ultimaSync = KizeoCharlaTracking::max('updated_at');
 
         return view('charla-tracking.index', compact(
-            'desde', 'hasta', 'estado', 'buscar',
+            'desde', 'hasta', 'estado', 'buscar', 'filters',
             'total', 'completadas', 'pendientes', 'transferidos', 'tasa', 'promDias',
             'porUsuario', 'tendencia', 'distribucion',
             'topAsignadores', 'porDestinatario', 'porLugar',
-            'registrosList', 'topPendientes', 'ultimaSync'
+            'registrosList', 'topPendientes', 'ultimaSync', 'charlaActionLogs'
         ));
     }
 
-    public function sync()
+    public function sync(Request $request)
     {
-        Artisan::call('kizeo:sync-charla-tracking', ['--months' => 6]);
-        $output = Artisan::output();
+        try {
+            Artisan::call('kizeo:sync-charla-tracking', ['--months' => 6]);
+            $output = Artisan::output();
 
-        return back()->with('success', 'Sincronización completada. ' . trim($output));
+            $this->recordAction($request, 'sync', 'success', 'Sincronización manual de charlas completada.', [], [
+                'output' => trim($output),
+            ]);
+
+            return back()->with('success', 'Sincronización completada. ' . trim($output));
+        } catch (\Throwable $e) {
+            $this->recordAction($request, 'sync', 'failed', 'Error durante sincronización manual de charlas.', [], [
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Error durante sincronización: ' . $e->getMessage());
+        }
     }
 
-    public function emailPreview()
+    public function emailPreview(Request $request)
     {
-        $data = KizeoCharlaWeeklyReport::buildReportData();
+        $filters = $this->reportFiltersFromRequest($request);
+        $data = KizeoCharlaWeeklyReport::buildReportDataFromFilters($filters);
 
         $mailable = new CharlaTrackingReporteMail(
             $data['stats'],
@@ -189,11 +187,105 @@ class CharlaTrackingController extends Controller
         return $mailable->render();
     }
 
-    public function sendNow()
+    public function sendNow(Request $request)
     {
-        Artisan::call('kizeo:charla-weekly-report', ['--sync' => true]);
-        $output = Artisan::output();
+        $filters = $this->reportFiltersFromRequest($request);
+        $options = ['--sync' => true];
 
-        return back()->with('success', 'Reporte enviado exitosamente. ' . trim($output));
+        foreach ($filters as $key => $value) {
+            $options["--{$key}"] = $value;
+        }
+
+        try {
+            $exitCode = Artisan::call('kizeo:charla-weekly-report', $options);
+            $output = Artisan::output();
+
+            $status = $exitCode === 0 ? 'success' : 'failed';
+            $this->recordAction($request, 'report_send_now', $status, 'Ejecución manual de reporte de charlas.', $filters, [
+                'output' => trim($output),
+                'exit_code' => $exitCode,
+            ]);
+
+            if ($exitCode !== 0) {
+                return back()->with('error', 'El reporte no se pudo enviar. ' . trim($output));
+            }
+
+            return back()->with('success', 'Reporte enviado exitosamente. ' . trim($output));
+        } catch (\Throwable $e) {
+            $this->recordAction($request, 'report_send_now', 'failed', 'Error al ejecutar reporte manual de charlas.', $filters, [
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Error al enviar reporte: ' . $e->getMessage());
+        }
+    }
+
+    private function reportFiltersFromRequest(Request $request): array
+    {
+        return KizeoCharlaWeeklyReport::normalizeReportFilters(
+            $request->only(KizeoCharlaWeeklyReport::reportFilterKeys())
+        );
+    }
+
+    private function trackingQuery(array $filters)
+    {
+        $desde = Carbon::parse($filters['desde'])->startOfDay()->toDateTimeString();
+        $hasta = Carbon::parse($filters['hasta'])->endOfDay()->toDateTimeString();
+
+        $query = KizeoCharlaTracking::query()->enPeriodo($desde, $hasta);
+
+        if (($filters['estado'] ?? 'todos') === 'pendiente') {
+            $query->pendientes();
+        } elseif (($filters['estado'] ?? 'todos') === 'completado') {
+            $query->completados();
+        } elseif (($filters['estado'] ?? 'todos') === 'transferido') {
+            $query->transferidos();
+        }
+
+        if (!empty($filters['buscar'])) {
+            $buscar = $filters['buscar'];
+            $query->where(function ($q) use ($buscar) {
+                $q->where('asignado_por', 'like', "%{$buscar}%")
+                    ->orWhere('asignado_a', 'like', "%{$buscar}%")
+                    ->orWhere('titulo_actividad', 'like', "%{$buscar}%")
+                    ->orWhere('lugar', 'like', "%{$buscar}%");
+            });
+        }
+
+        return $query;
+    }
+
+    private function recordAction(
+        Request $request,
+        string $action,
+        string $status,
+        ?string $summary = null,
+        array $filters = [],
+        array $metadata = []
+    ): void {
+        $userAgent = $request->userAgent();
+
+        CharlaTrackingActionLog::record([
+            'user_id' => $request->user()?->id,
+            'action' => $action,
+            'status' => $status,
+            'summary' => $summary,
+            'filters' => $filters ?: null,
+            'metadata' => $metadata ?: null,
+            'ip_address' => $request->ip(),
+            'user_agent' => $userAgent ? substr($userAgent, 0, 500) : null,
+        ]);
+    }
+
+    private function recentActionLogs()
+    {
+        try {
+            return CharlaTrackingActionLog::with('user')
+                ->latest()
+                ->limit(8)
+                ->get();
+        } catch (\Throwable) {
+            return collect();
+        }
     }
 }

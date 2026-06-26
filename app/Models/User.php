@@ -34,7 +34,26 @@ class User extends Authenticatable
     public function cargo()         { return $this->belongsTo(Cargo::class); }
     public function centroCosto()   { return $this->belongsTo(CentroCosto::class, 'centro_costo_id'); }
     public function consentimientos() { return $this->hasMany(ConsentimientoDatos::class); }
+    public function consentimientoDatosVigente()
+    {
+        return $this->hasOne(ConsentimientoDatos::class)
+            ->where('vigente', true)
+            ->whereNull('fecha_revocacion')
+            ->latestOfMany('fecha_aceptacion');
+    }
     public function solicitudesArco() { return $this->hasMany(SolicitudArco::class); }
+
+    public function tieneConsentimientoDatosVigente(): bool
+    {
+        if ($this->relationLoaded('consentimientoDatosVigente')) {
+            return $this->consentimientoDatosVigente !== null;
+        }
+
+        return $this->consentimientos()
+            ->where('vigente', true)
+            ->whereNull('fecha_revocacion')
+            ->exists();
+    }
 
     public function getNombreCompletoAttribute(): string
     {

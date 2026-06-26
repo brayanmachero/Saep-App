@@ -344,8 +344,12 @@
             <ul style="margin-top: 0.8rem; margin-bottom: 0;">
                 <li><strong>Correo:</strong> protecciondatos@saep.cl</li>
                 <li><strong>Plataforma:</strong> Sección "Protección de Datos" dentro de SAEP</li>
+                <li><strong>Canal público ARCO:</strong> <a href="{{ route('proteccion-datos.publico.crear') }}">Crear solicitud sin cuenta interna</a></li>
                 <li><strong>Dirección postal:</strong> [Dirección de SAEP]</li>
             </ul>
+            <p style="margin: 0.9rem 0 0;">
+                Las acciones técnicas ejecutadas desde esta plataforma aplican sobre los datos que la plataforma administra directamente. Cuando una solicitud comprenda datos alojados en otros sistemas internos, repositorios documentales, correos, respaldos o proveedores tecnológicos, SAEP evaluará la solicitud como responsable del tratamiento y coordinará las acciones correspondientes con las áreas o encargados externos aplicables, considerando las obligaciones legales de conservación que correspondan.
+            </p>
         </div>
 
         <h2 id="s14"><i class="bi bi-arrow-repeat"></i> 14. Modificaciones a la Política</h2>

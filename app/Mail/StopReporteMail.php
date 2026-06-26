@@ -68,7 +68,7 @@ class StopReporteMail extends Mailable
 
         return [
             Attachment::fromPath($this->excelPath)
-                ->as("Reporte_STO_CCU_{$this->frecuencia}_{$label}.xlsx")
+                ->as("Reporte_STOP_CCU_{$this->frecuencia}_{$label}.xlsx")
                 ->withMime('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
         ];
     }
