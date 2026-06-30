@@ -405,6 +405,7 @@ Route::middleware('auth')->group(function () {
         Route::put('/proteccion-datos/solicitud/{solicitud}/responder', [ProteccionDatosController::class, 'responderSolicitud'])->name('proteccion-datos.responder-solicitud');
         Route::post('/proteccion-datos/solicitud/{solicitud}/ejecutar-supresion', [ProteccionDatosController::class, 'ejecutarSupresion'])->name('proteccion-datos.ejecutar-supresion');
         Route::get('/proteccion-datos/registro-tratamiento', [ProteccionDatosController::class, 'registroTratamiento'])->name('proteccion-datos.registro-tratamiento');
+        Route::get('/proteccion-datos/matriz-retencion', [ProteccionDatosController::class, 'matrizRetencion'])->name('proteccion-datos.matriz-retencion');
     });
 
     // --- DOCUMENTACIÓN ---
