@@ -134,7 +134,7 @@
                         <i class="bi bi-shield-fill-exclamation"></i>
                         <span>Ley Karin</span>
                     </a>
-                    <a href="{{ route('ley-karin.dashboard') }}" class="nav-item nav-subitem {{ request()->routeIs('ley-karin.dashboard') ? 'active' : '' }}">
+                    <a href="{{ route('ley-karin.dashboard') }}" class="nav-item {{ request()->routeIs('ley-karin.dashboard') ? 'active' : '' }}">
                         <i class="bi bi-bar-chart-line-fill"></i>
                         <span>Dashboard LK</span>
                     </a>
