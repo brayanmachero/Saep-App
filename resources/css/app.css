@@ -267,6 +267,10 @@ body {
     position: relative;
     white-space: nowrap;
 }
+.nav-item.nav-subitem {
+    margin-left: 0.75rem;
+    padding-left: 0.85rem;
+}
 .nav-item i {
     font-size: 1.2rem;
     width: 24px;
@@ -278,6 +282,10 @@ body {
 }
 .sidebar.collapsed .nav-item i {
     margin-right: 0;
+}
+.sidebar.collapsed .nav-item.nav-subitem {
+    margin-left: 0;
+    padding-left: 1rem;
 }
 .nav-item span {
     transition: opacity var(--transition-speed);
