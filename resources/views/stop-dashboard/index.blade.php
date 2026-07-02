@@ -23,6 +23,12 @@
         $activeFilterSummary = !empty($activeFilterBadges)
             ? implode(' · ', $activeFilterBadges)
             : 'Sin filtros aplicados';
+        $reportFilters = $filters ?? [];
+        $hasReportPeriod = collect(['fecha_desde', 'fecha_hasta', 'mes', 'anio'])
+            ->contains(fn ($key) => filled($reportFilters[$key] ?? null));
+        if (!empty($reportFilters) && !$hasReportPeriod) {
+            $reportFilters['all'] = '1';
+        }
         $sendReportConfirm = '¿Enviar el reporte STOP a los destinatarios configurados con estos filtros? ' . $activeFilterSummary;
     @endphp
 
@@ -48,15 +54,15 @@
             </p>
         </div>
         <div class="stop-header-actions">
-            <a href="{{ route('stop-dashboard.reporte.preview', $filters ?? []) }}" target="_blank" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;text-decoration:none">
+            <a href="{{ route('stop-dashboard.reporte.preview', $reportFilters) }}" target="_blank" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;text-decoration:none">
                 <i class="bi bi-envelope-open"></i> Vista Previa Email
             </a>
-            <a href="{{ route('stop-dashboard.reporte.excel', $filters ?? []) }}" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;text-decoration:none;background:#166534;color:#fff;border:none">
+            <a href="{{ route('stop-dashboard.reporte.excel', $reportFilters) }}" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;text-decoration:none;background:#166534;color:#fff;border:none">
                 <i class="bi bi-file-earmark-excel"></i> Descargar Excel
             </a>
             <form method="POST" action="{{ route('stop-dashboard.reporte.send-now') }}" style="display:inline" onsubmit="return confirm(@js($sendReportConfirm))">
                 @csrf
-                @foreach(($filters ?? []) as $fk => $fv)
+                @foreach($reportFilters as $fk => $fv)
                     @if($fv)<input type="hidden" name="{{ $fk }}" value="{{ $fv }}">@endif
                 @endforeach
                 <button type="submit" class="btn-secondary" style="padding:.5rem 1rem;font-size:.82rem;background:#1e40af;color:#fff;border:none;cursor:pointer">

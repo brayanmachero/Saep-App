@@ -390,8 +390,14 @@ class StopDashboardController extends Controller
 
     private function reportFiltersFromRequest(Request $request): array
     {
+        $filters = $request->only(StopWeeklyReport::reportFilterKeys());
+
+        if ($request->boolean('all')) {
+            $filters['all'] = '1';
+        }
+
         return array_filter(
-            $request->only(StopWeeklyReport::reportFilterKeys()),
+            $filters,
             fn ($value) => $value !== null && $value !== ''
         );
     }

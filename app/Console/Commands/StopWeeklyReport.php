@@ -301,6 +301,7 @@ class StopWeeklyReport extends Command
     public static function normalizeReportFilters(array $filters): array
     {
         $normalized = [];
+        $forceAllPeriod = !empty($filters['all']);
 
         foreach (self::REPORT_FILTER_KEYS as $key) {
             $value = $filters[$key] ?? null;
@@ -321,7 +322,7 @@ class StopWeeklyReport extends Command
             || !empty($normalized['mes'])
             || !empty($normalized['anio']);
 
-        if (!$hasPeriod) {
+        if (!$hasPeriod && !$forceAllPeriod) {
             $normalized['mes'] = now()->format('Y-m');
         }
 

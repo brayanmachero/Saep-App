@@ -193,6 +193,31 @@ class StopDashboardTest extends TestCase
         $this->assertSame('Valentin', $data['filters']['trabajador'] ?? null);
     }
 
+    public function test_dashboard_reports_preserve_explicit_unbounded_period_filters(): void
+    {
+        StopObservacion::query()->delete();
+
+        $this->createStopObservation('2026-05-10', 'SAEP', 'Positiva', 'Centro Norte', 'Valentin Hernandez');
+        $this->createStopObservation('2026-07-10', 'SAEP', 'Negativa', 'Centro Norte', 'Maria Soto');
+
+        $this->actingAs($this->createSuperAdminUser())
+            ->get(route('stop-dashboard', [
+                'empresa_observado' => 'SAEP',
+                'trabajador' => 'Valentin',
+            ]))
+            ->assertOk()
+            ->assertSee('all=1', false);
+
+        $data = StopWeeklyReport::buildReportDataFromFilters([
+            'empresa_observado' => 'SAEP',
+            'trabajador' => 'Valentin',
+            'all' => '1',
+        ]);
+
+        $this->assertSame(1, $data['analytics']['totalRows'] ?? null);
+        $this->assertArrayNotHasKey('mes', $data['filters']);
+    }
+
     public function test_month_comparison_respects_company_year_month_and_ytd_cutoff(): void
     {
         StopObservacion::query()->delete();
