@@ -25,6 +25,7 @@ class StopWeeklyReport extends Command
         'fecha_hasta',
         'mes',
         'anio',
+        'trabajador',
     ];
 
     protected $signature = 'stop:weekly-report

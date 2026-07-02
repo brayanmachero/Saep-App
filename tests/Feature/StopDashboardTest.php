@@ -166,6 +166,33 @@ class StopDashboardTest extends TestCase
             ->assertSee('Prueba auditoria STOP', false);
     }
 
+    public function test_dashboard_and_reports_apply_worker_search_filter(): void
+    {
+        StopObservacion::query()->delete();
+
+        $this->createStopObservation('2026-05-10', 'SAEP', 'Positiva', 'Centro Norte', 'Valentin Hernandez');
+        $this->createStopObservation('2026-05-10', 'SAEP', 'Negativa', 'Centro Norte', 'Maria Soto');
+
+        $this->actingAs($this->createSuperAdminUser())
+            ->get(route('stop-dashboard', [
+                'empresa_observado' => 'SAEP',
+                'mes' => '2026-05',
+                'trabajador' => 'Valentin',
+            ]))
+            ->assertOk()
+            ->assertSee('Trabajador: Valentin', false)
+            ->assertSee('>1</h2>', false);
+
+        $data = StopWeeklyReport::buildReportDataFromFilters([
+            'empresa_observado' => 'SAEP',
+            'mes' => '2026-05',
+            'trabajador' => 'Valentin',
+        ]);
+
+        $this->assertSame(1, $data['analytics']['totalRows'] ?? null);
+        $this->assertSame('Valentin', $data['filters']['trabajador'] ?? null);
+    }
+
     public function test_month_comparison_respects_company_year_month_and_ytd_cutoff(): void
     {
         StopObservacion::query()->delete();
@@ -572,6 +599,7 @@ class StopDashboardTest extends TestCase
         string $company,
         string $classification,
         string $center = 'Centro Test',
+        string $workerName = 'Trabajador Test',
     ): StopObservacion
     {
         return StopObservacion::create([
@@ -582,7 +610,7 @@ class StopDashboardTest extends TestCase
             'centro' => $center,
             'clasificacion' => $classification,
             'tipo_observacion' => 'EPP',
-            'nombre_observado' => 'Trabajador Test',
+            'nombre_observado' => $workerName,
             'checklist_data' => [
                 ['cat' => 'EPP', 'q' => 'Uso de casco', 'val' => 'CUMPLE'],
             ],

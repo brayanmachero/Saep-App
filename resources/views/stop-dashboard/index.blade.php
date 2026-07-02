@@ -13,6 +13,7 @@
             'fecha_hasta' => 'Hasta',
             'mes' => 'Mes',
             'anio' => 'Año',
+            'trabajador' => 'Trabajador',
         ];
         $activeFilterBadges = collect($filters ?? [])
             ->filter(fn ($value) => $value !== null && $value !== '')
@@ -144,7 +145,7 @@
                 {{-- Anio --}}
                 <div>
                     <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">A&ntilde;o</label>
-                    <select name="anio" class="filter-select" onchange="this.form.submit()">
+                    <select name="anio" id="filter-anio" class="filter-select" onchange="clearDateFilters(); clearMesFilter(); this.form.submit()">
                         <option value="">Todos (acumulado)</option>
                         @foreach($filterOptions['anios'] ?? [] as $opt)
                             <option value="{{ $opt }}" {{ ($filters['anio'] ?? '') === $opt ? 'selected' : '' }}>{{ $opt }}</option>
@@ -154,7 +155,7 @@
                 {{-- Mes --}}
                 <div>
                     <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">Mes</label>
-                    <input type="month" name="mes" id="filter-mes" class="filter-select" value="{{ $filters['mes'] ?? '' }}" onchange="clearDateFilters(); this.form.submit()">
+                    <input type="month" name="mes" id="filter-mes" class="filter-select" value="{{ $filters['mes'] ?? '' }}" onchange="clearDateFilters(); clearYearFilter(); this.form.submit()">
                 </div>
                 {{-- Clasificacion --}}
                 <div>
@@ -168,12 +169,12 @@
                 {{-- Fecha Desde --}}
                 <div>
                     <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">Fecha Desde</label>
-                    <input type="date" name="fecha_desde" id="filter-fecha-desde" class="filter-select" value="{{ $filters['fecha_desde'] ?? '' }}" onchange="clearMesFilter(); this.form.submit()">
+                    <input type="date" name="fecha_desde" id="filter-fecha-desde" class="filter-select" value="{{ $filters['fecha_desde'] ?? '' }}" onchange="clearMesFilter(); clearYearFilter(); this.form.submit()">
                 </div>
                 {{-- Fecha Hasta --}}
                 <div>
                     <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:.2rem">Fecha Hasta</label>
-                    <input type="date" name="fecha_hasta" id="filter-fecha-hasta" class="filter-select" value="{{ $filters['fecha_hasta'] ?? '' }}" onchange="clearMesFilter(); this.form.submit()">
+                    <input type="date" name="fecha_hasta" id="filter-fecha-hasta" class="filter-select" value="{{ $filters['fecha_hasta'] ?? '' }}" onchange="clearMesFilter(); clearYearFilter(); this.form.submit()">
                 </div>
                 {{-- Buscar trabajador (observador u observado) --}}
                 <div style="grid-column:span 2">
@@ -1275,6 +1276,10 @@ function clearDateFilters() {
 function clearMesFilter() {
     var m = document.getElementById('filter-mes');
     if (m) m.value = '';
+}
+function clearYearFilter() {
+    var y = document.getElementById('filter-anio');
+    if (y) y.value = '';
 }
 let _trabajadorTimer = null;
 function debouncedTrabajadorSubmit() {
