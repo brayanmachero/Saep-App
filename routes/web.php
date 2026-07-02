@@ -12,6 +12,7 @@ use App\Http\Controllers\CentroCostoController;
 use App\Http\Controllers\CharlaSstController;
 use App\Http\Controllers\ConfiguracionController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DescargaContenedorController;
 use App\Http\Controllers\DepartamentoController;
 use App\Http\Controllers\DocumentacionController;
 use App\Http\Controllers\ExportController;
@@ -160,6 +161,61 @@ Route::middleware('auth')->group(function () {
     });
     Route::middleware('modulo:categorias_formularios')->group(function () {
         Route::resource('categorias-formularios', CategoriaFormularioController::class)->except(['show']);
+    });
+
+    // --- OPERACIONES: DESCARGA DE CONTENEDORES ---
+    Route::middleware('modulo:descarga_contenedores')->group(function () {
+        Route::get('descarga-contenedores/carga-rapida', [DescargaContenedorController::class, 'cargaRapida'])
+            ->name('descarga-contenedores.carga-rapida')
+            ->middleware('modulo:descarga_contenedores,puede_crear');
+        Route::post('descarga-contenedores/carga-rapida', [DescargaContenedorController::class, 'storeBulk'])
+            ->name('descarga-contenedores.store-bulk')
+            ->middleware('modulo:descarga_contenedores,puede_crear');
+        Route::get('descarga-contenedores/cargas', [DescargaContenedorController::class, 'cargas'])
+            ->name('descarga-contenedores.cargas');
+        Route::get('descarga-contenedores/dotacion', [DescargaContenedorController::class, 'dotacion'])
+            ->name('descarga-contenedores.dotacion')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::get('descarga-contenedores/liquidacion', [DescargaContenedorController::class, 'liquidacion'])
+            ->name('descarga-contenedores.liquidacion')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::get('descarga-contenedores/reportes', [DescargaContenedorController::class, 'reportes'])
+            ->name('descarga-contenedores.reportes')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::get('descarga-contenedores/tarifas', [DescargaContenedorController::class, 'tarifas'])
+            ->name('descarga-contenedores.tarifas')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::post('descarga-contenedores/tarifas', [DescargaContenedorController::class, 'storeTarifa'])
+            ->name('descarga-contenedores.tarifas.store')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::match(['put', 'patch'], 'descarga-contenedores/tarifas/{tarifa}', [DescargaContenedorController::class, 'updateTarifa'])
+            ->name('descarga-contenedores.tarifas.update')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::get('descarga-contenedores', [DescargaContenedorController::class, 'index'])
+            ->name('descarga-contenedores.index');
+        Route::get('descarga-contenedores/create', [DescargaContenedorController::class, 'create'])
+            ->name('descarga-contenedores.create')
+            ->middleware('modulo:descarga_contenedores,puede_crear');
+        Route::post('descarga-contenedores', [DescargaContenedorController::class, 'store'])
+            ->name('descarga-contenedores.store')
+            ->middleware('modulo:descarga_contenedores,puede_crear');
+        Route::patch('descarga-contenedores/{descarga}/validar', [DescargaContenedorController::class, 'validar'])
+            ->name('descarga-contenedores.validar')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::patch('descarga-contenedores/{descarga}/borrador', [DescargaContenedorController::class, 'volverBorrador'])
+            ->name('descarga-contenedores.volver-borrador')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::get('descarga-contenedores/{descarga}', [DescargaContenedorController::class, 'show'])
+            ->name('descarga-contenedores.show');
+        Route::get('descarga-contenedores/{descarga}/edit', [DescargaContenedorController::class, 'edit'])
+            ->name('descarga-contenedores.edit')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::match(['put', 'patch'], 'descarga-contenedores/{descarga}', [DescargaContenedorController::class, 'update'])
+            ->name('descarga-contenedores.update')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::delete('descarga-contenedores/{descarga}', [DescargaContenedorController::class, 'destroy'])
+            ->name('descarga-contenedores.destroy')
+            ->middleware('modulo:descarga_contenedores,puede_eliminar');
     });
 
     // --- FORMULARIOS Y RESPUESTAS ---

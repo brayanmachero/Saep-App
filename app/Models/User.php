@@ -115,6 +115,20 @@ class User extends Authenticatable
             || in_array($nombre, ['SUPER ADMIN', 'ADMIN', 'ADMINISTRADOR'], true);
     }
 
+    public function puedeGestionarCostosDescargaContenedores(): bool
+    {
+        if (!$this->tieneAcceso('descarga_contenedores', 'puede_editar')) {
+            return false;
+        }
+
+        $codigo = strtoupper((string) ($this->rol?->codigo ?? ''));
+        $nombre = strtoupper((string) ($this->rol?->nombre ?? ''));
+
+        return $this->esAdminSistema()
+            || str_contains($codigo, 'COORDIN')
+            || str_contains($nombre, 'COORDIN');
+    }
+
     /**
      * The attributes that should be hidden for serialization.
      *

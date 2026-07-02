@@ -12,8 +12,10 @@ class KizeoService
 
     public function __construct()
     {
-        $this->baseUrl = rtrim(config('services.kizeo.url', 'https://www.kizeoforms.com/rest/v3'), '/');
-        $this->token   = config('services.kizeo.token', '');
+        $baseUrl = config('services.kizeo.url') ?: 'https://www.kizeoforms.com/rest/v3';
+
+        $this->baseUrl = rtrim((string) $baseUrl, '/');
+        $this->token   = (string) (config('services.kizeo.token') ?? '');
     }
 
     /**

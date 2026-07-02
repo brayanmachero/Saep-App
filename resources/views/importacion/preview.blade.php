@@ -44,7 +44,7 @@
                 <i class="bi bi-filetype-csv" style="font-size:1.15rem;color:#059669;"></i>
             </div>
             <div>
-                <p style="font-size:1.4rem;font-weight:800;margin:0;color:var(--text-main);">{{ ucfirst($tipo) }}</p>
+                <p style="font-size:1.4rem;font-weight:800;margin:0;color:var(--text-main);">{{ $tipo === 'trabajadores_talana' ? 'Nómina Talana' : ucfirst($tipo) }}</p>
                 <p style="font-size:0.72rem;color:var(--text-muted);margin:0;">Tipo de importación</p>
             </div>
         </div>

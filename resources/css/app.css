@@ -696,6 +696,35 @@ select.form-input { cursor: pointer; }
     color: #f59e0b;
     background: rgba(245,158,11,0.08);
 }
+.icon-btn.validation-ready {
+    color: #059669;
+}
+.icon-btn.validation-ready:hover {
+    border-color: #059669;
+    color: #059669;
+    background: rgba(16,185,129,0.08);
+}
+.icon-btn.validation-disabled,
+.icon-btn.validation-disabled:hover {
+    opacity: 0.42;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    border-color: var(--surface-border);
+    color: var(--text-muted);
+    background: none;
+}
+.pending-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    min-width: 150px;
+}
+.pending-list .badge {
+    font-size: 0.68rem;
+    padding: 0.22rem 0.5rem;
+    white-space: nowrap;
+}
 
 /* ── Alerts ── */
 .alert {

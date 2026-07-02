@@ -40,6 +40,7 @@
         <p style="color:var(--text-muted);font-size:.9rem;margin:0 0 1rem;line-height:1.5;">
             Sube un archivo CSV con los datos de los trabajadores exportados desde Talana u otro sistema de RRHH.
             Los usuarios existentes (por RUT o email) serán actualizados, los nuevos serán creados con rol <strong>Trabajador</strong>.
+            Además, la nómina operacional Talana quedará sincronizada para módulos como Contenedores.
         </p>
 
         <form method="POST" action="{{ route('importacion.preview') }}" enctype="multipart/form-data" id="importForm">
@@ -72,6 +73,38 @@
                 </a>
                 <button type="submit" class="btn-premium" id="btnPreview" disabled style="opacity:.5;">
                     <i class="bi bi-eye-fill"></i> Previsualizar
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {{-- Tarjeta de importación solo nómina Talana --}}
+    <div class="glass-card" style="margin-bottom:1.5rem;border-left:4px solid var(--primary-color);">
+        <h3 style="font-size:0.82rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1.25rem;font-weight:700;">
+            <i class="bi bi-person-lines-fill"></i> Importar Nómina Talana
+        </h3>
+
+        <p style="color:var(--text-muted);font-size:.9rem;margin:0 0 1rem;line-height:1.5;">
+            Usa esta opción para cargar o actualizar trabajadores disponibles para operaciones sin crear cuentas de acceso en SAEP.
+            Es la fuente usada por el selector de trabajadores en Contenedores.
+        </p>
+
+        <form method="POST" action="{{ route('importacion.preview') }}" enctype="multipart/form-data">
+            @csrf
+            <input type="hidden" name="tipo" value="trabajadores_talana">
+
+            <div class="form-group" style="margin-bottom:1rem;">
+                <label class="form-label" for="csvTalanaInput">Archivo CSV Talana</label>
+                <input type="file" name="archivo" accept=".csv,.txt" id="csvTalanaInput" class="form-control @error('archivo') is-invalid @enderror">
+                @error('archivo') <span class="error-msg">{{ $message }}</span> @enderror
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.75rem;">
+                <a href="{{ route('importacion.plantilla', 'trabajadores_talana') }}" class="btn-ghost" style="font-size:.85rem;">
+                    <i class="bi bi-download"></i> Descargar Plantilla Talana
+                </a>
+                <button type="submit" class="btn-premium">
+                    <i class="bi bi-eye-fill"></i> Previsualizar Nómina
                 </button>
             </div>
         </form>

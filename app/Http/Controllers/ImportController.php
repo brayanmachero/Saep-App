@@ -8,6 +8,7 @@ use App\Models\CentroCosto;
 use App\Models\Configuracion;
 use App\Models\Departamento;
 use App\Models\Rol;
+use App\Models\TalanaTrabajador;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -33,7 +34,7 @@ class ImportController extends Controller
     {
         $request->validate([
             'archivo' => ['required', 'file', 'mimes:csv,txt', 'max:5120'],
-            'tipo'    => ['required', 'in:usuarios'],
+            'tipo'    => ['required', 'in:usuarios,trabajadores_talana'],
         ]);
 
         $tipo = $request->tipo;
@@ -72,14 +73,20 @@ class ImportController extends Controller
 
         $result = match ($tipo) {
             'usuarios' => $this->importUsuarios($rows),
+            'trabajadores_talana' => $this->importTrabajadoresTalana($rows),
             default    => ['creados' => 0, 'actualizados' => 0, 'errores' => ['Tipo de importación no soportado.']],
         };
 
         // Limpiar sesión
         $request->session()->forget(['import_data', 'import_tipo']);
 
+        $message = "Importación completada: {$result['creados']} creados, {$result['actualizados']} actualizados.";
+        if (array_key_exists('talana_creados', $result)) {
+            $message .= " Nómina Talana: {$result['talana_creados']} creados, {$result['talana_actualizados']} actualizados.";
+        }
+
         return redirect()->route('importacion.index')
-            ->with('success', "Importación completada: {$result['creados']} creados, {$result['actualizados']} actualizados.")
+            ->with('success', $message)
             ->with('import_errores', $result['errores']);
     }
 
@@ -90,6 +97,8 @@ class ImportController extends Controller
     {
         $creados = 0;
         $actualizados = 0;
+        $talanaCreados = 0;
+        $talanaActualizados = 0;
         $errores = [];
 
         // Cache de lookups para evitar queries repetidas
@@ -98,25 +107,7 @@ class ImportController extends Controller
         $centrosCosto = CentroCosto::all()->keyBy(fn ($cc) => mb_strtolower(trim($cc->nombre)));
         $rolTrabajador = Rol::where('nombre', 'TRABAJADOR')->first();
 
-        // Mapeo de columnas CSV (Talana) → campos de BD
-        $columnMap = [
-            'rut'               => ['rut', 'rut trabajador', 'rut_trabajador'],
-            'name'              => ['nombre', 'nombres', 'name', 'primer nombre'],
-            'apellido_paterno'  => ['apellido paterno', 'apellido_paterno', 'primer apellido'],
-            'apellido_materno'  => ['apellido materno', 'apellido_materno', 'segundo apellido'],
-            'email'             => ['email', 'correo', 'correo electronico', 'correo electrónico', 'e-mail'],
-            'cargo'             => ['cargo', 'puesto', 'cargo actual'],
-            'departamento'      => ['departamento', 'area', 'área', 'seccion', 'sección'],
-            'centro_costo'      => ['centro de costo', 'centro_costo', 'centro costo', 'cc'],
-            'tipo_nomina'       => ['tipo nomina', 'tipo_nomina', 'tipo de nomina', 'tipo de nómina', 'tipo nómina'],
-            'razon_social'      => ['razon social', 'razón social', 'razon_social', 'empresa'],
-            'fecha_nacimiento'  => ['fecha nacimiento', 'fecha_nacimiento', 'fecha de nacimiento', 'nacimiento'],
-            'nacionalidad'      => ['nacionalidad', 'pais', 'país'],
-            'sexo'              => ['sexo', 'genero', 'género'],
-            'estado_civil'      => ['estado civil', 'estado_civil'],
-            'fecha_ingreso'     => ['fecha ingreso', 'fecha_ingreso', 'fecha de ingreso', 'ingreso'],
-            'telefono'          => ['telefono', 'teléfono', 'telefono contacto', 'celular', 'fono'],
-        ];
+        $columnMap = $this->talanaColumnMap();
 
         foreach ($rows as $i => $row) {
             $fila = $i + 2; // Fila real en el CSV (header = 1)
@@ -158,24 +149,39 @@ class ImportController extends Controller
 
                 // Auto-crear cargo si no existe
                 if (!$cargoId && $cargoNombre) {
-                    $nuevoCargo = Cargo::create(['nombre' => trim($mapped['cargo']), 'activo' => true]);
+                    $nuevoCargo = Cargo::create([
+                        'codigo' => $this->codigoImportacion('cargos', $mapped['cargo']),
+                        'nombre' => trim($mapped['cargo']),
+                        'activo' => true,
+                    ]);
                     $cargos->put($cargoNombre, $nuevoCargo);
                     $cargoId = $nuevoCargo->id;
                 }
 
                 // Auto-crear departamento si no existe
                 if (!$depId && $depNombre) {
-                    $nuevoDep = Departamento::create(['nombre' => trim($mapped['departamento']), 'activo' => true]);
+                    $nuevoDep = Departamento::create([
+                        'codigo' => $this->codigoImportacion('departamentos', $mapped['departamento']),
+                        'nombre' => trim($mapped['departamento']),
+                        'activo' => true,
+                    ]);
                     $departamentos->put($depNombre, $nuevoDep);
                     $depId = $nuevoDep->id;
                 }
 
                 // Auto-crear centro de costo si no existe
                 if (!$ccId && $ccNombre) {
-                    $nuevoCC = CentroCosto::create(['nombre' => trim($mapped['centro_costo']), 'activo' => true]);
+                    $nuevoCC = CentroCosto::create([
+                        'codigo' => $this->codigoImportacion('centros_costo', $mapped['centro_costo']),
+                        'nombre' => trim($mapped['centro_costo']),
+                        'activo' => true,
+                    ]);
                     $centrosCosto->put($ccNombre, $nuevoCC);
                     $ccId = $nuevoCC->id;
                 }
+
+                $talanaNuevo = $this->upsertTalanaTrabajador($mapped, $row, $cargoId, $depId, $ccId);
+                $talanaNuevo ? $talanaCreados++ : $talanaActualizados++;
 
                 $userData = [
                     'name'              => $name,
@@ -233,7 +239,223 @@ class ImportController extends Controller
             }
         }
 
+        return [
+            'creados' => $creados,
+            'actualizados' => $actualizados,
+            'errores' => $errores,
+            'talana_creados' => $talanaCreados,
+            'talana_actualizados' => $talanaActualizados,
+        ];
+    }
+
+    /**
+     * Importar solo nómina operacional Talana, sin crear cuentas de acceso.
+     */
+    private function importTrabajadoresTalana(array $rows): array
+    {
+        $creados = 0;
+        $actualizados = 0;
+        $errores = [];
+
+        $cargos = Cargo::all()->keyBy(fn ($c) => mb_strtolower(trim($c->nombre)));
+        $departamentos = Departamento::all()->keyBy(fn ($d) => mb_strtolower(trim($d->nombre)));
+        $centrosCosto = CentroCosto::all()->keyBy(fn ($cc) => mb_strtolower(trim($cc->nombre)));
+        $columnMap = $this->talanaColumnMap();
+
+        foreach ($rows as $i => $row) {
+            $fila = $i + 2;
+
+            try {
+                $mapped = $this->mapColumns($row, $columnMap);
+                $rut = trim($mapped['rut'] ?? '');
+                $email = trim($mapped['email'] ?? '');
+                $name = trim($mapped['name'] ?? '');
+
+                if (empty($rut) && empty($email) && empty($mapped['talana_id'])) {
+                    $errores[] = "Fila {$fila}: Sin RUT, email ni ID Talana, se omite.";
+                    continue;
+                }
+
+                if (empty($name)) {
+                    $errores[] = "Fila {$fila}: Sin nombre, se omite.";
+                    continue;
+                }
+
+                $cargoNombre = mb_strtolower(trim($mapped['cargo'] ?? ''));
+                $depNombre = mb_strtolower(trim($mapped['departamento'] ?? ''));
+                $ccNombre = mb_strtolower(trim($mapped['centro_costo'] ?? ''));
+
+                $cargoId = $cargos->get($cargoNombre)?->id;
+                $depId = $departamentos->get($depNombre)?->id;
+                $ccId = $centrosCosto->get($ccNombre)?->id;
+
+                if (!$cargoId && $cargoNombre) {
+                    $nuevoCargo = Cargo::create([
+                        'codigo' => $this->codigoImportacion('cargos', $mapped['cargo']),
+                        'nombre' => trim($mapped['cargo']),
+                        'activo' => true,
+                    ]);
+                    $cargos->put($cargoNombre, $nuevoCargo);
+                    $cargoId = $nuevoCargo->id;
+                }
+
+                if (!$depId && $depNombre) {
+                    $nuevoDep = Departamento::create([
+                        'codigo' => $this->codigoImportacion('departamentos', $mapped['departamento']),
+                        'nombre' => trim($mapped['departamento']),
+                        'activo' => true,
+                    ]);
+                    $departamentos->put($depNombre, $nuevoDep);
+                    $depId = $nuevoDep->id;
+                }
+
+                if (!$ccId && $ccNombre) {
+                    $nuevoCC = CentroCosto::create([
+                        'codigo' => $this->codigoImportacion('centros_costo', $mapped['centro_costo']),
+                        'nombre' => trim($mapped['centro_costo']),
+                        'activo' => true,
+                    ]);
+                    $centrosCosto->put($ccNombre, $nuevoCC);
+                    $ccId = $nuevoCC->id;
+                }
+
+                $nuevo = $this->upsertTalanaTrabajador($mapped, $row, $cargoId, $depId, $ccId);
+                $nuevo ? $creados++ : $actualizados++;
+            } catch (\Exception $e) {
+                $errores[] = "Fila {$fila}: " . $e->getMessage();
+                Log::warning("Import Talana error fila {$fila}", ['error' => $e->getMessage()]);
+            }
+        }
+
         return compact('creados', 'actualizados', 'errores');
+    }
+
+    private function talanaColumnMap(): array
+    {
+        return [
+            'talana_id'         => ['talana id', 'talana_id', 'id talana', 'id trabajador', 'codigo trabajador', 'código trabajador', 'ficha'],
+            'rut'               => ['rut', 'rut trabajador', 'rut_trabajador', 'identificacion', 'identificación'],
+            'name'              => ['nombre', 'nombres', 'name', 'primer nombre'],
+            'apellido_paterno'  => ['apellido paterno', 'apellido_paterno', 'primer apellido'],
+            'apellido_materno'  => ['apellido materno', 'apellido_materno', 'segundo apellido'],
+            'email'             => ['email', 'correo', 'correo electronico', 'correo electrónico', 'e-mail'],
+            'cargo'             => ['cargo', 'puesto', 'cargo actual'],
+            'departamento'      => ['departamento', 'area', 'área', 'seccion', 'sección'],
+            'centro_costo'      => ['centro de costo', 'centro_costo', 'centro costo', 'cc'],
+            'tipo_nomina'       => ['tipo nomina', 'tipo_nomina', 'tipo de nomina', 'tipo de nómina', 'tipo nómina'],
+            'razon_social'      => ['razon social', 'razón social', 'razon_social', 'empresa'],
+            'fecha_nacimiento'  => ['fecha nacimiento', 'fecha_nacimiento', 'fecha de nacimiento', 'nacimiento'],
+            'nacionalidad'      => ['nacionalidad', 'pais', 'país'],
+            'sexo'              => ['sexo', 'genero', 'género'],
+            'estado_civil'      => ['estado civil', 'estado_civil'],
+            'fecha_ingreso'     => ['fecha ingreso', 'fecha_ingreso', 'fecha de ingreso', 'ingreso'],
+            'fecha_termino'     => ['fecha termino', 'fecha término', 'fecha_termino', 'fecha de termino', 'fecha de término', 'termino contrato', 'término contrato', 'fecha finiquito'],
+            'estado'            => ['estado', 'situacion', 'situación', 'estado trabajador', 'vigencia'],
+            'telefono'          => ['telefono', 'teléfono', 'telefono contacto', 'celular', 'fono'],
+        ];
+    }
+
+    private function upsertTalanaTrabajador(array $mapped, array $rawRow, ?int $cargoId, ?int $depId, ?int $ccId): bool
+    {
+        $talanaId = trim($mapped['talana_id'] ?? '') ?: null;
+        $rut = $this->cleanRut($mapped['rut'] ?? '');
+        $email = trim($mapped['email'] ?? '') ?: null;
+
+        $trabajador = null;
+        if ($talanaId) {
+            $trabajador = TalanaTrabajador::where('talana_id', $talanaId)->first();
+        }
+        if (!$trabajador && $rut) {
+            $trabajador = TalanaTrabajador::where('rut', $rut)->first();
+        }
+        if (!$trabajador && $email) {
+            $trabajador = TalanaTrabajador::where('email', $email)->first();
+        }
+
+        $fechaTermino = $this->parseDate($mapped['fecha_termino'] ?? '');
+        $data = [
+            'talana_id' => $talanaId,
+            'rut' => $rut,
+            'nombre' => trim($mapped['name'] ?? '') ?: 'Sin nombre',
+            'apellido_paterno' => trim($mapped['apellido_paterno'] ?? '') ?: null,
+            'apellido_materno' => trim($mapped['apellido_materno'] ?? '') ?: null,
+            'email' => $email,
+            'cargo_id' => $cargoId,
+            'cargo_nombre' => trim($mapped['cargo'] ?? '') ?: null,
+            'departamento_id' => $depId,
+            'departamento_nombre' => trim($mapped['departamento'] ?? '') ?: null,
+            'centro_costo_id' => $ccId,
+            'centro_costo_nombre' => trim($mapped['centro_costo'] ?? '') ?: null,
+            'tipo_nomina' => strtoupper(trim($mapped['tipo_nomina'] ?? '')) ?: null,
+            'razon_social' => trim($mapped['razon_social'] ?? '') ?: null,
+            'fecha_nacimiento' => $this->parseDate($mapped['fecha_nacimiento'] ?? ''),
+            'fecha_ingreso' => $this->parseDate($mapped['fecha_ingreso'] ?? ''),
+            'fecha_termino' => $fechaTermino,
+            'telefono' => trim($mapped['telefono'] ?? '') ?: null,
+            'activo' => $this->parseActivo($mapped['estado'] ?? '', $fechaTermino),
+            'origen' => 'talana_csv',
+            'raw_payload' => $rawRow,
+        ];
+
+        if ($trabajador) {
+            foreach (['talana_id', 'rut', 'email'] as $identityField) {
+                if (empty($data[$identityField])) {
+                    unset($data[$identityField]);
+                }
+            }
+
+            $trabajador->update($data);
+            return false;
+        }
+
+        TalanaTrabajador::create($data);
+        return true;
+    }
+
+    private function cleanRut(string $value): ?string
+    {
+        $clean = strtoupper(preg_replace('/[^0-9kK]/', '', $value));
+
+        return $clean === '' ? null : $clean;
+    }
+
+    private function parseActivo(string $estado, ?string $fechaTermino): bool
+    {
+        if ($fechaTermino && $fechaTermino <= now()->toDateString()) {
+            return false;
+        }
+
+        $normalized = mb_strtolower(trim($estado));
+        $normalized = strtr($normalized, [
+            'á' => 'a',
+            'é' => 'e',
+            'í' => 'i',
+            'ó' => 'o',
+            'ú' => 'u',
+        ]);
+
+        if (in_array($normalized, ['inactivo', 'desvinculado', 'finiquitado', 'egresado', 'no vigente', 'no', '0'], true)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function codigoImportacion(string $table, string $nombre): string
+    {
+        $base = mb_strtoupper(Str::slug(trim($nombre) ?: 'IMPORTADO', '_'));
+        $base = $base ?: 'IMPORTADO';
+        $base = Str::limit($base, 80, '');
+        $codigo = $base;
+        $i = 1;
+
+        while (DB::table($table)->where('codigo', $codigo)->exists()) {
+            $suffix = '_' . $i;
+            $codigo = Str::limit($base, 100 - strlen($suffix), '') . $suffix;
+            $i++;
+        }
+
+        return $codigo;
     }
 
     /**
@@ -347,28 +569,31 @@ class ImportController extends Controller
      */
     public function plantilla(string $tipo)
     {
-        if ($tipo !== 'usuarios') {
+        if (!in_array($tipo, ['usuarios', 'trabajadores_talana'], true)) {
             abort(404);
         }
 
         $headers = [
-            'RUT', 'Nombre', 'Apellido Paterno', 'Apellido Materno', 'Email',
+            'ID Talana', 'RUT', 'Nombre', 'Apellido Paterno', 'Apellido Materno', 'Email',
             'Cargo', 'Departamento', 'Centro de Costo', 'Tipo Nomina',
             'Razon Social', 'Fecha Nacimiento', 'Nacionalidad', 'Sexo',
-            'Estado Civil', 'Fecha Ingreso', 'Telefono'
+            'Estado Civil', 'Fecha Ingreso', 'Fecha Termino', 'Estado', 'Telefono'
         ];
 
         $example = [
-            '12.345.678-9', 'Juan', 'Pérez', 'González', 'juan.perez@empresa.cl',
+            'TAL-001', '12.345.678-9', 'Juan', 'Pérez', 'González', 'juan.perez@empresa.cl',
             'Operador', 'Producción', 'CC-001', 'NORMAL',
             'Mi Empresa S.A.', '1990-01-15', 'Chilena', 'M',
-            'Soltero/a', '2024-03-01', '+56912345678'
+            'Soltero/a', '2024-03-01', '', 'Activo', '+56912345678'
         ];
 
         $csv = implode(';', $headers) . "\n" . implode(';', $example) . "\n";
+        $filename = $tipo === 'trabajadores_talana'
+            ? 'plantilla_trabajadores_talana.csv'
+            : 'plantilla_usuarios.csv';
 
         return response($csv)
             ->header('Content-Type', 'text/csv; charset=UTF-8')
-            ->header('Content-Disposition', 'attachment; filename="plantilla_usuarios.csv"');
+            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
     }
 }
