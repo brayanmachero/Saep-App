@@ -903,6 +903,12 @@ class DescargaContenedorController extends Controller
             $q->orWhere(function ($nameQuery) {
                 $this->applyKeywordFilter($nameQuery, 'centro_costo_nombre', $this->descargaDotacionCenterKeywords());
             });
+        })->where(function ($cargoQuery) {
+            $this->applyKeywordFilter($cargoQuery, 'cargo_nombre', $this->descargaDotacionCargoKeywords());
+
+            $cargoQuery->orWhereHas('cargo', function ($cargo) {
+                $this->applyKeywordFilter($cargo, 'nombre', $this->descargaDotacionCargoKeywords());
+            });
         });
     }
 
@@ -919,11 +925,25 @@ class DescargaContenedorController extends Controller
     {
         return [
             'CAMPOS DE CHILE',
-            'PEÑON',
-            'PEÑÓN',
-            'PENON',
-            'QUILICURA',
-            'MAERSK',
+            'LTS CAMPOS DE CHILE',
+            'LTS PEÑON',
+            'LTS PEÑÓN',
+            'LTS PENON',
+            'LTS QUILICURA',
+            'MAERSK PUMA',
+            'MAERSK LA VARA',
+            'MAERSK MATTEL',
+        ];
+    }
+
+    private function descargaDotacionCargoKeywords(): array
+    {
+        return [
+            'DESCARGA',
+            'ESTIBA',
+            'DESCARGADOR',
+            'ENCARGADO DE TURNO',
+            'SUPERVISOR DE OPERACIONES',
         ];
     }
 
