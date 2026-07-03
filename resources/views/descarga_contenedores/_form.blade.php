@@ -517,6 +517,38 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
         });
     }
 
+    function positionWorkerDropdown() {
+        const rect = input.getBoundingClientRect();
+        const gap = 4;
+        const viewportPadding = 16;
+        const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+        const spaceAbove = rect.top - viewportPadding;
+        const openUp = spaceBelow < 180 && spaceAbove > spaceBelow;
+        const maxHeight = Math.max(160, Math.min(320, openUp ? spaceAbove - gap : spaceBelow - gap));
+
+        dropdown.classList.add('is-floating');
+        dropdown.style.left = `${rect.left}px`;
+        dropdown.style.width = `${rect.width}px`;
+        dropdown.style.right = 'auto';
+        dropdown.style.maxHeight = `${maxHeight}px`;
+        dropdown.style.top = openUp
+            ? `${Math.max(viewportPadding, rect.top - maxHeight - gap)}px`
+            : `${rect.bottom + gap}px`;
+    }
+
+    function showWorkerDropdown() {
+        if (dropdown.parentElement !== document.body) {
+            document.body.appendChild(dropdown);
+        }
+
+        dropdown.style.display = 'block';
+        positionWorkerDropdown();
+    }
+
+    function hideWorkerDropdown() {
+        dropdown.style.display = 'none';
+    }
+
     function render(query = '') {
         const q = query.toLowerCase();
         const centerValue = centerFilter.value;
@@ -558,7 +590,7 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
         } else {
             dropdown.innerHTML = '<div class="worker-empty">Sin resultados para ese centro/cargo</div>';
         }
-        dropdown.style.display = 'block';
+        showWorkerDropdown();
 
         dropdown.querySelectorAll('.worker-option').forEach(option => {
             const selectOption = event => {
@@ -570,7 +602,7 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
                     selected.set(String(worker.id), { worker, porcentaje: null });
                     equalize();
                     input.value = '';
-                    dropdown.style.display = 'none';
+                    hideWorkerDropdown();
                     sync();
                 }
             };
@@ -585,7 +617,7 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
 
     input.addEventListener('focus', () => render(input.value.trim()));
     input.addEventListener('input', () => render(input.value.trim()));
-    input.addEventListener('blur', () => setTimeout(() => dropdown.style.display = 'none', 150));
+    input.addEventListener('blur', () => setTimeout(hideWorkerDropdown, 150));
     centerFilter.addEventListener('change', () => {
         refreshCargoOptions();
         render(input.value.trim());
@@ -600,6 +632,12 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
         sync();
     });
     tarifaSelect?.addEventListener('change', () => sync());
+    window.addEventListener('resize', () => {
+        if (dropdown.style.display !== 'none') positionWorkerDropdown();
+    });
+    window.addEventListener('scroll', () => {
+        if (dropdown.style.display !== 'none') positionWorkerDropdown();
+    }, true);
     sync();
 }
 
@@ -756,6 +794,12 @@ document.addEventListener('DOMContentLoaded', () => {
     border-radius: 10px;
     margin-top: 3px;
     box-shadow: 0 10px 30px rgba(0,0,0,.14);
+}
+.worker-dropdown.is-floating {
+    position: fixed;
+    right: auto;
+    margin-top: 0;
+    z-index: 5000;
 }
 .worker-option { padding: .65rem .8rem; cursor: pointer; display: grid; gap: .15rem; }
 .worker-option:hover { background: rgba(15, 27, 76, .06); }
