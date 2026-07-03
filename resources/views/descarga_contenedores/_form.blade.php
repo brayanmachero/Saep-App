@@ -524,16 +524,22 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
         const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
         const spaceAbove = rect.top - viewportPadding;
         const openUp = spaceBelow < 180 && spaceAbove > spaceBelow;
-        const maxHeight = Math.max(160, Math.min(320, openUp ? spaceAbove - gap : spaceBelow - gap));
+        const availableSpace = Math.max(120, openUp ? spaceAbove - gap : spaceBelow - gap);
+        const maxHeight = Math.min(320, availableSpace);
 
         dropdown.classList.add('is-floating');
         dropdown.style.left = `${rect.left}px`;
         dropdown.style.width = `${rect.width}px`;
         dropdown.style.right = 'auto';
+        dropdown.style.top = 'auto';
+        dropdown.style.bottom = 'auto';
         dropdown.style.maxHeight = `${maxHeight}px`;
-        dropdown.style.top = openUp
-            ? `${Math.max(viewportPadding, rect.top - maxHeight - gap)}px`
-            : `${rect.bottom + gap}px`;
+
+        if (openUp) {
+            dropdown.style.bottom = `${Math.max(viewportPadding, window.innerHeight - rect.top + gap)}px`;
+        } else {
+            dropdown.style.top = `${rect.bottom + gap}px`;
+        }
     }
 
     function showWorkerDropdown() {
@@ -547,6 +553,8 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
 
     function hideWorkerDropdown() {
         dropdown.style.display = 'none';
+        dropdown.style.top = '';
+        dropdown.style.bottom = '';
     }
 
     function render(query = '') {
