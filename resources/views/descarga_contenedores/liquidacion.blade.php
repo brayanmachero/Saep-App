@@ -5,7 +5,7 @@
     <div class="page-header">
         <div>
             <h2 class="page-heading">Liquidación</h2>
-            <p class="page-subheading">Productividad y pago referencial agrupado por trabajador.</p>
+            <p class="page-subheading">Pago referencial agrupado por trabajador. Por defecto sólo considera registros validados.</p>
         </div>
     </div>
 
@@ -49,9 +49,11 @@
             <div>
                 <label style="font-size:.75rem;color:var(--text-muted)">Estado</label>
                 <select name="estado" class="form-control">
-                    <option value="">Todos</option>
+                    <option value="validado" {{ $estadoSeleccionado === 'validado' ? 'selected' : '' }}>Validado</option>
+                    <option value="todos" {{ $estadoSeleccionado === 'todos' ? 'selected' : '' }}>Todos</option>
                     @foreach(['borrador' => 'Borrador', 'validado' => 'Validado', 'cerrado' => 'Cerrado', 'liquidado' => 'Liquidado'] as $value => $label)
-                        <option value="{{ $value }}" {{ request('estado') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                        @continue($value === 'validado')
+                        <option value="{{ $value }}" {{ $estadoSeleccionado === $value ? 'selected' : '' }}>{{ $label }}</option>
                     @endforeach
                 </select>
             </div>
@@ -64,6 +66,7 @@
                 <input type="date" name="fecha_hasta" value="{{ request('fecha_hasta') }}" class="form-control">
             </div>
             <button type="submit" class="btn-premium"><i class="bi bi-search"></i> Filtrar</button>
+            <a href="{{ route('descarga-contenedores.liquidacion.exportar', request()->query()) }}" class="btn-secondary"><i class="bi bi-download"></i> Exportar CSV</a>
             @if(request()->hasAny(['buscar','centro_costo_id','estado','fecha_desde','fecha_hasta']))
                 <a href="{{ route('descarga-contenedores.liquidacion') }}" class="btn-secondary"><i class="bi bi-x-lg"></i> Limpiar</a>
             @endif

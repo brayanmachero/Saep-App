@@ -84,6 +84,7 @@ class DescargaContenedorController extends Controller
             'total' => DescargaContenedor::count(),
             'borradores' => DescargaContenedor::where('estado', 'borrador')->count(),
             'validadas' => DescargaContenedor::where('estado', 'validado')->count(),
+            'liquidadas' => DescargaContenedor::where('estado', 'liquidado')->count(),
             'participantes' => DB::table('descarga_contenedor_participantes')->count(),
             'revision_tarifa' => DescargaContenedor::where('requiere_revision_tarifa', true)->count(),
             'sin_equipo' => DescargaContenedor::doesntHave('participantes')->count(),
@@ -131,6 +132,7 @@ class DescargaContenedorController extends Controller
             'supervisor',
             'creadoPor',
             'validadoPor',
+            'liquidadoPor',
             'participantes.talanaTrabajador.centroCosto',
             'participantes.talanaTrabajador.cargo',
             'participantes.user.centroCosto',
@@ -149,6 +151,8 @@ class DescargaContenedorController extends Controller
 
     public function edit(DescargaContenedor $descarga)
     {
+        $this->ensureEditable($descarga);
+
         $descarga = $descarga->load('participantes');
 
         return view('descarga_contenedores.edit', array_merge(
@@ -159,6 +163,8 @@ class DescargaContenedorController extends Controller
 
     public function update(Request $request, DescargaContenedor $descarga)
     {
+        $this->ensureEditable($descarga);
+
         $data = $this->validatedData($request);
 
         DB::transaction(function () use ($request, $descarga, $data) {
@@ -179,7 +185,7 @@ class DescargaContenedorController extends Controller
 
     public function validar(DescargaContenedor $descarga)
     {
-        if (!in_array($descarga->estado, ['borrador', 'validado'], true)) {
+        if ($descarga->estado !== 'borrador') {
             return back()->with('error', 'Solo se pueden validar registros en borrador.');
         }
 
@@ -192,6 +198,8 @@ class DescargaContenedorController extends Controller
             'estado' => 'validado',
             'validado_por' => auth()->id(),
             'validado_at' => now(),
+            'liquidado_por' => null,
+            'liquidado_at' => null,
         ]);
 
         return back()->with('success', 'Registro validado correctamente.');
@@ -207,13 +215,58 @@ class DescargaContenedorController extends Controller
             'estado' => 'borrador',
             'validado_por' => null,
             'validado_at' => null,
+            'liquidado_por' => null,
+            'liquidado_at' => null,
         ]);
 
         return back()->with('success', 'Registro devuelto a borrador.');
     }
 
+    public function liquidar(DescargaContenedor $descarga)
+    {
+        $this->authorizeCostManagement();
+
+        if ($descarga->estado !== 'validado') {
+            return back()->with('error', 'Solo se pueden liquidar registros validados.');
+        }
+
+        $blockers = $descarga->validationBlockers();
+        if ($blockers->isNotEmpty()) {
+            return back()->with('error', 'No se puede liquidar: ' . $blockers->implode(', ') . '.');
+        }
+
+        $descarga->update([
+            'estado' => 'liquidado',
+            'liquidado_por' => auth()->id(),
+            'liquidado_at' => now(),
+        ]);
+
+        return back()->with('success', 'Registro marcado como liquidado.');
+    }
+
+    public function volverValidado(DescargaContenedor $descarga)
+    {
+        $this->authorizeCostManagement();
+
+        if ($descarga->estado !== 'liquidado') {
+            return back()->with('error', 'Solo se pueden reabrir registros liquidados.');
+        }
+
+        $descarga->update([
+            'estado' => 'validado',
+            'liquidado_por' => null,
+            'liquidado_at' => null,
+        ]);
+
+        return back()->with('success', 'Registro reabierto como validado.');
+    }
+
     public function destroy(DescargaContenedor $descarga)
     {
+        if ($descarga->estado === 'liquidado') {
+            return back()->with('error', 'No se puede eliminar un registro liquidado. Reábrelo primero.');
+        }
+
         $descarga->delete();
 
         return redirect()
@@ -352,6 +405,16 @@ class DescargaContenedorController extends Controller
             $query->where('centro_costo_id', $request->input('centro_costo_id'));
         }
 
+        if ($request->filled('cargo')) {
+            $cargo = trim($request->input('cargo'));
+            $query->where(function ($q) use ($cargo) {
+                $q->where('cargo_nombre', $cargo)
+                    ->orWhereHas('cargo', function ($cargoQuery) use ($cargo) {
+                        $cargoQuery->where('nombre', $cargo);
+                    });
+            });
+        }
+
         if ($request->input('estado') === 'activos') {
             $query->where('activo', true);
         } elseif ($request->input('estado') === 'inactivos') {
@@ -382,14 +445,22 @@ class DescargaContenedorController extends Controller
         }
 
         $centros = CentroCosto::where('activo', true)->orderBy('nombre')->get();
+        $cargos = TalanaTrabajador::query()
+            ->whereNotNull('cargo_nombre')
+            ->select('cargo_nombre')
+            ->distinct()
+            ->orderBy('cargo_nombre')
+            ->pluck('cargo_nombre');
+
         $stats = [
             'activos' => TalanaTrabajador::where('activo', true)->count(),
             'inactivos' => TalanaTrabajador::where('activo', false)->count(),
             'centros' => TalanaTrabajador::whereNotNull('centro_costo_id')->distinct()->count('centro_costo_id'),
+            'cargos' => TalanaTrabajador::whereNotNull('cargo_nombre')->distinct()->count('cargo_nombre'),
             'participantes' => DB::table('descarga_contenedor_participantes')->whereNotNull('talana_trabajador_id')->distinct()->count('talana_trabajador_id'),
         ];
 
-        return view('descarga_contenedores.dotacion', compact('trabajadores', 'participacion', 'centros', 'stats'));
+        return view('descarga_contenedores.dotacion', compact('trabajadores', 'participacion', 'centros', 'cargos', 'stats'));
     }
 
     public function liquidacion(Request $request)
@@ -404,34 +475,59 @@ class DescargaContenedorController extends Controller
             'monto' => (clone $base)->sum('p.monto_calculado'),
         ];
 
-        $liquidaciones = $base
-            ->select([
-                'p.talana_trabajador_id',
-                'p.rut_snapshot',
-                'p.nombre_snapshot',
-                'p.cargo_snapshot',
-                'p.centro_costo_snapshot',
-            ])
-            ->selectRaw('COUNT(DISTINCT d.id) as descargas_count')
-            ->selectRaw('COUNT(*) as participaciones_count')
-            ->selectRaw('SUM(COALESCE(p.porcentaje_participacion, 0)) as porcentaje_total')
-            ->selectRaw('SUM(COALESCE(p.monto_calculado, 0)) as monto_total')
-            ->selectRaw('MIN(d.fecha) as fecha_desde')
-            ->selectRaw('MAX(d.fecha) as fecha_hasta')
-            ->groupBy(
-                'p.talana_trabajador_id',
-                'p.rut_snapshot',
-                'p.nombre_snapshot',
-                'p.cargo_snapshot',
-                'p.centro_costo_snapshot'
-            )
+        $liquidaciones = $this->liquidacionAgrupadaQuery($request)
             ->orderByDesc('monto_total')
             ->paginate(30)
             ->withQueryString();
 
         $centros = CentroCosto::where('activo', true)->orderBy('nombre')->get();
+        $estadoSeleccionado = $this->selectedLiquidacionEstado($request);
 
-        return view('descarga_contenedores.liquidacion', compact('liquidaciones', 'centros', 'stats'));
+        return view('descarga_contenedores.liquidacion', compact('liquidaciones', 'centros', 'stats', 'estadoSeleccionado'));
+    }
+
+    public function exportLiquidacion(Request $request)
+    {
+        $this->authorizeCostManagement();
+
+        $rows = $this->liquidacionAgrupadaQuery($request)
+            ->orderByDesc('monto_total')
+            ->get();
+        $filename = 'liquidacion-contenedores-' . now()->format('Ymd-His') . '.csv';
+
+        return response()->streamDownload(function () use ($rows) {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, [
+                'Trabajador',
+                'RUT',
+                'Cargo',
+                'Centro',
+                'Fecha desde',
+                'Fecha hasta',
+                'Descargas',
+                'Participaciones',
+                'Porcentaje total',
+                'Monto total',
+            ], ';');
+
+            foreach ($rows as $row) {
+                fputcsv($handle, [
+                    $row->nombre_snapshot,
+                    $row->rut_snapshot,
+                    $row->cargo_snapshot,
+                    $row->centro_costo_snapshot,
+                    $row->fecha_desde,
+                    $row->fecha_hasta,
+                    $row->descargas_count,
+                    $row->participaciones_count,
+                    number_format((float) $row->porcentaje_total, 2, ',', ''),
+                    number_format((float) $row->monto_total, 2, ',', ''),
+                ], ';');
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function reportes(Request $request)
@@ -589,8 +685,9 @@ class DescargaContenedorController extends Controller
             });
         }
 
-        if ($request->filled('estado')) {
-            $query->where('d.estado', $request->input('estado'));
+        $estado = $this->selectedLiquidacionEstado($request);
+        if ($estado !== 'todos') {
+            $query->where('d.estado', $estado);
         }
 
         if ($request->filled('fecha_desde')) {
@@ -602,6 +699,38 @@ class DescargaContenedorController extends Controller
         }
 
         return $query;
+    }
+
+    private function liquidacionAgrupadaQuery(Request $request)
+    {
+        return $this->liquidacionQuery($request)
+            ->select([
+                'p.talana_trabajador_id',
+                'p.rut_snapshot',
+                'p.nombre_snapshot',
+                'p.cargo_snapshot',
+                'p.centro_costo_snapshot',
+            ])
+            ->selectRaw('COUNT(DISTINCT d.id) as descargas_count')
+            ->selectRaw('COUNT(*) as participaciones_count')
+            ->selectRaw('SUM(COALESCE(p.porcentaje_participacion, 0)) as porcentaje_total')
+            ->selectRaw('SUM(COALESCE(p.monto_calculado, 0)) as monto_total')
+            ->selectRaw('MIN(d.fecha) as fecha_desde')
+            ->selectRaw('MAX(d.fecha) as fecha_hasta')
+            ->groupBy(
+                'p.talana_trabajador_id',
+                'p.rut_snapshot',
+                'p.nombre_snapshot',
+                'p.cargo_snapshot',
+                'p.centro_costo_snapshot'
+            );
+    }
+
+    private function selectedLiquidacionEstado(Request $request): string
+    {
+        $estado = $request->query('estado');
+
+        return $estado === null || $estado === '' ? 'validado' : (string) $estado;
     }
 
     private function readyForValidationQuery()
@@ -626,14 +755,23 @@ class DescargaContenedorController extends Controller
             ->whereNotNull('fecha')
             ->whereNotNull('contenedor')
             ->where('contenedor', '<>', '')
+            ->where(function ($q) {
+                $q->whereNotNull('centro_costo_id')
+                    ->orWhere(function ($bodega) {
+                        $bodega->whereNotNull('bodega')
+                            ->where('bodega', '<>', '');
+                    });
+            })
             ->whereNotNull('fact_codigo')
             ->where('fact_codigo', '<>', '')
             ->whereNotNull('tarifa_id')
+            ->whereNotNull('pago_colaborador_snapshot')
             ->where(function ($q) {
                 $q->where('requiere_revision_tarifa', false)
                     ->orWhereNull('requiere_revision_tarifa');
             })
-            ->has('participantes');
+            ->has('participantes')
+            ->whereRaw('(select ROUND(COALESCE(SUM(porcentaje_participacion), 0), 2) from descarga_contenedor_participantes where descarga_contenedor_id = descarga_contenedores.id) = 100');
     }
 
     private function applyPendingValidationFilter($query): void
@@ -643,11 +781,20 @@ class DescargaContenedorController extends Controller
                 $q->whereNull('fecha')
                     ->orWhereNull('contenedor')
                     ->orWhere('contenedor', '')
+                    ->orWhere(function ($centro) {
+                        $centro->whereNull('centro_costo_id')
+                            ->where(function ($bodega) {
+                                $bodega->whereNull('bodega')
+                                    ->orWhere('bodega', '');
+                            });
+                    })
                     ->orWhereNull('fact_codigo')
                     ->orWhere('fact_codigo', '')
                     ->orWhereNull('tarifa_id')
+                    ->orWhereNull('pago_colaborador_snapshot')
                     ->orWhere('requiere_revision_tarifa', true)
-                    ->orWhereDoesntHave('participantes');
+                    ->orWhereDoesntHave('participantes')
+                    ->orWhereRaw('(select ROUND(COALESCE(SUM(porcentaje_participacion), 0), 2) from descarga_contenedor_participantes where descarga_contenedor_id = descarga_contenedores.id) <> 100');
             });
     }
 
@@ -693,6 +840,11 @@ class DescargaContenedorController extends Controller
     private function authorizeCostManagement(): void
     {
         abort_unless($this->puedeGestionarCostos(), 403);
+    }
+
+    private function ensureEditable(DescargaContenedor $descarga): void
+    {
+        abort_if($descarga->estado === 'liquidado', 403, 'No se puede editar un registro liquidado.');
     }
 
     private function formData(): array
@@ -1020,6 +1172,11 @@ class DescargaContenedorController extends Controller
         if (($data['estado'] ?? null) !== 'validado') {
             $data['validado_por'] = null;
             $data['validado_at'] = null;
+        }
+
+        if (($data['estado'] ?? null) !== 'liquidado') {
+            $data['liquidado_por'] = null;
+            $data['liquidado_at'] = null;
         }
     }
 

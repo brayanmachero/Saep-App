@@ -179,6 +179,9 @@ Route::middleware('auth')->group(function () {
         Route::get('descarga-contenedores/liquidacion', [DescargaContenedorController::class, 'liquidacion'])
             ->name('descarga-contenedores.liquidacion')
             ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::get('descarga-contenedores/liquidacion/exportar', [DescargaContenedorController::class, 'exportLiquidacion'])
+            ->name('descarga-contenedores.liquidacion.exportar')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
         Route::get('descarga-contenedores/reportes', [DescargaContenedorController::class, 'reportes'])
             ->name('descarga-contenedores.reportes')
             ->middleware('modulo:descarga_contenedores,puede_editar');
@@ -204,6 +207,12 @@ Route::middleware('auth')->group(function () {
             ->middleware('modulo:descarga_contenedores,puede_editar');
         Route::patch('descarga-contenedores/{descarga}/borrador', [DescargaContenedorController::class, 'volverBorrador'])
             ->name('descarga-contenedores.volver-borrador')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::patch('descarga-contenedores/{descarga}/liquidar', [DescargaContenedorController::class, 'liquidar'])
+            ->name('descarga-contenedores.liquidar')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::patch('descarga-contenedores/{descarga}/volver-validado', [DescargaContenedorController::class, 'volverValidado'])
+            ->name('descarga-contenedores.volver-validado')
             ->middleware('modulo:descarga_contenedores,puede_editar');
         Route::get('descarga-contenedores/{descarga}', [DescargaContenedorController::class, 'show'])
             ->name('descarga-contenedores.show');

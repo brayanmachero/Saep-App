@@ -26,6 +26,10 @@
             <div class="stat-info"><h3>{{ $stats['centros'] }}</h3><p>Centros con dotación</p></div>
         </div>
         <div class="glass-card stat-item">
+            <div class="stat-icon primary"><i class="bi bi-person-badge"></i></div>
+            <div class="stat-info"><h3>{{ $stats['cargos'] }}</h3><p>Cargos clasificados</p></div>
+        </div>
+        <div class="glass-card stat-item">
             <div class="stat-icon primary"><i class="bi bi-people"></i></div>
             <div class="stat-info"><h3>{{ $stats['participantes'] }}</h3><p>Usados en descargas</p></div>
         </div>
@@ -47,6 +51,15 @@
                 </select>
             </div>
             <div>
+                <label style="font-size:.75rem;color:var(--text-muted)">Cargo</label>
+                <select name="cargo" class="form-control">
+                    <option value="">Todos</option>
+                    @foreach($cargos as $cargo)
+                        <option value="{{ $cargo }}" {{ request('cargo') === $cargo ? 'selected' : '' }}>{{ $cargo }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
                 <label style="font-size:.75rem;color:var(--text-muted)">Estado</label>
                 <select name="estado" class="form-control">
                     <option value="">Todos</option>
@@ -55,7 +68,7 @@
                 </select>
             </div>
             <button type="submit" class="btn-premium"><i class="bi bi-search"></i> Filtrar</button>
-            @if(request()->hasAny(['buscar','centro_costo_id','estado']))
+            @if(request()->hasAny(['buscar','centro_costo_id','cargo','estado']))
                 <a href="{{ route('descarga-contenedores.dotacion') }}" class="btn-secondary"><i class="bi bi-x-lg"></i> Limpiar</a>
             @endif
         </form>

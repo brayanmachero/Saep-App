@@ -25,14 +25,27 @@
                 <button class="btn-premium" type="submit"><i class="bi bi-check2-circle"></i> Validar</button>
             </form>
             @elseif($descarga->estado === 'validado')
+            @if($puedeGestionarCostos)
+            <form method="POST" action="{{ route('descarga-contenedores.liquidar', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Marcar este registro como liquidado?')">
+                @csrf @method('PATCH')
+                <button class="btn-premium" type="submit"><i class="bi bi-cash-stack"></i> Liquidar</button>
+            </form>
+            @endif
             <form method="POST" action="{{ route('descarga-contenedores.volver-borrador', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Devolver este registro a borrador?')">
                 @csrf @method('PATCH')
                 <button class="btn-secondary" type="submit"><i class="bi bi-arrow-counterclockwise"></i> Volver a borrador</button>
             </form>
+            @elseif($descarga->estado === 'liquidado' && $puedeGestionarCostos)
+            <form method="POST" action="{{ route('descarga-contenedores.volver-validado', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Reabrir este registro como validado?')">
+                @csrf @method('PATCH')
+                <button class="btn-secondary" type="submit"><i class="bi bi-arrow-up-circle"></i> Reabrir como validado</button>
+            </form>
             @endif
+            @if($descarga->estado !== 'liquidado')
             <a href="{{ route('descarga-contenedores.edit', $descarga) }}" class="btn-premium">
                 <i class="bi bi-pencil"></i> Editar
             </a>
+            @endif
             @endif
         </div>
     </div>
@@ -44,6 +57,12 @@
             <h4 class="section-title">Resumen</h4>
             <dl class="detail-list">
                 <div><dt>Estado</dt><dd><span class="{{ $descarga->estadoBadge['class'] }}">{{ $descarga->estadoBadge['label'] }}</span></dd></div>
+                <div><dt>Validado por</dt><dd>{{ $descarga->validadoPor?->nombre_completo ?: ($descarga->validadoPor?->name ?: '—') }}</dd></div>
+                <div><dt>Fecha validación</dt><dd>{{ $descarga->validado_at?->format('d/m/Y H:i') ?? '—' }}</dd></div>
+                @if($puedeGestionarCostos && $descarga->estado === 'liquidado')
+                <div><dt>Liquidado por</dt><dd>{{ $descarga->liquidadoPor?->nombre_completo ?: ($descarga->liquidadoPor?->name ?: '—') }}</dd></div>
+                <div><dt>Fecha liquidación</dt><dd>{{ $descarga->liquidado_at?->format('d/m/Y H:i') ?? '—' }}</dd></div>
+                @endif
                 <div><dt>Operación</dt><dd>{{ $descarga->operacion ?: '—' }}</dd></div>
                 <div><dt>Centro costo</dt><dd>{{ $descarga->centroCosto->nombre ?? '—' }}</dd></div>
                 <div><dt>Bodega</dt><dd>{{ $descarga->bodega ?: '—' }}</dd></div>

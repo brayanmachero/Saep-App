@@ -437,6 +437,13 @@ class DescargaContenedorTest extends TestCase
             ->assertRedirect()
             ->assertSessionHasNoErrors();
 
+        $descargaA = DescargaContenedor::where('contenedor', 'CONT-LIQ-001')->firstOrFail();
+
+        $this->actingAs($user)
+            ->patch(route('descarga-contenedores.validar', $descargaA))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
         $this->actingAs($user)
             ->post(route('descarga-contenedores.store'), [
                 'estado' => 'validado',
@@ -454,6 +461,13 @@ class DescargaContenedorTest extends TestCase
             ->assertRedirect()
             ->assertSessionHasNoErrors();
 
+        $descargaB = DescargaContenedor::where('contenedor', 'CONT-LIQ-002')->firstOrFail();
+
+        $this->actingAs($user)
+            ->patch(route('descarga-contenedores.validar', $descargaB))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
         $this->actingAs($user)
             ->get(route('descarga-contenedores.liquidacion'))
             ->assertOk()
@@ -461,6 +475,178 @@ class DescargaContenedorTest extends TestCase
             ->assertSee('$54.000')
             ->assertSee('Trabajador Liquidacion B')
             ->assertSee('$18.000');
+    }
+
+    public function test_liquidacion_defaults_to_validated_records_and_exports_csv(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Liquidacion Estado QA');
+        $tarifa = $this->createTarifa('CNTLIQEST', 75000, 36000, 'LIQUIDACION ESTADO QA');
+        $validadoWorker = $this->createTalanaWorker('Trabajador Liquidacion Validado', $centro);
+        $borradorWorker = $this->createTalanaWorker('Trabajador Liquidacion Borrador', $centro);
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'CD Liquidacion Estado QA',
+                'fecha' => '2026-07-02',
+                'contenedor' => 'CONT-LIQ-VALIDADO',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([$validadoWorker->id]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descargaValidada = DescargaContenedor::where('contenedor', 'CONT-LIQ-VALIDADO')->firstOrFail();
+
+        $this->actingAs($user)
+            ->patch(route('descarga-contenedores.validar', $descargaValidada))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'CD Liquidacion Estado QA',
+                'fecha' => '2026-07-03',
+                'contenedor' => 'CONT-LIQ-BORRADOR',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([$borradorWorker->id]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.liquidacion'))
+            ->assertOk()
+            ->assertSee('Trabajador Liquidacion Validado')
+            ->assertDontSee('Trabajador Liquidacion Borrador');
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.liquidacion', ['estado' => 'todos']))
+            ->assertOk()
+            ->assertSee('Trabajador Liquidacion Validado')
+            ->assertSee('Trabajador Liquidacion Borrador');
+
+        $response = $this->actingAs($user)
+            ->get(route('descarga-contenedores.liquidacion.exportar'));
+
+        $response->assertOk();
+        $csv = $response->streamedContent();
+
+        $this->assertStringContainsString('Trabajador Liquidacion Validado', $csv);
+        $this->assertStringNotContainsString('Trabajador Liquidacion Borrador', $csv);
+    }
+
+    public function test_coordinator_can_liquidate_and_reopen_validated_record(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Liquidar QA');
+        $tarifa = $this->createTarifa('CNTLIQACC', 75000, 36000, 'LIQUIDAR ACCION QA');
+        $worker = $this->createTalanaWorker('Trabajador Liquidar Accion', $centro);
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'CD Liquidar QA',
+                'fecha' => '2026-07-02',
+                'contenedor' => 'CONT-LIQ-ACCION',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([$worker->id]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-LIQ-ACCION')->firstOrFail();
+
+        $this->actingAs($user)
+            ->patch(route('descarga-contenedores.validar', $descarga))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->actingAs($user)
+            ->patch(route('descarga-contenedores.liquidar', $descarga))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $descarga->refresh();
+
+        $this->assertSame('liquidado', $descarga->estado);
+        $this->assertSame($user->id, $descarga->liquidado_por);
+        $this->assertNotNull($descarga->liquidado_at);
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.show', $descarga))
+            ->assertOk()
+            ->assertSee('Liquidado')
+            ->assertSee('Reabrir como validado')
+            ->assertDontSee('Editar');
+
+        $this->actingAs($user)
+            ->patch(route('descarga-contenedores.volver-validado', $descarga))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $descarga->refresh();
+
+        $this->assertSame('validado', $descarga->estado);
+        $this->assertNull($descarga->liquidado_por);
+        $this->assertNull($descarga->liquidado_at);
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.show', $descarga))
+            ->assertOk()
+            ->assertSee('Liquidar')
+            ->assertSee('Editar')
+            ->assertDontSee('Liquidado por')
+            ->assertDontSee('Fecha liquidación');
+    }
+
+    public function test_liquidated_records_are_locked_until_reopened(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Liquidado Bloqueado QA');
+        $tarifa = $this->createTarifa('CNTLIQLOCK', 75000, 36000, 'LIQUIDADO BLOQUEADO QA');
+        $worker = $this->createTalanaWorker('Trabajador Liquidado Bloqueado', $centro);
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'CD Liquidado Bloqueado QA',
+                'fecha' => '2026-07-02',
+                'contenedor' => 'CONT-LIQ-LOCK',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([$worker->id]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-LIQ-LOCK')->firstOrFail();
+
+        $this->actingAs($user)
+            ->patch(route('descarga-contenedores.validar', $descarga))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->actingAs($user)
+            ->patch(route('descarga-contenedores.liquidar', $descarga))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.edit', $descarga))
+            ->assertForbidden();
+
+        $this->actingAs($user)
+            ->delete(route('descarga-contenedores.destroy', $descarga))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertNotSoftDeleted('descarga_contenedores', ['id' => $descarga->id]);
     }
 
     public function test_dotacion_page_uses_talana_workers(): void
@@ -487,6 +673,63 @@ class DescargaContenedorTest extends TestCase
             ->assertOk()
             ->assertSee('Trabajador Dotacion Visible')
             ->assertDontSee('Usuario No Dotacion QA');
+    }
+
+    public function test_dotacion_can_filter_workers_by_cargo(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Cargo QA');
+        $descargador = $this->createTalanaWorker('Trabajador Cargo Descargador', $centro);
+        $apoyo = $this->createTalanaWorker('Trabajador Cargo Apoyo', $centro);
+        $apoyo->update(['cargo_nombre' => 'Operario Apoyo']);
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.dotacion', ['cargo' => 'Operario Apoyo']))
+            ->assertOk()
+            ->assertSee('Cargos clasificados')
+            ->assertSee('Trabajador Cargo Apoyo')
+            ->assertDontSee('Trabajador Cargo Descargador');
+    }
+
+    public function test_validation_rejects_distribution_that_does_not_sum_100_percent(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Porcentaje QA');
+        $tarifa = $this->createTarifa('CNTPCTQA', 75000, 36000, 'PORCENTAJE QA');
+        $workerA = $this->createTalanaWorker('Trabajador Porcentaje A', $centro);
+        $workerB = $this->createTalanaWorker('Trabajador Porcentaje B', $centro);
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'CD Porcentaje QA',
+                'fecha' => '2026-07-02',
+                'contenedor' => 'CONT-PCT-001',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([
+                    ['id' => $workerA->id, 'porcentaje' => 50],
+                    ['id' => $workerB->id, 'porcentaje' => 50],
+                ]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-PCT-001')->firstOrFail();
+        $descarga->participantes()->where('talana_trabajador_id', $workerB->id)->update([
+            'porcentaje_participacion' => 20,
+            'monto_calculado' => 7200,
+        ]);
+
+        $this->actingAs($user)
+            ->patch(route('descarga-contenedores.validar', $descarga))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $descarga->refresh();
+
+        $this->assertSame('borrador', $descarga->estado);
+        $this->assertTrue($descarga->validationBlockers()->contains('porcentajes no suman 100%'));
     }
 
     public function test_reportes_page_groups_by_operation_and_fact(): void

@@ -43,12 +43,15 @@ class DescargaContenedor extends Model
         'creado_por',
         'validado_por',
         'validado_at',
+        'liquidado_por',
+        'liquidado_at',
     ];
 
     protected $casts = [
         'fecha' => 'date',
         'raw_row' => 'array',
         'validado_at' => 'datetime',
+        'liquidado_at' => 'datetime',
         'pallets' => 'decimal:2',
         'costo_unitario_snapshot' => 'decimal:2',
         'pago_colaborador_snapshot' => 'decimal:2',
@@ -83,6 +86,11 @@ class DescargaContenedor extends Model
     public function validadoPor()
     {
         return $this->belongsTo(User::class, 'validado_por');
+    }
+
+    public function liquidadoPor()
+    {
+        return $this->belongsTo(User::class, 'liquidado_por');
     }
 
     public function participantes()
@@ -136,13 +144,19 @@ class DescargaContenedor extends Model
     {
         $this->loadMissing('participantes');
 
+        $participantesCount = $this->participantes->count();
+        $porcentajeTotal = round((float) $this->participantes->sum('porcentaje_participacion'), 2);
+
         return collect([
             blank($this->fecha) ? 'falta fecha' : null,
             blank($this->contenedor) ? 'falta contenedor' : null,
+            blank($this->centro_costo_id) && blank($this->bodega) ? 'falta centro o bodega' : null,
             blank($this->fact_codigo) ? 'falta código FACT' : null,
             !$this->tarifa_id ? 'falta tarifa asociada' : null,
             $this->requiere_revision_tarifa ? 'tarifa pendiente de revisión' : null,
+            !$this->requiere_revision_tarifa && $this->pago_colaborador_snapshot === null ? 'falta pago colaborador' : null,
             $this->participantes->isEmpty() ? 'falta equipo de trabajadores' : null,
+            $participantesCount > 0 && abs($porcentajeTotal - 100.0) > 0.01 ? 'porcentajes no suman 100%' : null,
         ])->filter()->values();
     }
 

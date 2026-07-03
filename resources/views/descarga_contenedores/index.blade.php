@@ -38,6 +38,12 @@
             <div class="stat-icon success"><i class="bi bi-check2-circle"></i></div>
             <div class="stat-info"><h3>{{ $stats['validadas'] }}</h3><p>Validadas</p></div>
         </div>
+        @if($puedeGestionarCostos)
+        <div class="glass-card stat-item">
+            <div class="stat-icon success"><i class="bi bi-cash-stack"></i></div>
+            <div class="stat-info"><h3>{{ $stats['liquidadas'] }}</h3><p>Liquidadas</p></div>
+        </div>
+        @endif
         <div class="glass-card stat-item">
             <div class="stat-icon success"><i class="bi bi-shield-check"></i></div>
             <div class="stat-info"><h3>{{ $stats['listos_validar'] }}</h3><p>Listos para validar</p></div>
@@ -229,18 +235,33 @@
                                         <button class="icon-btn validation-disabled" title="Pendiente: {{ $blockers->implode(', ') }}" disabled><i class="bi bi-check2-circle"></i></button>
                                     @endif
                                 @elseif($descarga->estado === 'validado')
+                                    @if($puedeGestionarCostos)
+                                    <form method="POST" action="{{ route('descarga-contenedores.liquidar', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Marcar este registro como liquidado?')">
+                                        @csrf @method('PATCH')
+                                        <button class="icon-btn validation-ready" title="Liquidar"><i class="bi bi-cash-stack"></i></button>
+                                    </form>
+                                    @endif
                                     <form method="POST" action="{{ route('descarga-contenedores.volver-borrador', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Devolver este registro a borrador?')">
                                         @csrf @method('PATCH')
                                         <button class="icon-btn" title="Volver a borrador"><i class="bi bi-arrow-counterclockwise"></i></button>
                                     </form>
+                                @elseif($descarga->estado === 'liquidado' && $puedeGestionarCostos)
+                                    <form method="POST" action="{{ route('descarga-contenedores.volver-validado', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Reabrir este registro como validado?')">
+                                        @csrf @method('PATCH')
+                                        <button class="icon-btn" title="Reabrir como validado"><i class="bi bi-arrow-up-circle"></i></button>
+                                    </form>
                                 @endif
+                                @if($descarga->estado !== 'liquidado')
                                 <a href="{{ route('descarga-contenedores.edit', $descarga) }}" class="icon-btn" title="Editar"><i class="bi bi-pencil-fill"></i></a>
+                                @endif
                             @endif
                             @if(auth()->user()->tieneAcceso('descarga_contenedores', 'puede_eliminar'))
+                                @if($descarga->estado !== 'liquidado')
                                 <form method="POST" action="{{ route('descarga-contenedores.destroy', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Eliminar esta descarga?')">
                                     @csrf @method('DELETE')
                                     <button class="icon-btn danger" title="Eliminar"><i class="bi bi-trash-fill"></i></button>
                                 </form>
+                                @endif
                             @endif
                         </td>
                     </tr>
