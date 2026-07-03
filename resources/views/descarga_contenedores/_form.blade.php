@@ -368,26 +368,45 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
         worker.centro || 'Sin centro',
     ])).entries()]
         .sort((a, b) => a[1].localeCompare(b[1], 'es'));
-    const cargoOptions = [...new Map(workers.map(worker => [
-        workerCargoKey(worker),
-        worker.cargo || 'Sin cargo',
-    ])).entries()]
-        .sort((a, b) => a[1].localeCompare(b[1], 'es'));
-
     centerOptions.forEach(([value, label]) => {
         centerFilter.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`);
     });
-    cargoOptions.forEach(([value, label]) => {
-        cargoFilter.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`);
-    });
+
+    function cargoOptionsForCenter(centerValue = '') {
+        const source = centerValue
+            ? workers.filter(worker => workerCenterKey(worker) === centerValue)
+            : workers;
+
+        return [...new Map(source.map(worker => [
+            workerCargoKey(worker),
+            worker.cargo || 'Sin cargo',
+        ])).entries()]
+            .sort((a, b) => a[1].localeCompare(b[1], 'es'));
+    }
+
+    function refreshCargoOptions() {
+        const currentCargo = cargoFilter.value;
+        const options = cargoOptionsForCenter(centerFilter.value);
+
+        cargoFilter.innerHTML = '<option value="">Todos los cargos</option>';
+        options.forEach(([value, label]) => {
+            cargoFilter.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`);
+        });
+
+        cargoFilter.value = options.some(([value]) => value === currentCargo) ? currentCargo : '';
+    }
 
     function syncCenterFilterFromRecord() {
         const selectedCenterId = descargaCenterSelect?.value ? `id:${descargaCenterSelect.value}` : '';
         if (selectedCenterId && centerOptions.some(([value]) => value === selectedCenterId)) {
             centerFilter.value = selectedCenterId;
+        } else if (!selectedCenterId) {
+            centerFilter.value = '';
         }
+        refreshCargoOptions();
     }
 
+    refreshCargoOptions();
     syncCenterFilterFromRecord();
 
     (initialIds || []).forEach(item => {
@@ -567,7 +586,10 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
     input.addEventListener('focus', () => render(input.value.trim()));
     input.addEventListener('input', () => render(input.value.trim()));
     input.addEventListener('blur', () => setTimeout(() => dropdown.style.display = 'none', 150));
-    centerFilter.addEventListener('change', () => render(input.value.trim()));
+    centerFilter.addEventListener('change', () => {
+        refreshCargoOptions();
+        render(input.value.trim());
+    });
     cargoFilter.addEventListener('change', () => render(input.value.trim()));
     descargaCenterSelect?.addEventListener('change', () => {
         syncCenterFilterFromRecord();
