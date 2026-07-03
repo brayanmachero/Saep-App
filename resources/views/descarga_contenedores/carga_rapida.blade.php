@@ -54,7 +54,7 @@
                     <p class="helper-text" style="margin-top:.5rem">{{ $supervisorActualMeta ?: 'Se completa automáticamente con el usuario autenticado.' }}</p>
 
                     <h4 class="section-title">Participantes base</h4>
-                    <p class="helper-text">Selecciona un equipo base desde la nómina Talana y aplícalo a todas las filas. La participación se reparte en partes iguales; puedes editar un registro después si requiere porcentajes especiales.</p>
+                    <p class="helper-text">Selecciona un equipo base desde la nómina Talana de los centros gestionados en los Excel y aplícalo a todas las filas. La participación se reparte en partes iguales; puedes editar un registro después si requiere porcentajes especiales.</p>
                     <input type="hidden" id="base_participantes_json" value="[]">
                     <div id="base_worker_picker" class="worker-picker compact"></div>
                     <button type="button" class="btn-secondary" id="apply-base-btn" style="margin-top:.75rem">

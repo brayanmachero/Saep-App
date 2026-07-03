@@ -303,6 +303,68 @@ class DescargaContenedorTest extends TestCase
             ->assertDontSee('Usuario Solo Sistema QA');
     }
 
+    public function test_container_worker_selectors_are_scoped_to_excel_managed_centers(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centroGestionado = $this->createCentroCosto('LTS PENON QA');
+        $centroFuera = $this->createCentroCosto('CD Administrativo Fuera QA');
+
+        $workerGestionado = $this->createTalanaWorker('Trabajador Centro Excel QA', $centroGestionado);
+        $workerFuera = $this->createTalanaWorker('Trabajador Centro Fuera QA', $centroFuera);
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.create'))
+            ->assertOk()
+            ->assertSee('LTS PENON QA')
+            ->assertSee('Trabajador Centro Excel QA')
+            ->assertDontSee('CD Administrativo Fuera QA')
+            ->assertDontSee('Trabajador Centro Fuera QA');
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.carga-rapida'))
+            ->assertOk()
+            ->assertSee('LTS PENON QA')
+            ->assertSee('Trabajador Centro Excel QA')
+            ->assertDontSee('CD Administrativo Fuera QA')
+            ->assertDontSee('Trabajador Centro Fuera QA');
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.dotacion'))
+            ->assertOk()
+            ->assertSee('LTS PENON QA')
+            ->assertSee('Trabajador Centro Excel QA')
+            ->assertDontSee('CD Administrativo Fuera QA')
+            ->assertDontSee('Trabajador Centro Fuera QA');
+
+        $tarifa = $this->createTarifa('CNTSCOPEQA', 75000, 36000, 'SCOPE QA');
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centroGestionado->id,
+                'bodega' => 'LTS PENON QA',
+                'fecha' => '2026-07-03',
+                'contenedor' => 'CONT-SCOPE-QA',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([
+                    ['id' => $workerGestionado->id, 'porcentaje' => 50],
+                    ['id' => $workerFuera->id, 'porcentaje' => 50],
+                ]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-SCOPE-QA')->firstOrFail();
+        $this->assertSame(1, $descarga->participantes()->count());
+        $this->assertDatabaseHas('descarga_contenedor_participantes', [
+            'descarga_contenedor_id' => $descarga->id,
+            'talana_trabajador_id' => $workerGestionado->id,
+        ]);
+        $this->assertDatabaseMissing('descarga_contenedor_participantes', [
+            'descarga_contenedor_id' => $descarga->id,
+            'talana_trabajador_id' => $workerFuera->id,
+        ]);
+    }
+
     public function test_index_filters_operational_pending_records(): void
     {
         $user = $this->createSuperAdminUser();

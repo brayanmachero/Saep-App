@@ -79,7 +79,7 @@ class DescargaContenedorController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        $centros = CentroCosto::where('activo', true)->orderBy('nombre')->get();
+        $centros = $this->centrosOperacion();
         $stats = [
             'total' => DescargaContenedor::count(),
             'borradores' => DescargaContenedor::where('estado', 'borrador')->count(),
@@ -388,6 +388,7 @@ class DescargaContenedorController extends Controller
         $this->authorizeCostManagement();
 
         $query = TalanaTrabajador::with(['cargo', 'centroCosto']);
+        $this->applyTrabajadoresDotacionFilter($query);
 
         if ($request->filled('buscar')) {
             $term = trim($request->input('buscar'));
@@ -444,19 +445,27 @@ class DescargaContenedorController extends Controller
                 ->keyBy('talana_trabajador_id');
         }
 
-        $centros = CentroCosto::where('activo', true)->orderBy('nombre')->get();
-        $cargos = TalanaTrabajador::query()
+        $centros = $this->centrosDotacion();
+        $cargosQuery = TalanaTrabajador::query()
             ->whereNotNull('cargo_nombre')
-            ->select('cargo_nombre')
-            ->distinct()
+            ->select('cargo_nombre');
+        $this->applyTrabajadoresDotacionFilter($cargosQuery);
+        $cargos = $cargosQuery->distinct()
             ->orderBy('cargo_nombre')
             ->pluck('cargo_nombre');
 
+        $trabajadoresBase = TalanaTrabajador::query();
+        $this->applyTrabajadoresDotacionFilter($trabajadoresBase);
+        $trabajadoresActivos = clone $trabajadoresBase;
+        $trabajadoresInactivos = clone $trabajadoresBase;
+        $trabajadoresCentros = clone $trabajadoresBase;
+        $trabajadoresCargos = clone $trabajadoresBase;
+
         $stats = [
-            'activos' => TalanaTrabajador::where('activo', true)->count(),
-            'inactivos' => TalanaTrabajador::where('activo', false)->count(),
-            'centros' => TalanaTrabajador::whereNotNull('centro_costo_id')->distinct()->count('centro_costo_id'),
-            'cargos' => TalanaTrabajador::whereNotNull('cargo_nombre')->distinct()->count('cargo_nombre'),
+            'activos' => $trabajadoresActivos->where('activo', true)->count(),
+            'inactivos' => $trabajadoresInactivos->where('activo', false)->count(),
+            'centros' => $trabajadoresCentros->whereNotNull('centro_costo_id')->distinct()->count('centro_costo_id'),
+            'cargos' => $trabajadoresCargos->whereNotNull('cargo_nombre')->distinct()->count('cargo_nombre'),
             'participantes' => DB::table('descarga_contenedor_participantes')->whereNotNull('talana_trabajador_id')->distinct()->count('talana_trabajador_id'),
         ];
 
@@ -480,7 +489,7 @@ class DescargaContenedorController extends Controller
             ->paginate(30)
             ->withQueryString();
 
-        $centros = CentroCosto::where('activo', true)->orderBy('nombre')->get();
+        $centros = $this->centrosOperacion();
         $estadoSeleccionado = $this->selectedLiquidacionEstado($request);
 
         return view('descarga_contenedores.liquidacion', compact('liquidaciones', 'centros', 'stats', 'estadoSeleccionado'));
@@ -589,7 +598,7 @@ class DescargaContenedorController extends Controller
             ->limit(18)
             ->get();
 
-        $centros = CentroCosto::where('activo', true)->orderBy('nombre')->get();
+        $centros = $this->centrosOperacion();
         $operaciones = DescargaContenedor::whereNotNull('operacion')
             ->distinct()
             ->orderBy('operacion')
@@ -847,10 +856,92 @@ class DescargaContenedorController extends Controller
         abort_if($descarga->estado === 'liquidado', 403, 'No se puede editar un registro liquidado.');
     }
 
+    private function centrosOperacion()
+    {
+        $centros = $this->centrosByKeywords($this->descargaOperacionCenterKeywords());
+
+        return $centros->isNotEmpty()
+            ? $centros
+            : CentroCosto::where('activo', true)->orderBy('nombre')->get();
+    }
+
+    private function centrosDotacion()
+    {
+        $centros = $this->centrosByKeywords($this->descargaDotacionCenterKeywords());
+
+        return $centros->isNotEmpty()
+            ? $centros
+            : CentroCosto::where('activo', true)->orderBy('nombre')->get();
+    }
+
+    private function centrosByKeywords(array $keywords)
+    {
+        $query = CentroCosto::where('activo', true);
+        $this->applyKeywordFilter($query, 'nombre', $keywords);
+
+        return $query->orderBy('nombre')->get();
+    }
+
+    private function applyTrabajadoresDotacionFilter($query): void
+    {
+        $centros = $this->centrosByKeywords($this->descargaDotacionCenterKeywords());
+        $hasDotacionByName = TalanaTrabajador::query()
+            ->where(function ($q) {
+                $this->applyKeywordFilter($q, 'centro_costo_nombre', $this->descargaDotacionCenterKeywords());
+            })
+            ->exists();
+
+        if ($centros->isEmpty() && !$hasDotacionByName) {
+            return;
+        }
+
+        $query->where(function ($q) use ($centros) {
+            if ($centros->isNotEmpty()) {
+                $q->whereIn('centro_costo_id', $centros->pluck('id'));
+            }
+
+            $q->orWhere(function ($nameQuery) {
+                $this->applyKeywordFilter($nameQuery, 'centro_costo_nombre', $this->descargaDotacionCenterKeywords());
+            });
+        });
+    }
+
+    private function applyKeywordFilter($query, string $column, array $keywords): void
+    {
+        $query->where(function ($q) use ($column, $keywords) {
+            foreach ($keywords as $keyword) {
+                $q->orWhere($column, 'like', '%' . $keyword . '%');
+            }
+        });
+    }
+
+    private function descargaDotacionCenterKeywords(): array
+    {
+        return [
+            'CAMPOS DE CHILE',
+            'PEÑON',
+            'PEÑÓN',
+            'PENON',
+            'QUILICURA',
+            'MAERSK',
+        ];
+    }
+
+    private function descargaOperacionCenterKeywords(): array
+    {
+        return array_values(array_unique(array_merge($this->descargaDotacionCenterKeywords(), [
+            'DHL',
+            'ECOMMERCE',
+            'E-COMMERCE',
+            'TRANSPORTE',
+            'BRAZO',
+        ])));
+    }
+
     private function formData(): array
     {
         return [
-            'centros' => CentroCosto::where('activo', true)->orderBy('nombre')->get(),
+            'centros' => $this->centrosOperacion(),
             'tarifas' => DescargaContenedorTarifa::where('activo', true)->orderBy('cliente')->orderBy('codigo')->get(),
             'trabajadores' => $this->trabajadoresSelector(),
             'supervisorSistema' => auth()->user()?->loadMissing(['cargo', 'centroCosto']),
@@ -859,9 +950,11 @@ class DescargaContenedorController extends Controller
 
     private function trabajadoresSelector()
     {
-        return TalanaTrabajador::with(['cargo', 'centroCosto'])
-            ->where('activo', true)
-            ->orderBy('nombre')
+        $query = TalanaTrabajador::with(['cargo', 'centroCosto'])
+            ->where('activo', true);
+        $this->applyTrabajadoresDotacionFilter($query);
+
+        return $query->orderBy('nombre')
             ->orderBy('apellido_paterno')
             ->get()
             ->map(fn (TalanaTrabajador $trabajador) => [
@@ -1007,10 +1100,10 @@ class DescargaContenedorController extends Controller
             return;
         }
 
-        $trabajadores = TalanaTrabajador::with(['cargo', 'centroCosto'])
-            ->whereIn('id', $trabajadorIds)
-            ->get()
-            ->keyBy('id');
+        $trabajadoresQuery = TalanaTrabajador::with(['cargo', 'centroCosto'])
+            ->whereIn('id', $trabajadorIds);
+        $this->applyTrabajadoresDotacionFilter($trabajadoresQuery);
+        $trabajadores = $trabajadoresQuery->get()->keyBy('id');
 
         $pagoTotal = $this->pagoTotalColaboradores($descarga);
 

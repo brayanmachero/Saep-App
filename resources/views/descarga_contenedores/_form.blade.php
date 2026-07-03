@@ -169,7 +169,7 @@
     <h4 class="section-title">Trabajadores que participaron</h4>
     <input type="hidden" name="participantes_json" id="participantes_json" value='@json($selectedParticipantes)'>
     <div id="participantes_picker" class="worker-picker"></div>
-    <small class="muted-hint">Fuente: nómina Talana. Puedes seleccionar trabajadores de cualquier centro. El sistema guardará una copia histórica de nombre, RUT, cargo y centro al momento del registro.</small>
+    <small class="muted-hint">Fuente: nómina Talana acotada a los centros gestionados en los Excel de descarga. El sistema guardará una copia histórica de nombre, RUT, cargo y centro al momento del registro.</small>
 </div>
 
 <script type="application/json" id="trabajadores_data">@json($trabajadores)</script>
