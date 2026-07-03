@@ -5,17 +5,17 @@
 <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:40px 15px;">
 <tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;overflow:hidden;border:1px solid #e2e8f0;">
-    <tr>
-        <td bgcolor="#1e3a8a" style="background-color:#1e3a8a;padding:35px 30px;text-align:center;color:#ffffff;border-bottom:4px solid #f97316;">
-            <div style="margin-bottom:20px;">
-                <img src="{{ asset('brand/wp/Logo_Saep.svg') }}" alt="SAEP" width="160" style="max-height:48px;width:auto;display:inline-block;" />
-            </div>
-            <h1 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.025em;">Acta de Entrega de Vehículo</h1>
-            <p style="margin:8px 0 0;font-size:15px;opacity:0.9;">Confirmación oficial de recepción y custodia</p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_header', [
+        'module' => 'Kizeo Forms · Vehiculos',
+        'badge' => 'Acta de entrega',
+        'badgeColor' => '#2563eb',
+        'accentColor' => '#2563eb',
+    ])
     <tr>
         <td style="padding:35px 30px;">
+            <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f1b4c;">Acta de Entrega de Vehículo</h1>
+            <p style="margin:0 0 24px;font-size:14px;color:#64748b;">Confirmación oficial de recepción y custodia</p>
+
             <div style="background-color:#f8fafc;border-left:4px solid #3b82f6;padding:16px 20px;">
                 <p style="margin:0;font-size:14.5px;line-height:1.6;color:#475569;">
                     Se ha completado exitosamente la inspección y el acto de entrega del vehículo <strong>{{ $vehiculo['patente'] }}</strong>.
@@ -43,12 +43,10 @@
             </table>
         </td>
     </tr>
-    <tr>
-        <td style="background-color:#f8fafc;padding:24px 30px;text-align:center;font-size:13px;color:#64748b;border-top:1px solid #e2e8f0;">
-            <strong>SAEP Servicios Profesionales</strong> © {{ date('Y') }}<br><br>
-            Documento generado de forma automática a través de Kizeo Forms. No responda a este correo.
-        </td>
-    </tr>
+    @include('emails.partials.saep_footer', [
+        'note' => 'Documento generado automaticamente a traves de Kizeo Forms.',
+        'context' => 'No respondas a este correo.',
+    ])
 </table>
 </td></tr>
 </table>

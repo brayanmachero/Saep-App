@@ -5,12 +5,12 @@
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
 <tr><td align="center">
 <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-    <tr>
-        <td style="background:#0f1b4c;padding:28px 36px;">
-            <h1 style="color:white;font-size:20px;margin:0;">SAEP Platform</h1>
-            <p style="color:rgba(255,255,255,0.8);font-size:13px;margin:6px 0 0;">📋 Nueva Tarea Asignada — Tablero Kanban</p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_header', [
+        'module' => 'Tablero Kanban',
+        'badge' => 'Nueva tarea',
+        'badgeColor' => '#6366f1',
+        'accentColor' => '#6366f1',
+    ])
     <tr>
         <td style="padding:32px 36px;">
             <p style="font-size:15px;color:#1e1e2e;margin:0 0 20px;">
@@ -62,24 +62,16 @@
                 </tr>
             </table>
 
-            <table cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
-                <tr>
-                    <td style="background:#0f1b4c;border-radius:8px;padding:12px 28px;">
-                        <a href="{{ route('kanban.show', $tarea->tablero_id) }}" style="color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;">
-                            Ver Tablero →
-                        </a>
-                    </td>
-                </tr>
-            </table>
+            @include('emails.partials.saep_button', [
+                'url' => route('kanban.show', $tarea->tablero_id),
+                'label' => 'Ver tablero',
+            ])
         </td>
     </tr>
-    <tr>
-        <td style="background:#f9fafb;padding:20px 36px;border-top:1px solid #e5e7eb;">
-            <p style="font-size:11px;color:#9ca3af;margin:0;text-align:center;">
-                Este es un mensaje automático de SAEP Platform. No responda este correo.
-            </p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_footer', [
+        'note' => 'Correo generado automaticamente por el tablero Kanban.',
+        'context' => 'No respondas a este mensaje.',
+    ])
 </table>
 </td></tr>
 </table>

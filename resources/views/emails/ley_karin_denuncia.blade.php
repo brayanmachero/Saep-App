@@ -5,14 +5,12 @@
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
 <tr><td align="center">
 <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-    <tr>
-        <td style="background:#dc2626;padding:28px 36px;">
-            <h1 style="color:white;font-size:20px;margin:0;">SAEP Platform</h1>
-            <p style="color:rgba(255,255,255,0.8);font-size:13px;margin:6px 0 0;">
-                🔒 Nueva Denuncia Ley Karin — Confidencial
-            </p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_header', [
+        'module' => 'Canal de denuncia Ley Karin',
+        'badge' => 'Confidencial',
+        'badgeColor' => '#dc2626',
+        'accentColor' => '#dc2626',
+    ])
     <tr>
         <td style="padding:32px 36px;">
             <p style="font-size:15px;color:#1e1e2e;margin:0 0 20px;">Estimado/a,</p>
@@ -54,26 +52,22 @@
                 </p>
             </div>
 
-            <div style="text-align:center;margin-bottom:24px;">
-                <a href="{{ route('ley-karin.show', $caso) }}"
-                   style="background:#dc2626;color:white;padding:14px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600;display:inline-block;">
-                    Ver Expediente
-                </a>
-            </div>
+            @include('emails.partials.saep_button', [
+                'url' => route('ley-karin.show', $caso),
+                'label' => 'Ver expediente',
+                'color' => '#dc2626',
+            ])
 
             <p style="font-size:13px;color:#9ca3af;line-height:1.6;margin:0;">
                 Este expediente es <strong>confidencial</strong>. Solo personal autorizado debe acceder a su contenido.<br>
-                Correo generado automáticamente por SAEP Platform.
+                Correo generado automáticamente por SAEP.
             </p>
         </td>
     </tr>
-    <tr>
-        <td style="background:#f3f4f6;padding:16px 36px;text-align:center;">
-            <p style="font-size:11px;color:#9ca3af;margin:0;">
-                © {{ date('Y') }} SAEP Platform. Todos los derechos reservados.
-            </p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_footer', [
+        'note' => 'Correo automatico del canal Ley Karin.',
+        'context' => 'Informacion confidencial. Acceso solo para personal autorizado.',
+    ])
 </table>
 </td></tr>
 </table>

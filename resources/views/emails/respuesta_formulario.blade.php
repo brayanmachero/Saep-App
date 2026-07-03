@@ -5,22 +5,11 @@
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
 <tr><td align="center">
 <table width="620" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-    {{-- Header --}}
-    <tr>
-        <td style="background:#0f1b4c;padding:0;">
-            <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td style="padding:24px 36px;">
-                        <h1 style="color:white;font-size:22px;margin:0;letter-spacing:2px;font-weight:800;">SAEP</h1>
-                        <p style="color:rgba(255,255,255,0.55);font-size:10px;margin:4px 0 0;text-transform:uppercase;letter-spacing:1px;">Sistema Automatizado de Ejecución y Prevención</p>
-                    </td>
-                    <td style="padding:24px 36px;text-align:right;vertical-align:middle;">
-                        <span style="background:#10b981;color:white;padding:6px 14px;border-radius:50px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Respuesta Recibida</span>
-                    </td>
-                </tr>
-            </table>
-        </td>
-    </tr>
+    @include('emails.partials.saep_header', [
+        'module' => 'Formularios digitales',
+        'badge' => 'Respuesta recibida',
+        'badgeColor' => '#10b981',
+    ])
     {{-- Body --}}
     <tr>
         <td style="padding:32px 36px;">
@@ -80,26 +69,21 @@
                 @endforeach
             </table>
 
-            <div style="text-align:center;margin-bottom:24px;">
-                <a href="{{ route('respuestas.show', $respuesta) }}"
-                   style="background:#0f1b4c;color:white;padding:14px 36px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600;display:inline-block;">
-                    Ver Respuesta Completa
-                </a>
-            </div>
+            @include('emails.partials.saep_button', [
+                'url' => route('respuestas.show', $respuesta),
+                'label' => 'Ver respuesta completa',
+            ])
 
             <p style="font-size:13px;color:#9ca3af;line-height:1.6;margin:0;">
                 Este correo fue generado automáticamente por SAEP al recibir una nueva respuesta.
             </p>
         </td>
     </tr>
-    {{-- Footer --}}
-    <tr>
-        <td style="background:#0f1b4c;padding:16px 36px;text-align:center;">
-            <p style="font-size:11px;color:rgba(255,255,255,0.5);margin:0;">
-                © {{ date('Y') }} SAEP Platform · saep.bmachero.com
-            </p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_footer', [
+        'note' => 'Correo generado automaticamente al recibir una nueva respuesta.',
+        'siteUrl' => config('app.url'),
+        'siteLabel' => parse_url(config('app.url'), PHP_URL_HOST) ?: 'SAEP',
+    ])
 </table>
 </td></tr>
 </table>

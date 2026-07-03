@@ -5,13 +5,19 @@
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#eef1f6;padding:40px 16px;">
 <tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" role="presentation" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(15,27,76,0.06);">
-    <tr><td style="background:#0f1b4c;padding:28px 40px;text-align:center;">
-        <img src="{{ asset('brand/wp/Logo-Saep_footer.svg') }}" alt="SAEP" width="100" style="display:inline-block;">
-    </td></tr>
-    <tr><td style="height:4px;background:linear-gradient(90deg,#f97316,#fb923c,#f97316);"></td></tr>
+    @php
+        $vencimientoBadge = $diasRestantes <= 0 ? 'Tarea vencida' : 'Vencimiento proximo';
+        $vencimientoColor = $diasRestantes <= 0 ? '#dc2626' : '#f59e0b';
+    @endphp
+    @include('emails.partials.saep_header', [
+        'module' => 'Tablero Kanban',
+        'badge' => $vencimientoBadge,
+        'badgeColor' => $vencimientoColor,
+        'accentColor' => $vencimientoColor,
+    ])
     <tr><td style="padding:36px 40px 28px;">
         <h1 style="font-size:20px;font-weight:700;color:#0f1b4c;margin:0 0 6px;">
-            @if($diasRestantes <= 0) 🔴 Tarea vencida @elseif($diasRestantes == 1) ⚠️ Tarea vence mañana @else ⚠️ Tarea vence en {{ $diasRestantes }} días @endif
+            @if($diasRestantes <= 0) Tarea vencida @elseif($diasRestantes == 1) Tarea vence mañana @else Tarea vence en {{ $diasRestantes }} días @endif
         </h1>
         <p style="font-size:13px;color:#64748b;margin:0 0 24px;">Tablero Kanban — {{ $tableroNombre }}</p>
 
@@ -47,17 +53,15 @@
             </tr>
         </table>
 
-        <div style="text-align:center;margin-bottom:24px;">
-            <a href="{{ $tareaUrl }}" style="background:#0f1b4c;color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;display:inline-block;">
-                Ver Tablero
-            </a>
-        </div>
+        @include('emails.partials.saep_button', [
+            'url' => $tareaUrl,
+            'label' => 'Ver tablero',
+        ])
     </td></tr>
-    <tr><td style="padding:0 40px;"><div style="border-top:1px solid #f1f5f9;"></div></td></tr>
-    <tr><td style="padding:20px 40px 28px;text-align:center;">
-        <p style="font-size:11px;color:#94a3b8;margin:0 0 6px;">Este correo fue enviado automáticamente por SAEP Platform.</p>
-        <p style="font-size:11px;color:#cbd5e1;margin:0;">&copy; {{ date('Y') }} S.A.E.P. Ltda. &mdash; <a href="https://saep.cl" style="color:#94a3b8;text-decoration:none;">saep.cl</a></p>
-    </td></tr>
+    @include('emails.partials.saep_footer', [
+        'note' => 'Correo automatico del tablero Kanban.',
+        'context' => 'Notificacion de vencimiento de tarea.',
+    ])
 </table>
 </td></tr></table>
 </body>

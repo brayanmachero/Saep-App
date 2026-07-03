@@ -4,12 +4,18 @@
     <meta charset="utf-8">
     <title>Cotización {{ $cotizacion->numero }}</title>
 </head>
-<body style="font-family:Arial,sans-serif;color:#1f2937;line-height:1.5;margin:0;padding:0;background:#f8fafc;">
-    <div style="max-width:680px;margin:0 auto;background:#ffffff;padding:28px;border:1px solid #e5e7eb;">
-        <div style="border-bottom:3px solid #0f1b4c;padding-bottom:16px;margin-bottom:20px;">
-            <h1 style="margin:0;color:#0f1b4c;font-size:22px;">SAEP</h1>
-            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Sistema de Cotizaciones Comerciales</p>
-        </div>
+<body style="font-family:Arial,sans-serif;color:#1f2937;line-height:1.5;margin:0;padding:0;background:#eef1f6;">
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#eef1f6;padding:36px 16px;">
+<tr><td align="center">
+<table width="680" cellpadding="0" cellspacing="0" role="presentation" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;box-shadow:0 2px 16px rgba(15,27,76,0.06);">
+        @include('emails.partials.saep_header', [
+            'module' => 'Sistema de cotizaciones comerciales',
+            'badge' => 'Cotizacion enviada',
+            'badgeColor' => '#0ea5e9',
+            'accentColor' => '#0ea5e9',
+        ])
+        <tr>
+        <td style="padding:28px 36px;">
 
         <p>Estimados,</p>
 
@@ -45,6 +51,14 @@
         <p style="font-size:13px;color:#64748b;">Este correo fue generado automáticamente desde SAEP. La cotización oficial se encuentra adjunta en formato PDF.</p>
 
         <p style="margin-top:24px;">Saludos,<br><strong>Equipo SAEP</strong></p>
-    </div>
+        </td>
+        </tr>
+        @include('emails.partials.saep_footer', [
+            'note' => 'Correo generado automaticamente desde SAEP.',
+            'context' => 'La cotizacion oficial se encuentra adjunta en formato PDF.',
+        ])
+</table>
+</td></tr>
+</table>
 </body>
 </html>

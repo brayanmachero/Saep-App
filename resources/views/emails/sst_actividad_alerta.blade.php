@@ -5,36 +5,29 @@
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
 <tr><td align="center">
 <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-    <tr>
-        @php
-            $headerColors = [
-                'vencida' => '#dc2626',
-                'vencimiento' => '#f59e0b',
-                'recordatorio' => '#6366f1',
-                'seguimiento_pendiente' => '#ea580c',
-            ];
-            $headerBg = $headerColors[$tipo] ?? '#0f1b4c';
-        @endphp
-        <td style="background:{{ $headerBg }};padding:28px 36px;">
-            <h1 style="color:white;font-size:20px;margin:0;">SAEP Platform</h1>
-            <p style="color:rgba(255,255,255,0.8);font-size:13px;margin:6px 0 0;">
-                @if($tipo === 'asignacion')
-                    📋 Nueva Actividad Asignada
-                @elseif($tipo === 'vencimiento')
-                    ⏰ Actividad Próxima a Vencer
-                @elseif($tipo === 'recordatorio')
-                    🔔 Recordatorio de Actividad
-                    @if($actividad->periodicidad)
-                    ({{ \App\Models\SstActividad::periodicidadesMap()[$actividad->periodicidad] ?? $actividad->periodicidad }})
-                    @endif
-                @elseif($tipo === 'seguimiento_pendiente')
-                    📊 Seguimiento Pendiente
-                @else
-                    ⚠️ Actividad Vencida
-                @endif
-            </p>
-        </td>
-    </tr>
+    @php
+        $headerColors = [
+            'vencida' => '#dc2626',
+            'vencimiento' => '#f59e0b',
+            'recordatorio' => '#6366f1',
+            'seguimiento_pendiente' => '#ea580c',
+            'asignacion' => '#2563eb',
+        ];
+        $headerBg = $headerColors[$tipo] ?? '#0f1b4c';
+        $headerLabel = match ($tipo) {
+            'asignacion' => 'Nueva actividad',
+            'vencimiento' => 'Proxima a vencer',
+            'recordatorio' => 'Recordatorio',
+            'seguimiento_pendiente' => 'Seguimiento pendiente',
+            default => 'Actividad vencida',
+        };
+    @endphp
+    @include('emails.partials.saep_header', [
+        'module' => 'Programa SST',
+        'badge' => $headerLabel,
+        'badgeColor' => $headerBg,
+        'accentColor' => $headerBg,
+    ])
     <tr>
         <td style="padding:32px 36px;">
             <p style="font-size:15px;color:#1e1e2e;margin:0 0 20px;">
@@ -141,12 +134,10 @@
                 $jefeNombre = $actividad->categoria?->programa?->responsable?->nombre_completo;
             @endphp
             @if($programaId)
-            <div style="text-align:center;margin-bottom:24px;">
-                <a href="{{ route('carta-gantt.show', $programaId) }}"
-                   style="background:#0f1b4c;color:white;padding:14px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600;display:inline-block;">
-                    Ver en Carta Gantt
-                </a>
-            </div>
+            @include('emails.partials.saep_button', [
+                'url' => route('carta-gantt.show', $programaId),
+                'label' => 'Ver en Carta Gantt',
+            ])
             @endif
 
             @if($tipo !== 'asignacion' && $jefeNombre)
@@ -158,13 +149,10 @@
             @endif
         </td>
     </tr>
-    <tr>
-        <td style="background:#f9fafb;padding:20px 36px;border-top:1px solid #e5e7eb;">
-            <p style="font-size:11px;color:#9ca3af;margin:0;text-align:center;">
-                Este es un correo automático de SAEP Platform. No responder a este mensaje.
-            </p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_footer', [
+        'note' => 'Correo automatico del programa SST.',
+        'context' => 'No respondas a este mensaje.',
+    ])
 </table>
 </td></tr>
 </table>

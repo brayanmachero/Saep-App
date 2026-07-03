@@ -94,9 +94,16 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 <tr><td align="center" style="padding:24px 8px;">
 <table role="presentation" width="700" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff; max-width:700px; border-radius:4px;">
 
+@include('emails.partials.saep_header', [
+    'module' => 'Prevencion de Riesgos · Tarjeta STOP CCU',
+    'badge' => 'Reporte ' . ($frecuencia ?? 'Semanal'),
+    'badgeColor' => '#16a34a',
+    'accentColor' => '#16a34a',
+])
+
 {{-- ═══════════ HEADER ═══════════ --}}
 <tr>
-<td style="background-color:#1B5E20; padding:24px 32px; text-align:center; border-radius:4px 4px 0 0;">
+<td style="background-color:#1B5E20; padding:24px 32px; text-align:center;">
     <h1 style="margin:0; color:#ffffff; font-size:22px; font-weight:bold; letter-spacing:0.5px;">
         AUDITOR&Iacute;AS STOP CCU &mdash; Reporte {{ $frecuencia ?? 'Semanal' }}
         @if(strtolower($frecuencia ?? 'Semanal') === 'semanal')
@@ -957,17 +964,12 @@ body, table, td, th, p, span, h1, h2, h3 { font-family: Arial, Helvetica, sans-s
 </td>
 </tr>
 
-{{-- ═══════════ FOOTER ═══════════ --}}
-<tr>
-<td style="padding:14px 32px; background-color:#f8fafc; text-align:center; border-top:1px solid #e2e8f0; border-radius:0 0 4px 4px;">
-    <p style="margin:0 0 4px; font-size:11px; color:#94a3b8;">
-        Reporte generado autom&aacute;ticamente por <strong>SAEP</strong> &mdash; {{ $mesLabel ?? $periodo }}
-    </p>
-    <p style="margin:0; font-size:10px; color:#cbd5e1;">
-        {{ config('app.url') }} &middot; Prevenci&oacute;n de Riesgos &middot; Observaciones de Seguridad
-    </p>
-</td>
-</tr>
+@include('emails.partials.saep_footer', [
+    'note' => 'Reporte generado automaticamente por SAEP.',
+    'context' => ($mesLabel ?? $periodo) . ' · Prevencion de Riesgos · Observaciones de Seguridad',
+    'siteUrl' => config('app.url'),
+    'siteLabel' => parse_url(config('app.url'), PHP_URL_HOST) ?: 'SAEP',
+])
 
 </table>
 </td></tr>

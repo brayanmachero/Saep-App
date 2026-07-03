@@ -6,16 +6,17 @@
 <tr><td align="center">
 <table width="700" cellpadding="0" cellspacing="0" role="presentation" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(15,27,76,0.06);">
 
-    {{-- Header --}}
-    <tr><td style="background:#0f1b4c;padding:28px 40px;text-align:center;">
-        <img src="{{ asset('brand/wp/Logo-Saep_footer.svg') }}" alt="SAEP" width="100" style="display:inline-block;">
-    </td></tr>
-    <tr><td style="height:4px;background:linear-gradient(90deg,#dc2626,#ef4444,#dc2626);"></td></tr>
+    @include('emails.partials.saep_header', [
+        'module' => 'Talana · contratos',
+        'badge' => 'Revision critica',
+        'badgeColor' => '#dc2626',
+        'accentColor' => '#dc2626',
+    ])
 
     {{-- Título --}}
     <tr><td style="padding:36px 40px 20px;">
         <h1 style="font-size:20px;font-weight:700;color:#7f1d1d;margin:0 0 6px;">
-            🔴 Contratos vencidos — trabajadores aún activos
+            Contratos vencidos — trabajadores aún activos
         </h1>
         <p style="font-size:13px;color:#64748b;margin:0 0 20px;">
             Generado el {{ $generadoEn }} — Datos en tiempo real desde Talana Producción — {{ count($porCC) }} centro(s) de costo
@@ -119,12 +120,10 @@
         </p>
     </td></tr>
 
-    {{-- Footer --}}
-    <tr><td style="padding:0 40px;"><div style="border-top:1px solid #f1f5f9;"></div></td></tr>
-    <tr><td style="padding:20px 40px 28px;text-align:center;">
-        <p style="font-size:11px;color:#94a3b8;margin:0 0 6px;">Este correo fue enviado automáticamente por SAEP Platform.</p>
-        <p style="font-size:11px;color:#cbd5e1;margin:0;">&copy; {{ date('Y') }} S.A.E.P. Ltda. &mdash; <a href="https://saep.cl" style="color:#94a3b8;text-decoration:none;">saep.cl</a></p>
-    </td></tr>
+    @include('emails.partials.saep_footer', [
+        'note' => 'Correo automatico de integracion Talana.',
+        'context' => 'Datos obtenidos en modo solo lectura desde Talana Produccion.',
+    ])
 </table>
 </td></tr></table>
 </body>

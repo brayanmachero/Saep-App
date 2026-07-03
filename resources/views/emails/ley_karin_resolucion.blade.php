@@ -5,14 +5,12 @@
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
 <tr><td align="center">
 <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-    <tr>
-        <td style="background:#16a34a;padding:28px 36px;">
-            <h1 style="color:white;font-size:20px;margin:0;">SAEP Platform</h1>
-            <p style="color:rgba(255,255,255,0.85);font-size:13px;margin:6px 0 0;">
-                Resolución de Denuncia Ley Karin — {{ $caso->folio }}
-            </p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_header', [
+        'module' => 'Resolucion Ley Karin - ' . $caso->folio,
+        'badge' => 'Resuelta',
+        'badgeColor' => '#16a34a',
+        'accentColor' => '#16a34a',
+    ])
     <tr>
         <td style="padding:32px 36px;">
             <p style="font-size:15px;color:#1e1e2e;margin:0 0 20px;">Estimado/a {{ $caso->denunciante_nombre ?? 'Denunciante' }},</p>
@@ -74,14 +72,10 @@
             </p>
         </td>
     </tr>
-    <tr>
-        <td style="background:#f9fafb;padding:20px 36px;border-top:1px solid #e5e7eb;">
-            <p style="font-size:11px;color:#9ca3af;margin:0;text-align:center;">
-                Este es un mensaje confidencial generado por SAEP Platform.
-                No responda a este correo.
-            </p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_footer', [
+        'note' => 'Mensaje confidencial generado por SAEP.',
+        'context' => 'No respondas a este correo.',
+    ])
 </table>
 </td></tr>
 </table>

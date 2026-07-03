@@ -8,13 +8,12 @@
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 20px;">
 <tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
-    <!-- Header -->
-    <tr>
-        <td style="background:linear-gradient(135deg,#0b1437,#1a237e);padding:30px 40px;text-align:center;">
-            <h1 style="color:#ffffff;margin:0;font-size:20px;font-weight:700;">Acuse de Recibo</h1>
-            <p style="color:rgba(255,255,255,0.7);margin:8px 0 0;font-size:14px;">Canal de Denuncia — Ley Karin</p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_header', [
+        'module' => 'Canal de denuncia Ley Karin',
+        'badge' => 'Acuse de recibo',
+        'badgeColor' => '#6366f1',
+        'accentColor' => '#6366f1',
+    ])
 
     <!-- Body -->
     <tr>
@@ -96,16 +95,10 @@
         </td>
     </tr>
 
-    <!-- Footer -->
-    <tr>
-        <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
-            <p style="font-size:12px;color:#9ca3af;margin:0;line-height:1.6;">
-                Este es un correo automático. Por favor no respondas a este mensaje.<br>
-                Información confidencial protegida por la Ley 21.643 y Ley 21.719.<br>
-                &copy; {{ date('Y') }} SAEP Platform
-            </p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_footer', [
+        'note' => 'Este es un correo automatico. Por favor no respondas a este mensaje.',
+        'context' => 'Informacion confidencial protegida por la Ley 21.643 y Ley 21.719.',
+    ])
 </table>
 </td></tr>
 </table>

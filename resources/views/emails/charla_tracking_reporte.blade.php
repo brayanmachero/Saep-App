@@ -24,21 +24,12 @@ body, table, td { font-family: Arial, Helvetica, sans-serif !important; }
 <!-- Container 660px -->
 <table role="presentation" width="660" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff; border:1px solid #e2e8f0; max-width:660px;">
 
-{{-- ===== HEADER ===== --}}
-<tr>
-<td style="background-color:#0f172a; padding:28px 32px; text-align:center;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr>
-        <td style="text-align:center;">
-            <h1 style="margin:0; color:#ffffff; font-size:20px; font-weight:bold; font-family:Arial, Helvetica, sans-serif; letter-spacing:0.3px;">
-                Reporte Semanal &mdash; Charlas de Seguridad
-            </h1>
-            <p style="margin:8px 0 0; color:#93c5fd; font-size:13px; font-family:Arial, Helvetica, sans-serif;">{{ $periodo }}</p>
-        </td>
-    </tr>
-    </table>
-</td>
-</tr>
+@include('emails.partials.saep_header', [
+    'module' => 'Reporte semanal · Charlas de seguridad · ' . $periodo,
+    'badge' => 'Prevencion SST',
+    'badgeColor' => $tasaColor,
+    'accentColor' => $tasaColor,
+])
 
 {{-- ===== TASA BANNER ===== --}}
 <tr>
@@ -260,15 +251,10 @@ body, table, td { font-family: Arial, Helvetica, sans-serif !important; }
 </tr>
 @endif
 
-{{-- ===== FOOTER ===== --}}
-<tr>
-<td style="background-color:#f8fafc; padding:20px 32px; text-align:center; border-top:1px solid #e2e8f0;">
-    <p style="margin:0; color:#94a3b8; font-size:11px; font-family:Arial, Helvetica, sans-serif; line-height:18px;">
-        Este reporte se genera autom&aacute;ticamente cada lunes a las 08:00 AM.<br />
-        <strong style="color:#64748b;">SAEP Platform</strong> &mdash; Prevenci&oacute;n de Riesgos
-    </p>
-</td>
-</tr>
+@include('emails.partials.saep_footer', [
+    'note' => 'Este reporte se genera automaticamente cada lunes a las 08:00 AM.',
+    'context' => 'Prevencion de Riesgos · Charlas SST',
+])
 
 </table>
 <!-- /Container -->

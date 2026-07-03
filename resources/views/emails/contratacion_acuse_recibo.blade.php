@@ -5,15 +5,12 @@
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
 <tr><td align="center">
 <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-    <!-- Header -->
-    <tr>
-        <td style="background:linear-gradient(90deg,#0b1437,#1a237e);padding:28px 36px;">
-            <h1 style="color:white;font-size:20px;margin:0;">SAEP Platform</h1>
-            <p style="color:rgba(255,255,255,0.8);font-size:13px;margin:6px 0 0;">
-                ✅ Postulación recibida correctamente
-            </p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_header', [
+        'module' => 'Portal de contratacion',
+        'badge' => 'Postulacion recibida',
+        'badgeColor' => '#10b981',
+        'accentColor' => '#10b981',
+    ])
     <!-- Body -->
     <tr>
         <td style="padding:32px 36px;">
@@ -161,14 +158,10 @@
             </p>
         </td>
     </tr>
-    <!-- Footer -->
-    <tr>
-        <td style="background:#f9fafb;padding:20px 36px;border-top:1px solid #e5e7eb;text-align:center;">
-            <p style="font-size:11px;color:#9ca3af;margin:0;">
-                &copy; {{ date('Y') }} SAEP Platform · Portal de Contratación
-            </p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_footer', [
+        'note' => 'Correo automatico del portal de contratacion.',
+        'context' => 'La documentacion no se adjunta por seguridad de la informacion.',
+    ])
 </table>
 </td></tr>
 </table>

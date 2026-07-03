@@ -10,9 +10,11 @@
     .container { max-width:860px; margin:20px auto; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,.10); }
 
     /* Header */
-    .header { background:linear-gradient(135deg,#1e3a5f 0%,#2d5986 100%); padding:30px 36px; color:#fff; }
-    .header h1 { font-size:22px; font-weight:700; letter-spacing:.3px; }
+    .header { background:#0f1b4c; padding:28px 36px; color:#fff; border-bottom:4px solid #f97316; }
+    .header img { display:block; width:160px; max-width:160px; height:auto; margin-bottom:12px; }
+    .header h1 { font-size:22px; font-weight:700; }
     .header p  { margin-top:6px; opacity:.85; font-size:13px; }
+    .header .eyebrow { font-size:11px; font-weight:700; text-transform:uppercase; opacity:.72; margin:0 0 10px; }
 
     /* Resumen cards */
     .summary { display:flex; gap:12px; padding:24px 36px 8px; flex-wrap:wrap; }
@@ -50,7 +52,8 @@
     .marca-hora { font-family:monospace; font-size:12px; }
 
     /* Footer */
-    .footer { padding:16px 36px; background:#f8fafc; font-size:12px; color:#718096; text-align:center; border-top:1px solid #e8ecf0; }
+    .footer { padding:20px 36px; background:#0f1b4c; font-size:12px; color:rgba(255,255,255,.72); text-align:center; border-top:4px solid #f97316; }
+    .footer strong { color:#fff; }
     .notice { background:#fffbeb; border:1px solid #fcd34d; border-radius:8px; padding:12px 16px; font-size:12px; color:#78350f; margin:0 36px 20px; }
 
     @media (max-width:600px) {
@@ -65,7 +68,9 @@
 
     {{-- HEADER --}}
     <div class="header">
-        <h1>📊 Reporte Asistencia Talana</h1>
+        <img src="{{ asset('brand/wp/logo-saep-email.png') }}" alt="SAEP">
+        <div class="eyebrow">Sistema de gestion operacional y prevencion</div>
+        <h1>Reporte Asistencia Talana</h1>
         <p>{{ ucfirst($dia) }} · Generado {{ $generadoEn }}</p>
     </div>
 
@@ -312,7 +317,7 @@
 
     {{-- FOOTER --}}
     <div class="footer">
-        Reporte automático generado por SAEP · {{ $generadoEn }} · Adjunto: Excel con detalle completo
+        Reporte automatico generado por <strong>SAEP</strong> · {{ $generadoEn }} · Adjunto: Excel con detalle completo
     </div>
 
 </div>

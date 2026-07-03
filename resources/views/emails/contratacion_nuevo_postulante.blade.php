@@ -5,15 +5,12 @@
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
 <tr><td align="center">
 <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-    <!-- Header -->
-    <tr>
-        <td style="background:linear-gradient(90deg,#0b1437,#1a237e);padding:28px 36px;">
-            <h1 style="color:white;font-size:20px;margin:0;">SAEP Platform</h1>
-            <p style="color:rgba(255,255,255,0.8);font-size:13px;margin:6px 0 0;">
-                🔔 Nuevo postulante registrado
-            </p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_header', [
+        'module' => 'Portal de contratacion',
+        'badge' => 'Nuevo postulante',
+        'badgeColor' => '#0ea5e9',
+        'accentColor' => '#0ea5e9',
+    ])
     <!-- Body -->
     <tr>
         <td style="padding:32px 36px;">
@@ -157,27 +154,17 @@
 
             <!-- CTA -->
             @php $panelUrl = config('app.url') . '/contratacion/' . $postulante->id; @endphp
-            <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;">
-                <tr>
-                    <td align="center">
-                        <a href="{{ $panelUrl }}"
-                           style="display:inline-block;background:#0ea5e9;color:white;font-size:14px;font-weight:700;
-                                  padding:12px 28px;border-radius:10px;text-decoration:none;letter-spacing:0.03em;">
-                            Ver en panel RRHH →
-                        </a>
-                    </td>
-                </tr>
-            </table>
+            @include('emails.partials.saep_button', [
+                'url' => $panelUrl,
+                'label' => 'Ver en panel RRHH',
+                'color' => '#0ea5e9',
+            ])
         </td>
     </tr>
-    <!-- Footer -->
-    <tr>
-        <td style="background:#f9fafb;padding:20px 36px;border-top:1px solid #e5e7eb;text-align:center;">
-            <p style="font-size:11px;color:#9ca3af;margin:0;">
-                &copy; {{ date('Y') }} SAEP Platform · Notificación automática RRHH
-            </p>
-        </td>
-    </tr>
+    @include('emails.partials.saep_footer', [
+        'note' => 'Notificacion automatica del portal de contratacion.',
+        'context' => 'Acceso restringido a personal autorizado de RRHH.',
+    ])
 </table>
 </td></tr>
 </table>
