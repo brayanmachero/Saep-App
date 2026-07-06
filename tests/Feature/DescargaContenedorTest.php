@@ -753,6 +753,23 @@ class DescargaContenedorTest extends TestCase
             ->assertDontSee('Trabajador Cargo Descargador');
     }
 
+    public function test_dotacion_cargo_options_are_scoped_to_selected_center(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centroA = $this->createCentroCosto('CD Cargo Centro A QA');
+        $centroB = $this->createCentroCosto('CD Cargo Centro B QA');
+        $workerA = $this->createTalanaWorker('Trabajador Centro A QA', $centroA);
+        $workerB = $this->createTalanaWorker('Trabajador Centro B QA', $centroB);
+        $workerA->update(['cargo_nombre' => 'Operario Centro A QA']);
+        $workerB->update(['cargo_nombre' => 'Operario Centro B QA']);
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.dotacion', ['centro_costo_id' => $centroA->id]))
+            ->assertOk()
+            ->assertSee('Operario Centro A QA')
+            ->assertDontSee('Operario Centro B QA');
+    }
+
     public function test_validation_rejects_distribution_that_does_not_sum_100_percent(): void
     {
         $user = $this->createSuperAdminUser();
@@ -792,6 +809,31 @@ class DescargaContenedorTest extends TestCase
 
         $this->assertSame('borrador', $descarga->estado);
         $this->assertTrue($descarga->validationBlockers()->contains('porcentajes no suman 100%'));
+    }
+
+    public function test_pending_detail_shows_workflow_status_and_completion_action(): void
+    {
+        $user = $this->createSuperAdminUser();
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store'), [
+                'contenedor' => 'CONT-PENDIENTE-001',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-PENDIENTE-001')->firstOrFail();
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.show', $descarga))
+            ->assertOk()
+            ->assertSee('Estado del proceso')
+            ->assertSee('Registro en carga, con pendientes antes de validar.')
+            ->assertSee('Fecha registrada')
+            ->assertSee('Antes de validar falta:')
+            ->assertSee('Completar registro')
+            ->assertSee('Pendiente')
+            ->assertDontSee('Listo para validar.');
     }
 
     public function test_reportes_page_groups_by_operation_and_fact(): void
@@ -894,6 +936,7 @@ class DescargaContenedorTest extends TestCase
             ->assertSee('100,00%')
             ->assertDontSee('Costo unitario')
             ->assertDontSee('Pago colaboradores')
+            ->assertDontSee('Pago colaborador definido')
             ->assertDontSee('Tarifas relacionadas')
             ->assertDontSee('Monto')
             ->assertDontSee('$36.000');
@@ -961,7 +1004,7 @@ class DescargaContenedorTest extends TestCase
     public function test_coordinator_can_see_container_cost_detail(): void
     {
         $admin = $this->createSuperAdminUser();
-        $coordinador = $this->createContainerModuleUser(true, 'COORDINADOR', 'Coordinador');
+        $coordinador = $this->createContainerModuleUser(true, 'CONTENEDORES_COORDINADOR', 'Coordinador Contenedores');
         $centro = $this->createCentroCosto('CD Coordinador QA');
         $tarifa = $this->createTarifa('CNTCOORD', 75000, 36000, 'COORDINADOR QA');
         $worker = $this->createTalanaWorker('Trabajador Coordinador QA', $centro);
@@ -990,6 +1033,51 @@ class DescargaContenedorTest extends TestCase
             ->assertSee('Tarifas relacionadas')
             ->assertSee('$75.000')
             ->assertSee('$36.000');
+    }
+
+    public function test_generic_coordinator_role_does_not_see_container_cost_detail(): void
+    {
+        $admin = $this->createSuperAdminUser();
+        $coordinadorGenerico = $this->createContainerModuleUser(true, 'COORDINADOR', 'Coordinador');
+        $centro = $this->createCentroCosto('CD Coordinador Generico QA');
+        $tarifa = $this->createTarifa('CNTCOORDGEN', 75000, 36000, 'COORDINADOR GENERICO QA');
+        $worker = $this->createTalanaWorker('Trabajador Coordinador Generico QA', $centro);
+
+        $this->actingAs($admin)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'CD Coordinador Generico QA',
+                'fecha' => '2026-07-02',
+                'contenedor' => 'CONT-COORD-GENERICO-001',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([$worker->id]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-COORD-GENERICO-001')->firstOrFail();
+
+        $this->actingAs($coordinadorGenerico)
+            ->get(route('descarga-contenedores.show', $descarga))
+            ->assertOk()
+            ->assertSee('CONT-COORD-GENERICO-001')
+            ->assertDontSee('Costo unitario')
+            ->assertDontSee('Pago colaboradores')
+            ->assertDontSee('Tarifas relacionadas')
+            ->assertDontSee('$75.000')
+            ->assertDontSee('$36.000');
+
+        foreach ([
+            'descarga-contenedores.dotacion',
+            'descarga-contenedores.liquidacion',
+            'descarga-contenedores.reportes',
+            'descarga-contenedores.tarifas',
+        ] as $routeName) {
+            $this->actingAs($coordinadorGenerico)
+                ->get(route($routeName))
+                ->assertForbidden();
+        }
     }
 
     private function createSuperAdminUser(): User
@@ -1025,8 +1113,8 @@ class DescargaContenedorTest extends TestCase
 
     private function createContainerModuleUser(bool $puedeEditar, ?string $roleCode = null, ?string $roleName = null): User
     {
-        $roleCode ??= 'CONTENEDORES_' . ($puedeEditar ? 'COORDINACION' : 'CAPTURA');
-        $roleName ??= $puedeEditar ? 'Coordinación Contenedores' : 'Captura Contenedores';
+        $roleCode ??= 'CONTENEDORES_' . ($puedeEditar ? 'COORDINADOR' : 'CAPTURADOR');
+        $roleName ??= $puedeEditar ? 'Coordinador Contenedores' : 'Capturador Contenedores';
 
         $role = Rol::firstOrCreate(
             ['codigo' => $roleCode],

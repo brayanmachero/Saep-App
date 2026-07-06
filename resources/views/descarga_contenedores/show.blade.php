@@ -4,6 +4,18 @@
 @php
     $puedeGestionarCostos = auth()->user()->puedeGestionarCostosDescargaContenedores();
     $participantesColspan = $puedeGestionarCostos ? 6 : 5;
+    $blockers = $descarga->validationBlockers();
+    $visibleBlockers = $blockers->map(function ($blocker) use ($puedeGestionarCostos) {
+        if ($puedeGestionarCostos) {
+            return $blocker;
+        }
+
+        return match ($blocker) {
+            'falta pago colaborador' => 'tarifa FACT pendiente',
+            'tarifa pendiente de revisión' => 'tarifa FACT por revisar',
+            default => $blocker,
+        };
+    });
 @endphp
 <div class="page-container">
     <div class="page-header">
@@ -20,10 +32,16 @@
             </a>
             @if(auth()->user()->tieneAcceso('descarga_contenedores', 'puede_editar'))
             @if($descarga->estado === 'borrador')
-            <form method="POST" action="{{ route('descarga-contenedores.validar', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Validar este registro de contenedor?')">
-                @csrf @method('PATCH')
-                <button class="btn-premium" type="submit"><i class="bi bi-check2-circle"></i> Validar</button>
-            </form>
+                @if($blockers->isEmpty())
+                <form method="POST" action="{{ route('descarga-contenedores.validar', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Validar este registro de contenedor?')">
+                    @csrf @method('PATCH')
+                    <button class="btn-premium" type="submit"><i class="bi bi-check2-circle"></i> Validar</button>
+                </form>
+                @else
+                <button class="btn-secondary" type="button" disabled title="Falta completar: {{ $visibleBlockers->implode(', ') }}">
+                    <i class="bi bi-exclamation-triangle"></i> Pendiente
+                </button>
+                @endif
             @elseif($descarga->estado === 'validado')
             @if($puedeGestionarCostos)
             <form method="POST" action="{{ route('descarga-contenedores.liquidar', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Marcar este registro como liquidado?')">
@@ -51,6 +69,25 @@
     </div>
 
     @include('partials._alerts')
+    @include('descarga_contenedores._context_help', [
+        'title' => 'Lectura del detalle',
+        'items' => $puedeGestionarCostos
+            ? [
+                'Resumen muestra trazabilidad, FACT y valores congelados al guardar el registro.',
+                'Trabajadores participantes muestra el porcentaje usado para distribuir el pago colaborador.',
+                'Si está liquidado, el registro queda bloqueado para evitar cambios accidentales.',
+            ]
+            : [
+                'Resumen muestra trazabilidad operativa del registro.',
+                'Trabajadores participantes muestra la dotación y porcentaje declarado.',
+                'Los valores económicos están reservados para coordinación.',
+            ],
+    ])
+    @include('descarga_contenedores._workflow_status', [
+        'descarga' => $descarga,
+        'puedeGestionarCostos' => $puedeGestionarCostos,
+        'blockers' => $blockers,
+    ])
 
     <div class="detail-grid">
         <div class="glass-card">

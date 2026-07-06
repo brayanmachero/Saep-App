@@ -16,6 +16,14 @@
 
     @include('partials._alerts')
     @include('descarga_contenedores._nav')
+    @include('descarga_contenedores._context_help', [
+        'title' => 'Historial de cargas',
+        'items' => [
+            'Cada carga agrupa una importación masiva realizada desde Programación.',
+            'Filas con alerta indica registros que quedaron con datos pendientes, tarifa por revisar o información incompleta.',
+            'Ver registros abre el listado filtrado por el nombre de la tanda.',
+        ],
+    ])
 
     <div class="stats-grid">
         <div class="glass-card stat-item">

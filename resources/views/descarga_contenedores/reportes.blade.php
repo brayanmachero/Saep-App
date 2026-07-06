@@ -11,6 +11,14 @@
 
     @include('partials._alerts')
     @include('descarga_contenedores._nav')
+    @include('descarga_contenedores._context_help', [
+        'title' => 'Lectura de reportes',
+        'items' => [
+            'Los reportes usan los mismos filtros superiores para mantener una lectura consistente.',
+            'Costo ref. y pago ref. corresponden a snapshots de tarifa guardados en cada registro.',
+            'Los registros con tarifa por revisar pueden afectar totales económicos hasta que se corrijan.',
+        ],
+    ])
 
     <div class="stats-grid">
         <div class="glass-card stat-item">
@@ -64,7 +72,7 @@
                 </select>
             </div>
             <div>
-                <label style="font-size:.75rem;color:var(--text-muted)">Estado</label>
+                <label style="font-size:.75rem;color:var(--text-muted)">Estado @include('descarga_contenedores._help_icon', ['text' => 'Filtra el análisis por etapa del flujo: borrador, validado, cerrado o liquidado.'])</label>
                 <select name="estado" class="form-control">
                     <option value="">Todos</option>
                     @foreach(['borrador' => 'Borrador', 'validado' => 'Validado', 'cerrado' => 'Cerrado', 'liquidado' => 'Liquidado'] as $value => $label)

@@ -24,50 +24,105 @@
 
     @include('partials._alerts')
     @include('descarga_contenedores._nav')
+    @include('descarga_contenedores._context_help', [
+        'title' => 'Flujo de trabajo',
+        'items' => $puedeGestionarCostos
+            ? [
+                'Borrador: registro editable, creado manualmente o desde programación.',
+                'Listo para validar: tiene datos mínimos, equipo y porcentajes al 100%.',
+                'Validado: queda autorizado para revisión de liquidación.',
+                'Liquidado: queda bloqueado para evitar cambios accidentales en pagos.',
+            ]
+            : [
+                'Borrador: registro editable, creado manualmente o desde programación.',
+                'Listo para validar: tiene datos mínimos, equipo y porcentajes al 100%.',
+                'Validado: coordinación revisó el registro. Los valores económicos no son visibles para este perfil.',
+            ],
+    ])
+
+    <div class="process-flow">
+        <a href="{{ route('descarga-contenedores.index', ['validacion_estado' => 'pendientes']) }}" class="process-step warning">
+            <i class="bi bi-clipboard-x"></i>
+            <span>
+                <strong>{{ $stats['pendientes_validar'] }}</strong>
+                <small>Pendientes por completar</small>
+            </span>
+        </a>
+        <a href="{{ route('descarga-contenedores.index', ['validacion_estado' => 'listos']) }}" class="process-step success">
+            <i class="bi bi-shield-check"></i>
+            <span>
+                <strong>{{ $stats['listos_validar'] }}</strong>
+                <small>Listos para validar</small>
+            </span>
+        </a>
+        <a href="{{ route('descarga-contenedores.index', ['estado' => 'validado']) }}" class="process-step primary">
+            <i class="bi bi-check2-circle"></i>
+            <span>
+                <strong>{{ $stats['validadas'] }}</strong>
+                <small>{{ $puedeGestionarCostos ? 'Validadas para liquidar' : 'Validadas por coordinación' }}</small>
+            </span>
+        </a>
+        @if($puedeGestionarCostos)
+        <a href="{{ route('descarga-contenedores.index', ['tarifa_estado' => 'revision']) }}" class="process-step warning">
+            <i class="bi bi-exclamation-triangle"></i>
+            <span>
+                <strong>{{ $stats['revision_tarifa'] }}</strong>
+                <small>Tarifas por revisar</small>
+            </span>
+        </a>
+        <a href="{{ route('descarga-contenedores.index', ['estado' => 'liquidado']) }}" class="process-step locked">
+            <i class="bi bi-lock-fill"></i>
+            <span>
+                <strong>{{ $stats['liquidadas'] }}</strong>
+                <small>Liquidadas y bloqueadas</small>
+            </span>
+        </a>
+        @endif
+    </div>
 
     <div class="stats-grid">
-        <div class="glass-card stat-item">
+        <div class="glass-card stat-item" title="Total de registros de descarga guardados en el módulo.">
             <div class="stat-icon primary"><i class="bi bi-box-seam"></i></div>
             <div class="stat-info"><h3>{{ $stats['total'] }}</h3><p>Registros</p></div>
         </div>
-        <div class="glass-card stat-item">
+        <div class="glass-card stat-item" title="Registros pendientes de revisión o cierre por coordinación.">
             <div class="stat-icon warning"><i class="bi bi-pencil-square"></i></div>
             <div class="stat-info"><h3>{{ $stats['borradores'] }}</h3><p>Borradores</p></div>
         </div>
-        <div class="glass-card stat-item">
+        <div class="glass-card stat-item" title="Registros revisados y autorizados para seguir el flujo.">
             <div class="stat-icon success"><i class="bi bi-check2-circle"></i></div>
             <div class="stat-info"><h3>{{ $stats['validadas'] }}</h3><p>Validadas</p></div>
         </div>
         @if($puedeGestionarCostos)
-        <div class="glass-card stat-item">
+        <div class="glass-card stat-item" title="Registros ya cerrados para pago referencial.">
             <div class="stat-icon success"><i class="bi bi-cash-stack"></i></div>
             <div class="stat-info"><h3>{{ $stats['liquidadas'] }}</h3><p>Liquidadas</p></div>
         </div>
         @endif
-        <div class="glass-card stat-item">
+        <div class="glass-card stat-item" title="Borradores sin pendientes de validación.">
             <div class="stat-icon success"><i class="bi bi-shield-check"></i></div>
             <div class="stat-info"><h3>{{ $stats['listos_validar'] }}</h3><p>Listos para validar</p></div>
         </div>
-        <div class="glass-card stat-item">
+        <div class="glass-card stat-item" title="Cantidad total de asignaciones de trabajadores en descargas.">
             <div class="stat-icon primary"><i class="bi bi-people"></i></div>
             <div class="stat-info"><h3>{{ $stats['participantes'] }}</h3><p>Participaciones</p></div>
         </div>
-        <div class="glass-card stat-item">
+        <div class="glass-card stat-item" title="Borradores con datos faltantes, equipo incompleto o porcentajes que no suman 100%.">
             <div class="stat-icon warning"><i class="bi bi-clipboard-x"></i></div>
             <div class="stat-info"><h3>{{ $stats['pendientes_validar'] }}</h3><p>Pendientes</p></div>
         </div>
         @if($puedeGestionarCostos)
-        <div class="glass-card stat-item">
+        <div class="glass-card stat-item" title="Registros con código FACT manual, duplicado o marcado para revisión.">
             <div class="stat-icon warning"><i class="bi bi-exclamation-triangle"></i></div>
             <div class="stat-info"><h3>{{ $stats['revision_tarifa'] }}</h3><p>Tarifa por revisar</p></div>
         </div>
         @endif
-        <div class="glass-card stat-item">
+        <div class="glass-card stat-item" title="Registros sin trabajadores asignados.">
             <div class="stat-icon warning"><i class="bi bi-person-dash"></i></div>
             <div class="stat-info"><h3>{{ $stats['sin_equipo'] }}</h3><p>Sin equipo</p></div>
         </div>
         @if($puedeGestionarCostos)
-        <div class="glass-card stat-item">
+        <div class="glass-card stat-item" title="Suma referencial de pagos a colaboradores según tarifas asociadas.">
             <div class="stat-icon success"><i class="bi bi-cash-coin"></i></div>
             <div class="stat-info"><h3>${{ number_format((float) $stats['pago_total'], 0, ',', '.') }}</h3><p>Pago total ref.</p></div>
         </div>
@@ -99,7 +154,7 @@
                 </select>
             </div>
             <div>
-                <label style="font-size:.75rem;color:var(--text-muted)">Validación</label>
+                <label style="font-size:.75rem;color:var(--text-muted)">Validación @include('descarga_contenedores._help_icon', ['text' => 'Listos: cumplen datos mínimos para validar. Pendientes: requieren completar información antes de validación.'])</label>
                 <select name="validacion_estado" class="form-control">
                     <option value="">Todos</option>
                     <option value="listos" {{ request('validacion_estado') === 'listos' ? 'selected' : '' }}>Listos</option>
@@ -108,7 +163,7 @@
             </div>
             @if($puedeGestionarCostos)
             <div>
-                <label style="font-size:.75rem;color:var(--text-muted)">Tarifa</label>
+                <label style="font-size:.75rem;color:var(--text-muted)">Tarifa @include('descarga_contenedores._help_icon', ['text' => 'Permite separar registros con tarifa válida, sin tarifa o con código FACT que requiere revisión.'])</label>
                 <select name="tarifa_estado" class="form-control">
                     <option value="">Todas</option>
                     <option value="revision" {{ request('tarifa_estado') === 'revision' ? 'selected' : '' }}>Por revisar</option>
@@ -155,14 +210,27 @@
                         @endif
                         <th>Cajas</th>
                         <th>Trab.</th>
-                        <th>Pendientes</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
+                        <th title="Datos que faltan para validar el registro.">Pendientes</th>
+                        <th title="Etapa actual del flujo operativo.">Estado</th>
+                        <th title="Ver, validar, liquidar, editar o eliminar según permisos.">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($descargas as $descarga)
-                    @php($blockers = $descarga->validationBlockers())
+                    @php
+                        $blockers = $descarga->validationBlockers();
+                        $visibleBlockers = $blockers->map(function ($blocker) use ($puedeGestionarCostos) {
+                            if ($puedeGestionarCostos) {
+                                return $blocker;
+                            }
+
+                            return match ($blocker) {
+                                'falta pago colaborador' => 'tarifa FACT pendiente',
+                                'tarifa pendiente de revisión' => 'tarifa FACT por revisar',
+                                default => $blocker,
+                            };
+                        });
+                    @endphp
                     <tr>
                         <td>{{ $descarga->fecha?->format('d/m/Y') ?? '—' }}</td>
                         <td>
@@ -212,11 +280,11 @@
                                 <span class="badge success">Listo</span>
                             @else
                                 <div class="pending-list">
-                                    @foreach($blockers->take(2) as $blocker)
+                                    @foreach($visibleBlockers->take(2) as $blocker)
                                         <span class="badge warning">{{ ucfirst($blocker) }}</span>
                                     @endforeach
-                                    @if($blockers->count() > 2)
-                                        <span class="badge warning">+{{ $blockers->count() - 2 }}</span>
+                                    @if($visibleBlockers->count() > 2)
+                                        <span class="badge warning">+{{ $visibleBlockers->count() - 2 }}</span>
                                     @endif
                                 </div>
                             @endif
@@ -229,16 +297,16 @@
                                     @if($blockers->isEmpty())
                                         <form method="POST" action="{{ route('descarga-contenedores.validar', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Validar este registro de contenedor?')">
                                             @csrf @method('PATCH')
-                                            <button class="icon-btn validation-ready" title="Validar"><i class="bi bi-check2-circle"></i></button>
+                                            <button class="icon-btn validation-ready" title="Validar: bloquea el borrador como registro revisado"><i class="bi bi-check2-circle"></i></button>
                                         </form>
                                     @else
-                                        <button class="icon-btn validation-disabled" title="Pendiente: {{ $blockers->implode(', ') }}" disabled><i class="bi bi-check2-circle"></i></button>
+                                        <button class="icon-btn validation-disabled" title="No se puede validar. Pendiente: {{ $visibleBlockers->implode(', ') }}" disabled><i class="bi bi-check2-circle"></i></button>
                                     @endif
                                 @elseif($descarga->estado === 'validado')
                                     @if($puedeGestionarCostos)
                                     <form method="POST" action="{{ route('descarga-contenedores.liquidar', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Marcar este registro como liquidado?')">
                                         @csrf @method('PATCH')
-                                        <button class="icon-btn validation-ready" title="Liquidar"><i class="bi bi-cash-stack"></i></button>
+                                        <button class="icon-btn validation-ready" title="Liquidar: cerrar para pago referencial"><i class="bi bi-cash-stack"></i></button>
                                     </form>
                                     @endif
                                     <form method="POST" action="{{ route('descarga-contenedores.volver-borrador', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Devolver este registro a borrador?')">
@@ -280,4 +348,57 @@
         @endif
     </div>
 </div>
+<style>
+.process-flow {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: .75rem;
+    margin-bottom: 1rem;
+}
+.process-step {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    min-width: 0;
+    padding: .85rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    background: var(--surface-color);
+    color: var(--text-main);
+    text-decoration: none;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, .05);
+}
+.process-step:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px rgba(15, 23, 42, .08);
+}
+.process-step i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    font-size: 1rem;
+}
+.process-step strong {
+    display: block;
+    font-size: 1.25rem;
+    line-height: 1;
+}
+.process-step small {
+    display: block;
+    margin-top: .2rem;
+    color: var(--text-muted);
+    font-size: .76rem;
+}
+.process-step.primary i { background: rgba(59, 130, 246, .12); color: #2563eb; }
+.process-step.success i { background: rgba(16, 185, 129, .12); color: var(--success-color); }
+.process-step.warning i { background: rgba(217, 119, 6, .14); color: #d97706; }
+.process-step.locked i { background: rgba(100, 116, 139, .16); color: var(--text-muted); }
+@media (max-width: 640px) {
+    .process-flow { grid-template-columns: 1fr; }
+}
+</style>
 @endsection

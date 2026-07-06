@@ -11,6 +11,14 @@
 
     @include('partials._alerts')
     @include('descarga_contenedores._nav')
+    @include('descarga_contenedores._context_help', [
+        'title' => 'Lectura de dotación',
+        'items' => [
+            'La nómina viene de Talana y está acotada a los centros gestionados por la operación de contenedores.',
+            'Al filtrar por centro, el selector de cargo muestra sólo cargos disponibles en ese centro.',
+            'Los montos son referenciales y se calculan desde registros donde el trabajador participó.',
+        ],
+    ])
 
     <div class="stats-grid">
         <div class="glass-card stat-item">
@@ -51,7 +59,7 @@
                 </select>
             </div>
             <div>
-                <label style="font-size:.75rem;color:var(--text-muted)">Cargo</label>
+                <label style="font-size:.75rem;color:var(--text-muted)">Cargo @include('descarga_contenedores._help_icon', ['text' => 'Si seleccionas un centro, aquí aparecen sólo cargos disponibles en ese centro.'])</label>
                 <select name="cargo" class="form-control">
                     <option value="">Todos</option>
                     @foreach($cargos as $cargo)

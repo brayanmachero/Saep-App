@@ -450,6 +450,9 @@ class DescargaContenedorController extends Controller
             ->whereNotNull('cargo_nombre')
             ->select('cargo_nombre');
         $this->applyTrabajadoresDotacionFilter($cargosQuery);
+        if ($request->filled('centro_costo_id')) {
+            $cargosQuery->where('centro_costo_id', $request->input('centro_costo_id'));
+        }
         $cargos = $cargosQuery->distinct()
             ->orderBy('cargo_nombre')
             ->pluck('cargo_nombre');

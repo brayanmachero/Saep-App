@@ -14,6 +14,16 @@
 
     @include('partials._alerts')
     @include('descarga_contenedores._nav')
+    @include('descarga_contenedores._context_help', [
+        'title' => 'Uso de tarifas FACT',
+        'items' => [
+            'Costo unitario corresponde al valor de referencia de la operación para la empresa.',
+            'Pago colaborador corresponde al monto base que se reparte entre trabajadores según porcentaje.',
+            'Requiere revisión se usa cuando el código existe pero el valor debe confirmarse antes de liquidar.',
+            'Los registros ya creados conservan snapshot histórico aunque luego se edite la tarifa.',
+        ],
+        'tone' => 'warning',
+    ])
 
     <div class="glass-card" style="margin-bottom:1rem">
         <h4 class="section-title">Nuevo código</h4>
@@ -32,18 +42,18 @@
                 <input type="text" name="proceso" class="form-control" value="{{ old('proceso') }}" required>
             </div>
             <div>
-                <label>Costo unitario</label>
+                <label>Costo unitario @include('descarga_contenedores._help_icon', ['text' => 'Valor referencial asociado al trabajo del contenedor para la empresa.'])</label>
                 <input type="number" name="costo_unitario" class="form-control" value="{{ old('costo_unitario') }}" min="0" step="0.01">
             </div>
             <div>
-                <label>Pago colaborador</label>
+                <label>Pago colaborador @include('descarga_contenedores._help_icon', ['text' => 'Monto base a repartir entre los trabajadores participantes según porcentaje.'])</label>
                 <input type="number" name="pago_colaborador" class="form-control" value="{{ old('pago_colaborador') }}" min="0" step="0.01">
             </div>
             <div class="check-row">
                 <input type="hidden" name="requiere_revision" value="0">
-                <label><input type="checkbox" name="requiere_revision" value="1" {{ old('requiere_revision') ? 'checked' : '' }}> Requiere revisión</label>
+                <label title="Marca códigos que no deben usarse como valor definitivo hasta confirmar tarifa"><input type="checkbox" name="requiere_revision" value="1" {{ old('requiere_revision') ? 'checked' : '' }}> Requiere revisión</label>
                 <input type="hidden" name="activo" value="0">
-                <label><input type="checkbox" name="activo" value="1" checked> Activo</label>
+                <label title="Sólo las tarifas activas aparecen en los selectores de registros"><input type="checkbox" name="activo" value="1" checked> Activo</label>
             </div>
             <div style="grid-column:1/-1">
                 <label>Observaciones</label>
@@ -84,9 +94,9 @@
                         <th>Cliente</th>
                         <th>Código</th>
                         <th>Proceso</th>
-                        <th>Costo unitario</th>
-                        <th>Pago colaborador</th>
-                        <th>Flags</th>
+                        <th title="Valor referencial asociado al trabajo del contenedor para la empresa.">Costo unitario</th>
+                        <th title="Monto base a repartir entre trabajadores según porcentaje.">Pago colaborador</th>
+                        <th title="Estados operativos de la tarifa: revisión pendiente o disponibilidad en formularios.">Flags</th>
                         <th>Observaciones</th>
                         <th></th>
                     </tr>
@@ -104,9 +114,9 @@
                             <td><input type="number" name="pago_colaborador" class="form-control mini-input" value="{{ $tarifa->pago_colaborador }}" min="0" step="0.01"></td>
                             <td>
                                 <input type="hidden" name="requiere_revision" value="0">
-                                <label class="table-check"><input type="checkbox" name="requiere_revision" value="1" {{ $tarifa->requiere_revision ? 'checked' : '' }}> Revisión</label>
+                                <label class="table-check" title="Marcar si el código debe confirmarse antes de liquidar"><input type="checkbox" name="requiere_revision" value="1" {{ $tarifa->requiere_revision ? 'checked' : '' }}> Revisión</label>
                                 <input type="hidden" name="activo" value="0">
-                                <label class="table-check"><input type="checkbox" name="activo" value="1" {{ $tarifa->activo ? 'checked' : '' }}> Activo</label>
+                                <label class="table-check" title="Sólo las tarifas activas aparecen en los selectores de registros"><input type="checkbox" name="activo" value="1" {{ $tarifa->activo ? 'checked' : '' }}> Activo</label>
                             </td>
                             <td><input type="text" name="observaciones" class="form-control obs-input" value="{{ $tarifa->observaciones }}" maxlength="400"></td>
                             <td><button class="icon-btn" title="Guardar"><i class="bi bi-save-fill"></i></button></td>

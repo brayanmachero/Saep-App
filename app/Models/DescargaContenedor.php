@@ -164,4 +164,85 @@ class DescargaContenedor extends Model
     {
         return $this->estado === 'borrador' && $this->validationBlockers()->isEmpty();
     }
+
+    public function validationChecklist(): array
+    {
+        $this->loadMissing('participantes');
+
+        $participantesCount = $this->participantes->count();
+        $porcentajeTotal = round((float) $this->participantes->sum('porcentaje_participacion'), 2);
+        $tarifaConfirmada = filled($this->tarifa_id) && !$this->requiere_revision_tarifa;
+
+        return [
+            [
+                'key' => 'fecha',
+                'label' => 'Fecha registrada',
+                'detail' => $this->fecha?->format('d/m/Y') ?? 'Pendiente',
+                'done' => filled($this->fecha),
+            ],
+            [
+                'key' => 'contenedor',
+                'label' => 'Contenedor identificado',
+                'detail' => filled($this->contenedor) ? $this->contenedor : 'Pendiente',
+                'done' => filled($this->contenedor),
+            ],
+            [
+                'key' => 'centro',
+                'label' => 'Centro o bodega definido',
+                'detail' => $this->centroCosto?->nombre ?: ($this->bodega ?: 'Pendiente'),
+                'done' => filled($this->centro_costo_id) || filled($this->bodega),
+            ],
+            [
+                'key' => 'fact',
+                'label' => 'Código FACT informado',
+                'detail' => filled($this->fact_codigo) ? $this->fact_codigo : 'Pendiente',
+                'done' => filled($this->fact_codigo),
+            ],
+            [
+                'key' => 'tarifa',
+                'label' => 'Tarifa FACT confirmada',
+                'detail' => $this->requiere_revision_tarifa
+                    ? 'Revisión pendiente'
+                    : ($this->tarifa_id ? 'Asociada' : 'Pendiente'),
+                'done' => $tarifaConfirmada,
+            ],
+            [
+                'key' => 'pago',
+                'label' => 'Pago colaborador definido',
+                'detail' => $this->pago_colaborador_snapshot !== null && !$this->requiere_revision_tarifa
+                    ? 'Congelado en el registro'
+                    : 'Pendiente',
+                'done' => $this->pago_colaborador_snapshot !== null && !$this->requiere_revision_tarifa,
+                'restricted' => 'costs',
+            ],
+            [
+                'key' => 'equipo',
+                'label' => 'Equipo asignado',
+                'detail' => $participantesCount > 0
+                    ? $participantesCount . ' participante' . ($participantesCount === 1 ? '' : 's')
+                    : 'Pendiente',
+                'done' => $participantesCount > 0,
+            ],
+            [
+                'key' => 'porcentajes',
+                'label' => 'Distribución 100%',
+                'detail' => $participantesCount > 0
+                    ? number_format($porcentajeTotal, 2, ',', '.') . '%'
+                    : 'Pendiente',
+                'done' => $participantesCount > 0 && abs($porcentajeTotal - 100.0) <= 0.01,
+            ],
+        ];
+    }
+
+    public function validationProgressPercent(bool $includeRestricted = true): int
+    {
+        $items = collect($this->validationChecklist())
+            ->filter(fn (array $item) => $includeRestricted || empty($item['restricted']));
+
+        if ($items->isEmpty()) {
+            return 0;
+        }
+
+        return (int) round($items->where('done', true)->count() * 100 / $items->count());
+    }
 }

@@ -1,13 +1,13 @@
 @php
     $puedeGestionarCostos = auth()->user()->puedeGestionarCostosDescargaContenedores();
     $items = [
-        ['route' => 'descarga-contenedores.index', 'match' => 'descarga-contenedores.index', 'label' => 'Registros', 'icon' => 'bi-table'],
-        ['route' => 'descarga-contenedores.carga-rapida', 'match' => 'descarga-contenedores.carga-rapida', 'label' => 'Programación', 'icon' => 'bi-clipboard-plus', 'ability' => 'puede_crear'],
-        ['route' => 'descarga-contenedores.cargas', 'match' => 'descarga-contenedores.cargas', 'label' => 'Cargas', 'icon' => 'bi-clock-history', 'ability' => 'puede_crear'],
-        ['route' => 'descarga-contenedores.dotacion', 'match' => 'descarga-contenedores.dotacion', 'label' => 'Dotación', 'icon' => 'bi-people', 'requires_costs' => true],
-        ['route' => 'descarga-contenedores.liquidacion', 'match' => 'descarga-contenedores.liquidacion', 'label' => 'Liquidación', 'icon' => 'bi-cash-stack', 'requires_costs' => true],
-        ['route' => 'descarga-contenedores.reportes', 'match' => 'descarga-contenedores.reportes', 'label' => 'Reportes', 'icon' => 'bi-bar-chart', 'requires_costs' => true],
-        ['route' => 'descarga-contenedores.tarifas', 'match' => 'descarga-contenedores.tarifas', 'label' => 'Tarifas FACT', 'icon' => 'bi-tags', 'requires_costs' => true],
+        ['route' => 'descarga-contenedores.index', 'match' => 'descarga-contenedores.index', 'label' => 'Registros', 'icon' => 'bi-table', 'help' => 'Listado operativo para revisar, validar y editar descargas.'],
+        ['route' => 'descarga-contenedores.carga-rapida', 'match' => 'descarga-contenedores.carga-rapida', 'label' => 'Programación', 'icon' => 'bi-clipboard-plus', 'ability' => 'puede_crear', 'help' => 'Carga masiva desde tablas copiadas de correo o Excel.'],
+        ['route' => 'descarga-contenedores.cargas', 'match' => 'descarga-contenedores.cargas', 'label' => 'Cargas', 'icon' => 'bi-clock-history', 'ability' => 'puede_crear', 'help' => 'Historial de tandas importadas desde programación.'],
+        ['route' => 'descarga-contenedores.dotacion', 'match' => 'descarga-contenedores.dotacion', 'label' => 'Dotación', 'icon' => 'bi-people', 'requires_costs' => true, 'help' => 'Nómina Talana disponible para asignar a descargas.'],
+        ['route' => 'descarga-contenedores.liquidacion', 'match' => 'descarga-contenedores.liquidacion', 'label' => 'Liquidación', 'icon' => 'bi-cash-stack', 'requires_costs' => true, 'help' => 'Resumen económico por trabajador según registros validados.'],
+        ['route' => 'descarga-contenedores.reportes', 'match' => 'descarga-contenedores.reportes', 'label' => 'Reportes', 'icon' => 'bi-bar-chart', 'requires_costs' => true, 'help' => 'Análisis por operación, centro, FACT y periodo.'],
+        ['route' => 'descarga-contenedores.tarifas', 'match' => 'descarga-contenedores.tarifas', 'label' => 'Tarifas FACT', 'icon' => 'bi-tags', 'requires_costs' => true, 'help' => 'Mantenedor de códigos FACT, costos y pagos de referencia.'],
     ];
 @endphp
 
@@ -15,7 +15,10 @@
     @foreach($items as $item)
         @continue(isset($item['ability']) && !auth()->user()->tieneAcceso('descarga_contenedores', $item['ability']))
         @continue(($item['requires_costs'] ?? false) && !$puedeGestionarCostos)
-        <a href="{{ route($item['route']) }}" class="contenedores-nav-link {{ request()->routeIs($item['match']) ? 'active' : '' }}">
+        <a href="{{ route($item['route']) }}"
+           class="contenedores-nav-link {{ request()->routeIs($item['match']) ? 'active' : '' }}"
+           title="{{ $item['help'] }}"
+           aria-label="{{ $item['label'] }}: {{ $item['help'] }}">
             <i class="bi {{ $item['icon'] }}"></i>
             <span>{{ $item['label'] }}</span>
         </a>

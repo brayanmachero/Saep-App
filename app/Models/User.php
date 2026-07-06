@@ -122,11 +122,9 @@ class User extends Authenticatable
         }
 
         $codigo = strtoupper((string) ($this->rol?->codigo ?? ''));
-        $nombre = strtoupper((string) ($this->rol?->nombre ?? ''));
 
         return $this->esAdminSistema()
-            || str_contains($codigo, 'COORDIN')
-            || str_contains($nombre, 'COORDIN');
+            || $codigo === 'CONTENEDORES_COORDINADOR';
     }
 
     /**

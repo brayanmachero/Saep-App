@@ -46,23 +46,33 @@
 @endif
 
 <div class="form-panel">
+    @include('descarga_contenedores._context_help', [
+        'title' => 'Criterio de llenado',
+        'items' => [
+            'Guarda primero en borrador; coordinación valida cuando el registro queda completo.',
+            'Supervisor sistema se toma desde el usuario conectado para mantener trazabilidad.',
+            'El código FACT puede seleccionarse desde tarifa o escribirse manualmente para revisión.',
+            'Los participantes se guardan con copia histórica de nombre, RUT, cargo y centro Talana.',
+        ],
+    ])
+
     <h4 class="section-title">Datos de la descarga</h4>
     <div class="form-grid">
         <div class="form-group">
-            <label>Estado</label>
+            <label>Estado @include('descarga_contenedores._help_icon', ['text' => 'Todo registro nuevo entra como borrador. Validar corresponde a coordinación.'])</label>
             <input type="text" class="form-control readonly-control" value="{{ $descarga?->estadoBadge['label'] ?? 'Borrador' }}" readonly>
             <small class="muted-hint">Todo registro nuevo queda en borrador. La validación la realiza coordinación desde acciones rápidas.</small>
         </div>
         <div class="form-group">
-            <label>Fecha</label>
+            <label>Fecha @include('descarga_contenedores._help_icon', ['text' => 'Fecha en que se ejecuta o programa la descarga del contenedor.'])</label>
             <input type="date" name="fecha" value="{{ old('fecha', optional($descarga?->fecha)->format('Y-m-d')) }}" class="form-control">
         </div>
         <div class="form-group">
-            <label>Operación</label>
+            <label>Operación @include('descarga_contenedores._help_icon', ['text' => 'Cliente o línea operativa asociada al contenedor. Sirve para reportes.'])</label>
             <input type="text" name="operacion" value="{{ old('operacion', $descarga->operacion ?? 'Walmart') }}" class="form-control" placeholder="Walmart, Maersk, DHL...">
         </div>
         <div class="form-group">
-            <label>Centro de costo</label>
+            <label>Centro de costo @include('descarga_contenedores._help_icon', ['text' => 'Centro gestionado por la operación. También filtra trabajadores disponibles en Talana.'])</label>
             <select name="centro_costo_id" class="form-control">
                 <option value="">Sin asociar</option>
                 @foreach($centros as $centro)
@@ -73,30 +83,30 @@
             </select>
         </div>
         <div class="form-group">
-            <label>Bodega / CD</label>
+            <label>Bodega / CD @include('descarga_contenedores._help_icon', ['text' => 'Nombre operativo de la bodega o centro de distribución informado en la programación.'])</label>
             <input type="text" name="bodega" value="{{ old('bodega', $descarga->bodega ?? '') }}" class="form-control" placeholder="LTS Peñón, Quilicura, Campos de Chile...">
         </div>
         <div class="form-group">
-            <label>Facturación / mes</label>
+            <label>Facturación / mes @include('descarga_contenedores._help_icon', ['text' => 'Periodo interno de facturación o ciclo recibido en la programación.'])</label>
             <input type="text" name="facturacion_mes" value="{{ old('facturacion_mes', $descarga->facturacion_mes ?? '') }}" class="form-control" placeholder="Julio, P072026...">
         </div>
         <div class="form-group">
-            <label>Contenedor</label>
+            <label>Contenedor @include('descarga_contenedores._help_icon', ['text' => 'Identificador o número del contenedor. Se usa para buscar duplicados y trazabilidad.'])</label>
             <input type="text" name="contenedor" value="{{ old('contenedor', $descarga->contenedor ?? '') }}" class="form-control" placeholder="N° contenedor">
         </div>
         <div class="form-group">
-            <label>Equipo descarga</label>
+            <label>Equipo descarga @include('descarga_contenedores._help_icon', ['text' => 'Nombre del equipo, cuadrilla o grupo responsable de ejecutar la descarga.'])</label>
             <input type="text" name="equipo_descarga" value="{{ old('equipo_descarga', $descarga->equipo_descarga ?? '') }}" class="form-control" placeholder="SAEP 1, Equipo 3, Brazo AM...">
         </div>
         <div class="form-group">
-            <label>Supervisor sistema</label>
+            <label>Supervisor sistema @include('descarga_contenedores._help_icon', ['text' => 'Usuario autenticado que crea o edita el registro. No se escribe manualmente.'])</label>
             <input type="text" class="form-control readonly-control" value="{{ $supervisorActualNombre ?: 'Se asignará por login' }}" readonly>
             <small class="muted-hint">
                 {{ $supervisorActualMeta ?: 'Se completa automáticamente con el usuario autenticado.' }}
             </small>
         </div>
         <div class="form-group">
-            <label>Supervisor / encargado texto</label>
+            <label>Supervisor / encargado texto @include('descarga_contenedores._help_icon', ['text' => 'Nombre informado en correo, Excel o reporte cuando no coincide con el usuario conectado.'])</label>
             <input type="text" name="supervisor_nombre" value="{{ old('supervisor_nombre', $descarga->supervisor_nombre ?? '') }}" class="form-control" placeholder="Nombre recibido en correo o reporte">
         </div>
     </div>
@@ -104,35 +114,35 @@
     <h4 class="section-title">Detalle operativo</h4>
     <div class="form-grid">
         <div class="form-group">
-            <label>Hora cita</label>
+            <label>Hora cita @include('descarga_contenedores._help_icon', ['text' => 'Hora programada para recibir o iniciar la operación.'])</label>
             <input type="time" name="hora_cita" value="{{ old('hora_cita', $descarga?->hora_cita ? substr($descarga->hora_cita, 0, 5) : '') }}" class="form-control">
         </div>
         <div class="form-group">
-            <label>Inicio descarga</label>
+            <label>Inicio descarga @include('descarga_contenedores._help_icon', ['text' => 'Hora real de inicio. Permite medir desviaciones contra la cita.'])</label>
             <input type="time" name="hora_inicio_descarga" value="{{ old('hora_inicio_descarga', $descarga?->hora_inicio_descarga ? substr($descarga->hora_inicio_descarga, 0, 5) : '') }}" class="form-control">
         </div>
         <div class="form-group">
-            <label>Término descarga</label>
+            <label>Término descarga @include('descarga_contenedores._help_icon', ['text' => 'Hora real de término de la descarga.'])</label>
             <input type="time" name="hora_termino_descarga" value="{{ old('hora_termino_descarga', $descarga?->hora_termino_descarga ? substr($descarga->hora_termino_descarga, 0, 5) : '') }}" class="form-control">
         </div>
         <div class="form-group">
-            <label>Ítems</label>
+            <label>Ítems @include('descarga_contenedores._help_icon', ['text' => 'Cantidad de líneas, SKU o ítems informados para el contenedor.'])</label>
             <input type="number" name="item" value="{{ old('item', $descarga->item ?? '') }}" class="form-control" min="0">
         </div>
         <div class="form-group">
-            <label>Cajas</label>
+            <label>Cajas @include('descarga_contenedores._help_icon', ['text' => 'Volumen de cajas descargadas. Se usa en reportes operativos.'])</label>
             <input type="number" name="cajas" value="{{ old('cajas', $descarga->cajas ?? '') }}" class="form-control" min="0">
         </div>
         <div class="form-group">
-            <label>Pallets</label>
+            <label>Pallets @include('descarga_contenedores._help_icon', ['text' => 'Cantidad de pallets asociados al contenedor cuando aplica.'])</label>
             <input type="number" name="pallets" value="{{ old('pallets', $descarga->pallets ?? '') }}" class="form-control" min="0" step="0.01">
         </div>
         <div class="form-group">
-            <label>Producto</label>
+            <label>Producto @include('descarga_contenedores._help_icon', ['text' => 'Descripción corta del contenido descargado.'])</label>
             <input type="text" name="producto" value="{{ old('producto', $descarga->producto ?? '') }}" class="form-control" placeholder="Productos varios, pastas, aceites...">
         </div>
         <div class="form-group">
-            <label>Tarifa FACT</label>
+            <label>Tarifa FACT @include('descarga_contenedores._help_icon', ['text' => $puedeGestionarCostos ? 'Código FACT asociado a costo empresa y pago colaborador. Queda congelado en el registro.' : 'Código FACT operativo. Los valores económicos quedan reservados para coordinación.'])</label>
             <input type="hidden" name="tarifa_id" id="tarifa_id" value="{{ $selectedTarifaId }}">
             <input type="hidden" name="fact_codigo" id="fact_codigo" value="{{ $selectedFactCodigo }}">
             <div class="tarifa-picker" id="tarifa_picker">
@@ -156,17 +166,17 @@
             </small>
         </div>
         <div class="form-group">
-            <label>Código FACT seleccionado</label>
+            <label>Código FACT seleccionado @include('descarga_contenedores._help_icon', ['text' => 'Vista de solo lectura del código que se guardará. Si no hay tarifa asociada, queda como pendiente de revisión.'])</label>
             <input type="text" id="fact_codigo_preview" class="form-control readonly-control" value="{{ $selectedFactCodigo }}" placeholder="Se completa desde la tarifa o al escribir un código" readonly>
             <small class="muted-hint">Si escribes un código manual sin elegir tarifa, se guardará como código FACT para revisión.</small>
         </div>
         <div class="form-group" style="grid-column:1/-1">
-            <label>Observación</label>
+            <label>Observación @include('descarga_contenedores._help_icon', ['text' => 'Notas de apoyo: diferencias, apoyo de otro centro, incidencias o instrucciones de coordinación.'])</label>
             <textarea name="observacion" class="form-control" rows="3" placeholder="Notas operativas, apoyo de otro centro, diferencias, etc.">{{ old('observacion', $descarga->observacion ?? '') }}</textarea>
         </div>
     </div>
 
-    <h4 class="section-title">Trabajadores que participaron</h4>
+    <h4 class="section-title">Trabajadores que participaron @include('descarga_contenedores._help_icon', ['text' => 'Selecciona la dotación real que participó. Los porcentajes deben sumar 100% para validar.'])</h4>
     <input type="hidden" name="participantes_json" id="participantes_json" value='@json($selectedParticipantes)'>
     <div id="participantes_picker" class="worker-picker"></div>
     <small class="muted-hint">Fuente: nómina Talana acotada a los centros gestionados en los Excel de descarga. El sistema guardará una copia histórica de nombre, RUT, cargo y centro al momento del registro.</small>
@@ -521,10 +531,11 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
         const rect = input.getBoundingClientRect();
         const gap = 4;
         const viewportPadding = 16;
+        const minDropdownHeight = 120;
         const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
         const spaceAbove = rect.top - viewportPadding;
-        const openUp = spaceBelow < 180 && spaceAbove > spaceBelow;
-        const availableSpace = Math.max(120, openUp ? spaceAbove - gap : spaceBelow - gap);
+        const openUp = spaceBelow < minDropdownHeight && spaceAbove > spaceBelow;
+        const availableSpace = Math.max(minDropdownHeight, openUp ? spaceAbove - gap : spaceBelow - gap);
         const maxHeight = Math.min(320, availableSpace);
 
         dropdown.classList.add('is-floating');

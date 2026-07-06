@@ -22,6 +22,15 @@
 
     @include('partials._alerts')
     @include('descarga_contenedores._nav')
+    @include('descarga_contenedores._context_help', [
+        'title' => 'Uso de programación',
+        'items' => [
+            'Pega la tabla tal como llega por correo o desde Excel; la vista previa permite corregir antes de guardar.',
+            'Cada fila se guarda como borrador para evitar validar información incompleta.',
+            'Participantes base aplica el mismo equipo a todas las filas, útil cuando una cuadrilla descarga varios contenedores.',
+            'Si el FACT viene repetido o no existe, el registro queda marcado para revisión de tarifa.',
+        ],
+    ])
 
     <form method="POST" action="{{ route('descarga-contenedores.store-bulk') }}" id="bulk-form">
         @csrf
@@ -31,11 +40,11 @@
             <div class="quick-grid">
                 <div>
                     <div class="form-group">
-                        <label>Nombre de la carga</label>
+                        <label>Nombre de la carga @include('descarga_contenedores._help_icon', ['text' => 'Nombre interno para rastrear esta tanda en el historial de cargas.'])</label>
                         <input type="text" name="nombre" class="form-control" value="{{ old('nombre') }}" placeholder="Ej: Programación P07 Peñón turno AM">
                     </div>
                     <div class="form-group">
-                        <label>Tabla copiada desde correo o Excel</label>
+                        <label>Tabla copiada desde correo o Excel @include('descarga_contenedores._help_icon', ['text' => 'Puedes pegar columnas separadas por tabulador, punto y coma o coma. Si trae encabezado, se omitirá automáticamente.'])</label>
                         <textarea id="paste_source" name="paste_source" class="form-control paste-area" rows="10" placeholder="Pega aquí columnas tipo: Operación, Bodega, Supervisor, Facturación, Fecha, Contenedor, Equipo, H.Cita...">{{ old('paste_source') }}</textarea>
                     </div>
                     <div style="display:flex;gap:.5rem;flex-wrap:wrap">
@@ -49,11 +58,11 @@
                 </div>
 
                 <div>
-                    <h4 class="section-title">Supervisor sistema</h4>
+                    <h4 class="section-title">Supervisor sistema @include('descarga_contenedores._help_icon', ['text' => 'Se toma desde el login para saber quién creó la carga masiva.'])</h4>
                     <input type="text" class="form-control readonly-control" value="{{ $supervisorActualNombre ?: 'Se asignará por login' }}" readonly>
                     <p class="helper-text" style="margin-top:.5rem">{{ $supervisorActualMeta ?: 'Se completa automáticamente con el usuario autenticado.' }}</p>
 
-                    <h4 class="section-title">Participantes base</h4>
+                    <h4 class="section-title">Participantes base @include('descarga_contenedores._help_icon', ['text' => 'Equipo que se copiará a cada fila de la vista previa. Luego puedes editar fila por fila.'])</h4>
                     <p class="helper-text">Selecciona un equipo base desde la nómina Talana de los centros gestionados en los Excel y aplícalo a todas las filas. La participación se reparte en partes iguales; puedes editar un registro después si requiere porcentajes especiales.</p>
                     <input type="hidden" id="base_participantes_json" value="[]">
                     <div id="base_worker_picker" class="worker-picker compact"></div>
@@ -61,7 +70,7 @@
                         <i class="bi bi-people"></i> Aplicar a todas las filas
                     </button>
 
-                    <h4 class="section-title" style="margin-top:1.5rem">Mapeo esperado</h4>
+                    <h4 class="section-title" style="margin-top:1.5rem">Mapeo esperado @include('descarga_contenedores._help_icon', ['text' => 'Orden de columnas usado para convertir la tabla pegada en registros.'])</h4>
                     <div class="mapping-list">
                         <span>A Operación</span>
                         <span>B Bodega</span>
@@ -80,7 +89,7 @@
         <div class="glass-card" id="preview-card" style="display:none">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
                 <div>
-                    <h3 style="margin:0;font-size:1.1rem">Vista previa editable</h3>
+        <h3 style="margin:0;font-size:1.1rem">Vista previa editable @include('descarga_contenedores._help_icon', ['text' => 'Revisa y corrige datos antes de guardar. Nada se crea hasta presionar Guardar registros.'])</h3>
                     <p class="helper-text" id="preview-count" style="margin:.2rem 0 0"></p>
                 </div>
                 <button type="submit" class="btn-premium">
@@ -254,18 +263,34 @@ function initWorkerPicker(container, hiddenInput, initialIds, onChange) {
         worker.centro || 'Sin centro',
     ])).entries()]
         .sort((a, b) => a[1].localeCompare(b[1], 'es'));
-    const cargoOptions = [...new Map(workers.map(worker => [
-        workerCargoKey(worker),
-        worker.cargo || 'Sin cargo',
-    ])).entries()]
-        .sort((a, b) => a[1].localeCompare(b[1], 'es'));
-
     centerOptions.forEach(([value, label]) => {
         centerFilter.insertAdjacentHTML('beforeend', `<option value="${escapeAttr(value)}">${escapeAttr(label)}</option>`);
     });
-    cargoOptions.forEach(([value, label]) => {
-        cargoFilter.insertAdjacentHTML('beforeend', `<option value="${escapeAttr(value)}">${escapeAttr(label)}</option>`);
-    });
+
+    function cargoOptionsForCenter(centerValue = '') {
+        const source = centerValue
+            ? workers.filter(worker => workerCenterKey(worker) === centerValue)
+            : workers;
+
+        return [...new Map(source.map(worker => [
+            workerCargoKey(worker),
+            worker.cargo || 'Sin cargo',
+        ])).entries()]
+            .sort((a, b) => a[1].localeCompare(b[1], 'es'));
+    }
+
+    function refreshCargoOptions() {
+        const currentCargo = cargoFilter.value;
+        const options = cargoOptionsForCenter(centerFilter.value);
+
+        cargoFilter.innerHTML = '<option value="">Todos los cargos</option>';
+        options.forEach(([value, label]) => {
+            cargoFilter.insertAdjacentHTML('beforeend', `<option value="${escapeAttr(value)}">${escapeAttr(label)}</option>`);
+        });
+        cargoFilter.value = options.some(([value]) => value === currentCargo) ? currentCargo : '';
+    }
+
+    refreshCargoOptions();
 
     (initialIds || []).forEach(id => {
         const worker = byWorkerId.get(String(id));
@@ -357,7 +382,10 @@ function initWorkerPicker(container, hiddenInput, initialIds, onChange) {
     input.addEventListener('focus', () => render(input.value.trim()));
     input.addEventListener('input', () => render(input.value.trim()));
     input.addEventListener('blur', () => setTimeout(() => dropdown.style.display = 'none', 150));
-    centerFilter.addEventListener('change', () => render(input.value.trim()));
+    centerFilter.addEventListener('change', () => {
+        refreshCargoOptions();
+        render(input.value.trim());
+    });
     cargoFilter.addEventListener('change', () => render(input.value.trim()));
     sync();
 
