@@ -34,6 +34,17 @@
                 <input type="text" name="cliente" class="form-control" value="{{ old('cliente', 'WM') }}" required>
             </div>
             <div>
+                <label>Centro de costo</label>
+                <select name="centro_costo_id" class="form-control">
+                    <option value="">General del cliente</option>
+                    @foreach($centros as $centro)
+                        <option value="{{ $centro->id }}" {{ old('centro_costo_id') == $centro->id ? 'selected' : '' }}>
+                            {{ $centro->nombre }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
                 <label>Código FACT</label>
                 <input type="text" name="codigo" class="form-control" value="{{ old('codigo') }}" required>
             </div>
@@ -79,8 +90,19 @@
                     <option value="inactivos" {{ request('estado') === 'inactivos' ? 'selected' : '' }}>Inactivos</option>
                 </select>
             </div>
+            <div>
+                <label style="font-size:.75rem;color:var(--text-muted)">Centro</label>
+                <select name="centro_costo_id" class="form-control">
+                    <option value="">Todos</option>
+                    @foreach($centros as $centro)
+                        <option value="{{ $centro->id }}" {{ request('centro_costo_id') == $centro->id ? 'selected' : '' }}>
+                            {{ $centro->nombre }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
             <button type="submit" class="btn-premium"><i class="bi bi-search"></i> Filtrar</button>
-            @if(request()->hasAny(['buscar','estado']))
+            @if(request()->hasAny(['buscar','estado','centro_costo_id']))
                 <a href="{{ route('descarga-contenedores.tarifas') }}" class="btn-secondary"><i class="bi bi-x-lg"></i> Limpiar</a>
             @endif
         </form>
@@ -92,6 +114,7 @@
                 <thead>
                     <tr>
                         <th>Cliente</th>
+                        <th>Centro</th>
                         <th>Código</th>
                         <th>Proceso</th>
                         <th title="Valor referencial asociado al trabajo del contenedor para la empresa.">Costo unitario</th>
@@ -108,6 +131,16 @@
                             @csrf
                             @method('PUT')
                             <td><input type="text" name="cliente" class="form-control mini-input" value="{{ $tarifa->cliente }}" required></td>
+                            <td>
+                                <select name="centro_costo_id" class="form-control center-input">
+                                    <option value="">General</option>
+                                    @foreach($centros as $centro)
+                                        <option value="{{ $centro->id }}" {{ $tarifa->centro_costo_id == $centro->id ? 'selected' : '' }}>
+                                            {{ $centro->nombre }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </td>
                             <td><input type="text" name="codigo" class="form-control mini-input" value="{{ $tarifa->codigo }}" required></td>
                             <td><input type="text" name="proceso" class="form-control process-input" value="{{ $tarifa->proceso }}" required></td>
                             <td><input type="number" name="costo_unitario" class="form-control mini-input" value="{{ $tarifa->costo_unitario }}" min="0" step="0.01"></td>
@@ -123,7 +156,7 @@
                         </form>
                     </tr>
                     @empty
-                    <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted)">No hay tarifas registradas.</td></tr>
+                    <tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted)">No hay tarifas registradas.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -145,12 +178,13 @@
     padding-bottom: .5rem;
     border-bottom: 1px solid var(--surface-border);
 }
-.tarifa-form-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .75rem; align-items: end; }
+.tarifa-form-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .75rem; align-items: end; }
 .tarifa-form-grid label { font-size: .75rem; color: var(--text-muted); }
 .check-row { display: grid; gap: .35rem; align-self: center; }
 .check-row label, .table-check { font-size: .78rem; color: var(--text-main); display: flex; align-items: center; gap: .35rem; white-space: nowrap; }
-.tarifa-table { min-width: 1180px; }
+.tarifa-table { min-width: 1320px; }
 .mini-input { min-width: 105px; }
+.center-input { min-width: 190px; }
 .process-input { min-width: 220px; }
 .obs-input { min-width: 260px; }
 @media (max-width: 980px) {

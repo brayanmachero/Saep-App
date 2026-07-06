@@ -10,6 +10,7 @@ class DescargaContenedorTarifa extends Model
 
     protected $fillable = [
         'cliente',
+        'centro_costo_id',
         'codigo',
         'proceso',
         'costo_unitario',
@@ -25,4 +26,9 @@ class DescargaContenedorTarifa extends Model
         'requiere_revision' => 'boolean',
         'activo' => 'boolean',
     ];
+
+    public function centroCosto()
+    {
+        return $this->belongsTo(CentroCosto::class, 'centro_costo_id');
+    }
 }

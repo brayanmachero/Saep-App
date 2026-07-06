@@ -176,6 +176,12 @@ Route::middleware('auth')->group(function () {
         Route::get('descarga-contenedores/dotacion', [DescargaContenedorController::class, 'dotacion'])
             ->name('descarga-contenedores.dotacion')
             ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::post('descarga-contenedores/dotacion/trabajadores', [DescargaContenedorController::class, 'storeTrabajadorOperacion'])
+            ->name('descarga-contenedores.dotacion.trabajadores.store')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::patch('descarga-contenedores/dotacion/trabajadores/{trabajador}', [DescargaContenedorController::class, 'updateTrabajadorOperacion'])
+            ->name('descarga-contenedores.dotacion.trabajadores.update')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
         Route::get('descarga-contenedores/liquidacion', [DescargaContenedorController::class, 'liquidacion'])
             ->name('descarga-contenedores.liquidacion')
             ->middleware('modulo:descarga_contenedores,puede_editar');

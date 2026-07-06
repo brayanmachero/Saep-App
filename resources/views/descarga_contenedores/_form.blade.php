@@ -19,13 +19,15 @@
     $selectedTarifa = $tarifas->first(fn ($t) => (string) $t->id === (string) $selectedTarifaId);
     $selectedFactCodigo = old('fact_codigo', $descarga->fact_codigo ?? ($selectedTarifa?->codigo ?? ''));
     $selectedTarifaSearch = $selectedTarifa
-        ? trim($selectedTarifa->codigo . ' · ' . $selectedTarifa->cliente . ' · ' . $selectedTarifa->proceso)
+        ? trim($selectedTarifa->codigo . ' · ' . $selectedTarifa->cliente . ' · ' . ($selectedTarifa->centroCosto?->nombre ?: 'General') . ' · ' . $selectedTarifa->proceso)
         : $selectedFactCodigo;
     $puedeGestionarCostos = auth()->user()->puedeGestionarCostosDescargaContenedores();
     $tarifasPickerData = $tarifas->map(function ($t) use ($puedeGestionarCostos) {
         $data = [
             'id' => $t->id,
             'cliente' => $t->cliente,
+            'centro_costo_id' => $t->centro_costo_id,
+            'centro' => $t->centroCosto?->nombre,
             'codigo' => $t->codigo,
             'proceso' => $t->proceso,
             'requiere_revision' => $t->requiere_revision,
@@ -147,13 +149,13 @@
             <input type="hidden" name="fact_codigo" id="fact_codigo" value="{{ $selectedFactCodigo }}">
             <div class="tarifa-picker" id="tarifa_picker">
                 <div class="tarifa-search-wrap">
-                    <input type="text" class="form-control tarifa-search" autocomplete="off" value="{{ $selectedTarifaSearch }}" placeholder="Buscar código FACT, cliente o proceso...">
+                    <input type="text" class="form-control tarifa-search" autocomplete="off" value="{{ $selectedTarifaSearch }}" placeholder="Buscar código FACT, cliente, centro o proceso...">
                     <div class="tarifa-dropdown"></div>
                 </div>
                 <div class="tarifa-selected {{ $selectedTarifa ? '' : 'is-empty' }}" data-tarifa-selected>
                     <span data-tarifa-selected-text>
                         @if($selectedTarifa)
-                            <strong>{{ $selectedTarifa->codigo }}</strong> · {{ $selectedTarifa->cliente }} · {{ $selectedTarifa->proceso }}
+                            <strong>{{ $selectedTarifa->codigo }}</strong> · {{ $selectedTarifa->cliente }} · {{ $selectedTarifa->centroCosto?->nombre ?: 'General' }} · {{ $selectedTarifa->proceso }}
                         @else
                             Sin tarifa asociada
                         @endif
@@ -162,7 +164,7 @@
                 </div>
             </div>
             <small class="muted-hint">
-                {{ $puedeGestionarCostos ? 'Busca por código, cliente o proceso. La tarifa elegida queda congelada en el registro para mantener historial.' : 'Busca por código, cliente o proceso. Los valores económicos quedan reservados para coordinación.' }}
+                {{ $puedeGestionarCostos ? 'Busca por código, cliente, centro o proceso. Si eliges centro de costo, se priorizan tarifas del centro y tarifas generales del cliente.' : 'Busca por código, cliente, centro o proceso. Los valores económicos quedan reservados para coordinación.' }}
             </small>
         </div>
         <div class="form-group">
@@ -214,6 +216,10 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
             .trim();
     }
 
+    function normalizeRut(value) {
+        return String(value || '').toUpperCase().replace(/[^0-9K]/g, '');
+    }
+
     function workerCenterKey(worker) {
         return worker.centro_costo_id
             ? `id:${worker.centro_costo_id}`
@@ -227,7 +233,7 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
     }
 
     function tarifaLabel(tarifa) {
-        return `${tarifa.codigo || ''} · ${tarifa.cliente || ''} · ${tarifa.proceso || ''}`;
+        return `${tarifa.codigo || ''} · ${tarifa.cliente || ''} · ${tarifa.centro || 'General'} · ${tarifa.proceso || ''}`;
     }
 
     function setFactCodigo(value) {
@@ -245,6 +251,12 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
         const selectedBox = picker.querySelector('[data-tarifa-selected]');
         const selectedText = picker.querySelector('[data-tarifa-selected-text]');
         const clearBtn = picker.querySelector('[data-clear-tarifa]');
+        const recordCenterSelect = document.querySelector('[name="centro_costo_id"]');
+
+        function tarifaMatchesRecordCenter(tarifa) {
+            const centerId = recordCenterSelect?.value || '';
+            return !centerId || !tarifa.centro_costo_id || String(tarifa.centro_costo_id) === String(centerId);
+        }
 
         function updateSelected(tarifa = null, manualCode = '') {
             const hasValue = !!tarifa || !!manualCode;
@@ -254,7 +266,7 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
 
             if (tarifa) {
                 const badge = tarifa.requiere_revision ? '<span class="badge warning">Revisar</span>' : '';
-                selectedText.innerHTML = `<strong>${escapeHtml(tarifa.codigo)}</strong> · ${escapeHtml(tarifa.cliente)} · ${escapeHtml(tarifa.proceso)} ${badge}`;
+                selectedText.innerHTML = `<strong>${escapeHtml(tarifa.codigo)}</strong> · ${escapeHtml(tarifa.cliente)} · ${escapeHtml(tarifa.centro || 'General')} · ${escapeHtml(tarifa.proceso)} ${badge}`;
                 return;
             }
 
@@ -267,17 +279,18 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
                 const searchable = [
                     t.codigo,
                     t.cliente,
+                    t.centro,
                     t.proceso,
                 ].join(' ').toLowerCase();
 
-                return !q || searchable.includes(q);
+                return tarifaMatchesRecordCenter(t) && (!q || searchable.includes(q));
             }).slice(0, 80);
 
             dropdown.innerHTML = matches.length
                 ? matches.map(t => `
                     <div class="tarifa-option" data-id="${escapeHtml(t.id)}" role="button" tabindex="0">
                         <strong>${escapeHtml(t.codigo)}</strong>
-                        <span>${escapeHtml(t.cliente)} · ${escapeHtml(t.proceso)}</span>
+                        <span>${escapeHtml(t.cliente)} · ${escapeHtml(t.centro || 'General')} · ${escapeHtml(t.proceso)}</span>
                         ${t.requiere_revision ? '<em>Revisar</em>' : ''}
                     </div>
                 `).join('')
@@ -326,6 +339,11 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
             dropdown.style.display = 'none';
             tarifaSelect.dispatchEvent(new Event('change', { bubbles: true }));
         });
+        recordCenterSelect?.addEventListener('change', () => {
+            if (search === document.activeElement) {
+                renderTarifas(search.value);
+            }
+        });
 
         const initialTarifa = byTarifaId.get(String(tarifaSelect.value || ''));
         if (initialTarifa) {
@@ -346,6 +364,7 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
             <span>Pago estimado: <strong data-pago>$0</strong></span>
             @endif
             <button type="button" class="btn-secondary btn-mini" data-equalize>Repartir igual</button>
+            <button type="button" class="btn-secondary btn-mini" data-add-filtered>Agregar filtrados</button>
         </div>
         <div class="worker-filter-row">
             <select class="form-control worker-center-filter" aria-label="Filtrar trabajadores por centro">
@@ -372,6 +391,7 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
     const totalEl = container.querySelector('[data-total]');
     const pagoEl = container.querySelector('[data-pago]');
     const equalizeBtn = container.querySelector('[data-equalize]');
+    const addFilteredBtn = container.querySelector('[data-add-filtered]');
 
     const centerOptions = [...new Map(workers.map(worker => [
         workerCenterKey(worker),
@@ -568,21 +588,29 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
         dropdown.style.bottom = '';
     }
 
-    function render(query = '') {
-        const q = query.toLowerCase();
+    function availableWorkers(query = '') {
+        const q = normalizeText(query);
+        const rutQuery = normalizeRut(query);
         const centerValue = centerFilter.value;
         const cargoValue = cargoFilter.value;
-        const available = workers.filter(w => {
+
+        return workers.filter(w => {
             if (selected.has(String(w.id))) return false;
             if (centerValue && workerCenterKey(w) !== centerValue) return false;
             if (cargoValue && workerCargoKey(w) !== cargoValue) return false;
 
             return !q
-                || (w.label || '').toLowerCase().includes(q)
-                || (w.rut || '').toLowerCase().includes(q)
-                || (w.cargo || '').toLowerCase().includes(q)
-                || (w.centro || '').toLowerCase().includes(q);
+                || normalizeText(w.label).includes(q)
+                || normalizeText(w.rut).includes(q)
+                || normalizeRut(w.rut).includes(rutQuery)
+                || normalizeText(w.cargo).includes(q)
+                || normalizeText(w.centro).includes(q)
+                || normalizeText(w.centro_talana).includes(q);
         });
+    }
+
+    function render(query = '') {
+        const available = availableWorkers(query);
         const matches = available
             .sort((a, b) => `${a.centro || ''} ${a.cargo || ''} ${a.label || ''}`.localeCompare(`${b.centro || ''} ${b.cargo || ''} ${b.label || ''}`, 'es'))
             .slice(0, 70);
@@ -648,6 +676,22 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
     });
     equalizeBtn.addEventListener('click', () => {
         equalize();
+        sync();
+    });
+    addFilteredBtn.addEventListener('click', () => {
+        const ids = availableWorkers(input.value.trim()).map(worker => worker.id);
+        if (!ids.length) {
+            if (window.showToast) window.showToast('No hay trabajadores disponibles para agregar con ese filtro.', 'warning');
+            return;
+        }
+
+        ids.forEach(id => {
+            const worker = byId.get(String(id));
+            if (worker) selected.set(String(id), { worker, porcentaje: null });
+        });
+        equalize();
+        input.value = '';
+        hideWorkerDropdown();
         sync();
     });
     tarifaSelect?.addEventListener('change', () => sync());

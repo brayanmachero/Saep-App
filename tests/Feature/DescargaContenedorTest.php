@@ -259,6 +259,97 @@ class DescargaContenedorTest extends TestCase
         $this->assertSame('DUPLICADO B', $descargaSeleccionada->tarifa_proceso_snapshot);
     }
 
+    public function test_fact_code_is_resolved_by_selected_center_before_other_tariffs(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centroA = $this->createCentroCosto('LTS PEÑON FACT QA');
+        $centroB = $this->createCentroCosto('LTS QUILICURA FACT QA');
+        $tarifaA = $this->createTarifa('CNTCENTRO', 75000, 36000, 'TARIFA PEÑON', false, $centroA);
+        $tarifaB = $this->createTarifa('CNTCENTRO', 90000, 42000, 'TARIFA QUILICURA', false, $centroB);
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centroB->id,
+                'bodega' => 'LTS QUILICURA',
+                'fecha' => '2026-07-04',
+                'contenedor' => 'CONT-CENTRO-QA',
+                'fact_codigo' => 'CNTCENTRO',
+                'participantes_json' => json_encode([]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-CENTRO-QA')->firstOrFail();
+
+        $this->assertSame($tarifaB->id, $descarga->tarifa_id);
+        $this->assertSame('TARIFA QUILICURA', $descarga->tarifa_proceso_snapshot);
+        $this->assertNotSame($tarifaA->id, $descarga->tarifa_id);
+    }
+
+    public function test_dotacion_search_accepts_rut_without_dots_and_operational_center_override(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centroTalana = $this->createCentroCosto('LTS CAMPOS DE CHILE DOT QA');
+        $centroOperativo = $this->createCentroCosto('LTS QUILICURA DOT QA');
+        $trabajador = $this->createTalanaWorker('Rut Operativo QA', $centroTalana, [
+            'rut' => '18.202.202-K',
+        ]);
+
+        $this->actingAs($user)
+            ->patch(route('descarga-contenedores.dotacion.trabajadores.update', $trabajador), [
+                'centro_operativo_id' => $centroOperativo->id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $trabajador->refresh();
+        $this->assertSame($centroOperativo->id, $trabajador->centro_operativo_id);
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.dotacion', [
+                'buscar' => '18202202-K',
+                'centro_costo_id' => $centroOperativo->id,
+            ]))
+            ->assertOk()
+            ->assertSee('Rut Operativo QA')
+            ->assertSee('18202202-K')
+            ->assertSee('LTS QUILICURA DOT QA');
+    }
+
+    public function test_manual_store_uses_operational_center_in_participant_snapshot(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centroTalana = $this->createCentroCosto('LTS CAMPOS DE CHILE SNAP QA');
+        $centroOperativo = $this->createCentroCosto('LTS QUILICURA SNAP QA');
+        $tarifa = $this->createTarifa('CNTSNAPCENTRO', 75000, 36000);
+        $trabajador = $this->createTalanaWorker('Centro Operativo QA', $centroTalana, [
+            'centro_operativo_id' => $centroOperativo->id,
+            'centro_operativo_nombre' => $centroOperativo->nombre,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centroOperativo->id,
+                'bodega' => 'LTS QUILICURA',
+                'fecha' => '2026-07-05',
+                'contenedor' => 'CONT-SNAP-CENTRO-QA',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([
+                    ['id' => $trabajador->id, 'porcentaje' => 100],
+                ]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-SNAP-CENTRO-QA')->firstOrFail();
+        $participante = $descarga->participantes()->firstOrFail();
+
+        $this->assertSame($centroOperativo->id, $participante->centro_costo_id_snapshot);
+        $this->assertSame($centroOperativo->nombre, $participante->centro_costo_snapshot);
+    }
+
     public function test_create_form_lists_talana_workers_not_plain_users(): void
     {
         $user = $this->createSuperAdminUser();
@@ -310,7 +401,9 @@ class DescargaContenedorTest extends TestCase
         $centroFuera = $this->createCentroCosto('CD Administrativo Fuera QA');
 
         $workerGestionado = $this->createTalanaWorker('Trabajador Centro Excel QA', $centroGestionado);
-        $workerFuera = $this->createTalanaWorker('Trabajador Centro Fuera QA', $centroFuera);
+        $workerFuera = $this->createTalanaWorker('Trabajador Centro Fuera QA', $centroFuera, [
+            'centro_costo_nombre' => $centroFuera->nombre,
+        ]);
 
         $this->actingAs($user)
             ->get(route('descarga-contenedores.create'))
@@ -1170,10 +1263,12 @@ class DescargaContenedorTest extends TestCase
         float $costo,
         float $pago,
         string $proceso = 'CONTENEDOR QA',
-        bool $requiereRevision = false
+        bool $requiereRevision = false,
+        ?CentroCosto $centro = null
     ): DescargaContenedorTarifa {
         return DescargaContenedorTarifa::create([
             'cliente' => 'WM',
+            'centro_costo_id' => $centro?->id,
             'codigo' => $codigo,
             'proceso' => $proceso,
             'costo_unitario' => $costo,
@@ -1183,22 +1278,34 @@ class DescargaContenedorTest extends TestCase
         ]);
     }
 
-    private function createTalanaWorker(string $nombre, CentroCosto $centro): TalanaTrabajador
+    private function createTalanaWorker(string $nombre, CentroCosto $centro, array $overrides = []): TalanaTrabajador
     {
         $suffix = strtoupper(substr(md5($nombre . uniqid()), 0, 6));
+        $centroNombreTalana = $this->managedCenterNameForTest($centro->nombre);
 
-        return TalanaTrabajador::create([
+        return TalanaTrabajador::create(array_merge([
             'talana_id' => 'TAL-' . $suffix,
             'rut' => random_int(10000000, 25000000) . 'K',
             'nombre' => $nombre,
             'apellido_paterno' => 'QA',
             'email' => strtolower(str_replace(' ', '.', $nombre)) . '.' . strtolower($suffix) . '@talana.test',
             'centro_costo_id' => $centro->id,
-            'centro_costo_nombre' => $centro->nombre,
+            'centro_costo_nombre' => $centroNombreTalana,
             'cargo_nombre' => 'Descargador',
             'activo' => true,
             'origen' => 'talana_csv',
             'raw_payload' => ['test' => true],
-        ]);
+        ], $overrides));
+    }
+
+    private function managedCenterNameForTest(string $nombre): string
+    {
+        foreach (['LTS ', 'MAERSK ', 'DHL ', 'ECOMMERCE', 'TRANSPORTE', 'BRAZO'] as $keyword) {
+            if (str_contains(mb_strtoupper($nombre), $keyword)) {
+                return $nombre;
+            }
+        }
+
+        return 'LTS QUILICURA ' . $nombre;
     }
 }

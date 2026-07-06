@@ -21,7 +21,8 @@ class DescargaContenedorController extends Controller
 
         if ($request->filled('buscar')) {
             $term = trim($request->input('buscar'));
-            $query->where(function ($q) use ($term) {
+            $rutTerm = $this->normalizeRutSearch($term);
+            $query->where(function ($q) use ($term, $rutTerm) {
                 $q->where('contenedor', 'like', "%{$term}%")
                     ->orWhere('bodega', 'like', "%{$term}%")
                     ->orWhere('equipo_descarga', 'like', "%{$term}%")
@@ -34,6 +35,12 @@ class DescargaContenedorController extends Controller
                         $p->where('nombre_snapshot', 'like', "%{$term}%")
                             ->orWhere('rut_snapshot', 'like', "%{$term}%");
                     });
+
+                if ($rutTerm) {
+                    $q->orWhereHas('participantes', function ($p) use ($rutTerm) {
+                        $p->whereRaw("UPPER(REPLACE(REPLACE(REPLACE(rut_snapshot, '.', ''), '-', ''), ' ', '')) LIKE ?", ["%{$rutTerm}%"]);
+                    });
+                }
             });
         }
 
@@ -128,21 +135,24 @@ class DescargaContenedorController extends Controller
     {
         $descarga = $descarga->load([
             'centroCosto',
-            'tarifa',
+            'tarifa.centroCosto',
             'supervisor',
             'creadoPor',
             'validadoPor',
             'liquidadoPor',
             'participantes.talanaTrabajador.centroCosto',
+            'participantes.talanaTrabajador.centroOperativo',
             'participantes.talanaTrabajador.cargo',
             'participantes.user.centroCosto',
             'participantes.user.cargo',
         ]);
 
         $tarifas = $this->puedeGestionarCostos()
-            ? DescargaContenedorTarifa::where('activo', true)
+            ? DescargaContenedorTarifa::with('centroCosto')
+                ->where('activo', true)
                 ->where('codigo', $descarga->fact_codigo)
                 ->orderBy('cliente')
+                ->orderBy('centro_costo_id')
                 ->get()
             : collect();
 
@@ -387,23 +397,32 @@ class DescargaContenedorController extends Controller
     {
         $this->authorizeCostManagement();
 
-        $query = TalanaTrabajador::with(['cargo', 'centroCosto']);
+        $query = TalanaTrabajador::with(['cargo', 'centroCosto', 'centroOperativo']);
         $this->applyTrabajadoresDotacionFilter($query);
 
         if ($request->filled('buscar')) {
             $term = trim($request->input('buscar'));
-            $query->where(function ($q) use ($term) {
+            $rutTerm = $this->normalizeRutSearch($term);
+            $query->where(function ($q) use ($term, $rutTerm) {
                 $q->where('nombre', 'like', "%{$term}%")
                     ->orWhere('apellido_paterno', 'like', "%{$term}%")
                     ->orWhere('apellido_materno', 'like', "%{$term}%")
                     ->orWhere('rut', 'like', "%{$term}%")
                     ->orWhere('cargo_nombre', 'like', "%{$term}%")
-                    ->orWhere('centro_costo_nombre', 'like', "%{$term}%");
+                    ->orWhere('centro_costo_nombre', 'like', "%{$term}%")
+                    ->orWhere('centro_operativo_nombre', 'like', "%{$term}%")
+                    ->orWhereHas('centroOperativo', function ($centro) use ($term) {
+                        $centro->where('nombre', 'like', "%{$term}%");
+                    });
+
+                if ($rutTerm) {
+                    $q->orWhereRaw("UPPER(REPLACE(REPLACE(REPLACE(rut, '.', ''), '-', ''), ' ', '')) LIKE ?", ["%{$rutTerm}%"]);
+                }
             });
         }
 
         if ($request->filled('centro_costo_id')) {
-            $query->where('centro_costo_id', $request->input('centro_costo_id'));
+            $this->applyTrabajadorCentroFilter($query, (int) $request->input('centro_costo_id'));
         }
 
         if ($request->filled('cargo')) {
@@ -451,7 +470,7 @@ class DescargaContenedorController extends Controller
             ->select('cargo_nombre');
         $this->applyTrabajadoresDotacionFilter($cargosQuery);
         if ($request->filled('centro_costo_id')) {
-            $cargosQuery->where('centro_costo_id', $request->input('centro_costo_id'));
+            $this->applyTrabajadorCentroFilter($cargosQuery, (int) $request->input('centro_costo_id'));
         }
         $cargos = $cargosQuery->distinct()
             ->orderBy('cargo_nombre')
@@ -473,6 +492,74 @@ class DescargaContenedorController extends Controller
         ];
 
         return view('descarga_contenedores.dotacion', compact('trabajadores', 'participacion', 'centros', 'cargos', 'stats'));
+    }
+
+    public function storeTrabajadorOperacion(Request $request)
+    {
+        $this->authorizeCostManagement();
+
+        $data = $request->validate([
+            'nombre' => ['required', 'string', 'max:200'],
+            'apellido_paterno' => ['nullable', 'string', 'max:120'],
+            'apellido_materno' => ['nullable', 'string', 'max:120'],
+            'rut' => ['nullable', 'string', 'max:30'],
+            'cargo_nombre' => ['required', 'string', 'max:200'],
+            'centro_costo_id' => ['nullable', 'exists:centros_costo,id'],
+            'centro_operativo_id' => ['required', 'exists:centros_costo,id'],
+        ]);
+
+        $rut = $this->normalizeRutSearch($data['rut'] ?? null);
+        if ($rut && TalanaTrabajador::where('rut', $rut)->exists()) {
+            return back()
+                ->withInput()
+                ->with('error', 'Ya existe un trabajador con ese RUT en la dotación.');
+        }
+
+        $centroTalana = !empty($data['centro_costo_id'])
+            ? CentroCosto::find($data['centro_costo_id'])
+            : null;
+        $centroOperativo = CentroCosto::findOrFail($data['centro_operativo_id']);
+
+        TalanaTrabajador::create([
+            'talana_id' => null,
+            'rut' => $rut,
+            'nombre' => $this->cleanText($data['nombre']),
+            'apellido_paterno' => $this->cleanText($data['apellido_paterno'] ?? null),
+            'apellido_materno' => $this->cleanText($data['apellido_materno'] ?? null),
+            'cargo_nombre' => $this->cleanText($data['cargo_nombre']),
+            'centro_costo_id' => $centroTalana?->id,
+            'centro_costo_nombre' => $centroTalana?->nombre,
+            'centro_operativo_id' => $centroOperativo->id,
+            'centro_operativo_nombre' => $centroOperativo->nombre,
+            'activo' => true,
+            'origen' => 'manual_contenedores',
+            'raw_payload' => [
+                'source' => 'descarga_contenedores_dotacion',
+                'created_by' => auth()->id(),
+            ],
+        ]);
+
+        return back()->with('success', 'Trabajador agregado a la dotación de Contenedores.');
+    }
+
+    public function updateTrabajadorOperacion(Request $request, TalanaTrabajador $trabajador)
+    {
+        $this->authorizeCostManagement();
+
+        $data = $request->validate([
+            'centro_operativo_id' => ['nullable', 'exists:centros_costo,id'],
+        ]);
+
+        $centroOperativo = !empty($data['centro_operativo_id'])
+            ? CentroCosto::find($data['centro_operativo_id'])
+            : null;
+
+        $trabajador->update([
+            'centro_operativo_id' => $centroOperativo?->id,
+            'centro_operativo_nombre' => $centroOperativo?->nombre,
+        ]);
+
+        return back()->with('success', 'Centro operativo actualizado.');
     }
 
     public function liquidacion(Request $request)
@@ -622,15 +709,22 @@ class DescargaContenedorController extends Controller
     {
         $this->authorizeCostManagement();
 
-        $query = DescargaContenedorTarifa::query();
+        $query = DescargaContenedorTarifa::with('centroCosto');
 
         if ($request->filled('buscar')) {
             $term = trim($request->input('buscar'));
             $query->where(function ($q) use ($term) {
                 $q->where('cliente', 'like', "%{$term}%")
                     ->orWhere('codigo', 'like', "%{$term}%")
-                    ->orWhere('proceso', 'like', "%{$term}%");
+                    ->orWhere('proceso', 'like', "%{$term}%")
+                    ->orWhereHas('centroCosto', function ($centro) use ($term) {
+                        $centro->where('nombre', 'like', "%{$term}%");
+                    });
             });
+        }
+
+        if ($request->filled('centro_costo_id')) {
+            $query->where('centro_costo_id', $request->input('centro_costo_id'));
         }
 
         if ($request->input('estado') === 'activos') {
@@ -640,12 +734,15 @@ class DescargaContenedorController extends Controller
         }
 
         $tarifas = $query->orderBy('cliente')
+            ->orderBy('centro_costo_id')
             ->orderBy('codigo')
             ->orderBy('proceso')
             ->paginate(30)
             ->withQueryString();
 
-        return view('descarga_contenedores.tarifas', compact('tarifas'));
+        $centros = $this->centrosOperacion();
+
+        return view('descarga_contenedores.tarifas', compact('tarifas', 'centros'));
     }
 
     public function storeTarifa(Request $request)
@@ -680,12 +777,17 @@ class DescargaContenedorController extends Controller
 
         if ($request->filled('buscar')) {
             $term = trim($request->input('buscar'));
-            $query->where(function ($q) use ($term) {
+            $rutTerm = $this->normalizeRutSearch($term);
+            $query->where(function ($q) use ($term, $rutTerm) {
                 $q->where('p.nombre_snapshot', 'like', "%{$term}%")
                     ->orWhere('p.rut_snapshot', 'like', "%{$term}%")
                     ->orWhere('p.cargo_snapshot', 'like', "%{$term}%")
                     ->orWhere('d.contenedor', 'like', "%{$term}%")
                     ->orWhere('d.fact_codigo', 'like', "%{$term}%");
+
+                if ($rutTerm) {
+                    $q->orWhereRaw("UPPER(REPLACE(REPLACE(REPLACE(p.rut_snapshot, '.', ''), '-', ''), ' ', '')) LIKE ?", ["%{$rutTerm}%"]);
+                }
             });
         }
 
@@ -891,6 +993,9 @@ class DescargaContenedorController extends Controller
         $hasDotacionByName = TalanaTrabajador::query()
             ->where(function ($q) {
                 $this->applyKeywordFilter($q, 'centro_costo_nombre', $this->descargaDotacionCenterKeywords());
+                $q->orWhere(function ($operativo) {
+                    $this->applyKeywordFilter($operativo, 'centro_operativo_nombre', $this->descargaDotacionCenterKeywords());
+                });
             })
             ->exists();
 
@@ -900,11 +1005,14 @@ class DescargaContenedorController extends Controller
 
         $query->where(function ($q) use ($centros) {
             if ($centros->isNotEmpty()) {
-                $q->whereIn('centro_costo_id', $centros->pluck('id'));
+                $q->whereIn('centro_costo_id', $centros->pluck('id'))
+                    ->orWhereIn('centro_operativo_id', $centros->pluck('id'));
             }
 
             $q->orWhere(function ($nameQuery) {
                 $this->applyKeywordFilter($nameQuery, 'centro_costo_nombre', $this->descargaDotacionCenterKeywords());
+            })->orWhere(function ($nameQuery) {
+                $this->applyKeywordFilter($nameQuery, 'centro_operativo_nombre', $this->descargaDotacionCenterKeywords());
             });
         })->where(function ($cargoQuery) {
             $this->applyKeywordFilter($cargoQuery, 'cargo_nombre', $this->descargaDotacionCargoKeywords());
@@ -913,6 +1021,29 @@ class DescargaContenedorController extends Controller
                 $this->applyKeywordFilter($cargo, 'nombre', $this->descargaDotacionCargoKeywords());
             });
         });
+    }
+
+    private function applyTrabajadorCentroFilter($query, int $centroId): void
+    {
+        $query->where(function ($q) use ($centroId) {
+            $q->where('centro_operativo_id', $centroId)
+                ->orWhere(function ($talana) use ($centroId) {
+                    $talana->whereNull('centro_operativo_id')
+                        ->where('centro_costo_id', $centroId);
+                });
+        });
+    }
+
+    private function normalizeRutSearch($value): ?string
+    {
+        $value = $this->cleanText($value);
+        if (!$value) {
+            return null;
+        }
+
+        $clean = strtoupper(preg_replace('/[^0-9kK]/', '', $value));
+
+        return strlen($clean) >= 2 ? $clean : null;
     }
 
     private function applyKeywordFilter($query, string $column, array $keywords): void
@@ -945,6 +1076,7 @@ class DescargaContenedorController extends Controller
             'DESCARGA',
             'ESTIBA',
             'DESCARGADOR',
+            'OPERARIO',
             'ENCARGADO DE TURNO',
             'SUPERVISOR DE OPERACIONES',
         ];
@@ -965,7 +1097,12 @@ class DescargaContenedorController extends Controller
     {
         return [
             'centros' => $this->centrosOperacion(),
-            'tarifas' => DescargaContenedorTarifa::where('activo', true)->orderBy('cliente')->orderBy('codigo')->get(),
+            'tarifas' => DescargaContenedorTarifa::with('centroCosto')
+                ->where('activo', true)
+                ->orderBy('cliente')
+                ->orderBy('centro_costo_id')
+                ->orderBy('codigo')
+                ->get(),
             'trabajadores' => $this->trabajadoresSelector(),
             'supervisorSistema' => auth()->user()?->loadMissing(['cargo', 'centroCosto']),
         ];
@@ -973,7 +1110,7 @@ class DescargaContenedorController extends Controller
 
     private function trabajadoresSelector()
     {
-        $query = TalanaTrabajador::with(['cargo', 'centroCosto'])
+        $query = TalanaTrabajador::with(['cargo', 'centroCosto', 'centroOperativo'])
             ->where('activo', true);
         $this->applyTrabajadoresDotacionFilter($query);
 
@@ -986,8 +1123,12 @@ class DescargaContenedorController extends Controller
                 'rut' => $trabajador->rut,
                 'cargo_id' => $trabajador->cargo_id,
                 'cargo' => $trabajador->cargo?->nombre ?: $trabajador->cargo_nombre,
-                'centro' => $trabajador->centroCosto?->nombre ?: $trabajador->centro_costo_nombre,
-                'centro_costo_id' => $trabajador->centro_costo_id,
+                'centro' => $trabajador->centroDescargaNombre(),
+                'centro_costo_id' => $trabajador->centroDescargaId(),
+                'centro_talana' => $trabajador->centroCosto?->nombre ?: $trabajador->centro_costo_nombre,
+                'centro_talana_id' => $trabajador->centro_costo_id,
+                'centro_operativo' => $trabajador->centroOperativo?->nombre ?: $trabajador->centro_operativo_nombre,
+                'centro_operativo_id' => $trabajador->centro_operativo_id,
                 'origen' => $trabajador->origen,
             ])
             ->values();
@@ -1029,6 +1170,7 @@ class DescargaContenedorController extends Controller
     {
         $data = $request->validate([
             'cliente' => ['required', 'string', 'max:80'],
+            'centro_costo_id' => ['nullable', 'exists:centros_costo,id'],
             'codigo' => ['required', 'string', 'max:40'],
             'proceso' => ['required', 'string', 'max:180'],
             'costo_unitario' => ['nullable', 'numeric', 'min:0'],
@@ -1039,6 +1181,7 @@ class DescargaContenedorController extends Controller
         ]);
 
         $data['cliente'] = mb_strtoupper(trim($data['cliente']));
+        $data['centro_costo_id'] = $this->nullableInt($data['centro_costo_id'] ?? null);
         $data['codigo'] = $this->cleanUpper($data['codigo']);
         $data['proceso'] = trim($data['proceso']);
         $data['requiere_revision'] = (bool) ($data['requiere_revision'] ?? false);
@@ -1059,12 +1202,31 @@ class DescargaContenedorController extends Controller
             $tarifasCoincidentes = DescargaContenedorTarifa::where('activo', true)
                 ->where('codigo', $data['fact_codigo'])
                 ->orderBy('cliente')
+                ->orderBy('centro_costo_id')
                 ->orderBy('id')
-                ->limit(2)
                 ->get();
 
-            if ($tarifasCoincidentes->count() === 1) {
-                $tarifa = $tarifasCoincidentes->first();
+            $centroId = $this->nullableInt($data['centro_costo_id'] ?? null);
+            if ($centroId) {
+                $tarifasDelCentro = $tarifasCoincidentes
+                    ->where('centro_costo_id', $centroId)
+                    ->values();
+
+                if ($tarifasDelCentro->count() === 1) {
+                    $tarifa = $tarifasDelCentro->first();
+                }
+            }
+
+            if (!$tarifa) {
+                $tarifasGenerales = $tarifasCoincidentes
+                    ->whereNull('centro_costo_id')
+                    ->values();
+
+                if ($tarifasGenerales->count() === 1) {
+                    $tarifa = $tarifasGenerales->first();
+                } elseif ($tarifasCoincidentes->count() === 1) {
+                    $tarifa = $tarifasCoincidentes->first();
+                }
             }
         }
 
@@ -1123,7 +1285,7 @@ class DescargaContenedorController extends Controller
             return;
         }
 
-        $trabajadoresQuery = TalanaTrabajador::with(['cargo', 'centroCosto'])
+        $trabajadoresQuery = TalanaTrabajador::with(['cargo', 'centroCosto', 'centroOperativo'])
             ->whereIn('id', $trabajadorIds);
         $this->applyTrabajadoresDotacionFilter($trabajadoresQuery);
         $trabajadores = $trabajadoresQuery->get()->keyBy('id');
@@ -1148,8 +1310,8 @@ class DescargaContenedorController extends Controller
                 'nombre_snapshot' => $trabajador->nombre_completo ?: $trabajador->nombre,
                 'rut_snapshot' => $trabajador->rut,
                 'cargo_snapshot' => $trabajador->cargo?->nombre ?: $trabajador->cargo_nombre,
-                'centro_costo_id_snapshot' => $trabajador->centro_costo_id,
-                'centro_costo_snapshot' => $trabajador->centroCosto?->nombre ?: $trabajador->centro_costo_nombre,
+                'centro_costo_id_snapshot' => $trabajador->centroDescargaId(),
+                'centro_costo_snapshot' => $trabajador->centroDescargaNombre(),
                 'rol_en_descarga' => 'descargador',
                 'porcentaje_participacion' => $porcentaje,
                 'monto_calculado' => $monto,

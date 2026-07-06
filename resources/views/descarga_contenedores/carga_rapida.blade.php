@@ -63,7 +63,7 @@
                     <p class="helper-text" style="margin-top:.5rem">{{ $supervisorActualMeta ?: 'Se completa automáticamente con el usuario autenticado.' }}</p>
 
                     <h4 class="section-title">Participantes base @include('descarga_contenedores._help_icon', ['text' => 'Equipo que se copiará a cada fila de la vista previa. Luego puedes editar fila por fila.'])</h4>
-                    <p class="helper-text">Selecciona un equipo base desde la nómina Talana de los centros gestionados en los Excel y aplícalo a todas las filas. La participación se reparte en partes iguales; puedes editar un registro después si requiere porcentajes especiales.</p>
+                    <p class="helper-text">Filtra centro/cargo, agrega los trabajadores disponibles como equipo base y aplícalos a todas las filas. La participación se reparte en partes iguales; puedes editar un registro después si requiere porcentajes especiales.</p>
                     <input type="hidden" id="base_participantes_json" value="[]">
                     <div id="base_worker_picker" class="worker-picker compact"></div>
                     <button type="button" class="btn-secondary" id="apply-base-btn" style="margin-top:.75rem">
@@ -123,6 +123,8 @@
     $tarifasData = $tarifas->map(fn($t) => [
         'id' => $t->id,
         'cliente' => $t->cliente,
+        'centro_costo_id' => $t->centro_costo_id,
+        'centro' => $t->centroCosto?->nombre,
         'codigo' => $t->codigo,
         'proceso' => $t->proceso,
         'requiere_revision' => $t->requiere_revision,
@@ -146,6 +148,10 @@ function normalizeText(value) {
         .trim();
 }
 
+function normalizeRut(value) {
+    return String(value || '').toUpperCase().replace(/[^0-9K]/g, '');
+}
+
 function workerCenterKey(worker) {
     return worker.centro_costo_id
         ? `id:${worker.centro_costo_id}`
@@ -163,16 +169,27 @@ function cleanFactCode(value) {
 }
 
 function tarifaLabel(tarifa) {
-    return `${tarifa.codigo || ''} · ${tarifa.cliente || ''} · ${tarifa.proceso || ''}`;
+    return `${tarifa.codigo || ''} · ${tarifa.cliente || ''} · ${tarifa.centro || 'General'} · ${tarifa.proceso || ''}`;
 }
 
-function tarifasByCode(code) {
+function tarifasByCode(code, centerId = '') {
     const clean = cleanFactCode(code);
-    return tarifas.filter(t => cleanFactCode(t.codigo) === clean);
+    return tarifas.filter(t => {
+        if (cleanFactCode(t.codigo) !== clean) return false;
+        return !centerId || !t.centro_costo_id || String(t.centro_costo_id) === String(centerId);
+    });
 }
 
-function uniqueTarifaByCode(code) {
-    const matches = tarifasByCode(code);
+function uniqueTarifaByCode(code, centerId = '') {
+    const matches = tarifasByCode(code, centerId);
+    const scoped = centerId
+        ? matches.filter(t => String(t.centro_costo_id || '') === String(centerId))
+        : [];
+    if (scoped.length === 1) return scoped[0];
+
+    const general = matches.filter(t => !t.centro_costo_id);
+    if (general.length === 1) return general[0];
+
     return matches.length === 1 ? matches[0] : null;
 }
 
@@ -236,6 +253,11 @@ function initWorkerPicker(container, hiddenInput, initialIds, onChange) {
     const selected = new Map();
     container.innerHTML = `
         <div class="worker-tags"></div>
+        <div>
+            <button type="button" class="btn-secondary btn-mini" data-add-filtered>
+                <i class="bi bi-person-plus"></i> Agregar filtrados
+            </button>
+        </div>
         <div class="worker-filter-row">
             <select class="form-control worker-center-filter" aria-label="Filtrar trabajadores por centro">
                 <option value="">Todos los centros</option>
@@ -257,6 +279,7 @@ function initWorkerPicker(container, hiddenInput, initialIds, onChange) {
     const centerFilter = container.querySelector('.worker-center-filter');
     const cargoFilter = container.querySelector('.worker-cargo-filter');
     const countEl = container.querySelector('[data-worker-count]');
+    const addFilteredBtn = container.querySelector('[data-add-filtered]');
 
     const centerOptions = [...new Map(workers.map(worker => [
         workerCenterKey(worker),
@@ -314,21 +337,29 @@ function initWorkerPicker(container, hiddenInput, initialIds, onChange) {
         });
     }
 
-    function render(query = '') {
-        const q = query.toLowerCase();
+    function availableWorkers(query = '') {
+        const q = normalizeText(query);
+        const rutQuery = normalizeRut(query);
         const centerValue = centerFilter.value;
         const cargoValue = cargoFilter.value;
-        const available = workers.filter(w => {
+
+        return workers.filter(w => {
             if (selected.has(String(w.id))) return false;
             if (centerValue && workerCenterKey(w) !== centerValue) return false;
             if (cargoValue && workerCargoKey(w) !== cargoValue) return false;
 
             return !q
-                || (w.label || '').toLowerCase().includes(q)
-                || (w.rut || '').toLowerCase().includes(q)
-                || (w.cargo || '').toLowerCase().includes(q)
-                || (w.centro || '').toLowerCase().includes(q);
+                || normalizeText(w.label).includes(q)
+                || normalizeText(w.rut).includes(q)
+                || normalizeRut(w.rut).includes(rutQuery)
+                || normalizeText(w.cargo).includes(q)
+                || normalizeText(w.centro).includes(q)
+                || normalizeText(w.centro_talana).includes(q);
         });
+    }
+
+    function render(query = '') {
+        const available = availableWorkers(query);
         const matches = available
             .sort((a, b) => `${a.centro || ''} ${a.cargo || ''} ${a.label || ''}`.localeCompare(`${b.centro || ''} ${b.cargo || ''} ${b.label || ''}`, 'es'))
             .slice(0, 70);
@@ -387,6 +418,21 @@ function initWorkerPicker(container, hiddenInput, initialIds, onChange) {
         render(input.value.trim());
     });
     cargoFilter.addEventListener('change', () => render(input.value.trim()));
+    addFilteredBtn.addEventListener('click', () => {
+        const ids = availableWorkers(input.value.trim()).map(worker => worker.id);
+        if (!ids.length) {
+            showToast('No hay trabajadores disponibles para agregar con ese filtro.', 'warning');
+            return;
+        }
+
+        ids.forEach(id => {
+            const worker = byWorkerId.get(String(id));
+            if (worker) selected.set(String(worker.id), worker);
+        });
+        input.value = '';
+        dropdown.style.display = 'none';
+        sync();
+    });
     sync();
 
     return {
@@ -408,13 +454,20 @@ function initTarifaPicker(container, tarifaInput, factInput) {
     const search = container.querySelector('.bulk-fact-search');
     const dropdown = container.querySelector('.bulk-fact-dropdown');
     const selectedText = container.querySelector('[data-fact-selected]');
+    const row = container.closest('tr');
+    const rowCenterInput = row?.querySelector('[data-key="centro_costo_id"]');
+
+    function tarifaMatchesRowCenter(tarifa) {
+        const centerId = rowCenterInput?.value || '';
+        return !centerId || !tarifa.centro_costo_id || String(tarifa.centro_costo_id) === String(centerId);
+    }
 
     function setSelection(tarifa = null, manualCode = '') {
         if (tarifa) {
             tarifaInput.value = String(tarifa.id);
             factInput.value = cleanFactCode(tarifa.codigo);
             search.value = tarifaLabel(tarifa);
-            selectedText.innerHTML = `<strong>${escapeAttr(tarifa.codigo)}</strong> · ${escapeAttr(tarifa.cliente)} · ${escapeAttr(tarifa.proceso)}${tarifa.requiere_revision ? ' <span class="badge warning">Revisar</span>' : ''}`;
+            selectedText.innerHTML = `<strong>${escapeAttr(tarifa.codigo)}</strong> · ${escapeAttr(tarifa.cliente)} · ${escapeAttr(tarifa.centro || 'General')} · ${escapeAttr(tarifa.proceso)}${tarifa.requiere_revision ? ' <span class="badge warning">Revisar</span>' : ''}`;
             return;
         }
 
@@ -427,7 +480,7 @@ function initTarifaPicker(container, tarifaInput, factInput) {
             return;
         }
 
-        const matches = tarifasByCode(code);
+        const matches = tarifasByCode(code, rowCenterInput?.value || '');
         selectedText.textContent = matches.length > 1
             ? `${code}: código repetido, selecciona proceso`
             : `${code}: pendiente de tarifa`;
@@ -436,15 +489,15 @@ function initTarifaPicker(container, tarifaInput, factInput) {
     function render(query = '') {
         const q = normalizeText(query);
         const matches = tarifas.filter(t => {
-            const haystack = normalizeText([t.codigo, t.cliente, t.proceso].join(' '));
-            return !q || haystack.includes(q);
+            const haystack = normalizeText([t.codigo, t.cliente, t.centro, t.proceso].join(' '));
+            return tarifaMatchesRowCenter(t) && (!q || haystack.includes(q));
         }).slice(0, 60);
 
         dropdown.innerHTML = matches.length
             ? matches.map(t => `
                 <div class="bulk-fact-option" data-id="${escapeAttr(t.id)}" role="button" tabindex="0">
                     <strong>${escapeAttr(t.codigo)}</strong>
-                    <small>${escapeAttr(t.cliente)} · ${escapeAttr(t.proceso)}</small>
+                    <small>${escapeAttr(t.cliente)} · ${escapeAttr(t.centro || 'General')} · ${escapeAttr(t.proceso)}</small>
                     ${t.requiere_revision ? '<em>Revisar</em>' : ''}
                 </div>
             `).join('')
@@ -483,7 +536,7 @@ function initTarifaPicker(container, tarifaInput, factInput) {
         return;
     }
 
-    const uniqueTarifa = uniqueTarifaByCode(factInput.value);
+    const uniqueTarifa = uniqueTarifaByCode(factInput.value, rowCenterInput?.value || '');
     if (uniqueTarifa) {
         setSelection(uniqueTarifa);
         return;
@@ -708,6 +761,7 @@ document.addEventListener('DOMContentLoaded', () => {
 .worker-picker.compact .worker-search-wrap { max-width: 360px; }
 .worker-picker.compact .worker-tags { max-width: 420px; }
 .worker-picker.compact .worker-filter-row { max-width: 420px; }
+.btn-mini { padding: .35rem .65rem; font-size: .78rem; }
 .worker-filter-row {
     display: grid;
     grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) auto;

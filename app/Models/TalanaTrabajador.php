@@ -22,6 +22,8 @@ class TalanaTrabajador extends Model
         'departamento_nombre',
         'centro_costo_id',
         'centro_costo_nombre',
+        'centro_operativo_id',
+        'centro_operativo_nombre',
         'tipo_nomina',
         'razon_social',
         'fecha_nacimiento',
@@ -56,6 +58,11 @@ class TalanaTrabajador extends Model
         return $this->belongsTo(CentroCosto::class, 'centro_costo_id');
     }
 
+    public function centroOperativo()
+    {
+        return $this->belongsTo(CentroCosto::class, 'centro_operativo_id');
+    }
+
     public function getNombreCompletoAttribute(): string
     {
         return trim($this->nombre . ' ' . $this->apellido_paterno . ' ' . $this->apellido_materno);
@@ -76,20 +83,22 @@ class TalanaTrabajador extends Model
 
                 $dv = substr($clean, -1);
                 $body = substr($clean, 0, -1);
-                $formatted = '';
-                $count = 0;
-
-                for ($i = strlen($body) - 1; $i >= 0; $i--) {
-                    $formatted = $body[$i] . $formatted;
-                    $count++;
-                    if ($count % 3 === 0 && $i > 0) {
-                        $formatted = '.' . $formatted;
-                    }
-                }
-
-                return $formatted . '-' . $dv;
+                return $body . '-' . $dv;
             },
             set: fn (?string $value) => $value ? strtoupper(preg_replace('/[^0-9kK]/', '', $value)) : null,
         );
+    }
+
+    public function centroDescargaId(): ?int
+    {
+        return $this->centro_operativo_id ?: $this->centro_costo_id;
+    }
+
+    public function centroDescargaNombre(): ?string
+    {
+        return $this->centroOperativo?->nombre
+            ?: $this->centro_operativo_nombre
+            ?: $this->centroCosto?->nombre
+            ?: $this->centro_costo_nombre;
     }
 }
