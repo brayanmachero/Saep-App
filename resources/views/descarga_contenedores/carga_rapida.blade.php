@@ -769,50 +769,79 @@ function escapeAttr(value) {
         .replace(/>/g, '&gt;');
 }
 
+function notifyUser(message, type = 'info') {
+    if (typeof window.showToast === 'function') {
+        window.showToast(message, type);
+        return;
+    }
+
+    window.alert(message);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    basePicker = initWorkerPicker(
-        document.getElementById('base_worker_picker'),
-        document.getElementById('base_participantes_json'),
-        [],
-        null
-    );
+    const previewBtn = document.getElementById('preview-btn');
+    const pasteSource = document.getElementById('paste_source');
+    const clearBtn = document.getElementById('clear-btn');
+    const applyBaseBtn = document.getElementById('apply-base-btn');
+    const bulkForm = document.getElementById('bulk-form');
+    const basePickerEl = document.getElementById('base_worker_picker');
+    const baseInput = document.getElementById('base_participantes_json');
+    const previewBody = document.getElementById('preview-body');
+    const previewCard = document.getElementById('preview-card');
+    const registrosInput = document.getElementById('registros_json');
 
-    document.getElementById('preview-btn').addEventListener('click', () => {
-        const rows = parsePastedTable(document.getElementById('paste_source').value);
-        if (!rows.length) {
-            showToast('No encontré filas para previsualizar.', 'warning');
-            return;
+    if (previewBtn && pasteSource) {
+        previewBtn.addEventListener('click', () => {
+            try {
+                const rows = parsePastedTable(pasteSource.value);
+                if (!rows.length) {
+                    notifyUser('No encontré filas para previsualizar.', 'warning');
+                    return;
+                }
+                renderPreview(rows);
+            } catch (error) {
+                console.error('Error generando vista previa de contenedores:', error);
+                notifyUser('No pude generar la vista previa. Revisa que la tabla venga con columnas separadas desde Excel o correo.', 'error');
+            }
+        });
+    }
+
+    if (basePickerEl && baseInput) {
+        try {
+            basePicker = initWorkerPicker(basePickerEl, baseInput, [], null);
+        } catch (error) {
+            console.error('Error inicializando participantes base:', error);
+            notifyUser('No pude inicializar el selector de participantes base, pero puedes generar la vista previa igual.', 'warning');
         }
-        renderPreview(rows);
-    });
+    }
 
-    document.getElementById('clear-btn').addEventListener('click', () => {
-        document.getElementById('paste_source').value = '';
-        document.getElementById('preview-body').innerHTML = '';
-        document.getElementById('preview-card').style.display = 'none';
+    clearBtn?.addEventListener('click', () => {
+        if (pasteSource) pasteSource.value = '';
+        if (previewBody) previewBody.innerHTML = '';
+        if (previewCard) previewCard.style.display = 'none';
         rowPickers.clear();
     });
 
-    document.getElementById('apply-base-btn').addEventListener('click', () => {
-        const ids = basePicker.get();
+    applyBaseBtn?.addEventListener('click', () => {
+        const ids = basePicker?.get() || [];
         if (!ids.length) {
-            showToast('Selecciona trabajadores base antes de aplicar.', 'warning');
+            notifyUser('Selecciona trabajadores base antes de aplicar.', 'warning');
             return;
         }
         document.querySelectorAll('#preview-body tr').forEach(tr => {
             if (tr._workerPicker) tr._workerPicker.set(ids);
         });
-        showToast('Participantes base aplicados a la vista previa.', 'success');
+        notifyUser('Participantes base aplicados a la vista previa.', 'success');
     });
 
-    document.getElementById('bulk-form').addEventListener('submit', event => {
+    bulkForm?.addEventListener('submit', event => {
         const rows = collectRows();
         if (!rows.length) {
             event.preventDefault();
-            showToast('No hay filas para guardar.', 'warning');
+            notifyUser('No hay filas para guardar.', 'warning');
             return;
         }
-        document.getElementById('registros_json').value = JSON.stringify(rows);
+        if (registrosInput) registrosInput.value = JSON.stringify(rows);
     });
 });
 </script>
