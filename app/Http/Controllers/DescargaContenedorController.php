@@ -559,7 +559,7 @@ class DescargaContenedorController extends Controller
             'centro_operativo_nombre' => $centroOperativo?->nombre,
         ]);
 
-        return back()->with('success', 'Centro operativo actualizado.');
+        return back()->with('success', 'Centro costo real actualizado.');
     }
 
     public function liquidacion(Request $request)

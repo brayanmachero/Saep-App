@@ -89,7 +89,7 @@
                         <span>O Observación</span>
                         <span>U FACT.</span>
                     </div>
-                    <p class="helper-text" style="margin-top:.75rem">Si el correo trae encabezados, el sistema mapea por nombre de columna. Las columnas P-T (Año, Mes, Semana, Día y Dato) se ignoran por ahora; el FACT se toma desde la columna U.</p>
+                    <p class="helper-text" style="margin-top:.75rem">Si el correo trae encabezados, el sistema mapea por nombre de columna. La vista previa muestra el orden completo del Excel; Año, Mes, Semana, Día y Dato quedan como referencia operativa antes de guardar.</p>
                 </div>
             </div>
         </div>
@@ -110,11 +110,26 @@
                     <thead>
                         <tr>
                             <th>Estado</th>
+                            <th>Operación</th>
+                            <th>Bodega</th>
+                            <th>Sup. Equipo</th>
+                            <th>Facturación</th>
                             <th>Fecha</th>
                             <th>Contenedor</th>
-                            <th>Bodega</th>
-                            <th>Equipo</th>
+                            <th>E.Descarga</th>
+                            <th>H.Cita</th>
+                            <th>Hi Descarga</th>
+                            <th>Ht Descarga</th>
+                            <th>Item</th>
                             <th>Cajas</th>
+                            <th>Pallets</th>
+                            <th>Productos</th>
+                            <th>Observación</th>
+                            <th>Año</th>
+                            <th>Mes</th>
+                            <th>Semana</th>
+                            <th>Día</th>
+                            <th>Dato</th>
                             <th>FACT.</th>
                             <th>Trabajadores</th>
                             <th></th>
@@ -236,11 +251,11 @@ const emailScheduleColumns = [
     'pallets',
     'producto',
     'observacion',
-    null,
-    null,
-    null,
-    null,
-    null,
+    'anio',
+    'mes',
+    'semana',
+    'dia',
+    'dato',
     'fact_codigo',
 ];
 
@@ -277,6 +292,12 @@ const headerAliases = {
     productos: 'producto',
     observacion: 'observacion',
     obs: 'observacion',
+    ano: 'anio',
+    anio: 'anio',
+    mes: 'mes',
+    semana: 'semana',
+    dia: 'dia',
+    dato: 'dato',
     fact: 'fact_codigo',
     factcodigo: 'fact_codigo',
     codigofact: 'fact_codigo',
@@ -671,6 +692,10 @@ function initTarifaPicker(container, tarifaInput, factInput) {
 const rowPickers = new Map();
 let basePicker;
 
+function previewInput(key, row, placeholder = '', className = 'mini-input') {
+    return `<input class="form-control ${className}" data-key="${escapeAttr(key)}" value="${escapeAttr(row[key])}" placeholder="${escapeAttr(placeholder)}">`;
+}
+
 function renderPreview(rows) {
     const body = document.getElementById('preview-body');
     body.innerHTML = '';
@@ -684,24 +709,29 @@ function renderPreview(rows) {
                 <span class="badge warning">Borrador</span>
                 <input type="hidden" data-key="estado" value="borrador">
             </td>
-            <td><input class="form-control mini-input" data-key="fecha" value="${escapeAttr(row.fecha)}" placeholder="dd/mm/aaaa"></td>
-            <td><input class="form-control mini-input" data-key="contenedor" value="${escapeAttr(row.contenedor)}"></td>
+            <td>${previewInput('operacion', row)}</td>
             <td>
-                <input class="form-control mini-input" data-key="bodega" value="${escapeAttr(row.bodega)}">
-                <input type="hidden" data-key="operacion" value="${escapeAttr(row.operacion)}">
-                <input type="hidden" data-key="supervisor_nombre" value="${escapeAttr(row.supervisor_nombre)}">
-                <input type="hidden" data-key="facturacion_mes" value="${escapeAttr(row.facturacion_mes)}">
+                ${previewInput('bodega', row, '', 'mini-input wide-input')}
                 <input type="hidden" data-key="centro_costo_id" value="${escapeAttr(row.centro_costo_id)}">
-                <input type="hidden" data-key="hora_cita" value="${escapeAttr(row.hora_cita)}">
-                <input type="hidden" data-key="hora_inicio_descarga" value="${escapeAttr(row.hora_inicio_descarga)}">
-                <input type="hidden" data-key="hora_termino_descarga" value="${escapeAttr(row.hora_termino_descarga)}">
-                <input type="hidden" data-key="item" value="${escapeAttr(row.item)}">
-                <input type="hidden" data-key="pallets" value="${escapeAttr(row.pallets)}">
-                <input type="hidden" data-key="producto" value="${escapeAttr(row.producto)}">
-                <input type="hidden" data-key="observacion" value="${escapeAttr(row.observacion)}">
             </td>
-            <td><input class="form-control mini-input" data-key="equipo_descarga" value="${escapeAttr(row.equipo_descarga)}"></td>
-            <td><input class="form-control mini-input" data-key="cajas" value="${escapeAttr(row.cajas)}"></td>
+            <td>${previewInput('supervisor_nombre', row, '', 'mini-input wide-input')}</td>
+            <td>${previewInput('facturacion_mes', row)}</td>
+            <td>${previewInput('fecha', row, 'dd/mm/aaaa')}</td>
+            <td>${previewInput('contenedor', row, '', 'mini-input wide-input')}</td>
+            <td>${previewInput('equipo_descarga', row)}</td>
+            <td>${previewInput('hora_cita', row, 'hh:mm', 'mini-input time-input')}</td>
+            <td>${previewInput('hora_inicio_descarga', row, 'hh:mm', 'mini-input time-input')}</td>
+            <td>${previewInput('hora_termino_descarga', row, 'hh:mm', 'mini-input time-input')}</td>
+            <td>${previewInput('item', row, '', 'mini-input number-input')}</td>
+            <td>${previewInput('cajas', row, '', 'mini-input number-input')}</td>
+            <td>${previewInput('pallets', row, '', 'mini-input number-input')}</td>
+            <td>${previewInput('producto', row, '', 'mini-input xwide-input')}</td>
+            <td>${previewInput('observacion', row, '', 'mini-input xwide-input')}</td>
+            <td>${previewInput('anio', row, '', 'mini-input small-input')}</td>
+            <td>${previewInput('mes', row, '', 'mini-input small-input')}</td>
+            <td>${previewInput('semana', row, '', 'mini-input small-input')}</td>
+            <td>${previewInput('dia', row, '', 'mini-input small-input')}</td>
+            <td>${previewInput('dato', row, '', 'mini-input small-input')}</td>
             <td>
                 <input type="hidden" data-key="tarifa_id" value="${escapeAttr(row.tarifa_id || '')}">
                 <input type="hidden" data-key="fact_codigo" value="${escapeAttr(row.fact_codigo)}">
@@ -870,8 +900,12 @@ document.addEventListener('DOMContentLoaded', () => {
     font-size: .8rem;
 }
 .preview-wrap { overflow-x: auto; }
-.preview-table { min-width: 1180px; }
+.preview-table { min-width: 2860px; }
 .mini-input { min-width: 110px; padding: .5rem .65rem; font-size: .82rem; }
+.small-input { min-width: 82px; }
+.number-input, .time-input { min-width: 92px; }
+.wide-input { min-width: 170px; }
+.xwide-input { min-width: 260px; }
 .bulk-fact-picker { position: relative; min-width: 220px; display: grid; gap: .25rem; }
 .bulk-fact-search { width: 100%; }
 .bulk-fact-selected {

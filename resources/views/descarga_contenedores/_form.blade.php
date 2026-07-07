@@ -698,9 +698,16 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
     window.addEventListener('resize', () => {
         if (dropdown.style.display !== 'none') positionWorkerDropdown();
     });
-    window.addEventListener('scroll', () => {
-        if (dropdown.style.display !== 'none') positionWorkerDropdown();
-    }, true);
+    const closeDropdownOnViewportMove = event => {
+        if (dropdown.style.display === 'none') return;
+        if (event.target === dropdown || dropdown.contains(event.target)) return;
+
+        hideWorkerDropdown();
+    };
+    window.addEventListener('scroll', closeDropdownOnViewportMove, true);
+    document.addEventListener('scroll', closeDropdownOnViewportMove, true);
+    window.addEventListener('wheel', closeDropdownOnViewportMove, { capture: true, passive: true });
+    window.addEventListener('touchmove', closeDropdownOnViewportMove, { capture: true, passive: true });
     sync();
 }
 

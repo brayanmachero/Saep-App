@@ -84,7 +84,7 @@
 
     <div class="glass-card" style="margin-bottom:1rem">
         <h4 class="section-title">Agregar trabajador operativo</h4>
-        <p class="helper-text">Usa esta alta sólo para Contenedores cuando la persona no aparece correctamente en la nómina Talana. Si existe en Talana, prefiere ajustar su centro operativo en la tabla.</p>
+        <p class="helper-text">Usa esta alta sólo para Contenedores cuando la persona no aparece correctamente en la nómina Talana. Si existe en Talana, prefiere ajustar su centro costo real en la tabla; ese dato no modifica la nómina Talana.</p>
         <form method="POST" action="{{ route('descarga-contenedores.dotacion.trabajadores.store') }}" class="worker-create-grid">
             @csrf
             <div>
@@ -113,7 +113,7 @@
                 </select>
             </div>
             <div>
-                <label>Centro operativo</label>
+                <label>Centro costo real</label>
                 <select name="centro_operativo_id" class="form-control" required>
                     <option value="">Seleccionar</option>
                     @foreach($centros as $centro)
@@ -136,7 +136,7 @@
                         <th>RUT</th>
                         <th>Cargo</th>
                         <th>Centro Talana</th>
-                        <th>Centro operativo</th>
+                        <th>Centro costo real</th>
                         <th>Estado</th>
                         <th>Descargas</th>
                         <th>Monto ref.</th>
@@ -163,12 +163,12 @@
                                         </option>
                                     @endforeach
                                 </select>
-                                <button class="icon-btn" title="Guardar centro operativo"><i class="bi bi-save-fill"></i></button>
+                                <button class="icon-btn" title="Guardar centro costo real"><i class="bi bi-save-fill"></i></button>
                             </form>
                             @if($trabajador->centro_operativo_id)
                                 <small class="muted-inline">Real: {{ $trabajador->centroOperativo?->nombre ?: $trabajador->centro_operativo_nombre }}</small>
                             @else
-                                <small class="muted-inline">Usa centro Talana</small>
+                                <small class="muted-inline">Usa centro Talana; no hay ajuste real para Contenedores</small>
                             @endif
                         </td>
                         <td>
