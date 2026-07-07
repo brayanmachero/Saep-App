@@ -80,8 +80,16 @@
                         <span>F Contenedor</span>
                         <span>G Equipo</span>
                         <span>H Hora cita</span>
+                        <span>I Inicio descarga</span>
+                        <span>J Término descarga</span>
+                        <span>K Item</span>
+                        <span>L Cajas</span>
+                        <span>M Pallets</span>
+                        <span>N Productos</span>
+                        <span>O Observación</span>
+                        <span>U FACT.</span>
                     </div>
-                    <p class="helper-text" style="margin-top:.75rem">Si vienen más columnas, se cargan inicio, término, ítems, cajas, pallets, producto, observación y FACT.</p>
+                    <p class="helper-text" style="margin-top:.75rem">Si el correo trae encabezados, el sistema mapea por nombre de columna. Las columnas P-T (Año, Mes, Semana, Día y Dato) se ignoran por ahora; el FACT se toma desde la columna U.</p>
                 </div>
             </div>
         </div>
@@ -193,7 +201,7 @@ function uniqueTarifaByCode(code, centerId = '') {
     return matches.length === 1 ? matches[0] : null;
 }
 
-const columns = [
+const legacyColumns = [
     'operacion',
     'bodega',
     'supervisor_nombre',
@@ -212,10 +220,123 @@ const columns = [
     'fact_codigo',
 ];
 
+const emailScheduleColumns = [
+    'operacion',
+    'bodega',
+    'supervisor_nombre',
+    'facturacion_mes',
+    'fecha',
+    'contenedor',
+    'equipo_descarga',
+    'hora_cita',
+    'hora_inicio_descarga',
+    'hora_termino_descarga',
+    'item',
+    'cajas',
+    'pallets',
+    'producto',
+    'observacion',
+    null,
+    null,
+    null,
+    null,
+    null,
+    'fact_codigo',
+];
+
+const headerAliases = {
+    operacion: 'operacion',
+    bodega: 'bodega',
+    supequipo: 'supervisor_nombre',
+    supervisor: 'supervisor_nombre',
+    supervisorencargado: 'supervisor_nombre',
+    facturacion: 'facturacion_mes',
+    facturacionmes: 'facturacion_mes',
+    mesfacturacion: 'facturacion_mes',
+    fecha: 'fecha',
+    contenedor: 'contenedor',
+    edescarga: 'equipo_descarga',
+    equipodescarga: 'equipo_descarga',
+    hdescarga: 'equipo_descarga',
+    hcita: 'hora_cita',
+    horacita: 'hora_cita',
+    hicitacion: 'hora_cita',
+    hidescarga: 'hora_inicio_descarga',
+    inicio: 'hora_inicio_descarga',
+    iniciodescarga: 'hora_inicio_descarga',
+    horainicio: 'hora_inicio_descarga',
+    htdescarga: 'hora_termino_descarga',
+    termino: 'hora_termino_descarga',
+    terminodescarga: 'hora_termino_descarga',
+    horatermino: 'hora_termino_descarga',
+    item: 'item',
+    items: 'item',
+    cajas: 'cajas',
+    pallets: 'pallets',
+    producto: 'producto',
+    productos: 'producto',
+    observacion: 'observacion',
+    obs: 'observacion',
+    fact: 'fact_codigo',
+    factcodigo: 'fact_codigo',
+    codigofact: 'fact_codigo',
+};
+
 function splitRow(line) {
     if (line.includes('\t')) return line.split('\t');
     if (line.includes(';')) return line.split(';');
     return line.split(',');
+}
+
+function normalizeHeader(value) {
+    return normalizeText(value).replace(/[^a-z0-9]/g, '');
+}
+
+function buildHeaderIndexes(row) {
+    return row.reduce((indexes, cell, index) => {
+        const key = headerAliases[normalizeHeader(cell)];
+        if (key && indexes[key] === undefined) {
+            indexes[key] = index;
+        }
+        return indexes;
+    }, {});
+}
+
+function hasRecognizableHeader(row) {
+    const indexes = buildHeaderIndexes(row);
+    const mappedCount = Object.keys(indexes).length;
+    return mappedCount >= 4 && (
+        indexes.fecha !== undefined
+        || indexes.contenedor !== undefined
+        || indexes.operacion !== undefined
+        || indexes.fact_codigo !== undefined
+    );
+}
+
+function makeEmptyImportRow() {
+    return { estado: 'borrador', participantes: [] };
+}
+
+function parseRowByHeaders(row, indexes) {
+    const item = makeEmptyImportRow();
+
+    Object.entries(indexes).forEach(([key, index]) => {
+        item[key] = row[index] || '';
+    });
+
+    return item;
+}
+
+function parseRowByPosition(row) {
+    const item = makeEmptyImportRow();
+    const columns = row.length >= emailScheduleColumns.length ? emailScheduleColumns : legacyColumns;
+
+    columns.forEach((key, index) => {
+        if (!key) return;
+        item[key] = row[index] || '';
+    });
+
+    return item;
 }
 
 function parsePastedTable(text) {
@@ -225,13 +346,15 @@ function parsePastedTable(text) {
 
     if (!rows.length) return [];
 
-    const first = rows[0].map(cell => cell.toLowerCase()).join(' ');
-    const hasHeader = first.includes('fecha') || first.includes('contenedor') || first.includes('operaci');
+    const hasHeader = hasRecognizableHeader(rows[0]);
+    const headerIndexes = hasHeader ? buildHeaderIndexes(rows[0]) : {};
     const dataRows = hasHeader ? rows.slice(1) : rows;
 
     return dataRows.map(row => {
-        const item = { estado: 'borrador', participantes: [] };
-        columns.forEach((key, index) => item[key] = row[index] || '');
+        const item = hasHeader
+            ? parseRowByHeaders(row, headerIndexes)
+            : parseRowByPosition(row);
+
         item.centro_costo_id = inferCenterId(item.bodega);
         return item;
     });
