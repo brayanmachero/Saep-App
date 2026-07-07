@@ -637,6 +637,9 @@ function initTarifaPicker(container, tarifaInput, factInput) {
             tarifaInput.value = String(tarifa.id);
             factInput.value = cleanFactCode(tarifa.codigo);
             search.value = tarifaLabel(tarifa);
+            const label = `${tarifa.codigo} · ${tarifa.cliente} · ${tarifa.centro || 'General'} · ${tarifa.proceso}${tarifa.requiere_revision ? ' · Revisar' : ''}`;
+            search.title = label;
+            selectedText.title = label;
             selectedText.innerHTML = `<strong>${escapeAttr(tarifa.codigo)}</strong> · ${escapeAttr(tarifa.cliente)} · ${escapeAttr(tarifa.centro || 'General')} · ${escapeAttr(tarifa.proceso)}${tarifa.requiere_revision ? ' <span class="badge warning">Revisar</span>' : ''}`;
             return;
         }
@@ -646,14 +649,56 @@ function initTarifaPicker(container, tarifaInput, factInput) {
         factInput.value = code;
 
         if (!code) {
+            search.title = '';
             selectedText.textContent = 'Sin FACT';
+            selectedText.title = 'Sin FACT';
             return;
         }
 
         const matches = tarifasByCode(code, rowCenterInput?.value || '');
-        selectedText.textContent = matches.length > 1
+        const status = matches.length > 1
             ? `${code}: código repetido, selecciona proceso`
             : `${code}: pendiente de tarifa`;
+        search.title = status;
+        selectedText.textContent = status;
+        selectedText.title = status;
+    }
+
+    function positionDropdown() {
+        if (dropdown.parentElement !== document.body) {
+            document.body.appendChild(dropdown);
+        }
+
+        const rect = search.getBoundingClientRect();
+        const viewportPadding = 12;
+        const gap = 6;
+        const width = Math.min(520, window.innerWidth - viewportPadding * 2);
+        const left = Math.min(
+            Math.max(viewportPadding, rect.left),
+            Math.max(viewportPadding, window.innerWidth - width - viewportPadding)
+        );
+        const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+        const spaceAbove = rect.top - viewportPadding;
+        const openUp = spaceBelow < 260 && spaceAbove > spaceBelow;
+        const maxHeight = Math.max(180, Math.min(360, (openUp ? spaceAbove : spaceBelow) - gap));
+
+        dropdown.classList.add('is-floating');
+        dropdown.style.width = `${width}px`;
+        dropdown.style.left = `${left}px`;
+        dropdown.style.right = 'auto';
+        dropdown.style.maxHeight = `${maxHeight}px`;
+        dropdown.style.top = openUp ? 'auto' : `${rect.bottom + gap}px`;
+        dropdown.style.bottom = openUp ? `${window.innerHeight - rect.top + gap}px` : 'auto';
+    }
+
+    function showDropdown() {
+        closeFactDropdowns(dropdown);
+        dropdown.style.display = 'block';
+        positionDropdown();
+    }
+
+    function hideDropdown() {
+        dropdown.style.display = 'none';
     }
 
     function render(query = '') {
@@ -672,7 +717,7 @@ function initTarifaPicker(container, tarifaInput, factInput) {
                 </div>
             `).join('')
             : '<div class="worker-empty">Sin resultados. Puedes dejar el código para revisión.</div>';
-        dropdown.style.display = 'block';
+        showDropdown();
 
         dropdown.querySelectorAll('.bulk-fact-option').forEach(option => {
             const selectOption = event => {
@@ -682,7 +727,7 @@ function initTarifaPicker(container, tarifaInput, factInput) {
                 const tarifa = byTarifaId.get(String(option.dataset.id));
                 if (!tarifa) return;
                 setSelection(tarifa);
-                dropdown.style.display = 'none';
+                hideDropdown();
             };
 
             option.addEventListener('mousedown', selectOption);
@@ -698,7 +743,7 @@ function initTarifaPicker(container, tarifaInput, factInput) {
         setSelection(null, search.value);
         render(search.value);
     });
-    search.addEventListener('blur', () => setTimeout(() => dropdown.style.display = 'none', 150));
+    search.addEventListener('blur', () => setTimeout(hideDropdown, 150));
 
     const initialTarifa = byTarifaId.get(String(tarifaInput.value || ''));
     if (initialTarifa) {
@@ -808,6 +853,7 @@ function renderPreview(rows) {
             closeOtherWorkerEditors();
             editor.classList.toggle('is-open');
         });
+        const factDropdown = tr.querySelector('.bulk-fact-dropdown');
         initTarifaPicker(
             tr.querySelector('.bulk-fact-picker'),
             tr.querySelector('[data-key="tarifa_id"]'),
@@ -817,6 +863,7 @@ function renderPreview(rows) {
         rowPickers.set(index, picker);
 
         tr.querySelector('.remove-row').addEventListener('click', () => {
+            factDropdown?.remove();
             tr.remove();
             refreshCount();
         });
@@ -834,6 +881,12 @@ function refreshCount() {
 function closeWorkerEditors(except = null) {
     document.querySelectorAll('.row-worker-editor.is-open').forEach(editor => {
         if (editor !== except) editor.classList.remove('is-open');
+    });
+}
+
+function closeFactDropdowns(except = null) {
+    document.querySelectorAll('.bulk-fact-dropdown').forEach(dropdown => {
+        if (dropdown !== except) dropdown.style.display = 'none';
     });
 }
 
@@ -935,9 +988,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (registrosInput) registrosInput.value = JSON.stringify(rows);
     });
 
-    previewWrap?.addEventListener('scroll', () => closeWorkerEditors(), { passive: true });
+    previewWrap?.addEventListener('scroll', () => {
+        closeWorkerEditors();
+        closeFactDropdowns();
+    }, { passive: true });
+    window.addEventListener('scroll', () => closeFactDropdowns(), { passive: true });
     document.addEventListener('keydown', event => {
-        if (event.key === 'Escape') closeWorkerEditors();
+        if (event.key === 'Escape') {
+            closeWorkerEditors();
+            closeFactDropdowns();
+        }
     });
 });
 </script>
@@ -1055,16 +1115,31 @@ document.addEventListener('DOMContentLoaded', () => {
     border-radius: 10px;
     box-shadow: 0 10px 30px rgba(0,0,0,.14);
 }
+.bulk-fact-dropdown.is-floating {
+    position: fixed;
+    right: auto;
+    z-index: 2500;
+}
 .bulk-fact-option {
     display: grid;
-    grid-template-columns: 72px 1fr auto;
-    align-items: center;
-    gap: .45rem;
-    padding: .55rem .7rem;
+    grid-template-columns: 70px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: .5rem;
+    padding: .48rem .6rem;
     cursor: pointer;
 }
 .bulk-fact-option:hover { background: rgba(15, 27, 76, .06); }
-.bulk-fact-option small { color: var(--text-muted); font-size: .74rem; }
+.bulk-fact-option strong {
+    font-size: .78rem;
+    line-height: 1.2;
+}
+.bulk-fact-option small {
+    color: var(--text-muted);
+    font-size: .73rem;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
 .bulk-fact-option em {
     color: #d97706;
     font-size: .68rem;

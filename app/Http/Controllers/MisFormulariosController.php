@@ -34,7 +34,7 @@ class MisFormulariosController extends Controller
             });
         }
 
-        $asignaciones = $query->orderByRaw("FIELD(formulario_usuario.estado, 'Pendiente', 'Vencido', 'Completado')")
+        $asignaciones = $query->orderByRaw("CASE formulario_usuario.estado WHEN 'Pendiente' THEN 1 WHEN 'Vencido' THEN 2 WHEN 'Completado' THEN 3 ELSE 4 END")
             ->orderBy('formulario_usuario.fecha_limite')
             ->paginate(15)
             ->withQueryString();

@@ -424,7 +424,7 @@ class KanbanController extends Controller
             ->whereHas('asignados', fn ($q) => $q->where('user_id', auth()->id()))
             ->where('archivada', false)
             ->whereHas('tablero', fn ($q) => $q->where('activo', true)->visiblesParaUsuario())
-            ->orderByRaw("FIELD(prioridad, 'ALTA', 'MEDIA', 'BAJA')")
+            ->orderByRaw("CASE prioridad WHEN 'ALTA' THEN 1 WHEN 'MEDIA' THEN 2 WHEN 'BAJA' THEN 3 ELSE 4 END")
             ->orderBy('fecha_vencimiento')
             ->get();
 

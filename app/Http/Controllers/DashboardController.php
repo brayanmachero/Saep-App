@@ -36,7 +36,7 @@ class DashboardController extends Controller
                 'formularios.fecha_fin',
                 'formularios.frecuencia'
             )
-            ->orderByRaw("FIELD(formulario_usuario.estado, 'Pendiente', 'Completado')")
+            ->orderByRaw("CASE formulario_usuario.estado WHEN 'Pendiente' THEN 1 WHEN 'Completado' THEN 2 ELSE 3 END")
             ->orderBy('formulario_usuario.fecha_limite')
             ->get()
             ->unique('formulario_id');
