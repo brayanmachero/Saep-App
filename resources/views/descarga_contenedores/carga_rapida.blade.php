@@ -95,7 +95,7 @@
         </div>
 
         <div class="glass-card" id="preview-card" style="display:none">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+            <div class="preview-toolbar">
                 <div>
         <h3 style="margin:0;font-size:1.1rem">Vista previa editable @include('descarga_contenedores._help_icon', ['text' => 'Revisa y corrige datos antes de guardar. Nada se crea hasta presionar Guardar registros.'])</h3>
                     <p class="helper-text" id="preview-count" style="margin:.2rem 0 0"></p>
@@ -107,6 +107,32 @@
 
             <div class="preview-wrap">
                 <table class="data-table preview-table">
+                    <colgroup>
+                        <col class="col-status">
+                        <col class="col-short">
+                        <col class="col-wide">
+                        <col class="col-wide">
+                        <col class="col-short">
+                        <col class="col-date">
+                        <col class="col-wide">
+                        <col class="col-short">
+                        <col class="col-time">
+                        <col class="col-time">
+                        <col class="col-time">
+                        <col class="col-small">
+                        <col class="col-number">
+                        <col class="col-number">
+                        <col class="col-text">
+                        <col class="col-text">
+                        <col class="col-small">
+                        <col class="col-small">
+                        <col class="col-small">
+                        <col class="col-small">
+                        <col class="col-small">
+                        <col class="col-fact">
+                        <col class="col-workers">
+                        <col class="col-action">
+                    </colgroup>
                     <thead>
                         <tr>
                             <th>Estado</th>
@@ -693,7 +719,8 @@ const rowPickers = new Map();
 let basePicker;
 
 function previewInput(key, row, placeholder = '', className = 'mini-input') {
-    return `<input class="form-control ${className}" data-key="${escapeAttr(key)}" value="${escapeAttr(row[key])}" placeholder="${escapeAttr(placeholder)}">`;
+    const value = row[key] || '';
+    return `<input class="form-control ${className}" data-key="${escapeAttr(key)}" value="${escapeAttr(value)}" title="${escapeAttr(value)}" placeholder="${escapeAttr(placeholder)}">`;
 }
 
 function renderPreview(rows) {
@@ -743,7 +770,15 @@ function renderPreview(rows) {
             </td>
             <td>
                 <input type="hidden" class="row-participants" value="[]">
-                <div class="row-worker-picker worker-picker compact"></div>
+                <div class="row-worker-compact">
+                    <span class="row-worker-summary" data-worker-summary>Sin trabajadores</span>
+                    <button type="button" class="btn-secondary btn-mini row-worker-toggle" data-worker-toggle>
+                        <i class="bi bi-people"></i> Editar
+                    </button>
+                    <div class="row-worker-editor" data-worker-editor>
+                        <div class="row-worker-picker worker-picker compact"></div>
+                    </div>
+                </div>
             </td>
             <td>
                 <button type="button" class="icon-btn danger remove-row" title="Quitar fila"><i class="bi bi-x-lg"></i></button>
@@ -752,8 +787,26 @@ function renderPreview(rows) {
         body.appendChild(tr);
 
         const hidden = tr.querySelector('.row-participants');
+        const summary = tr.querySelector('[data-worker-summary]');
+        const editor = tr.querySelector('[data-worker-editor]');
+        const toggle = tr.querySelector('[data-worker-toggle]');
+        const updateWorkerSummary = ids => {
+            const total = (ids || []).length;
+            summary.textContent = total ? `${total} trabajador${total === 1 ? '' : 'es'}` : 'Sin trabajadores';
+            summary.classList.toggle('has-workers', total > 0);
+        };
+        const closeOtherWorkerEditors = () => {
+            closeWorkerEditors(editor);
+        };
+
         const picker = initWorkerPicker(tr.querySelector('.row-worker-picker'), hidden, row.participantes || [], ids => {
             tr.dataset.participantes = JSON.stringify(ids);
+            updateWorkerSummary(ids);
+        });
+        updateWorkerSummary(picker.get());
+        toggle.addEventListener('click', () => {
+            closeOtherWorkerEditors();
+            editor.classList.toggle('is-open');
         });
         initTarifaPicker(
             tr.querySelector('.bulk-fact-picker'),
@@ -776,6 +829,12 @@ function renderPreview(rows) {
 function refreshCount() {
     const count = document.querySelectorAll('#preview-body tr').length;
     document.getElementById('preview-count').textContent = count ? `${count} filas listas para guardar` : 'Sin filas';
+}
+
+function closeWorkerEditors(except = null) {
+    document.querySelectorAll('.row-worker-editor.is-open').forEach(editor => {
+        if (editor !== except) editor.classList.remove('is-open');
+    });
 }
 
 function collectRows() {
@@ -818,6 +877,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const baseInput = document.getElementById('base_participantes_json');
     const previewBody = document.getElementById('preview-body');
     const previewCard = document.getElementById('preview-card');
+    const previewWrap = document.querySelector('.preview-wrap');
     const registrosInput = document.getElementById('registros_json');
 
     if (previewBtn && pasteSource) {
@@ -829,6 +889,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 renderPreview(rows);
+                previewCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             } catch (error) {
                 console.error('Error generando vista previa de contenedores:', error);
                 notifyUser('No pude generar la vista previa. Revisa que la tabla venga con columnas separadas desde Excel o correo.', 'error');
@@ -873,6 +934,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (registrosInput) registrosInput.value = JSON.stringify(rows);
     });
+
+    previewWrap?.addEventListener('scroll', () => closeWorkerEditors(), { passive: true });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeWorkerEditors();
+    });
 });
 </script>
 
@@ -899,19 +965,81 @@ document.addEventListener('DOMContentLoaded', () => {
     color: var(--text-main);
     font-size: .8rem;
 }
-.preview-wrap { overflow-x: auto; }
-.preview-table { min-width: 2860px; }
-.mini-input { min-width: 110px; padding: .5rem .65rem; font-size: .82rem; }
-.small-input { min-width: 82px; }
-.number-input, .time-input { min-width: 92px; }
-.wide-input { min-width: 170px; }
-.xwide-input { min-width: 260px; }
-.bulk-fact-picker { position: relative; min-width: 220px; display: grid; gap: .25rem; }
+.preview-toolbar {
+    position: sticky;
+    top: .5rem;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: .65rem;
+    padding: .55rem .6rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 10px;
+    background: var(--surface-card-solid);
+    box-shadow: 0 8px 22px rgba(15, 23, 42, .08);
+    flex-wrap: wrap;
+}
+.preview-wrap {
+    overflow: auto;
+    max-height: min(64vh, 680px);
+    border: 1px solid var(--surface-border);
+    border-radius: 10px;
+}
+.preview-table {
+    min-width: 2020px;
+    table-layout: fixed;
+}
+.preview-table .col-status { width: 74px; }
+.preview-table .col-short { width: 82px; }
+.preview-table .col-wide { width: 112px; }
+.preview-table .col-date { width: 86px; }
+.preview-table .col-time { width: 64px; }
+.preview-table .col-small { width: 48px; }
+.preview-table .col-number { width: 64px; }
+.preview-table .col-text { width: 148px; }
+.preview-table .col-fact { width: 138px; }
+.preview-table .col-workers { width: 150px; }
+.preview-table .col-action { width: 38px; }
+.preview-table th,
+.preview-table td {
+    padding: .3rem .34rem;
+    vertical-align: top;
+}
+.preview-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    background: var(--surface-card-solid);
+    white-space: nowrap;
+}
+.preview-table tbody tr {
+    scroll-margin-top: 42px;
+}
+.preview-table .badge {
+    padding: .28rem .45rem;
+    font-size: .68rem;
+    white-space: nowrap;
+}
+.mini-input {
+    width: 100%;
+    min-width: 0;
+    padding: .3rem .4rem;
+    font-size: .74rem;
+    line-height: 1.15;
+    box-sizing: border-box;
+}
+.bulk-fact-picker { position: relative; min-width: 0; display: grid; gap: .12rem; }
 .bulk-fact-search { width: 100%; }
 .bulk-fact-selected {
     color: var(--text-muted);
-    font-size: .72rem;
-    line-height: 1.25;
+    font-size: .68rem;
+    line-height: 1.15;
+    max-height: 1.2em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .bulk-fact-dropdown {
     display: none;
@@ -943,10 +1071,38 @@ document.addEventListener('DOMContentLoaded', () => {
     font-style: normal;
     font-weight: 700;
 }
+.row-worker-compact {
+    position: relative;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+}
+.row-worker-summary {
+    min-width: 82px;
+    color: var(--text-muted);
+    font-size: .72rem;
+    white-space: nowrap;
+}
+.row-worker-summary.has-workers { color: var(--text-main); font-weight: 700; }
+.row-worker-editor {
+    display: none;
+    position: absolute;
+    top: calc(100% + 5px);
+    right: 0;
+    width: min(520px, 78vw);
+    z-index: 30;
+    padding: .75rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 10px;
+    background: var(--surface-card-solid);
+    box-shadow: 0 16px 40px rgba(15, 23, 42, .18);
+}
+.row-worker-editor.is-open { display: block; }
 .worker-picker { display: grid; gap: .45rem; }
-.worker-picker.compact .worker-search-wrap { max-width: 360px; }
-.worker-picker.compact .worker-tags { max-width: 420px; }
-.worker-picker.compact .worker-filter-row { max-width: 420px; }
+.worker-picker.compact .worker-search-wrap { max-width: none; }
+.worker-picker.compact .worker-tags { max-width: none; }
+.worker-picker.compact .worker-filter-row { max-width: none; }
 .btn-mini { padding: .35rem .65rem; font-size: .78rem; }
 .worker-filter-row {
     display: grid;
