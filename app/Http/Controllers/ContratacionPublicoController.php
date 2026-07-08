@@ -175,6 +175,46 @@ class ContratacionPublicoController extends Controller
         return response()->json(['ok' => true, 'removed' => $removed]);
     }
 
+    public function registrarErrorDocumento(Request $request)
+    {
+        $googleUser = Session::get('contratacion_google_user');
+        if (!$googleUser) {
+            return response()->json(['message' => 'Sesión expirada. Inicia sesión con Google nuevamente.'], 401);
+        }
+
+        $data = $request->validate([
+            'campo'             => 'nullable|string|max:80',
+            'fase'              => 'required|string|max:80',
+            'mensaje'           => 'nullable|string|max:500',
+            'archivo_nombre'    => 'nullable|string|max:255',
+            'archivo_tamano'    => 'nullable|integer|min:0',
+            'archivo_tipo'      => 'nullable|string|max:120',
+            'http_status'       => 'nullable|integer|min:0|max:599',
+            'xhr_response'      => 'nullable|string|max:1000',
+            'navigator_online'  => 'nullable|boolean',
+            'user_agent_cliente' => 'nullable|string|max:500',
+        ]);
+
+        Log::warning('Contratacion publico: error frontend upload documento', [
+            'google_id_hash'    => hash('sha256', (string) ($googleUser['id'] ?? '')),
+            'email_hash'        => hash('sha256', (string) ($googleUser['email'] ?? '')),
+            'campo'             => $data['campo'] ?? null,
+            'fase'              => $data['fase'],
+            'mensaje'           => $data['mensaje'] ?? null,
+            'archivo_nombre'    => isset($data['archivo_nombre']) ? Str::limit($data['archivo_nombre'], 120, '') : null,
+            'archivo_tamano'    => $data['archivo_tamano'] ?? null,
+            'archivo_tipo'      => $data['archivo_tipo'] ?? null,
+            'http_status'       => $data['http_status'] ?? null,
+            'xhr_response'      => isset($data['xhr_response']) ? Str::limit($data['xhr_response'], 500, '') : null,
+            'navigator_online'  => $data['navigator_online'] ?? null,
+            'ip'                => $request->ip(),
+            'user_agent'        => Str::limit((string) $request->userAgent(), 500, ''),
+            'user_agent_cliente' => $data['user_agent_cliente'] ?? null,
+        ]);
+
+        return response()->json(['ok' => true]);
+    }
+
     // ─── Paso 5: Guardar / actualizar postulación ────────────────
     public function store(Request $request)
     {

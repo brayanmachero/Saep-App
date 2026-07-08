@@ -89,6 +89,7 @@ Route::prefix('postulacion')->middleware('throttle:180,1')->group(function () {
     Route::get('/formulario',      [ContratacionPublicoController::class, 'formulario'])->name('contratacion-publico.formulario');
     Route::post('/documentos/preupload', [ContratacionPublicoController::class, 'preuploadDocumento'])->middleware('throttle:120,1')->name('contratacion-publico.documento.preupload');
     Route::post('/documentos/descartar', [ContratacionPublicoController::class, 'descartarPreuploadDocumento'])->middleware('throttle:120,1')->name('contratacion-publico.documento.descartar');
+    Route::post('/documentos/error', [ContratacionPublicoController::class, 'registrarErrorDocumento'])->middleware('throttle:120,1')->name('contratacion-publico.documento.error');
     Route::post('/enviar',         [ContratacionPublicoController::class, 'store'])->middleware('throttle:20,1')->name('contratacion-publico.store');
     Route::get('/confirmacion/{folio}', [ContratacionPublicoController::class, 'confirmacion'])->name('contratacion-publico.confirmacion')->middleware('signed');
     Route::post('/logout',         [ContratacionPublicoController::class, 'logout'])->name('contratacion-publico.logout');

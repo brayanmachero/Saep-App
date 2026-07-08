@@ -66,7 +66,14 @@ class PublicConfirmationSignatureTest extends TestCase
         $this->get(route('contratacion-publico.confirmacion', $postulante->folio))
             ->assertForbidden();
 
-        $this->get(URL::temporarySignedRoute(
+        $this->withSession([
+            'contratacion_google_user' => [
+                'id' => $postulante->google_id,
+                'email' => $postulante->email,
+                'name' => $postulante->google_name,
+                'avatar' => null,
+            ],
+        ])->get(URL::temporarySignedRoute(
             'contratacion-publico.confirmacion',
             now()->addDays(7),
             ['folio' => $postulante->folio]

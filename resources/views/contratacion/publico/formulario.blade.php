@@ -498,6 +498,7 @@ document.getElementById('rut').addEventListener('input', function () {
 const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
 const PREUPLOAD_URL = @json(route('contratacion-publico.documento.preupload'));
 const DISCARD_UPLOAD_URL = @json(route('contratacion-publico.documento.descartar'));
+const UPLOAD_ERROR_URL = @json(route('contratacion-publico.documento.error'));
 const CSRF_TOKEN = @json(csrf_token());
 const uploadActivos = new Set();
 let envioEnCurso = false;
@@ -538,6 +539,43 @@ function mostrarErrorArchivo(campo, mensaje) {
 function ocultarErrorArchivo(campo) {
     const errorEl = document.getElementById('file-error-' + campo);
     if (errorEl) errorEl.style.display = 'none';
+}
+
+function registrarErrorUpload(campo, fase, mensaje, input = null, xhr = null) {
+    try {
+        const file = input && input.files && input.files[0] ? input.files[0] : null;
+        const formData = new FormData();
+        formData.append('_token', CSRF_TOKEN);
+        formData.append('campo', campo || '');
+        formData.append('fase', fase || 'desconocida');
+        formData.append('mensaje', String(mensaje || '').slice(0, 500));
+        formData.append('navigator_online', navigator.onLine ? '1' : '0');
+        formData.append('user_agent_cliente', String(navigator.userAgent || '').slice(0, 500));
+
+        if (file) {
+            formData.append('archivo_nombre', String(file.name || '').slice(0, 255));
+            formData.append('archivo_tamano', String(file.size || 0));
+            formData.append('archivo_tipo', String(file.type || '').slice(0, 120));
+        }
+
+        if (xhr) {
+            formData.append('http_status', String(xhr.status || 0));
+            formData.append('xhr_response', String(xhr.responseText || '').slice(0, 1000));
+        }
+
+        if (navigator.sendBeacon && navigator.sendBeacon(UPLOAD_ERROR_URL, formData)) {
+            return;
+        }
+
+        fetch(UPLOAD_ERROR_URL, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+            body: formData,
+            keepalive: true
+        }).catch(function () {});
+    } catch (error) {
+        // No bloquear la postulación si falla la telemetría.
+    }
 }
 
 function iconoEstado(estado) {
@@ -627,15 +665,19 @@ function subirDocumento(input) {
     }
 
     if (file.size > MAX_FILE_BYTES) {
+        const msg = 'El archivo "' + file.name + '" supera el límite de 100 MB. Selecciona un archivo más pequeño.';
+        registrarErrorUpload(campo, 'client_size_limit', msg, input);
         input.value = '';
-        mostrarErrorArchivo(campo, 'El archivo "' + file.name + '" supera el límite de 100 MB. Selecciona un archivo más pequeño.');
+        mostrarErrorArchivo(campo, msg);
         setEstadoArchivo(campo, 'error', 'Archivo demasiado grande', { retry: false });
         return Promise.resolve(false);
     }
 
     return archivoEsLegible(file).then(function (legible) {
         if (!legible) {
-            mostrarErrorArchivo(campo, 'Chrome no pudo leer este archivo. Vuelve a seleccionarlo desde Galería o Archivos/Descargas y evita moverlo o editarlo antes de enviar.');
+            const msg = 'Chrome no pudo leer este archivo. Vuelve a seleccionarlo desde Galería o Archivos/Descargas y evita moverlo o editarlo antes de enviar.';
+            registrarErrorUpload(campo, 'client_file_unreadable', msg, input);
+            mostrarErrorArchivo(campo, msg);
             setEstadoArchivo(campo, 'error', 'Archivo no disponible en el teléfono', { retry: true });
             return false;
         }
@@ -680,6 +722,7 @@ function subirDocumento(input) {
                 }
 
                 const msg = mensajeErrorUpload(xhr);
+                registrarErrorUpload(campo, 'server_upload_rejected', msg, input, xhr);
                 mostrarErrorArchivo(campo, msg);
                 setEstadoArchivo(campo, 'error', 'Error al subir: ' + file.name, { retry: true });
                 resolve(false);
@@ -688,7 +731,9 @@ function subirDocumento(input) {
             xhr.onerror = function () {
                 uploadActivos.delete(campo);
                 actualizarBotonEnvio();
-                mostrarErrorArchivo(campo, 'No se pudo conectar para subir el archivo. Revisa la señal e intenta nuevamente.');
+                const msg = 'No se pudo conectar para subir el archivo. Revisa la señal e intenta nuevamente.';
+                registrarErrorUpload(campo, 'network_error', msg, input, xhr);
+                mostrarErrorArchivo(campo, msg);
                 setEstadoArchivo(campo, 'error', 'Error de conexión: ' + file.name, { retry: true });
                 resolve(false);
             };

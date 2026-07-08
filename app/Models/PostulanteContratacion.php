@@ -44,11 +44,17 @@ class PostulanteContratacion extends Model
                 // lockForUpdate dentro de una transacción serializa la lectura
                 // del último folio y bloquea otros INSERT concurrentes.
                 $model->folio = \DB::transaction(function () use ($year) {
-                    $last = static::whereYear('created_at', $year)
-                        ->orderByRaw('CAST(SUBSTRING_INDEX(folio, \'-\', -1) AS UNSIGNED) DESC')
+                    $lastSeq = static::whereYear('created_at', $year)
+                        ->where('folio', 'like', "POST-{$year}-%")
                         ->lockForUpdate()
-                        ->value('folio');
-                    $seq = $last ? ((int) substr(strrchr($last, '-'), 1)) + 1 : 1;
+                        ->pluck('folio')
+                        ->map(function ($folio) {
+                            $suffix = strrchr((string) $folio, '-');
+
+                            return $suffix === false ? 0 : (int) substr($suffix, 1);
+                        })
+                        ->max();
+                    $seq = ((int) $lastSeq) + 1;
                     return 'POST-' . $year . '-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
                 });
             }
