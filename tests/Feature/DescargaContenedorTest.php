@@ -1095,6 +1095,33 @@ class DescargaContenedorTest extends TestCase
             ->assertDontSee('$36.000');
     }
 
+    public function test_capture_only_user_forms_do_not_receive_price_data(): void
+    {
+        $capturador = $this->createContainerModuleUser(false);
+        $centro = $this->createCentroCosto('CD Captura Precio QA');
+        $this->createTarifa('CNTPRECIOCAP', 75000, 36000, 'PRECIO OCULTO QA', false, $centro);
+
+        foreach ([
+            route('descarga-contenedores.create'),
+            route('descarga-contenedores.carga-rapida'),
+        ] as $url) {
+            $this->actingAs($capturador)
+                ->get($url)
+                ->assertOk()
+                ->assertSee('CNTPRECIOCAP')
+                ->assertDontSee('Costo unitario')
+                ->assertDontSee('Pago estimado')
+                ->assertDontSee('Pago colaborador')
+                ->assertDontSee('Monto')
+                ->assertDontSee('75000')
+                ->assertDontSee('36000')
+                ->assertDontSee('$75.000')
+                ->assertDontSee('$36.000')
+                ->assertDontSee('"costo_unitario"', false)
+                ->assertDontSee('"pago_colaborador"', false);
+        }
+    }
+
     public function test_operational_editor_without_coordinator_role_cannot_see_costs(): void
     {
         $admin = $this->createSuperAdminUser();

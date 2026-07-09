@@ -34,7 +34,7 @@
                 'Liquidado: queda bloqueado para evitar cambios accidentales en pagos.',
             ]
             : [
-                'Borrador: registro editable, creado manualmente o desde programación.',
+                'Borrador: registro cargado para revisión de coordinación.',
                 'Listo para validar: tiene datos mínimos, equipo y porcentajes al 100%.',
                 'Validado: coordinación revisó el registro. Los valores económicos no son visibles para este perfil.',
             ],
