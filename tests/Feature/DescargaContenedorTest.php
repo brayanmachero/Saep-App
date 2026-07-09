@@ -317,6 +317,33 @@ class DescargaContenedorTest extends TestCase
             ->assertSee('LTS QUILICURA DOT QA');
     }
 
+    public function test_dotacion_can_bulk_update_operational_center_without_changing_talana_center(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centroTalana = $this->createCentroCosto('LTS CAMPOS DE CHILE BULK QA');
+        $centroOperativo = $this->createCentroCosto('LTS QUILICURA BULK QA');
+        $workerA = $this->createTalanaWorker('Bulk Centro Real A', $centroTalana);
+        $workerB = $this->createTalanaWorker('Bulk Centro Real B', $centroTalana);
+
+        $this->actingAs($user)
+            ->patch(route('descarga-contenedores.dotacion.trabajadores.bulk-update'), [
+                'trabajadores' => [$workerA->id, $workerB->id],
+                'centro_operativo_id' => $centroOperativo->id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $workerA->refresh();
+        $workerB->refresh();
+
+        $this->assertSame($centroTalana->id, $workerA->centro_costo_id);
+        $this->assertSame($centroTalana->id, $workerB->centro_costo_id);
+        $this->assertSame($centroOperativo->id, $workerA->centro_operativo_id);
+        $this->assertSame($centroOperativo->id, $workerB->centro_operativo_id);
+        $this->assertSame($centroOperativo->nombre, $workerA->centro_operativo_nombre);
+        $this->assertSame($centroOperativo->nombre, $workerB->centro_operativo_nombre);
+    }
+
     public function test_manual_store_uses_operational_center_in_participant_snapshot(): void
     {
         $user = $this->createSuperAdminUser();
@@ -900,6 +927,39 @@ class DescargaContenedorTest extends TestCase
 
         $descarga->refresh();
 
+        $this->assertSame('borrador', $descarga->estado);
+        $this->assertTrue($descarga->validationBlockers()->contains('porcentajes no suman 100%'));
+    }
+
+    public function test_manual_store_preserves_explicit_percentages_instead_of_normalizing_them(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Porcentaje Manual QA');
+        $tarifa = $this->createTarifa('CNTPCTMANUAL', 75000, 36000, 'PORCENTAJE MANUAL QA');
+        $workerA = $this->createTalanaWorker('Trabajador Manual Porcentaje A', $centro);
+        $workerB = $this->createTalanaWorker('Trabajador Manual Porcentaje B', $centro);
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'CD Porcentaje Manual QA',
+                'fecha' => '2026-07-02',
+                'contenedor' => 'CONT-PCT-MANUAL-001',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([
+                    ['id' => $workerA->id, 'porcentaje' => 50],
+                    ['id' => $workerB->id, 'porcentaje' => 20],
+                ]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-PCT-MANUAL-001')->firstOrFail();
+        $participantes = $descarga->participantes()->orderBy('id')->get();
+
+        $this->assertSame([50.0, 20.0], $participantes->map(fn ($p) => (float) $p->porcentaje_participacion)->all());
+        $this->assertSame([18000.0, 7200.0], $participantes->map(fn ($p) => (float) $p->monto_calculado)->all());
         $this->assertSame('borrador', $descarga->estado);
         $this->assertTrue($descarga->validationBlockers()->contains('porcentajes no suman 100%'));
     }

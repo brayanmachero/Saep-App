@@ -482,12 +482,14 @@ class DescargaContenedorController extends Controller
         $trabajadoresInactivos = clone $trabajadoresBase;
         $trabajadoresCentros = clone $trabajadoresBase;
         $trabajadoresCargos = clone $trabajadoresBase;
+        $trabajadoresAjustados = clone $trabajadoresBase;
 
         $stats = [
             'activos' => $trabajadoresActivos->where('activo', true)->count(),
             'inactivos' => $trabajadoresInactivos->where('activo', false)->count(),
             'centros' => $trabajadoresCentros->whereNotNull('centro_costo_id')->distinct()->count('centro_costo_id'),
             'cargos' => $trabajadoresCargos->whereNotNull('cargo_nombre')->distinct()->count('cargo_nombre'),
+            'ajustes_reales' => $trabajadoresAjustados->whereNotNull('centro_operativo_id')->count(),
             'participantes' => DB::table('descarga_contenedor_participantes')->whereNotNull('talana_trabajador_id')->distinct()->count('talana_trabajador_id'),
         ];
 
@@ -560,6 +562,37 @@ class DescargaContenedorController extends Controller
         ]);
 
         return back()->with('success', 'Centro costo real actualizado.');
+    }
+
+    public function updateTrabajadoresOperacionBulk(Request $request)
+    {
+        $this->authorizeCostManagement();
+
+        $data = $request->validate([
+            'trabajadores' => ['required', 'array', 'min:1', 'max:200'],
+            'trabajadores.*' => ['integer', 'distinct', 'exists:talana_trabajadores,id'],
+            'centro_operativo_id' => ['nullable', 'exists:centros_costo,id'],
+        ]);
+
+        $centroOperativo = !empty($data['centro_operativo_id'])
+            ? CentroCosto::find($data['centro_operativo_id'])
+            : null;
+        $trabajadorIds = collect($data['trabajadores'])
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        TalanaTrabajador::whereIn('id', $trabajadorIds)->update([
+            'centro_operativo_id' => $centroOperativo?->id,
+            'centro_operativo_nombre' => $centroOperativo?->nombre,
+        ]);
+
+        $accion = $centroOperativo
+            ? "asignados a {$centroOperativo->nombre}"
+            : 'configurados para usar el centro Talana';
+
+        return back()->with('success', "{$trabajadorIds->count()} trabajadores {$accion}.");
     }
 
     public function liquidacion(Request $request)
@@ -1359,6 +1392,7 @@ class DescargaContenedorController extends Controller
                     'porcentaje' => $porcentaje !== null && $porcentaje !== ''
                         ? max(0, (float) str_replace(',', '.', (string) $porcentaje))
                         : null,
+                    'porcentaje_informado' => $porcentaje !== null && $porcentaje !== '',
                 ];
             })
             ->filter()
@@ -1369,25 +1403,15 @@ class DescargaContenedorController extends Controller
             return $items;
         }
 
-        $sum = (float) $items->sum(fn ($item) => $item['porcentaje'] ?? 0);
-        if ($sum <= 0) {
+        $hasExplicitPercentages = $items->contains(fn ($item) => $item['porcentaje_informado']);
+        if (!$hasExplicitPercentages) {
             return $this->distribuirIgual($items->pluck('id')->all());
         }
 
-        $assigned = 0.0;
-        $lastIndex = $items->count() - 1;
-
-        return $items->map(function ($item, $index) use ($sum, $lastIndex, &$assigned) {
-            if ($index === $lastIndex) {
-                $porcentaje = round(100 - $assigned, 2);
-            } else {
-                $porcentaje = round(((float) ($item['porcentaje'] ?? 0)) * 100 / $sum, 2);
-                $assigned += $porcentaje;
-            }
-
+        return $items->map(function ($item) {
             return [
                 'id' => $item['id'],
-                'porcentaje' => $porcentaje,
+                'porcentaje' => round((float) ($item['porcentaje'] ?? 0), 2),
             ];
         });
     }

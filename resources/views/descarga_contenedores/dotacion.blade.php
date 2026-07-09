@@ -16,6 +16,7 @@
         'items' => [
             'La nómina viene de Talana y está acotada a los centros gestionados por la operación de contenedores.',
             'Al filtrar por centro, el selector de cargo muestra sólo cargos disponibles en ese centro.',
+            'Centro costo real es un ajuste propio de Contenedores: permite mover operativamente a una persona sin modificar su dato Talana.',
             'Los montos son referenciales y se calculan desde registros donde el trabajador participó.',
         ],
     ])
@@ -36,6 +37,10 @@
         <div class="glass-card stat-item">
             <div class="stat-icon primary"><i class="bi bi-person-badge"></i></div>
             <div class="stat-info"><h3>{{ $stats['cargos'] }}</h3><p>Cargos clasificados</p></div>
+        </div>
+        <div class="glass-card stat-item">
+            <div class="stat-icon warning"><i class="bi bi-arrow-left-right"></i></div>
+            <div class="stat-info"><h3>{{ $stats['ajustes_reales'] }}</h3><p>Ajustes reales</p></div>
         </div>
         <div class="glass-card stat-item">
             <div class="stat-icon primary"><i class="bi bi-people"></i></div>
@@ -128,10 +133,30 @@
     </div>
 
     <div class="glass-card">
+        <form method="POST" action="{{ route('descarga-contenedores.dotacion.trabajadores.bulk-update') }}" id="bulk-center-form" class="bulk-center-form">
+            @csrf
+            @method('PATCH')
+            <div>
+                <strong>Ajuste masivo de centro costo real</strong>
+                <p class="helper-text">Selecciona trabajadores de la tabla y aplica un centro real sólo para Contenedores. El centro Talana/origen queda intacto.</p>
+            </div>
+            <div class="bulk-center-actions">
+                <select name="centro_operativo_id" class="form-control">
+                    <option value="">Usar centro Talana/origen</option>
+                    @foreach($centros as $centro)
+                        <option value="{{ $centro->id }}">{{ $centro->nombre }}</option>
+                    @endforeach
+                </select>
+                <button type="submit" class="btn-premium"><i class="bi bi-check2-square"></i> Aplicar a seleccionados</button>
+            </div>
+        </form>
         <div style="overflow-x:auto">
             <table class="data-table">
                 <thead>
                     <tr>
+                        <th style="width:42px">
+                            <input type="checkbox" id="select-all-workers" title="Seleccionar todos los visibles">
+                        </th>
                         <th>Trabajador</th>
                         <th>RUT</th>
                         <th>Cargo</th>
@@ -147,6 +172,9 @@
                     @forelse($trabajadores as $trabajador)
                     @php($uso = $participacion->get($trabajador->id))
                     <tr>
+                        <td>
+                            <input type="checkbox" name="trabajadores[]" value="{{ $trabajador->id }}" form="bulk-center-form" class="worker-bulk-check" aria-label="Seleccionar {{ $trabajador->nombre_completo ?: $trabajador->nombre }}">
+                        </td>
                         <td><strong>{{ $trabajador->nombre_completo ?: $trabajador->nombre }}</strong></td>
                         <td>{{ $trabajador->rut ?: '—' }}</td>
                         <td>{{ $trabajador->cargo?->nombre ?: $trabajador->cargo_nombre ?: '—' }}</td>
@@ -181,7 +209,7 @@
                         <td>{{ $uso?->ultima_descarga ? \Carbon\Carbon::parse($uso->ultima_descarga)->format('d/m/Y') : '—' }}</td>
                     </tr>
                     @empty
-                    <tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted)">No hay trabajadores para el filtro seleccionado.</td></tr>
+                    <tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text-muted)">No hay trabajadores para el filtro seleccionado.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -191,6 +219,37 @@
         @endif
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const selectAll = document.getElementById('select-all-workers');
+    const checks = [...document.querySelectorAll('.worker-bulk-check')];
+    const bulkForm = document.getElementById('bulk-center-form');
+
+    selectAll?.addEventListener('change', () => {
+        checks.forEach(check => check.checked = selectAll.checked);
+    });
+
+    checks.forEach(check => {
+        check.addEventListener('change', () => {
+            if (!selectAll) return;
+            const selected = checks.filter(item => item.checked).length;
+            selectAll.checked = selected === checks.length && checks.length > 0;
+            selectAll.indeterminate = selected > 0 && selected < checks.length;
+        });
+    });
+
+    bulkForm?.addEventListener('submit', event => {
+        if (checks.some(check => check.checked)) return;
+
+        event.preventDefault();
+        if (window.showToast) {
+            window.showToast('Selecciona al menos un trabajador para aplicar el ajuste.', 'warning');
+            return;
+        }
+        window.alert('Selecciona al menos un trabajador para aplicar el ajuste.');
+    });
+});
+</script>
 <style>
 .section-title {
     margin: 0 0 .75rem;
@@ -203,6 +262,27 @@
     border-bottom: 1px solid var(--surface-border);
 }
 .helper-text { color: var(--text-muted); font-size: .86rem; line-height: 1.45; margin: 0 0 .75rem; }
+.bulk-center-form {
+    display: flex;
+    justify-content: space-between;
+    gap: .75rem;
+    align-items: flex-end;
+    margin-bottom: .85rem;
+    padding: .75rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    background: rgba(15, 27, 76, .04);
+}
+.bulk-center-form strong { color: var(--text-main); }
+.bulk-center-form .helper-text { margin: .25rem 0 0; max-width: 640px; }
+.bulk-center-actions {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+.bulk-center-actions select { min-width: 250px; }
 .worker-create-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)) auto; gap: .65rem; align-items: end; }
 .worker-create-grid label { font-size: .75rem; color: var(--text-muted); }
 .inline-center-form { display: flex; gap: .35rem; align-items: center; min-width: 260px; }
@@ -210,9 +290,13 @@
 .muted-inline { display:block; margin-top:.25rem; color:var(--text-muted); font-size:.72rem; }
 @media (max-width: 1180px) {
     .worker-create-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .bulk-center-form { align-items: stretch; flex-direction: column; }
+    .bulk-center-actions { justify-content: flex-start; }
 }
 @media (max-width: 640px) {
     .worker-create-grid { grid-template-columns: 1fr; }
+    .bulk-center-actions select,
+    .bulk-center-actions button { width: 100%; }
 }
 </style>
 @endsection

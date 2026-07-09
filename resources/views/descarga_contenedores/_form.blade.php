@@ -360,11 +360,12 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
         <div class="worker-tags"></div>
         <div class="distribution-summary">
             <span>Total: <strong data-total>0%</strong></span>
+            <span class="distribution-status" data-total-hint>Debe sumar 100% para validar.</span>
             @if($puedeGestionarCostos)
             <span>Pago estimado: <strong data-pago>$0</strong></span>
             @endif
             <button type="button" class="btn-secondary btn-mini" data-equalize>Repartir igual</button>
-            <button type="button" class="btn-secondary btn-mini" data-add-filtered>Agregar filtrados</button>
+            <button type="button" class="btn-secondary btn-mini" data-add-filtered>Agregar lista filtrada</button>
         </div>
         <div class="worker-filter-row">
             <select class="form-control worker-center-filter" aria-label="Filtrar trabajadores por centro">
@@ -389,6 +390,7 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
     const countEl = container.querySelector('[data-worker-count]');
     const descargaCenterSelect = document.querySelector('[name="centro_costo_id"]');
     const totalEl = container.querySelector('[data-total]');
+    const totalHintEl = container.querySelector('[data-total-hint]');
     const pagoEl = container.querySelector('[data-pago]');
     const equalizeBtn = container.querySelector('[data-equalize]');
     const addFilteredBtn = container.querySelector('[data-add-filtered]');
@@ -497,8 +499,18 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
             return { id: parseInt(id, 10), porcentaje };
         }));
 
-        totalEl.textContent = `${Math.round(total * 100) / 100}%`;
-        totalEl.style.color = Math.abs(total - 100) <= 0.05 ? 'var(--success-color)' : '#d97706';
+        const roundedTotal = Math.round(total * 100) / 100;
+        const difference = Math.round((100 - roundedTotal) * 100) / 100;
+        const isComplete = Math.abs(difference) <= 0.05;
+
+        totalEl.textContent = `${roundedTotal}%`;
+        totalEl.style.color = isComplete ? 'var(--success-color)' : '#d97706';
+        if (totalHintEl) {
+            totalHintEl.classList.toggle('is-ok', isComplete);
+            totalHintEl.textContent = isComplete
+                ? 'Listo para validar.'
+                : (difference > 0 ? `Falta ${difference}% por asignar.` : `Sobra ${Math.abs(difference)}%. Ajusta el reparto.`);
+        }
         if (pagoEl) {
             pagoEl.textContent = pago !== null ? formatCurrency(pago) : 'Revisar tarifa';
         }
@@ -552,7 +564,12 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
         const gap = 4;
         const viewportPadding = 16;
         const minDropdownHeight = 120;
-        const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+        const actions = document.querySelector('.container-form-actions');
+        const actionsRect = actions?.getBoundingClientRect();
+        const bottomLimit = actionsRect && actionsRect.top < window.innerHeight && actionsRect.bottom > 0
+            ? Math.max(viewportPadding, actionsRect.top - viewportPadding)
+            : window.innerHeight - viewportPadding;
+        const spaceBelow = bottomLimit - rect.bottom;
         const spaceAbove = rect.top - viewportPadding;
         const openUp = spaceBelow < minDropdownHeight && spaceAbove > spaceBelow;
         const availableSpace = Math.max(minDropdownHeight, openUp ? spaceAbove - gap : spaceBelow - gap);
@@ -724,10 +741,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <style>
 .form-panel { max-width: 1120px; margin: 0 auto; }
+.form-panel .form-grid { gap: 1rem; }
+.form-panel .form-group { min-width: 0; }
+.form-panel label {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    color: var(--text-main);
+    font-size: .92rem;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: .35rem;
+}
+.form-panel .form-control {
+    min-height: 44px;
+    font-size: .95rem;
+    line-height: 1.25;
+    border-radius: 8px;
+}
+.form-panel textarea.form-control {
+    min-height: 104px;
+}
 .section-title {
     margin: 0 0 1rem;
     color: var(--text-muted);
-    font-size: .8rem;
+    font-size: .86rem;
     text-transform: uppercase;
     letter-spacing: .06em;
     font-weight: 700;
@@ -735,7 +773,13 @@ document.addEventListener('DOMContentLoaded', () => {
     border-bottom: 1px solid var(--surface-border);
 }
 .section-title:not(:first-child) { margin-top: 1.5rem; }
-.muted-hint { display: block; margin-top: .45rem; color: var(--text-muted); }
+.muted-hint {
+    display: block;
+    margin-top: .45rem;
+    color: var(--text-muted);
+    font-size: .82rem;
+    line-height: 1.4;
+}
 .readonly-control { background: var(--surface-bg); color: var(--text-main); cursor: default; }
 .tarifa-picker { display: grid; gap: .45rem; }
 .tarifa-search-wrap { position: relative; }
@@ -755,15 +799,15 @@ document.addEventListener('DOMContentLoaded', () => {
 }
 .tarifa-option {
     display: grid;
-    grid-template-columns: 88px 1fr auto;
+    grid-template-columns: 98px 1fr auto;
     align-items: center;
     gap: .55rem;
-    padding: .65rem .8rem;
+    padding: .8rem .9rem;
     cursor: pointer;
 }
 .tarifa-option:hover { background: rgba(15, 27, 76, .06); }
 .tarifa-option span,
-.tarifa-empty { color: var(--text-muted); font-size: .78rem; }
+.tarifa-empty { color: var(--text-muted); font-size: .84rem; }
 .tarifa-option em {
     font-style: normal;
     color: #d97706;
@@ -776,15 +820,15 @@ document.addEventListener('DOMContentLoaded', () => {
     align-items: center;
     justify-content: space-between;
     gap: .5rem;
-    min-height: 38px;
-    padding: .45rem .55rem;
+    min-height: 44px;
+    padding: .55rem .65rem;
     border-radius: 8px;
     background: rgba(15, 27, 76, .06);
     color: var(--text-main);
-    font-size: .82rem;
+    font-size: .9rem;
 }
 .tarifa-selected.is-empty { color: var(--text-muted); background: rgba(107, 114, 128, .08); }
-.tarifa-selected .icon-btn { width: 30px; height: 30px; flex: 0 0 auto; }
+.tarifa-selected .icon-btn { width: 38px; height: 38px; flex: 0 0 auto; }
 .worker-picker { display: grid; gap: .5rem; }
 .distribution-summary {
     display: flex;
@@ -792,7 +836,22 @@ document.addEventListener('DOMContentLoaded', () => {
     gap: .75rem;
     flex-wrap: wrap;
     color: var(--text-muted);
-    font-size: .84rem;
+    font-size: .92rem;
+    padding: .65rem .75rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    background: rgba(15, 27, 76, .04);
+}
+.distribution-summary [data-total] {
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+.distribution-status {
+    color: #d97706;
+    font-weight: 700;
+}
+.distribution-status.is-ok {
+    color: var(--success-color);
 }
 .worker-filter-row {
     display: grid;
@@ -803,51 +862,56 @@ document.addEventListener('DOMContentLoaded', () => {
 }
 .worker-filter-count {
     color: var(--text-muted);
-    font-size: .78rem;
+    font-size: .84rem;
     white-space: nowrap;
 }
-.btn-mini { padding: .35rem .65rem; font-size: .78rem; }
+.btn-mini { padding: .5rem .75rem; font-size: .84rem; min-height: 38px; }
 .worker-tags { display: flex; flex-wrap: wrap; gap: .45rem; min-height: 2rem; }
 .worker-tag {
     display: grid;
     grid-template-columns: minmax(180px, 1fr) auto auto auto;
     align-items: center;
-    gap: .45rem;
-    padding: .45rem .55rem;
+    gap: .55rem;
+    padding: .6rem .7rem;
     border-radius: 8px;
     background: rgba(15, 27, 76, .08);
     color: var(--text-main);
-    font-size: .82rem;
-    min-width: 430px;
+    font-size: .9rem;
+    min-width: 460px;
 }
 .worker-tag.no-costs {
     grid-template-columns: minmax(180px, 1fr) auto auto;
-    min-width: 330px;
+    min-width: 360px;
 }
 .worker-main { display: grid; gap: .1rem; min-width: 0; }
-.worker-tag small { color: var(--text-muted); font-size: .72rem; }
+.worker-tag small { color: var(--text-muted); font-size: .78rem; }
 .percent-control {
     display: inline-flex;
     align-items: center;
     gap: .25rem;
     color: var(--text-muted);
-    font-size: .75rem;
+    font-size: .85rem;
 }
 .percent-control input {
-    width: 74px;
-    padding: .35rem .45rem;
+    width: 84px;
+    min-height: 38px;
+    padding: .45rem .55rem;
     border: 1px solid var(--surface-border);
     border-radius: 8px;
     background: var(--surface-card-solid);
     color: var(--text-main);
+    font-size: .9rem;
 }
 .worker-amount { min-width: 92px; text-align: right; }
 .worker-tag button {
-    border: 0;
-    background: none;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    background: var(--surface-card-solid);
     color: var(--text-muted);
     cursor: pointer;
-    font-size: 1rem;
+    font-size: 1.1rem;
     line-height: 1;
 }
 .worker-search-wrap { position: relative; max-width: 620px; }
@@ -871,24 +935,48 @@ document.addEventListener('DOMContentLoaded', () => {
     margin-top: 0;
     z-index: 5000;
 }
-.worker-option { padding: .65rem .8rem; cursor: pointer; display: grid; gap: .15rem; }
+.worker-option { padding: .8rem .9rem; cursor: pointer; display: grid; gap: .2rem; }
 .worker-option:hover { background: rgba(15, 27, 76, .06); }
 .worker-option em {
     color: var(--text-muted);
-    font-size: .72rem;
+    font-size: .78rem;
     font-style: normal;
 }
 .worker-group {
-    padding: .48rem .8rem .25rem;
+    padding: .55rem .9rem .3rem;
     color: var(--text-muted);
-    font-size: .68rem;
+    font-size: .72rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: .04em;
     background: rgba(107, 114, 128, .08);
 }
-.worker-option small, .worker-empty { color: var(--text-muted); font-size: .78rem; }
+.worker-option small, .worker-empty { color: var(--text-muted); font-size: .84rem; }
 .worker-empty { padding: .7rem .8rem; }
+.container-form-actions {
+    position: sticky;
+    bottom: .75rem;
+    z-index: 20;
+    display: flex;
+    justify-content: flex-end;
+    gap: .75rem;
+    margin-top: 1.5rem;
+    padding: .75rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 10px;
+    background: var(--surface-card-solid);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, .14);
+}
+.container-form-actions .btn-secondary,
+.container-form-actions .btn-premium {
+    min-height: 46px;
+    padding: .7rem 1.1rem;
+    font-size: .95rem;
+}
+.container-form-actions .primary-save {
+    min-width: 190px;
+    justify-content: center;
+}
 @media (max-width: 640px) {
     .tarifa-option { grid-template-columns: 1fr; align-items: start; }
     .worker-filter-row { grid-template-columns: 1fr; max-width: none; }
@@ -896,5 +984,14 @@ document.addEventListener('DOMContentLoaded', () => {
     .worker-search-wrap { max-width: none; }
     .worker-tag { width: 100%; min-width: 0; grid-template-columns: 1fr auto; }
     .worker-amount { text-align: left; }
+    .container-form-actions {
+        bottom: .4rem;
+        flex-direction: column-reverse;
+    }
+    .container-form-actions .btn-secondary,
+    .container-form-actions .btn-premium {
+        width: 100%;
+        justify-content: center;
+    }
 }
 </style>

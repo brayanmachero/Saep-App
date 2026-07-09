@@ -180,6 +180,9 @@ Route::middleware('auth')->group(function () {
         Route::post('descarga-contenedores/dotacion/trabajadores', [DescargaContenedorController::class, 'storeTrabajadorOperacion'])
             ->name('descarga-contenedores.dotacion.trabajadores.store')
             ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::patch('descarga-contenedores/dotacion/trabajadores/centro-operativo', [DescargaContenedorController::class, 'updateTrabajadoresOperacionBulk'])
+            ->name('descarga-contenedores.dotacion.trabajadores.bulk-update')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
         Route::patch('descarga-contenedores/dotacion/trabajadores/{trabajador}', [DescargaContenedorController::class, 'updateTrabajadorOperacion'])
             ->name('descarga-contenedores.dotacion.trabajadores.update')
             ->middleware('modulo:descarga_contenedores,puede_editar');

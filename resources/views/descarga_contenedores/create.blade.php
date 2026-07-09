@@ -17,9 +17,9 @@
     <div class="glass-card">
         <form method="POST" action="{{ route('descarga-contenedores.store') }}">
             @include('descarga_contenedores._form')
-            <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.5rem">
+            <div class="container-form-actions">
                 <a href="{{ route('descarga-contenedores.index') }}" class="btn-secondary">Cancelar</a>
-                <button type="submit" class="btn-premium">
+                <button type="submit" class="btn-premium primary-save">
                     <i class="bi bi-save"></i> Guardar descarga
                 </button>
             </div>
