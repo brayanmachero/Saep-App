@@ -100,6 +100,10 @@ Route::middleware('auth')->group(function () {
 
     // --- DESCARGA DE ARCHIVOS ADJUNTOS (privados) ---
     Route::get('/archivos/{archivo}/descargar', function (\App\Models\ArchivoAdjunto $archivo) {
+        if ($archivo->entidad_tipo === 'descarga_contenedor') {
+            abort_unless(auth()->user()?->tieneAcceso('descarga_contenedores'), 403);
+        }
+
         $path = storage_path('app/private/' . $archivo->ruta);
         if (!file_exists($path)) {
             abort(404);
@@ -204,6 +208,8 @@ Route::middleware('auth')->group(function () {
         Route::match(['put', 'patch'], 'descarga-contenedores/tarifas/{tarifa}', [DescargaContenedorController::class, 'updateTarifa'])
             ->name('descarga-contenedores.tarifas.update')
             ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::get('descarga-contenedores/evidencias/{archivo}', [DescargaContenedorController::class, 'verEvidencia'])
+            ->name('descarga-contenedores.evidencias.ver');
         Route::get('descarga-contenedores', [DescargaContenedorController::class, 'index'])
             ->name('descarga-contenedores.index');
         Route::get('descarga-contenedores/create', [DescargaContenedorController::class, 'create'])
@@ -223,6 +229,9 @@ Route::middleware('auth')->group(function () {
             ->middleware('modulo:descarga_contenedores,puede_editar');
         Route::patch('descarga-contenedores/{descarga}/volver-validado', [DescargaContenedorController::class, 'volverValidado'])
             ->name('descarga-contenedores.volver-validado')
+            ->middleware('modulo:descarga_contenedores,puede_editar');
+        Route::delete('descarga-contenedores/{descarga}/evidencias/{archivo}', [DescargaContenedorController::class, 'destroyEvidencia'])
+            ->name('descarga-contenedores.evidencias.destroy')
             ->middleware('modulo:descarga_contenedores,puede_editar');
         Route::get('descarga-contenedores/{descarga}', [DescargaContenedorController::class, 'show'])
             ->name('descarga-contenedores.show');

@@ -176,6 +176,23 @@
             <label>Observación @include('descarga_contenedores._help_icon', ['text' => 'Notas de apoyo: diferencias, apoyo de otro centro, incidencias o instrucciones de coordinación.'])</label>
             <textarea name="observacion" class="form-control" rows="3" placeholder="Notas operativas, apoyo de otro centro, diferencias, etc.">{{ old('observacion', $descarga->observacion ?? '') }}</textarea>
         </div>
+        <div class="form-group" style="grid-column:1/-1">
+            <label>Evidencia fotográfica @include('descarga_contenedores._help_icon', ['text' => 'Fotografías de respaldo asociadas al registro. JPG, PNG o WebP; hasta 8 archivos de 8 MB cada uno.'])</label>
+            <input type="file" name="evidencias[]" class="form-control" accept="image/jpeg,image/png,image/webp" multiple data-evidence-input>
+            <small class="muted-hint">Las imágenes quedan asociadas al registro y se conservan como respaldo privado. Máximo 8 fotos de 8 MB cada una.</small>
+            <div class="evidence-selected-summary" data-evidence-summary>Sin fotos seleccionadas.</div>
+            <div class="evidence-selected-list" data-evidence-list></div>
+            @if($descarga && $descarga->evidencias->isNotEmpty())
+                <div class="evidence-inline-list">
+                    @foreach($descarga->evidencias as $evidencia)
+                        <a href="{{ route('descarga-contenedores.evidencias.ver', $evidencia) }}" target="_blank" rel="noopener">
+                            <i class="bi bi-image"></i>
+                            {{ $evidencia->nombre_original }}
+                        </a>
+                    @endforeach
+                </div>
+            @endif
+        </div>
     </div>
 
     <h4 class="section-title">Trabajadores que participaron @include('descarga_contenedores._help_icon', ['text' => 'Selecciona la dotación real que participó. Los porcentajes deben sumar 100% para validar.'])</h4>
@@ -728,6 +745,61 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
     sync();
 }
 
+function initEvidenceInput(input) {
+    const summary = document.querySelector('[data-evidence-summary]');
+    const list = document.querySelector('[data-evidence-list]');
+    const maxFiles = 8;
+    const maxBytes = 8 * 1024 * 1024;
+
+    function escapeEvidenceHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes) return '0 KB';
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    }
+
+    function renderEvidenceSelection() {
+        const files = Array.from(input.files || []);
+        const tooLarge = files.filter(file => file.size > maxBytes).length;
+        const overLimit = files.length > maxFiles;
+        const hasWarning = tooLarge > 0 || overLimit;
+
+        if (summary) {
+            summary.classList.toggle('is-warning', hasWarning);
+            if (files.length === 0) {
+                summary.textContent = 'Sin fotos seleccionadas.';
+            } else {
+                summary.textContent = `${files.length} foto${files.length === 1 ? '' : 's'} seleccionada${files.length === 1 ? '' : 's'}${hasWarning ? ' - revisa limites antes de guardar.' : '.'}`;
+            }
+        }
+
+        if (!list) return;
+        list.innerHTML = files.map((file, index) => {
+            const warning = file.size > maxBytes ? '<span class="evidence-file-warning">Supera 8 MB</span>' : '';
+
+            return `
+                <div class="evidence-selected-item">
+                    <i class="bi bi-image"></i>
+                    <span title="${escapeEvidenceHtml(file.name)}">${index + 1}. ${escapeEvidenceHtml(file.name)}</span>
+                    <small>${formatBytes(file.size)}</small>
+                    ${warning}
+                </div>
+            `;
+        }).join('');
+    }
+
+    input.addEventListener('change', renderEvidenceSelection);
+    renderEvidenceSelection();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const picker = document.getElementById('participantes_picker');
     const hidden = document.getElementById('participantes_json');
@@ -735,6 +807,11 @@ document.addEventListener('DOMContentLoaded', () => {
         let initial = [];
         try { initial = JSON.parse(hidden.value || '[]'); } catch (e) {}
         initWorkerPicker(picker, hidden, initial);
+    }
+
+    const evidenceInput = document.querySelector('[data-evidence-input]');
+    if (evidenceInput) {
+        initEvidenceInput(evidenceInput);
     }
 });
 </script>
@@ -779,6 +856,71 @@ document.addEventListener('DOMContentLoaded', () => {
     color: var(--text-muted);
     font-size: .82rem;
     line-height: 1.4;
+}
+.evidence-inline-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .45rem;
+    margin-top: .65rem;
+}
+.evidence-inline-list a {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    max-width: 260px;
+    padding: .42rem .6rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    color: var(--text-main);
+    background: var(--surface-bg);
+    font-size: .82rem;
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.evidence-selected-summary {
+    margin-top: .55rem;
+    color: var(--text-muted);
+    font-size: .84rem;
+    line-height: 1.35;
+}
+.evidence-selected-summary.is-warning {
+    color: #d97706;
+    font-weight: 700;
+}
+.evidence-selected-list {
+    display: grid;
+    gap: .35rem;
+    margin-top: .5rem;
+    max-width: 640px;
+}
+.evidence-selected-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: .45rem;
+    padding: .45rem .55rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    background: rgba(15, 27, 76, .05);
+    color: var(--text-main);
+    font-size: .84rem;
+}
+.evidence-selected-item span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.evidence-selected-item small {
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.evidence-file-warning {
+    color: #d97706;
+    font-size: .76rem;
+    font-weight: 800;
+    white-space: nowrap;
 }
 .readonly-control { background: var(--surface-bg); color: var(--text-main); cursor: default; }
 .tarifa-picker { display: grid; gap: .45rem; }
@@ -984,6 +1126,9 @@ document.addEventListener('DOMContentLoaded', () => {
     .worker-search-wrap { max-width: none; }
     .worker-tag { width: 100%; min-width: 0; grid-template-columns: 1fr auto; }
     .worker-amount { text-align: left; }
+    .evidence-selected-item { grid-template-columns: auto minmax(0, 1fr); }
+    .evidence-selected-item small,
+    .evidence-file-warning { grid-column: 2; }
     .container-form-actions {
         bottom: .4rem;
         flex-direction: column-reverse;

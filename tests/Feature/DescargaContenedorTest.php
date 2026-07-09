@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Middleware\ForcePasswordChange;
 use App\Http\Middleware\VerificarConsentimientoDatos;
+use App\Models\ArchivoAdjunto;
 use App\Models\CentroCosto;
 use App\Models\ConsentimientoDatos;
 use App\Models\DescargaContenedor;
@@ -16,6 +17,8 @@ use App\Models\User;
 use App\Support\PrivacyPolicy;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class DescargaContenedorTest extends TestCase
@@ -118,6 +121,74 @@ class DescargaContenedorTest extends TestCase
         $this->assertSame('borrador', $descarga->estado);
         $this->assertNull($descarga->validado_por);
         $this->assertNull($descarga->validado_at);
+    }
+
+    public function test_capture_user_can_attach_private_photo_evidence_on_store(): void
+    {
+        Storage::fake('local');
+
+        $capturador = $this->createContainerModuleUser(false);
+        $centro = $this->createCentroCosto('CD Evidencia QA');
+        $tarifa = $this->createTarifa('CNTEVID', 75000, 36000, 'EVIDENCIA QA');
+        $worker = $this->createTalanaWorker('Trabajador Evidencia QA', $centro);
+        $foto = UploadedFile::fake()->image('evidencia-descarga.jpg', 900, 700)->size(640);
+
+        $this->actingAs($capturador)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'CD Evidencia QA',
+                'fecha' => '2026-07-02',
+                'contenedor' => 'CONT-EVID-001',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([$worker->id]),
+                'evidencias' => [$foto],
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-EVID-001')->firstOrFail();
+        $evidencia = ArchivoAdjunto::where('entidad_tipo', 'descarga_contenedor')
+            ->where('entidad_id', $descarga->id)
+            ->firstOrFail();
+
+        $this->assertSame('evidencia-descarga.jpg', $evidencia->nombre_original);
+        $this->assertSame($capturador->id, $evidencia->subido_por);
+        Storage::disk('local')->assertExists($evidencia->ruta);
+
+        $this->actingAs($capturador)
+            ->get(route('descarga-contenedores.show', $descarga))
+            ->assertOk()
+            ->assertSee('Evidencia fotográfica')
+            ->assertSee('evidencia-descarga.jpg');
+
+        $this->actingAs($capturador)
+            ->get(route('descarga-contenedores.evidencias.ver', $evidencia))
+            ->assertOk();
+
+        $this->actingAs($capturador)
+            ->delete(route('descarga-contenedores.evidencias.destroy', [$descarga, $evidencia]))
+            ->assertForbidden();
+
+        Storage::disk('local')->assertExists($evidencia->ruta);
+
+        $sinModuloRole = Rol::firstOrCreate(
+            ['codigo' => 'SIN_CONTENEDORES'],
+            ['nombre' => 'Sin Contenedores']
+        );
+        $sinModulo = User::create([
+            'name' => 'Usuario Sin Contenedores',
+            'email' => 'sin-contenedores-' . uniqid() . '@saep.local',
+            'rol_id' => $sinModuloRole->id,
+            'password' => Hash::make('Saep2026!'),
+            'activo' => true,
+            'acepta_politica_datos' => true,
+            'fecha_aceptacion_politica' => now(),
+        ]);
+
+        $this->actingAs($sinModulo)
+            ->get(route('archivos.descargar', $evidencia))
+            ->assertForbidden();
     }
 
     public function test_tariff_changes_do_not_rewrite_existing_descarga_snapshots(): void

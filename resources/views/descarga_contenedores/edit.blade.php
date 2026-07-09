@@ -15,7 +15,7 @@
     @include('partials._alerts')
 
     <div class="glass-card">
-        <form method="POST" action="{{ route('descarga-contenedores.update', $descarga) }}">
+        <form method="POST" action="{{ route('descarga-contenedores.update', $descarga) }}" enctype="multipart/form-data">
             @include('descarga_contenedores._form', ['descarga' => $descarga])
             <div class="container-form-actions">
                 <a href="{{ route('descarga-contenedores.show', $descarga) }}" class="btn-secondary">Cancelar</a>

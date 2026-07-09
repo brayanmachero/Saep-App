@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CentroCosto;
+use App\Models\ArchivoAdjunto;
 use App\Models\DescargaContenedor;
 use App\Models\DescargaContenedorCarga;
 use App\Models\DescargaContenedorTarifa;
@@ -10,6 +11,8 @@ use App\Models\TalanaTrabajador;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class DescargaContenedorController extends Controller
 {
@@ -122,6 +125,7 @@ class DescargaContenedorController extends Controller
 
             $descarga = DescargaContenedor::create($data);
             $this->syncParticipantes($descarga, $this->extractParticipantesFromRequest($request));
+            $this->storeEvidencias($descarga, $request);
 
             return $descarga;
         });
@@ -145,6 +149,7 @@ class DescargaContenedorController extends Controller
             'participantes.talanaTrabajador.cargo',
             'participantes.user.centroCosto',
             'participantes.user.cargo',
+            'evidencias.subidoPor',
         ]);
 
         $tarifas = $this->puedeGestionarCostos()
@@ -163,7 +168,7 @@ class DescargaContenedorController extends Controller
     {
         $this->ensureEditable($descarga);
 
-        $descarga = $descarga->load('participantes');
+        $descarga = $descarga->load(['participantes', 'evidencias.subidoPor']);
 
         return view('descarga_contenedores.edit', array_merge(
             $this->formData(),
@@ -186,6 +191,7 @@ class DescargaContenedorController extends Controller
             $descarga->update($data);
             $descarga->refresh();
             $this->syncParticipantes($descarga, $this->extractParticipantesFromRequest($request));
+            $this->storeEvidencias($descarga, $request);
         });
 
         return redirect()
@@ -282,6 +288,31 @@ class DescargaContenedorController extends Controller
         return redirect()
             ->route('descarga-contenedores.index')
             ->with('success', 'Descarga eliminada.');
+    }
+
+    public function verEvidencia(ArchivoAdjunto $archivo)
+    {
+        $this->ensureContainerEvidence($archivo);
+
+        if (!Storage::disk('local')->exists($archivo->ruta)) {
+            abort(404);
+        }
+
+        return response()->file(Storage::disk('local')->path($archivo->ruta), [
+            'Content-Type' => $archivo->mime_type,
+            'Content-Disposition' => 'inline; filename="' . $archivo->nombre_original . '"',
+        ]);
+    }
+
+    public function destroyEvidencia(DescargaContenedor $descarga, ArchivoAdjunto $archivo)
+    {
+        $this->ensureEditable($descarga);
+        $this->ensureContainerEvidence($archivo, $descarga);
+
+        Storage::disk('local')->delete($archivo->ruta);
+        $archivo->delete();
+
+        return back()->with('success', 'Evidencia eliminada.');
     }
 
     public function cargaRapida()
@@ -994,6 +1025,15 @@ class DescargaContenedorController extends Controller
         abort_if($descarga->estado === 'liquidado', 403, 'No se puede editar un registro liquidado.');
     }
 
+    private function ensureContainerEvidence(ArchivoAdjunto $archivo, ?DescargaContenedor $descarga = null): void
+    {
+        abort_unless($archivo->entidad_tipo === 'descarga_contenedor', 404);
+
+        if ($descarga) {
+            abort_unless((int) $archivo->entidad_id === (int) $descarga->id, 404);
+        }
+    }
+
     private function centrosOperacion()
     {
         $centros = $this->centrosByKeywords($this->descargaOperacionCenterKeywords());
@@ -1188,7 +1228,11 @@ class DescargaContenedorController extends Controller
             'tarifa_id' => ['nullable', 'exists:descarga_contenedor_tarifas,id'],
             'fact_codigo' => ['nullable', 'string', 'max:40'],
             'observacion' => ['nullable', 'string'],
+            'evidencias' => ['nullable', 'array', 'max:8'],
+            'evidencias.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
         ]);
+
+        unset($data['evidencias']);
 
         foreach (['hora_cita', 'hora_inicio_descarga', 'hora_termino_descarga'] as $field) {
             $data[$field] = $this->normalizeTime($data[$field] ?? null);
@@ -1197,6 +1241,35 @@ class DescargaContenedorController extends Controller
         $data['fact_codigo'] = $this->cleanUpper($data['fact_codigo'] ?? null);
 
         return $data;
+    }
+
+    private function storeEvidencias(DescargaContenedor $descarga, Request $request): void
+    {
+        if (!$request->hasFile('evidencias')) {
+            return;
+        }
+
+        foreach ((array) $request->file('evidencias') as $file) {
+            if (!$file || !$file->isValid()) {
+                continue;
+            }
+
+            $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'jpg');
+            $filename = (string) Str::uuid() . '.' . $extension;
+            $directory = 'descarga_contenedores/' . $descarga->id . '/evidencias';
+            $path = $file->storeAs($directory, $filename, 'local');
+
+            $descarga->evidencias()->create([
+                'entidad_tipo' => 'descarga_contenedor',
+                'nombre_original' => $file->getClientOriginalName(),
+                'nombre_archivo' => $filename,
+                'ruta' => $path,
+                'mime_type' => $file->getMimeType() ?: $file->getClientMimeType(),
+                'tamanio' => $file->getSize() ?: 0,
+                'campo_formulario' => 'evidencias',
+                'subido_por' => auth()->id(),
+            ]);
+        }
     }
 
     private function validatedTarifa(Request $request): array

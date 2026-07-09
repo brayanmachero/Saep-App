@@ -186,6 +186,31 @@
         </div>
     </div>
 
+    @if($descarga->evidencias->isNotEmpty())
+    <div class="glass-card" style="margin-top:1rem">
+        <h4 class="section-title">Evidencia fotográfica</h4>
+        <div class="evidence-grid">
+            @foreach($descarga->evidencias as $evidencia)
+                <div class="evidence-item">
+                    <a href="{{ route('descarga-contenedores.evidencias.ver', $evidencia) }}" target="_blank" rel="noopener" title="{{ $evidencia->nombre_original }}">
+                        <img src="{{ route('descarga-contenedores.evidencias.ver', $evidencia) }}" alt="Evidencia {{ $loop->iteration }}">
+                    </a>
+                    <div class="evidence-meta">
+                        <span>{{ $evidencia->nombre_original }}</span>
+                        <small>{{ $evidencia->tamanio_formateado }} · {{ $evidencia->created_at?->format('d/m/Y H:i') }}</small>
+                    </div>
+                    @if(auth()->user()->tieneAcceso('descarga_contenedores', 'puede_editar') && $descarga->estado !== 'liquidado')
+                    <form method="POST" action="{{ route('descarga-contenedores.evidencias.destroy', [$descarga, $evidencia]) }}" onsubmit="return confirm('¿Eliminar esta evidencia?')">
+                        @csrf @method('DELETE')
+                        <button type="submit" class="icon-btn danger" title="Eliminar evidencia"><i class="bi bi-trash-fill"></i></button>
+                    </form>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
+
     @if($puedeGestionarCostos && $tarifas->isNotEmpty())
     <div class="glass-card" style="margin-top:1rem">
         <h4 class="section-title">Tarifas relacionadas</h4>
@@ -233,6 +258,50 @@
 .detail-list div { display: grid; grid-template-columns: 150px 1fr; gap: .75rem; }
 .detail-list dt { color: var(--text-muted); font-size: .82rem; }
 .detail-list dd { margin: 0; font-weight: 600; }
+.evidence-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: .75rem;
+}
+.evidence-item {
+    position: relative;
+    display: grid;
+    gap: .55rem;
+    min-width: 0;
+    padding: .6rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    background: var(--surface-bg);
+}
+.evidence-item img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 7px;
+    background: var(--surface-card);
+}
+.evidence-meta {
+    display: grid;
+    gap: .15rem;
+    min-width: 0;
+}
+.evidence-meta span {
+    overflow: hidden;
+    color: var(--text-main);
+    font-size: .85rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.evidence-meta small {
+    color: var(--text-muted);
+    font-size: .76rem;
+}
+.evidence-item form {
+    position: absolute;
+    top: .7rem;
+    right: .7rem;
+}
 @media (max-width: 760px) {
     .detail-grid { grid-template-columns: 1fr; }
     .detail-list div { grid-template-columns: 1fr; gap: .2rem; }

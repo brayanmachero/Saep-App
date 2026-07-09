@@ -98,6 +98,13 @@ class DescargaContenedor extends Model
         return $this->hasMany(DescargaContenedorParticipante::class, 'descarga_contenedor_id');
     }
 
+    public function evidencias()
+    {
+        return $this->hasMany(ArchivoAdjunto::class, 'entidad_id')
+            ->where('entidad_tipo', 'descarga_contenedor')
+            ->orderByDesc('id');
+    }
+
     public function trabajadores()
     {
         return $this->belongsToMany(User::class, 'descarga_contenedor_participantes', 'descarga_contenedor_id', 'user_id')
