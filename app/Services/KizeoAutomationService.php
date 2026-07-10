@@ -330,12 +330,38 @@ class KizeoAutomationService
                 $flat[(string) $key . '_raw'] = $rawValue;
             }
 
-            if (is_array($field) && !empty($field['label'])) {
-                $flat[Str::slug((string) $field['label'], '_')] = $value;
+            foreach ($this->fieldLabelAliases(is_array($field) ? $field : [], $definition) as $alias) {
+                $flat[$alias] = $value;
+
+                if ($rawValue !== '' && $rawValue !== $value) {
+                    $flat[$alias . '_id'] = $rawValue;
+                    $flat[$alias . '_raw'] = $rawValue;
+                }
             }
         }
 
         return $flat;
+    }
+
+    private function fieldLabelAliases(array $field, array $definition): array
+    {
+        $aliases = [];
+
+        foreach (['label', 'caption', 'name', 'title'] as $source) {
+            foreach ([$field[$source] ?? null, $definition[$source] ?? null] as $candidate) {
+                if (!is_scalar($candidate)) {
+                    continue;
+                }
+
+                $slug = Str::slug(trim((string) $candidate), '_');
+
+                if ($slug !== '') {
+                    $aliases[$slug] = $slug;
+                }
+            }
+        }
+
+        return array_values($aliases);
     }
 
     private function extractValue(mixed $value, array $definition = []): string
@@ -362,7 +388,15 @@ class KizeoAutomationService
         }
 
         if (array_key_exists('value', $value)) {
-            return $this->extractValue($value['value']);
+            $extractedValue = $this->extractValue($value['value']);
+
+            if ($extractedValue !== '' || !array_key_exists('text', $value)) {
+                return $extractedValue;
+            }
+        }
+
+        if (array_key_exists('text', $value)) {
+            return $this->extractValue($value['text']);
         }
 
         if (isset($value['date'], $value['hour'])) {
@@ -429,16 +463,41 @@ class KizeoAutomationService
             return null;
         }
 
-        $values = $field['valuesAsArray'] ?? [$field['value'] ?? null];
-        $labels = $this->advancedListLabels($listId);
+        $values = collect($field['valuesAsArray'] ?? [$field['value'] ?? null])
+            ->map(fn ($id) => trim((string) $id))
+            ->filter(fn ($id) => $id !== '')
+            ->values()
+            ->all();
 
-        $resolved = collect($values)
+        if ($values === []) {
+            return null;
+        }
+
+        $labels = $this->advancedListLabels($listId);
+        $resolved = $this->resolveAdvancedListValues($values, $labels);
+
+        if (count($resolved) < count($values) && $this->hasTechnicalIds($values)) {
+            $labels = $this->advancedListLabels($listId, true);
+            $resolved = $this->resolveAdvancedListValues($values, $labels);
+        }
+
+        return $resolved ? implode(', ', $resolved) : null;
+    }
+
+    private function resolveAdvancedListValues(array $values, array $labels): array
+    {
+        return collect($values)
             ->map(fn ($id) => $labels[(string) $id] ?? null)
             ->filter()
             ->values()
             ->all();
+    }
 
-        return $resolved ? implode(', ', $resolved) : null;
+    private function hasTechnicalIds(array $values): bool
+    {
+        return collect($values)->contains(
+            fn ($value) => preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', (string) $value) === 1
+        );
     }
 
     private function formFieldDefinitions(string $formId): array
@@ -465,14 +524,18 @@ class KizeoAutomationService
         return $this->formFieldDefinitions[$formId];
     }
 
-    private function advancedListLabels(string $listId): array
+    private function advancedListLabels(string $listId, bool $forceRefresh = false): array
     {
+        if ($forceRefresh) {
+            unset($this->advancedListLabels[$listId]);
+        }
+
         if (array_key_exists($listId, $this->advancedListLabels)) {
             return $this->advancedListLabels[$listId];
         }
 
         try {
-            $items = $this->kizeo->getListItems($listId);
+            $items = $this->kizeo->getListItems($listId, $forceRefresh);
             $this->advancedListLabels[$listId] = collect($items)
                 ->mapWithKeys(fn ($item) => [(string) ($item['id'] ?? '') => (string) ($item['label'] ?? '')])
                 ->filter(fn ($label, $id) => $id !== '' && $label !== '')
