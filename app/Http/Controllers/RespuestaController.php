@@ -468,12 +468,7 @@ class RespuestaController extends Controller
             $sheet->setCellValue($col++ . $row, $r->created_at->format('d/m/Y H:i'));
 
             foreach ($fieldMap as $fid => $label) {
-                $val = $datos[$fid] ?? '';
-                if (is_array($val)) {
-                    // File field or checkbox array
-                    $val = isset($val['name']) ? $val['name'] : implode(', ', $val);
-                }
-                $sheet->setCellValue($col++ . $row, $val);
+                $sheet->setCellValue($col++ . $row, $this->formatExportValue($datos[$fid] ?? ''));
             }
             $row++;
         }
@@ -486,6 +481,46 @@ class RespuestaController extends Controller
         }, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
+    }
+
+    private function formatExportValue($value)
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'Si' : 'No';
+        }
+
+        if (is_scalar($value)) {
+            return $value;
+        }
+
+        if (!is_array($value)) {
+            return (string) $value;
+        }
+
+        foreach (['name', 'nombre', 'nombre_original', 'filename', 'file_name'] as $nameKey) {
+            if (isset($value[$nameKey]) && is_scalar($value[$nameKey])) {
+                return (string) $value[$nameKey];
+            }
+        }
+
+        $isList = array_is_list($value);
+        $parts = [];
+
+        foreach ($value as $key => $item) {
+            $formatted = $this->formatExportValue($item);
+
+            if ($formatted === '' || $formatted === null) {
+                continue;
+            }
+
+            $parts[] = $isList ? (string) $formatted : $key . ': ' . $formatted;
+        }
+
+        return implode(', ', $parts);
     }
 
     /**
