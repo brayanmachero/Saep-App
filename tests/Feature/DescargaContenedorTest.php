@@ -1331,6 +1331,55 @@ class DescargaContenedorTest extends TestCase
         }
     }
 
+    public function test_coordinator_review_queue_shows_ready_and_pending_drafts(): void
+    {
+        $admin = $this->createSuperAdminUser();
+        $coordinador = $this->createContainerModuleUser(true, 'CONTENEDORES_COORDINADOR', 'Coordinador Contenedores');
+        $capturador = $this->createContainerModuleUser(false);
+        $centro = $this->createCentroCosto('LTS QUILICURA Revision QA');
+        $tarifa = $this->createTarifa('CNTQUEUE', 75000, 36000, 'QUEUE QA', false, $centro);
+        $worker = $this->createTalanaWorker('Trabajador Queue QA', $centro);
+
+        $this->actingAs($admin)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'LTS QUILICURA Revision QA',
+                'fecha' => '2026-07-02',
+                'contenedor' => 'CONT-QUEUE-LISTO',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([$worker->id]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'LTS QUILICURA Revision QA',
+                'fecha' => '2026-07-03',
+                'contenedor' => 'CONT-QUEUE-PENDIENTE',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($coordinador)
+            ->get(route('descarga-contenedores.index'))
+            ->assertOk()
+            ->assertSee('Bandeja de revisión')
+            ->assertSee('CONT-QUEUE-LISTO')
+            ->assertSee('CONT-QUEUE-PENDIENTE')
+            ->assertSee('Listos para validar')
+            ->assertSee('Pendientes por completar');
+
+        $this->actingAs($capturador)
+            ->get(route('descarga-contenedores.index'))
+            ->assertOk()
+            ->assertDontSee('Bandeja de revisión')
+            ->assertDontSee('Validar registro');
+    }
+
     private function createSuperAdminUser(): User
     {
         $role = Rol::firstOrCreate(

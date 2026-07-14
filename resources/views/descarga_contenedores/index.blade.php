@@ -3,6 +3,7 @@
 @section('content')
 @php
     $puedeGestionarCostos = auth()->user()->puedeGestionarCostosDescargaContenedores();
+    $puedeEditarContenedores = auth()->user()->tieneAcceso('descarga_contenedores', 'puede_editar');
     $emptyColspan = $puedeGestionarCostos ? 11 : 10;
 @endphp
 <div class="page-container">
@@ -79,6 +80,89 @@
         </a>
         @endif
     </div>
+
+    @if($showValidationQueue)
+    <section class="review-queue" aria-label="Bandeja de revisión de contenedores">
+        <div class="review-queue-heading">
+            <div>
+                <h3>Bandeja de revisión</h3>
+                <p>Atajos para validar registros completos o completar los que siguen pendientes.</p>
+            </div>
+            <a href="{{ route('descarga-contenedores.index', ['validacion_estado' => 'listos']) }}" class="btn-secondary">
+                <i class="bi bi-shield-check"></i> Ver listos
+            </a>
+        </div>
+
+        <div class="review-queue-grid">
+            <div class="review-column">
+                <div class="review-column-title success">
+                    <i class="bi bi-check2-circle"></i>
+                    <span>Listos para validar</span>
+                </div>
+                @forelse($validationQueue['ready'] as $item)
+                    <div class="review-item">
+                        <div>
+                            <strong>{{ $item->contenedor ?: 'Sin contenedor' }}</strong>
+                            <small>{{ $item->fecha?->format('d/m/Y') ?? 'Sin fecha' }} · {{ $item->bodega ?: ($item->centroCosto->nombre ?? 'Sin centro') }}</small>
+                        </div>
+                        <div class="review-actions">
+                            <span class="badge success">{{ $item->participantes_count }} trab.</span>
+                            <form method="POST" action="{{ route('descarga-contenedores.validar', $item) }}" onsubmit="return confirm('¿Validar este registro de contenedor?')">
+                                @csrf @method('PATCH')
+                                <button class="icon-btn validation-ready" title="Validar registro"><i class="bi bi-check2-circle"></i></button>
+                            </form>
+                            <a href="{{ route('descarga-contenedores.show', $item) }}" class="icon-btn" title="Ver detalle"><i class="bi bi-eye-fill"></i></a>
+                        </div>
+                    </div>
+                @empty
+                    <p class="review-empty">No hay borradores completos para validar.</p>
+                @endforelse
+            </div>
+
+            <div class="review-column">
+                <div class="review-column-title warning">
+                    <i class="bi bi-clipboard-x"></i>
+                    <span>Pendientes por completar</span>
+                </div>
+                @forelse($validationQueue['pending'] as $item)
+                    @php
+                        $visibleBlockers = $item->validationBlockers()->map(function ($blocker) use ($puedeGestionarCostos) {
+                            if ($puedeGestionarCostos) {
+                                return $blocker;
+                            }
+
+                            return match ($blocker) {
+                                'falta pago colaborador' => 'tarifa FACT pendiente',
+                                'tarifa pendiente de revisión' => 'tarifa FACT por revisar',
+                                default => $blocker,
+                            };
+                        });
+                    @endphp
+                    <div class="review-item">
+                        <div>
+                            <strong>{{ $item->contenedor ?: 'Sin contenedor' }}</strong>
+                            <small>{{ $item->fecha?->format('d/m/Y') ?? 'Sin fecha' }} · {{ $item->bodega ?: ($item->centroCosto->nombre ?? 'Sin centro') }}</small>
+                            <div class="review-badges">
+                                @foreach($visibleBlockers->take(2) as $blocker)
+                                    <span class="badge warning">{{ ucfirst($blocker) }}</span>
+                                @endforeach
+                                @if($visibleBlockers->count() > 2)
+                                    <span class="badge warning">+{{ $visibleBlockers->count() - 2 }}</span>
+                                @endif
+                            </div>
+                        </div>
+                        <div class="review-actions">
+                            <a href="{{ route('descarga-contenedores.edit', $item) }}" class="icon-btn" title="Completar registro"><i class="bi bi-pencil-fill"></i></a>
+                            <a href="{{ route('descarga-contenedores.show', $item) }}" class="icon-btn" title="Ver detalle"><i class="bi bi-eye-fill"></i></a>
+                        </div>
+                    </div>
+                @empty
+                    <p class="review-empty">No hay borradores con pendientes.</p>
+                @endforelse
+            </div>
+        </div>
+    </section>
+    @endif
 
     <div class="stats-grid">
         <div class="glass-card stat-item" title="Total de registros de descarga guardados en el módulo.">
@@ -399,6 +483,106 @@
 .process-step.locked i { background: rgba(100, 116, 139, .16); color: var(--text-muted); }
 @media (max-width: 640px) {
     .process-flow { grid-template-columns: 1fr; }
+}
+.review-queue {
+    display: grid;
+    gap: .85rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    background: var(--surface-color);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, .06);
+}
+.review-queue-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+.review-queue-heading h3 {
+    margin: 0 0 .15rem;
+    color: var(--text-main);
+    font-size: 1rem;
+}
+.review-queue-heading p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: .82rem;
+}
+.review-queue-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .85rem;
+}
+.review-column {
+    min-width: 0;
+}
+.review-column-title {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    margin-bottom: .55rem;
+    color: var(--text-main);
+    font-size: .78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+.review-column-title.success i { color: var(--success-color); }
+.review-column-title.warning i { color: #d97706; }
+.review-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    min-width: 0;
+    padding: .65rem 0;
+    border-top: 1px solid var(--surface-border);
+}
+.review-item strong {
+    display: block;
+    color: var(--text-main);
+    font-size: .85rem;
+}
+.review-item small {
+    display: block;
+    margin-top: .12rem;
+    color: var(--text-muted);
+    font-size: .74rem;
+}
+.review-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    flex: 0 0 auto;
+}
+.review-actions form {
+    margin: 0;
+}
+.review-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+    margin-top: .35rem;
+}
+.review-empty {
+    margin: .3rem 0 0;
+    padding-top: .65rem;
+    border-top: 1px solid var(--surface-border);
+    color: var(--text-muted);
+    font-size: .82rem;
+}
+@media (max-width: 920px) {
+    .review-queue-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+    .review-queue-heading,
+    .review-item {
+        align-items: stretch;
+        flex-direction: column;
+    }
+    .review-actions { justify-content: flex-start; }
 }
 </style>
 @endsection

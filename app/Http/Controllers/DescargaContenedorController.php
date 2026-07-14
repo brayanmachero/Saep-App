@@ -19,6 +19,7 @@ class DescargaContenedorController extends Controller
     public function index(Request $request)
     {
         $puedeGestionarCostos = $this->puedeGestionarCostos();
+        $puedeEditarContenedores = auth()->user()?->tieneAcceso('descarga_contenedores', 'puede_editar') ?? false;
         $query = DescargaContenedor::with(['carga', 'centroCosto', 'participantes', 'creadoPor', 'tarifa'])
             ->withCount('participantes');
 
@@ -103,7 +104,15 @@ class DescargaContenedorController extends Controller
             'pago_total' => DescargaContenedor::whereNotNull('pago_colaborador_snapshot')->sum('pago_colaborador_snapshot'),
         ];
 
-        return view('descarga_contenedores.index', compact('descargas', 'centros', 'stats'));
+        $filterKeys = ['buscar', 'centro_costo_id', 'estado', 'validacion_estado', 'tarifa_estado', 'equipo_estado', 'fecha_desde', 'fecha_hasta'];
+        $showValidationQueue = $puedeEditarContenedores
+            && !collect($filterKeys)->contains(fn (string $key) => $request->filled($key));
+
+        $validationQueue = $showValidationQueue
+            ? $this->validationQueue()
+            : ['ready' => collect(), 'pending' => collect()];
+
+        return view('descarga_contenedores.index', compact('descargas', 'centros', 'stats', 'validationQueue', 'showValidationQueue'));
     }
 
     public function create()
@@ -917,6 +926,24 @@ class DescargaContenedorController extends Controller
         $this->applyReadyForValidationFilter($query);
 
         return $query;
+    }
+
+    private function validationQueue(): array
+    {
+        $baseRelations = ['centroCosto', 'participantes'];
+        $order = fn ($query) => $query
+            ->orderByRaw('fecha IS NULL')
+            ->orderByDesc('fecha')
+            ->orderByDesc('id');
+
+        return [
+            'ready' => $order($this->readyForValidationQuery()->with($baseRelations)->withCount('participantes'))
+                ->limit(5)
+                ->get(),
+            'pending' => $order($this->pendingValidationQuery()->with($baseRelations)->withCount('participantes'))
+                ->limit(5)
+                ->get(),
+        ];
     }
 
     private function pendingValidationQuery()
