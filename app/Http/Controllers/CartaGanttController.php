@@ -317,6 +317,8 @@ class CartaGanttController extends Controller
 
     public function updateActividad(Request $request, SstActividad $actividad)
     {
+        $this->abortUnlessCanManageActividadStructure($actividad);
+
         $request->validate([
             'nombre'              => 'required|string|max:300',
             'responsable_id'      => 'nullable|exists:users,id',
@@ -372,6 +374,8 @@ class CartaGanttController extends Controller
 
     public function destroyActividad(SstActividad $actividad)
     {
+        $this->abortUnlessCanManageActividadStructure($actividad, 'puede_eliminar');
+
         $actividad->delete();
         return back()->with('success', 'Actividad eliminada.');
     }
@@ -436,6 +440,8 @@ class CartaGanttController extends Controller
 
     public function storePlanAccion(Request $request, SstActividad $actividad)
     {
+        $this->abortUnlessCanManageActividadStructure($actividad);
+
         $request->validate([
             'accion'            => 'required|string|max:500',
             'responsable'       => 'nullable|string|max:200',
@@ -456,6 +462,9 @@ class CartaGanttController extends Controller
 
     public function updatePlanAccion(Request $request, SstPlanAccion $plan)
     {
+        $plan->loadMissing('actividad.categoria.programa');
+        $this->abortUnlessCanManageActividadStructure($plan->actividad);
+
         $request->validate([
             'estado'      => 'required|string|in:' . implode(',', array_keys(SstPlanAccion::estadosMap())),
             'observacion' => 'nullable|string',
@@ -471,6 +480,9 @@ class CartaGanttController extends Controller
 
     public function destroyPlanAccion(SstPlanAccion $plan)
     {
+        $plan->loadMissing('actividad.categoria.programa');
+        $this->abortUnlessCanManageActividadStructure($plan->actividad, 'puede_eliminar');
+
         $plan->delete();
         return back()->with('success', 'Plan de acción eliminado.');
     }
@@ -482,6 +494,7 @@ class CartaGanttController extends Controller
     public function reprogramarActividad(Request $request, SstActividad $actividad)
     {
         $actividad->loadMissing('categoria.programa');
+        $this->abortUnlessCanManageActividadStructure($actividad);
 
         $request->validate([
             'mes_original' => 'required|integer|min:1|max:12',
@@ -557,6 +570,30 @@ class CartaGanttController extends Controller
     // =====================================================
     // HELPERS
     // =====================================================
+
+    private function canManageProgramaStructure(ProgramaSst $programa, string $accion = 'puede_editar'): bool
+    {
+        $user = auth()->user();
+
+        if (!$user || !$user->tieneAcceso('carta_gantt', $accion)) {
+            return false;
+        }
+
+        return $user->esSuperAdmin() || (int) $programa->creado_por === (int) $user->id;
+    }
+
+    private function abortUnlessCanManageActividadStructure(?SstActividad $actividad, string $accion = 'puede_editar'): void
+    {
+        abort_unless($actividad instanceof SstActividad, 403);
+
+        $actividad->loadMissing('categoria.programa');
+        $programa = $actividad->categoria?->programa;
+
+        abort_unless(
+            $programa instanceof ProgramaSst && $this->canManageProgramaStructure($programa, $accion),
+            403
+        );
+    }
 
     /**
      * Envía email de actividad al responsable con CC al jefe del programa y superadmins.

@@ -172,6 +172,205 @@ class CartaGanttTest extends TestCase
             ->assertSee('openReprogramar(' . $actividad->id . ',', false);
     }
 
+    public function test_editor_who_is_not_program_creator_cannot_update_activity_structure_directly(): void
+    {
+        $creator = $this->createCartaGanttUser([
+            'puede_ver' => true,
+            'puede_crear' => true,
+            'puede_editar' => true,
+            'puede_eliminar' => false,
+        ]);
+        $otherEditor = $this->createCartaGanttUser([
+            'puede_ver' => true,
+            'puede_crear' => false,
+            'puede_editar' => true,
+            'puede_eliminar' => false,
+        ]);
+
+        $programa = $this->createPrograma($creator);
+        $categoria = $programa->categorias()->create(['nombre' => 'Estructura', 'orden' => 1]);
+        $actividad = $categoria->actividades()->create([
+            'nombre' => 'Actividad protegida',
+            'fecha_inicio' => '2026-01-01',
+            'fecha_fin' => '2026-12-31',
+            'prioridad' => 'MEDIA',
+            'estado' => 'PENDIENTE',
+            'periodicidad' => 'UNICA',
+            'cantidad_programada' => 1,
+            'orden' => 1,
+        ]);
+
+        $payload = [
+            'nombre' => 'Actividad modificada por externo',
+            'fecha_inicio' => '2026-01-01',
+            'fecha_fin' => '2026-12-31',
+            'prioridad' => 'ALTA',
+            'estado' => 'EN_PROGRESO',
+            'periodicidad' => 'MENSUAL',
+            'cantidad_programada' => 2,
+            'has_meses_prog' => '1',
+            'meses_prog' => [1, 2],
+        ];
+
+        $this->actingAs($otherEditor)
+            ->put(route('carta-gantt.actividades.update', $actividad), $payload)
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('sst_actividades', [
+            'id' => $actividad->id,
+            'nombre' => 'Actividad protegida',
+            'prioridad' => 'MEDIA',
+        ]);
+
+        $this->actingAs($creator)
+            ->put(route('carta-gantt.actividades.update', $actividad), $payload)
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('sst_actividades', [
+            'id' => $actividad->id,
+            'nombre' => 'Actividad modificada por externo',
+            'prioridad' => 'ALTA',
+        ]);
+    }
+
+    public function test_editor_who_is_not_program_creator_cannot_manage_plan_actions_directly(): void
+    {
+        $creator = $this->createCartaGanttUser([
+            'puede_ver' => true,
+            'puede_crear' => true,
+            'puede_editar' => true,
+            'puede_eliminar' => true,
+        ]);
+        $otherEditor = $this->createCartaGanttUser([
+            'puede_ver' => true,
+            'puede_crear' => false,
+            'puede_editar' => true,
+            'puede_eliminar' => true,
+        ]);
+
+        $programa = $this->createPrograma($creator);
+        $categoria = $programa->categorias()->create(['nombre' => 'Planes', 'orden' => 1]);
+        $actividad = $categoria->actividades()->create([
+            'nombre' => 'Actividad con planes',
+            'fecha_inicio' => '2026-01-01',
+            'fecha_fin' => '2026-12-31',
+            'prioridad' => 'MEDIA',
+            'estado' => 'PENDIENTE',
+            'periodicidad' => 'UNICA',
+            'cantidad_programada' => 1,
+            'orden' => 1,
+        ]);
+        $plan = $actividad->planesAccion()->create([
+            'accion' => 'Plan original',
+            'responsable' => 'Responsable QA',
+            'estado' => 'PENDIENTE',
+            'creado_por' => $creator->id,
+        ]);
+
+        $this->actingAs($otherEditor)
+            ->post(route('carta-gantt.plan-accion.store', $actividad), [
+                'accion' => 'Plan no autorizado',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($otherEditor)
+            ->patch(route('carta-gantt.plan-accion.update', $plan), [
+                'estado' => 'COMPLETADO',
+                'observacion' => 'Cambio externo',
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($otherEditor)
+            ->delete(route('carta-gantt.plan-accion.destroy', $plan))
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('sst_plan_accion', [
+            'actividad_id' => $actividad->id,
+            'accion' => 'Plan no autorizado',
+        ]);
+        $this->assertDatabaseHas('sst_plan_accion', [
+            'id' => $plan->id,
+            'estado' => 'PENDIENTE',
+        ]);
+
+        $this->actingAs($creator)
+            ->patch(route('carta-gantt.plan-accion.update', $plan), [
+                'estado' => 'COMPLETADO',
+                'observacion' => 'Cierre validado',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('sst_plan_accion', [
+            'id' => $plan->id,
+            'estado' => 'COMPLETADO',
+        ]);
+    }
+
+    public function test_editor_who_is_not_program_creator_cannot_reprogram_activity_directly(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-14 10:00:00'));
+
+        $creator = $this->createCartaGanttUser([
+            'puede_ver' => true,
+            'puede_crear' => true,
+            'puede_editar' => true,
+            'puede_eliminar' => false,
+        ]);
+        $otherEditor = $this->createCartaGanttUser([
+            'puede_ver' => true,
+            'puede_crear' => false,
+            'puede_editar' => true,
+            'puede_eliminar' => false,
+        ]);
+
+        $programa = $this->createPrograma($creator);
+        $categoria = $programa->categorias()->create(['nombre' => 'Reprogramacion backend', 'orden' => 1]);
+        $actividad = $categoria->actividades()->create([
+            'nombre' => 'Actividad vencida protegida',
+            'fecha_inicio' => '2026-06-01',
+            'fecha_fin' => '2026-06-30',
+            'prioridad' => 'MEDIA',
+            'estado' => 'PENDIENTE',
+            'periodicidad' => 'UNICA',
+            'cantidad_programada' => 1,
+            'orden' => 1,
+        ]);
+        $seguimiento = $actividad->seguimiento()->create([
+            'mes' => 6,
+            'programado' => true,
+            'realizado' => false,
+            'cantidad_realizada' => 0,
+        ]);
+
+        $payload = [
+            'mes_original' => 6,
+            'mes_nuevo' => 8,
+            'motivo' => 'Prueba de permiso',
+        ];
+
+        $this->actingAs($otherEditor)
+            ->post(route('carta-gantt.actividades.reprogramar', $actividad), $payload)
+            ->assertForbidden();
+
+        $seguimiento->refresh();
+        $this->assertTrue($seguimiento->programado);
+        $this->assertDatabaseMissing('sst_reprogramaciones', [
+            'actividad_id' => $actividad->id,
+            'mes_original' => 6,
+            'mes_nuevo' => 8,
+        ]);
+
+        $this->actingAs($creator)
+            ->post(route('carta-gantt.actividades.reprogramar', $actividad), $payload)
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('sst_reprogramaciones', [
+            'actividad_id' => $actividad->id,
+            'mes_original' => 6,
+            'mes_nuevo' => 8,
+        ]);
+    }
+
     public function test_csv_import_rejects_invalid_dates_without_creating_rows(): void
     {
         $user = $this->createCartaGanttUser([
