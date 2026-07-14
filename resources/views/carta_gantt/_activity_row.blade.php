@@ -119,7 +119,7 @@
             <button class="sst-icon-btn sst-icon-btn-xs" onclick="togglePlanes({{ $act->id }})" title="Planes de acción">
                 <i class="bi bi-clipboard-check"></i>
             </button>
-            @if(count($mesesVencidos) > 0 && ($esResponsable || $puedeEditarLocal))
+            @if(count($mesesVencidos) > 0 && $puedeEditarLocal)
             <button class="sst-icon-btn sst-icon-btn-xs" style="color:#6366f1" onclick="openReprogramar({{ $act->id }}, {{ json_encode($mesesVencidos) }})" title="Reprogramar">
                 <i class="bi bi-calendar2-range"></i>
             </button>

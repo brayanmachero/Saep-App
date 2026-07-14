@@ -123,6 +123,55 @@ class CartaGanttTest extends TestCase
         ]);
     }
 
+    public function test_responsible_without_edit_permission_does_not_see_reprogram_action(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-14 10:00:00'));
+
+        $creator = $this->createCartaGanttUser([
+            'puede_ver' => true,
+            'puede_crear' => true,
+            'puede_editar' => true,
+            'puede_eliminar' => false,
+        ]);
+        $responsable = $this->createCartaGanttUser([
+            'puede_ver' => true,
+            'puede_crear' => false,
+            'puede_editar' => false,
+            'puede_eliminar' => false,
+        ]);
+
+        $programa = $this->createPrograma($creator);
+        $categoria = $programa->categorias()->create(['nombre' => 'Reprogramacion visible', 'orden' => 1]);
+        $actividad = $categoria->actividades()->create([
+            'nombre' => 'Actividad vencida asignada',
+            'responsable' => $responsable->nombre_completo,
+            'responsable_id' => $responsable->id,
+            'fecha_inicio' => '2026-06-01',
+            'fecha_fin' => '2026-06-30',
+            'prioridad' => 'MEDIA',
+            'estado' => 'PENDIENTE',
+            'periodicidad' => 'UNICA',
+            'cantidad_programada' => 1,
+            'orden' => 1,
+        ]);
+        $actividad->seguimiento()->create([
+            'mes' => 6,
+            'programado' => true,
+            'realizado' => false,
+            'cantidad_realizada' => 0,
+        ]);
+
+        $this->actingAs($responsable)
+            ->get(route('carta-gantt.show', $programa))
+            ->assertOk()
+            ->assertDontSee('openReprogramar(' . $actividad->id . ',', false);
+
+        $this->actingAs($creator)
+            ->get(route('carta-gantt.show', $programa))
+            ->assertOk()
+            ->assertSee('openReprogramar(' . $actividad->id . ',', false);
+    }
+
     public function test_csv_import_rejects_invalid_dates_without_creating_rows(): void
     {
         $user = $this->createCartaGanttUser([
