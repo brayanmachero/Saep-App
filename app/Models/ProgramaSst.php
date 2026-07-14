@@ -74,6 +74,7 @@ class ProgramaSst extends Model
         return SstActividad::whereHas('categoria', fn($q) => $q->where('programa_id', $this->id))
             ->where('fecha_fin', '<', now())
             ->where('estado', '!=', 'COMPLETADA')
+            ->where('estado', '!=', 'CANCELADA')
             ->count();
     }
 }

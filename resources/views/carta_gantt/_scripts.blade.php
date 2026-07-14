@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ============ CONSTANTS ============
 const ANIO = {{ $anioPrograma }};
+const ANIO_ACTUAL = new Date().getFullYear();
 const MES_ACTUAL = {{ $mesActual }};
 const PUEDE_EDITAR = {{ ($puedeEditar ?? false) ? 'true' : 'false' }};
 const MESES = @json($mesesNombres);
@@ -31,6 +32,10 @@ const actividadesData = @json($actividadesJson);
 let currentView = 'anual';
 let periodoSem = MES_ACTUAL <= 6 ? 1 : 2;
 let periodoMes = MES_ACTUAL;
+
+function isPastProgramMonth(mes) {
+    return ANIO < ANIO_ACTUAL || (ANIO === ANIO_ACTUAL && mes < MES_ACTUAL);
+}
 
 // ============ VIEW SWITCHING (expand/collapse columns) ============
 function switchView(view) {
@@ -219,7 +224,7 @@ function rebuildTableRows(table, columns) {
             const parcial = prog && !real && cantReal > 0;
 
             if (col.type === 'month' && prog) {
-                const vencido = !real && col.mes < MES_ACTUAL;
+                const vencido = !real && isPastProgramMonth(col.mes);
                 const btn = document.createElement(PUEDE_EDITAR ? 'button' : 'span');
                 if (cantProg > 1) {
                     btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : (parcial ? 'gantt-partial' : 'gantt-plan')));
@@ -234,7 +239,7 @@ function rebuildTableRows(table, columns) {
                 else btn.style.cursor = 'default';
                 td.appendChild(btn);
             } else if (col.type === 'week' && prog) {
-                const vencido = !real && col.mes < MES_ACTUAL;
+                const vencido = !real && isPastProgramMonth(col.mes);
                 const btn = document.createElement(PUEDE_EDITAR ? 'button' : 'span');
                 if (cantProg > 1) {
                     btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : (parcial ? 'gantt-partial' : 'gantt-plan')));
@@ -248,7 +253,7 @@ function rebuildTableRows(table, columns) {
                 else btn.style.cursor = 'default';
                 td.appendChild(btn);
             } else if (col.type === 'day' && prog) {
-                const vencido = !real && col.mes < MES_ACTUAL;
+                const vencido = !real && isPastProgramMonth(col.mes);
                 const dot = document.createElement('span');
                 dot.style.cssText = 'display:inline-block;width:10px;height:10px;border-radius:50%;' + (PUEDE_EDITAR ? 'cursor:pointer;' : 'cursor:default;');
                 dot.style.background = real ? '#10b981' : (vencido ? '#ef4444' : (parcial ? '#f59e0b' : '#6366f1'));
@@ -309,7 +314,7 @@ function openReprogramar(actId, mesesVencidos) {
     const selectOrig = document.getElementById('reprog_mes_original');
     const selectNuevo = document.getElementById('reprog_mes_nuevo');
     const meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    const mesActual = {{ (int) date('n') }};
+    const mesActual = ANIO === ANIO_ACTUAL ? MES_ACTUAL : 1;
 
     form.action = '/carta-gantt/actividades/' + actId + '/reprogramar';
 
@@ -319,10 +324,14 @@ function openReprogramar(actId, mesesVencidos) {
         selectOrig.innerHTML += `<option value="${m}">${meses[m]}</option>`;
     });
 
-    // Populate mes_nuevo with current + future months
+    // Populate mes_nuevo with valid months for the program year
     selectNuevo.innerHTML = '<option value="">Seleccione...</option>';
-    for (let m = mesActual; m <= 12; m++) {
-        selectNuevo.innerHTML += `<option value="${m}">${meses[m]}</option>`;
+    if (ANIO < ANIO_ACTUAL) {
+        selectNuevo.innerHTML = '<option value="">Programa de año anterior</option>';
+    } else {
+        for (let m = mesActual; m <= 12; m++) {
+            selectNuevo.innerHTML += `<option value="${m}">${meses[m]}</option>`;
+        }
     }
 
     document.getElementById('reprog_motivo').value = '';
@@ -407,7 +416,7 @@ function openDetail(row) {
         if (s && s.programado) {
             const cantReal = s.realizado ? cantProg : (s.cantidad_realizada > 0 ? s.cantidad_realizada : 0);
             if (s.realizado) { cls = 'sst-seg-done'; txt += cantProg > 1 ? ' ' + cantProg+'/'+cantProg : ' ✓'; }
-            else if (m < MES_ACTUAL) { cls = 'sst-seg-late'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' !'; }
+            else if (isPastProgramMonth(m)) { cls = 'sst-seg-late'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' !'; }
             else { cls = 'sst-seg-prog'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' ○'; }
         }
         body += '<div class="sst-seg-cell ' + cls + '">' + txt + '</div>';
@@ -460,7 +469,7 @@ function updateStats() {
                 const cantReal = getCantReal(s, cantProg);
                 progTotal += cantProg;
                 realTotal += cantReal;
-                if (!s.realizado && m < mesFiltro) { vencidosMes++; }
+                if (!s.realizado && (ANIO < ANIO_ACTUAL || (ANIO === ANIO_ACTUAL && m < mesFiltro))) { vencidosMes++; }
                 // Selected month stats
                 if (m === mesFiltro) {
                     mesProgTotal += cantProg;

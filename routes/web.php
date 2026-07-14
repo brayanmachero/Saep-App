@@ -321,37 +321,66 @@ Route::middleware('auth')->group(function () {
     Route::middleware('modulo:carta_gantt')->group(function () {
         Route::get('carta-gantt/{cartaGantt}/reporte-pdf', [CartaGanttController::class, 'exportPdf'])
             ->name('carta-gantt.reporte-pdf');
-        Route::resource('carta-gantt', CartaGanttController::class);
+        Route::get('carta-gantt', [CartaGanttController::class, 'index'])
+            ->name('carta-gantt.index');
+        Route::get('carta-gantt/create', [CartaGanttController::class, 'create'])
+            ->name('carta-gantt.create')
+            ->middleware('modulo:carta_gantt,puede_crear');
+        Route::post('carta-gantt', [CartaGanttController::class, 'store'])
+            ->name('carta-gantt.store')
+            ->middleware('modulo:carta_gantt,puede_crear');
+        Route::get('carta-gantt/{cartaGantt}', [CartaGanttController::class, 'show'])
+            ->name('carta-gantt.show');
+        Route::get('carta-gantt/{cartaGantt}/edit', [CartaGanttController::class, 'edit'])
+            ->name('carta-gantt.edit')
+            ->middleware('modulo:carta_gantt,puede_editar');
+        Route::match(['put', 'patch'], 'carta-gantt/{cartaGantt}', [CartaGanttController::class, 'update'])
+            ->name('carta-gantt.update')
+            ->middleware('modulo:carta_gantt,puede_editar');
+        Route::delete('carta-gantt/{cartaGantt}', [CartaGanttController::class, 'destroy'])
+            ->name('carta-gantt.destroy')
+            ->middleware('modulo:carta_gantt,puede_eliminar');
         // Categorías
         Route::post('carta-gantt/{cartaGantt}/categorias',   [CartaGanttController::class, 'storeCategoria'])
-            ->name('carta-gantt.categorias.store');
+            ->name('carta-gantt.categorias.store')
+            ->middleware('modulo:carta_gantt,puede_crear');
         Route::delete('carta-gantt/categorias/{categoria}',  [CartaGanttController::class, 'destroyCategoria'])
-            ->name('carta-gantt.categorias.destroy');
+            ->name('carta-gantt.categorias.destroy')
+            ->middleware('modulo:carta_gantt,puede_eliminar');
         // Actividades
         Route::post('carta-gantt/categorias/{categoria}/actividades', [CartaGanttController::class, 'storeActividad'])
-            ->name('carta-gantt.actividades.store');
+            ->name('carta-gantt.actividades.store')
+            ->middleware('modulo:carta_gantt,puede_crear');
         Route::put('carta-gantt/actividades/{actividad}',    [CartaGanttController::class, 'updateActividad'])
-            ->name('carta-gantt.actividades.update');
+            ->name('carta-gantt.actividades.update')
+            ->middleware('modulo:carta_gantt,puede_editar');
         Route::delete('carta-gantt/actividades/{actividad}', [CartaGanttController::class, 'destroyActividad'])
-            ->name('carta-gantt.actividades.destroy');
+            ->name('carta-gantt.actividades.destroy')
+            ->middleware('modulo:carta_gantt,puede_eliminar');
         // Seguimiento AJAX
         Route::patch('carta-gantt/actividades/{actividad}/seguimiento', [CartaGanttController::class, 'updateSeguimiento'])
-            ->name('carta-gantt.seguimiento.update');
+            ->name('carta-gantt.seguimiento.update')
+            ->middleware('modulo:carta_gantt,puede_editar');
         // Plan de Acción
         Route::post('carta-gantt/actividades/{actividad}/plan-accion', [CartaGanttController::class, 'storePlanAccion'])
-            ->name('carta-gantt.plan-accion.store');
+            ->name('carta-gantt.plan-accion.store')
+            ->middleware('modulo:carta_gantt,puede_editar');
         Route::patch('carta-gantt/plan-accion/{plan}',       [CartaGanttController::class, 'updatePlanAccion'])
-            ->name('carta-gantt.plan-accion.update');
+            ->name('carta-gantt.plan-accion.update')
+            ->middleware('modulo:carta_gantt,puede_editar');
         Route::delete('carta-gantt/plan-accion/{plan}',      [CartaGanttController::class, 'destroyPlanAccion'])
-            ->name('carta-gantt.plan-accion.destroy');
+            ->name('carta-gantt.plan-accion.destroy')
+            ->middleware('modulo:carta_gantt,puede_eliminar');
         // Reprogramación de actividades
         Route::post('carta-gantt/actividades/{actividad}/reprogramar', [CartaGanttController::class, 'reprogramarActividad'])
-            ->name('carta-gantt.actividades.reprogramar');
+            ->name('carta-gantt.actividades.reprogramar')
+            ->middleware('modulo:carta_gantt,puede_editar');
         // Importación masiva CSV
         Route::get('carta-gantt/importar/plantilla', [CartaGanttController::class, 'descargarPlantilla'])
             ->name('carta-gantt.plantilla');
         Route::post('carta-gantt/{cartaGantt}/importar', [CartaGanttController::class, 'importarActividades'])
-            ->name('carta-gantt.importar');
+            ->name('carta-gantt.importar')
+            ->middleware('modulo:carta_gantt,puede_crear');
         // Preview email template
         Route::get('carta-gantt/email-preview/{tipo}', [CartaGanttController::class, 'previewEmail'])
             ->name('carta-gantt.email-preview');

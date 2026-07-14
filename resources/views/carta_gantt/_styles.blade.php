@@ -41,6 +41,8 @@
 .sst-gantt .sst-th-sticky{position:sticky;left:0;background:var(--surface-color);z-index:3;text-align:left}
 .sst-gantt tbody td{padding:.4rem;border-bottom:1px solid var(--surface-border);vertical-align:middle}
 .sst-gantt tbody td.sst-th-sticky{position:sticky;left:0;background:var(--surface-color);z-index:1}
+.sst-gantt .sst-actions-sticky{position:sticky;right:0;background:var(--surface-color);z-index:3;box-shadow:-10px 0 14px -14px rgba(15,23,42,.65)}
+.sst-gantt tbody td.sst-actions-sticky{z-index:2}
 .sst-td-mes{text-align:center;min-width:38px}
 
 /* Current month highlight */
@@ -48,7 +50,8 @@
 body.dark-mode .sst-mes-actual{background:rgba(99,102,241,.1)!important}
 
 /* Gantt cells */
-.gantt-cell{min-width:28px;height:28px;border-radius:6px;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;transition:all .2s;padding:0 3px}
+.gantt-cell{min-width:30px;height:30px;border-radius:6px;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:700;transition:all .2s;padding:0 3px}
+.gantt-cell:focus-visible,.sst-btn:focus-visible,.sst-icon-btn:focus-visible{outline:2px solid var(--accent-color,#6366f1);outline-offset:2px}
 .gantt-plan{background:rgba(99,102,241,.1);color:#6366f1;border:1.5px solid rgba(99,102,241,.25)}
 .gantt-plan:hover{background:rgba(99,102,241,.2);transform:scale(1.1)}
 .gantt-done{background:rgba(16,185,129,.15);color:#10b981;border:1.5px solid rgba(16,185,129,.3)}
@@ -112,13 +115,13 @@ body.dark-mode .sst-highlight-col{background:rgba(99,102,241,.1)!important}
     .sst-legend{order:3;justify-content:center}
     .sst-detail-grid{grid-template-columns:1fr}
     .sst-seg-grid{grid-template-columns:repeat(4,1fr)}
-    .sst-gantt-table{font-size:.75rem}
-    .sst-gantt-table th,.sst-gantt-table td{padding:4px 6px}
+    .sst-gantt{font-size:.75rem}
+    .sst-gantt th,.sst-gantt td{padding:4px 6px}
 }
 @media(max-width:480px){
     .sst-stats-grid{grid-template-columns:1fr}
     .sst-view-btn span{display:none}
-    .gantt-cell{min-width:22px;height:22px;font-size:.5rem;padding:0 2px}
+    .gantt-cell{min-width:26px;height:26px;font-size:.56rem;padding:0 2px}
     .sst-seg-grid{grid-template-columns:repeat(3,1fr)}
     .sst-import-tips{grid-template-columns:1fr !important}
     .sst-form-grid{grid-template-columns:1fr !important}

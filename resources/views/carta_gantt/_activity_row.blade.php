@@ -1,6 +1,9 @@
 {{-- Activity row for the annual Gantt table --}}
 @php
     $seg = $act->seguimiento_por_mes;
+    $anioActual = (int) date('Y');
+    $anioPrograma = (int) ($anioPrograma ?? $act->categoria?->programa?->anio ?? $anioActual);
+    $esMesVencido = fn (int $mes) => $anioPrograma < $anioActual || ($anioPrograma === $anioActual && $mes < $mesActual);
     $priColors = ['ALTA' => '#ef4444', 'MEDIA' => '#f59e0b', 'BAJA' => '#10b981'];
     $priLabels = ['ALTA' => 'Alta', 'MEDIA' => 'Media', 'BAJA' => 'Baja'];
     $estColors = ['PENDIENTE'=>'#94a3b8','EN_PROGRESO'=>'#f59e0b','COMPLETADA'=>'#10b981','CANCELADA'=>'#ef4444'];
@@ -59,7 +62,7 @@
         $prog = $s ? $s['programado'] : false;
         $real = $s ? $s['realizado'] : false;
         $cantReal = $s ? (int) ($s['cantidad_realizada'] ?? 0) : 0;
-        $vencido = $prog && !$real && $m < $mesActual;
+        $vencido = $prog && !$real && $esMesVencido($m);
         $parcial = $prog && !$real && $cantReal > 0;
     @endphp
     <td class="sst-td-mes {{ $m === $mesActual ? 'sst-mes-actual' : '' }}">
@@ -104,9 +107,9 @@
         $puedeEditarLocal = ($esSuperAdmin || $esCreador) && ($puedeEditar ?? false);
         $puedeEliminarLocal = ($esSuperAdmin || $esCreador) && ($puedeEliminar ?? false);
         // Meses vencidos (programado, no realizado, mes pasado)
-        $mesesVencidos = collect($seg)->filter(fn($s, $m) => $s['programado'] && !$s['realizado'] && $m < $mesActual)->keys()->all();
+        $mesesVencidos = collect($seg)->filter(fn($s, $m) => $s['programado'] && !$s['realizado'] && $esMesVencido((int) $m) && (int) ($s['cantidad_realizada'] ?? 0) === 0)->keys()->all();
     @endphp
-    <td style="text-align:right;white-space:nowrap">
+    <td class="sst-actions-sticky" style="text-align:right;white-space:nowrap">
         <div style="display:flex;gap:.2rem;justify-content:flex-end">
             @if($puedeEditarLocal)
             <button class="sst-icon-btn sst-icon-btn-xs" onclick="openEditModal(this.closest('tr'))" title="Editar">
@@ -163,7 +166,7 @@
                 <td style="padding:.3rem .5rem;color:var(--text-muted)">{{ $plan->fecha_compromiso?->format('d/m/Y') ?? '—' }}</td>
                 <td style="padding:.3rem .5rem"><span class="badge {{ $plan->estado_badge }}">{{ $plan->estado_label }}</span></td>
                 <td style="padding:.3rem .5rem;text-align:right">
-                    @if($puedeEditarLocal)
+                    @if($puedeEliminarLocal)
                     <form method="POST" action="{{ route('carta-gantt.plan-accion.destroy', $plan) }}"
                           onsubmit="return confirm('¿Eliminar este plan?')" style="display:inline">
                         @csrf @method('DELETE')

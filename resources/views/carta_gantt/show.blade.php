@@ -6,6 +6,7 @@
     $semanaActual = (int) date('W');
     $diaActual = (int) date('j');
     $anioPrograma = (int) $cartaGantt->anio;
+    $anioActual = (int) date('Y');
     $totalAct = $cartaGantt->actividadesTotales;
     $pct = $cartaGantt->porcentajeRealizado;
     $completadas = 0; $enProgreso = 0; $pendientes = 0; $porVencer = 0; $vencidosMes = 0;
@@ -15,7 +16,7 @@
             if ($a->estaPorVencer) $porVencer++;
             // Contar meses vencidos (programado + pasado + no realizado)
             foreach ($a->seguimiento_por_mes as $m => $s) {
-                if ($s['programado'] && !$s['realizado'] && $m < $mesActual) $vencidosMes++;
+                if ($s['programado'] && !$s['realizado'] && ($anioPrograma < $anioActual || ($anioPrograma === $anioActual && $m < $mesActual))) $vencidosMes++;
             }
             // Contar completadas/en progreso/pendientes del mes actual
             $sMesAct = $a->seguimiento_por_mes[$mesActual] ?? null;
@@ -78,8 +79,8 @@
             <a href="{{ route('carta-gantt.reporte-pdf', $cartaGantt) }}" class="sst-btn sst-btn-outline" target="_blank">
                 <i class="bi bi-file-earmark-pdf"></i> Reporte PDF
             </a>
-            @if($puedeCrear || $puedeEditar)
-            <button class="sst-btn sst-btn-outline" onclick="document.getElementById('importModal').style.display='flex'">
+            @if($puedeCrear)
+            <button class="sst-btn sst-btn-outline" onclick="document.getElementById('importModal').style.display='flex'" title="Crear actividades nuevas desde archivo CSV">
                 <i class="bi bi-cloud-upload"></i> Importar CSV
             </button>
             @endif
@@ -218,8 +219,8 @@
                 <div class="sst-cat-progress"><div class="sst-cat-progress-fill" style="width:{{ $catPct }}%"></div></div>
             </div>
             <div style="display:flex;gap:.35rem">
-                @if($puedeCrear || $puedeEditar)
-                <button class="sst-btn sst-btn-sm sst-btn-primary" onclick="toggleAddActividad({{ $categoria->id }})">
+                @if($puedeCrear)
+                <button class="sst-btn sst-btn-sm sst-btn-primary" onclick="toggleAddActividad({{ $categoria->id }})" title="Crear una nueva actividad en esta categoría">
                     <i class="bi bi-plus-lg"></i> Actividad
                 </button>
                 @endif
@@ -278,14 +279,14 @@
                 @foreach(['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'] as $idx => $mesNom)
                 <th class="sst-th-mes {{ ($idx + 1) === $mesActual ? 'sst-mes-actual' : '' }}">{{ $mesNom }}</th>
                 @endforeach
-                <th style="width:70px"></th>
+                <th class="sst-actions-sticky" style="width:82px"></th>
             </tr></thead>
             <tbody>
             @forelse($catActs as $act)
             @include('carta_gantt._activity_row', ['act' => $act, 'mesActual' => $mesActual])
             @empty
             <tr><td colspan="17" style="padding:2rem;color:var(--text-muted);font-style:italic;text-align:center">
-                Sin actividades. @if($puedeCrear || $puedeEditar)<button class="sst-link" onclick="toggleAddActividad({{ $categoria->id }})">Agregar primera actividad</button>@endif
+                Sin actividades. @if($puedeCrear)<button class="sst-link" onclick="toggleAddActividad({{ $categoria->id }})">Agregar primera actividad</button>@endif
             </td></tr>
             @endforelse
             </tbody>
@@ -296,9 +297,9 @@
     </div>
 
     {{-- ========== AGREGAR CATEGORÍA ========== --}}
-    @if($puedeCrear || $puedeEditar)
+    @if($puedeCrear)
     <div class="sst-add-cat-card">
-        <button class="sst-btn sst-btn-outline" onclick="toggleAddCat()" style="width:100%">
+        <button class="sst-btn sst-btn-outline" onclick="toggleAddCat()" style="width:100%" title="Crear una nueva categoría de actividades">
             <i class="bi bi-folder-plus"></i> Agregar Categoría
         </button>
         <div id="addCat" style="display:none;margin-top:1rem">
@@ -555,6 +556,9 @@
                 <div style="margin-bottom:.85rem">
                     <label class="sst-label">Nuevo mes (actual o futuro) *</label>
                     <select name="mes_nuevo" id="reprog_mes_nuevo" required class="form-input" style="font-size:.85rem"></select>
+                </div>
+                <div style="margin:-.35rem 0 .85rem;color:var(--text-muted);font-size:.74rem;line-height:1.35">
+                    Solo se puede mover un mes vencido sin avance registrado.
                 </div>
                 <div style="margin-bottom:.85rem">
                     <label class="sst-label">Motivo de reprogramación *</label>

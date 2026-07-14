@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 
 class CartaGanttController extends Controller
 {
@@ -480,16 +481,44 @@ class CartaGanttController extends Controller
 
     public function reprogramarActividad(Request $request, SstActividad $actividad)
     {
-        $mesActual = (int) date('n');
+        $actividad->loadMissing('categoria.programa');
 
         $request->validate([
             'mes_original' => 'required|integer|min:1|max:12',
-            'mes_nuevo'    => 'required|integer|min:' . $mesActual . '|max:12|different:mes_original',
+            'mes_nuevo'    => 'required|integer|min:1|max:12|different:mes_original',
             'motivo'       => 'required|string|max:500',
         ]);
 
         $mesOrig = (int) $request->mes_original;
         $mesNuevo = (int) $request->mes_nuevo;
+        $anioPrograma = (int) ($actividad->categoria?->programa?->anio ?? now()->year);
+        $anioActual = (int) now()->year;
+        $mesActual = (int) now()->month;
+
+        if ($anioPrograma < $anioActual) {
+            return back()->withErrors([
+                'mes_nuevo' => 'No se puede reprogramar una actividad de un programa de años anteriores.',
+            ]);
+        }
+
+        if ($anioPrograma === $anioActual && $mesNuevo < $mesActual) {
+            return back()->withErrors([
+                'mes_nuevo' => 'El nuevo mes debe ser el mes actual o uno posterior.',
+            ]);
+        }
+
+        $seguimientoOriginal = $actividad->seguimiento()->where('mes', $mesOrig)->first();
+        if (!$seguimientoOriginal || !$seguimientoOriginal->programado) {
+            return back()->withErrors([
+                'mes_original' => 'El mes seleccionado no está programado para esta actividad.',
+            ]);
+        }
+
+        if ($seguimientoOriginal->realizado || (int) $seguimientoOriginal->cantidad_realizada > 0) {
+            return back()->withErrors([
+                'mes_original' => 'No se puede reprogramar un mes con avance registrado. Revise el seguimiento antes de moverlo.',
+            ]);
+        }
 
         DB::transaction(function () use ($actividad, $mesOrig, $mesNuevo, $request) {
             // Log the reprogramming
@@ -504,8 +533,6 @@ class CartaGanttController extends Controller
             // Remove seguimiento from original month (mark as not programmed)
             $actividad->seguimiento()->where('mes', $mesOrig)->update([
                 'programado'          => false,
-                'realizado'           => false,
-                'cantidad_realizada'  => 0,
                 'actualizado_por'     => auth()->id(),
                 'fecha_actualizacion' => now(),
             ]);
@@ -732,6 +759,19 @@ class CartaGanttController extends Controller
                     continue;
                 }
 
+                try {
+                    $fechaInicio = $this->parseCsvDate($row['fecha_inicio'] ?? null);
+                    $fechaFin    = $this->parseCsvDate($row['fecha_fin'] ?? null);
+                } catch (\InvalidArgumentException $e) {
+                    $errores[] = "Fila {$fila}: {$e->getMessage()}";
+                    continue;
+                }
+
+                if ($fechaInicio && $fechaFin && $fechaFin < $fechaInicio) {
+                    $errores[] = "Fila {$fila}: fecha_fin no puede ser anterior a fecha_inicio.";
+                    continue;
+                }
+
                 // Buscar o crear categoría
                 $categoria = $cartaGantt->categorias()->firstOrCreate(
                     ['nombre' => $catNombre],
@@ -759,9 +799,6 @@ class CartaGanttController extends Controller
                 if ($periodicidad && !array_key_exists($periodicidad, SstActividad::periodicidadesMap())) {
                     $periodicidad = null;
                 }
-
-                $fechaInicio = !empty($row['fecha_inicio']) ? date('Y-m-d', strtotime($row['fecha_inicio'])) : null;
-                $fechaFin    = !empty($row['fecha_fin']) ? date('Y-m-d', strtotime($row['fecha_fin'])) : null;
 
                 $actividad = $categoria->actividades()->create([
                     'nombre'              => $nombre,
@@ -826,6 +863,32 @@ class CartaGanttController extends Controller
         }
 
         return back()->with('success', $msg);
+    }
+
+    private function parseCsvDate(?string $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        $formats = ['Y-m-d', 'Y/m/d', 'd/m/Y', 'j/n/Y', 'd-m-Y', 'j-n-Y'];
+        foreach ($formats as $format) {
+            try {
+                $date = Carbon::createFromFormat($format, $value);
+                $errors = Carbon::getLastErrors();
+                $hasErrors = is_array($errors)
+                    && (($errors['warning_count'] ?? 0) > 0 || ($errors['error_count'] ?? 0) > 0);
+
+                if (!$hasErrors && $date && $date->format($format) === $value) {
+                    return $date->toDateString();
+                }
+            } catch (\Throwable $e) {
+                // Try the next accepted format.
+            }
+        }
+
+        throw new \InvalidArgumentException("fecha inválida '{$value}'. Use AAAA-MM-DD o DD/MM/AAAA.");
     }
 
     // =====================================================
