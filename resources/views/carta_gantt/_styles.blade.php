@@ -8,6 +8,8 @@
 .sst-stat-value{font-size:1.35rem;font-weight:800;line-height:1.2;color:var(--text-main)}
 .sst-progress-track{height:6px;background:var(--surface-border);border-radius:3px;margin-top:.3rem;overflow:hidden}
 .sst-progress-fill{height:100%;background:linear-gradient(90deg,#6366f1,#818cf8);border-radius:3px;transition:width .6s ease}
+.sst-help-tooltip{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:.2rem;border-radius:999px;border:1px solid var(--surface-border);color:var(--text-muted);font-size:.62rem;line-height:1;cursor:help;text-transform:none;letter-spacing:0;vertical-align:middle}
+.sst-help-tooltip:hover{color:var(--accent-color,#6366f1);border-color:rgba(99,102,241,.35);background:rgba(99,102,241,.08)}
 
 /* ===== TOOLBAR ===== */
 .sst-toolbar{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.2rem;padding:.6rem .8rem;background:var(--surface-color);border:1px solid var(--surface-border);border-radius:10px}
@@ -71,7 +73,7 @@ body.dark-mode .sst-mes-actual{background:rgba(99,102,241,.1)!important}
 .sst-btn-primary{background:var(--accent-color,#6366f1);color:#fff}.sst-btn-primary:hover{opacity:.85;transform:translateY(-1px)}
 .sst-btn-outline{background:transparent;color:var(--text-main);border:1px solid var(--surface-border)}.sst-btn-outline:hover{background:var(--surface-color);border-color:var(--text-muted)}
 .sst-btn-danger{background:#fee2e2;color:#dc2626;border:1px solid #fecaca}.sst-btn-danger:hover{background:#fecaca}
-.sst-icon-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--surface-border);background:var(--surface-color);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-muted);transition:all .15s;font-size:.85rem}
+.sst-icon-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--surface-border);background:var(--surface-color);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-muted);transition:all .15s;font-size:.85rem;position:relative}
 .sst-icon-btn:hover{color:var(--text-main);border-color:var(--text-muted);background:var(--bg-color)}
 .sst-icon-btn-xs{width:26px;height:26px;font-size:.72rem;border-radius:6px}
 .sst-icon-btn-danger:hover{color:#dc2626;border-color:#fecaca;background:#fee2e2}

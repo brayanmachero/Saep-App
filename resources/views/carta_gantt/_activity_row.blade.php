@@ -8,6 +8,7 @@
     $priLabels = ['ALTA' => 'Alta', 'MEDIA' => 'Media', 'BAJA' => 'Baja'];
     $estColors = ['PENDIENTE'=>'#94a3b8','EN_PROGRESO'=>'#f59e0b','COMPLETADA'=>'#10b981','CANCELADA'=>'#ef4444'];
     $estLabels = \App\Models\SstActividad::estadosMap();
+    $mesesCorto = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 @endphp
 <tr class="sst-act-row" data-actividad-id="{{ $act->id }}"
     data-act="{{ json_encode([
@@ -26,7 +27,7 @@
     {{-- Nombre con acciones --}}
     <td class="sst-th-sticky" style="font-weight:600;font-size:.82rem">
         <div style="display:flex;align-items:center;gap:.35rem">
-            <button class="sst-icon-btn sst-icon-btn-xs" onclick="openDetail(this.closest('tr'))" title="Ver detalle">
+            <button class="sst-icon-btn sst-icon-btn-xs" onclick="openDetail(this.closest('tr'))" title="Ver detalle de {{ $act->nombre }}" aria-label="Ver detalle de {{ $act->nombre }}">
                 <i class="bi bi-eye"></i>
             </button>
             <span class="sst-act-name" style="flex:1;cursor:pointer" onclick="openDetail(this.closest('tr'))">{{ $act->nombre }}</span>
@@ -64,6 +65,12 @@
         $cantReal = $s ? (int) ($s['cantidad_realizada'] ?? 0) : 0;
         $vencido = $prog && !$real && $esMesVencido($m);
         $parcial = $prog && !$real && $cantReal > 0;
+        $mesNombre = $mesesCorto[$m] ?? "Mes {$m}";
+        $estadoMes = $real ? 'realizado' : ($vencido ? 'vencido' : ($parcial ? 'parcial' : 'programado'));
+        $accionMes = $rolPuedeEditar
+            ? ($cantProg > 1 ? ($real ? 'Clic para resetear avance' : 'Clic para avanzar una repetición') : ($real ? 'Clic para desmarcar' : 'Clic para marcar realizado'))
+            : 'Solo lectura';
+        $tituloMes = "{$act->nombre} - {$mesNombre}: {$estadoMes}. {$accionMes}.";
     @endphp
     <td class="sst-td-mes {{ $m === $mesActual ? 'sst-mes-actual' : '' }}">
         @if($prog)
@@ -71,13 +78,15 @@
         @if($cantProg > 1)
         <button class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : ($parcial ? 'gantt-partial' : 'gantt-plan')) }}"
                 onclick="toggleSeguimiento({{ $act->id }}, {{ $m }}, this)"
-                title="{{ $cantReal }}/{{ $cantProg }} — clic para {{ $real ? 'resetear' : 'avanzar' }}">
+                title="{{ $tituloMes }} Avance {{ $cantReal }}/{{ $cantProg }}."
+                aria-label="{{ $tituloMes }} Avance {{ $cantReal }} de {{ $cantProg }}.">
             {{ $real ? '✓' : ($cantReal > 0 ? $cantReal.'/'.$cantProg : '0/'.$cantProg) }}
         </button>
         @else
         <button class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : 'gantt-plan') }}"
                 onclick="toggleSeguimiento({{ $act->id }}, {{ $m }}, this)"
-                title="{{ $real ? 'Realizado' : ($vencido ? 'Vencido — clic para marcar' : 'Programado — clic para marcar') }}">
+                title="{{ $tituloMes }}"
+                aria-label="{{ $tituloMes }}">
             {{ $real ? '✓' : ($vencido ? '!' : '○') }}
         </button>
         @endif
@@ -85,12 +94,14 @@
         {{-- Solo vista: sin onclick --}}
         @if($cantProg > 1)
         <span class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : ($parcial ? 'gantt-partial' : 'gantt-plan')) }}" style="cursor:default;"
-              title="{{ $cantReal }}/{{ $cantProg }}">
+              title="{{ $tituloMes }} Avance {{ $cantReal }}/{{ $cantProg }}."
+              aria-label="{{ $tituloMes }} Avance {{ $cantReal }} de {{ $cantProg }}.">
             {{ $real ? '✓' : ($cantReal > 0 ? $cantReal.'/'.$cantProg : '0/'.$cantProg) }}
         </span>
         @else
         <span class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : 'gantt-plan') }}" style="cursor:default;"
-              title="{{ $real ? 'Realizado' : ($vencido ? 'Vencido' : 'Programado') }}">
+              title="{{ $tituloMes }}"
+              aria-label="{{ $tituloMes }}">
             {{ $real ? '✓' : ($vencido ? '!' : '○') }}
         </span>
         @endif
@@ -112,20 +123,20 @@
     <td class="sst-actions-sticky" style="text-align:right;white-space:nowrap">
         <div style="display:flex;gap:.2rem;justify-content:flex-end">
             @if($puedeEditarLocal)
-            <button class="sst-icon-btn sst-icon-btn-xs" onclick="openEditModal(this.closest('tr'))" title="Editar">
+            <button class="sst-icon-btn sst-icon-btn-xs" onclick="openEditModal(this.closest('tr'))" title="Editar actividad: {{ $act->nombre }}" aria-label="Editar actividad: {{ $act->nombre }}">
                 <i class="bi bi-pencil"></i>
             </button>
             @endif
-            <button class="sst-icon-btn sst-icon-btn-xs" onclick="togglePlanes({{ $act->id }})" title="Planes de acción">
+            <button class="sst-icon-btn sst-icon-btn-xs" onclick="togglePlanes({{ $act->id }})" title="Ver o agregar planes de acción: {{ $act->nombre }}" aria-label="Ver o agregar planes de acción: {{ $act->nombre }}">
                 <i class="bi bi-clipboard-check"></i>
             </button>
             @if(count($mesesVencidos) > 0 && $puedeEditarLocal)
-            <button class="sst-icon-btn sst-icon-btn-xs" style="color:#6366f1" onclick="openReprogramar({{ $act->id }}, {{ json_encode($mesesVencidos) }})" title="Reprogramar">
+            <button class="sst-icon-btn sst-icon-btn-xs" style="color:#6366f1" onclick="openReprogramar({{ $act->id }}, {{ json_encode($mesesVencidos) }})" title="Reprogramar meses vencidos sin avance: {{ $act->nombre }}" aria-label="Reprogramar meses vencidos sin avance: {{ $act->nombre }}">
                 <i class="bi bi-calendar2-range"></i>
             </button>
             @endif
             @if($act->reprogramaciones->count() > 0)
-            <button class="sst-icon-btn sst-icon-btn-xs" style="color:#8b5cf6" onclick="toggleReprogramaciones({{ $act->id }})" title="Historial reprogramaciones ({{ $act->reprogramaciones->count() }})">
+            <button class="sst-icon-btn sst-icon-btn-xs" style="color:#8b5cf6" onclick="toggleReprogramaciones({{ $act->id }})" title="Historial de reprogramaciones de {{ $act->nombre }} ({{ $act->reprogramaciones->count() }})" aria-label="Historial de reprogramaciones de {{ $act->nombre }}">
                 <i class="bi bi-clock-history"></i>
                 <span style="font-size:.6rem;position:absolute;top:-2px;right:-4px;background:#8b5cf6;color:#fff;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;font-weight:700;">{{ $act->reprogramaciones->count() }}</span>
             </button>
@@ -134,7 +145,7 @@
             <form method="POST" action="{{ route('carta-gantt.actividades.destroy', $act) }}"
                   onsubmit="return confirm('¿Eliminar esta actividad?')" style="display:inline">
                 @csrf @method('DELETE')
-                <button type="submit" class="sst-icon-btn sst-icon-btn-xs sst-icon-btn-danger" title="Eliminar">
+                <button type="submit" class="sst-icon-btn sst-icon-btn-xs sst-icon-btn-danger" title="Eliminar actividad: {{ $act->nombre }}" aria-label="Eliminar actividad: {{ $act->nombre }}">
                     <i class="bi bi-trash3"></i>
                 </button>
             </form>
@@ -170,7 +181,7 @@
                     <form method="POST" action="{{ route('carta-gantt.plan-accion.destroy', $plan) }}"
                           onsubmit="return confirm('¿Eliminar este plan?')" style="display:inline">
                         @csrf @method('DELETE')
-                        <button type="submit" class="sst-icon-btn sst-icon-btn-xs sst-icon-btn-danger"><i class="bi bi-x-lg"></i></button>
+                        <button type="submit" class="sst-icon-btn sst-icon-btn-xs sst-icon-btn-danger" title="Eliminar plan de acción" aria-label="Eliminar plan de acción"><i class="bi bi-x-lg"></i></button>
                     </form>
                     @endif
                 </td>

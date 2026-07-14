@@ -61,7 +61,7 @@
                 <span class="badge {{ $cartaGantt->estadoBadge }}">{{ ucfirst(strtolower($cartaGantt->estado)) }}</span>
                 <div style="display:flex;align-items:center;gap:.4rem;margin-left:.25rem">
                     <i class="bi bi-funnel-fill" style="font-size:.8rem;color:var(--text-muted)"></i>
-                    <select id="mesFilterSelect" onchange="filterByMonth(this.value)" class="form-input" style="padding:.3rem .6rem;font-size:.8rem;min-width:auto;width:auto;border-radius:8px;font-weight:600">
+                    <select id="mesFilterSelect" onchange="filterByMonth(this.value)" class="form-input" style="padding:.3rem .6rem;font-size:.8rem;min-width:auto;width:auto;border-radius:8px;font-weight:600" title="Mes usado para resumir avance, pendientes y reprogramaciones" aria-label="Filtrar resumen por mes">
                         @for($m = 1; $m <= 12; $m++)
                         <option value="{{ $m }}" {{ $m === $mesActual ? 'selected' : '' }}>{{ $mesesNombres[$m] }}</option>
                         @endfor
@@ -76,7 +76,7 @@
             </div>
         </div>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
-            <a href="{{ route('carta-gantt.reporte-pdf', $cartaGantt) }}" class="sst-btn sst-btn-outline" target="_blank">
+            <a href="{{ route('carta-gantt.reporte-pdf', $cartaGantt) }}" class="sst-btn sst-btn-outline" target="_blank" title="Descargar reporte PDF del programa" aria-label="Descargar reporte PDF del programa">
                 <i class="bi bi-file-earmark-pdf"></i> Reporte PDF
             </a>
             @if($puedeCrear)
@@ -85,9 +85,9 @@
             </button>
             @endif
             @if($puedeEditar)
-            <a href="{{ route('carta-gantt.edit', $cartaGantt) }}" class="sst-btn sst-btn-outline"><i class="bi bi-pencil"></i> Editar</a>
+            <a href="{{ route('carta-gantt.edit', $cartaGantt) }}" class="sst-btn sst-btn-outline" title="Editar datos generales del programa" aria-label="Editar datos generales del programa"><i class="bi bi-pencil"></i> Editar</a>
             @endif
-            <a href="{{ route('carta-gantt.index') }}" class="sst-btn sst-btn-outline"><i class="bi bi-arrow-left"></i> Volver</a>
+            <a href="{{ route('carta-gantt.index') }}" class="sst-btn sst-btn-outline" title="Volver al listado de programas" aria-label="Volver al listado de programas"><i class="bi bi-arrow-left"></i> Volver</a>
         </div>
     </div>
 
@@ -98,7 +98,7 @@
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#6366f1,#818cf8)"><i class="bi bi-speedometer2"></i></div>
             <div style="flex:1">
-                <div class="sst-stat-label">Avance Global</div>
+                <div class="sst-stat-label">Avance Global <span class="sst-help-tooltip" title="Porcentaje total realizado considerando todas las actividades programadas del año." aria-label="Porcentaje total realizado considerando todas las actividades programadas del año.">?</span></div>
                 <div class="sst-stat-value" id="progressNum">{{ $pct }}%</div>
                 <div class="sst-progress-track"><div class="sst-progress-fill" id="progressBar" style="width:{{ $pct }}%"></div></div>
             </div>
@@ -127,7 +127,7 @@
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa)"><i class="bi bi-calendar-check"></i></div>
             <div style="flex:1">
-                <div class="sst-stat-label" id="labelAvanceMes">Avance {{ $mesesNombres[$mesActual] }}</div>
+                <div class="sst-stat-label" id="labelAvanceMes">Avance {{ $mesesNombres[$mesActual] }} <span class="sst-help-tooltip" title="Porcentaje de actividades completadas para el mes seleccionado." aria-label="Porcentaje de actividades completadas para el mes seleccionado.">?</span></div>
                 <div class="sst-stat-value" id="monthProgressNum">{{ $mesPct }}%</div>
                 <div class="sst-progress-track"><div class="sst-progress-fill" id="monthProgressBar" style="width:{{ $mesPct }}%;background:linear-gradient(90deg,#8b5cf6,#a78bfa)"></div></div>
             </div>
@@ -142,7 +142,7 @@
         </div>
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#ef4444,#f87171)"><i class="bi bi-exclamation-triangle-fill"></i></div>
-            <div><div class="sst-stat-label">Meses Vencidos</div><div class="sst-stat-value" id="statVencidas" style="color:#ef4444">{{ $vencidosMes }}</div></div>
+            <div><div class="sst-stat-label">Meses Vencidos <span class="sst-help-tooltip" title="Meses programados que ya pasaron y siguen sin cierre." aria-label="Meses programados que ya pasaron y siguen sin cierre.">?</span></div><div class="sst-stat-value" id="statVencidas" style="color:#ef4444">{{ $vencidosMes }}</div></div>
         </div>
         <div class="sst-stat-card">
             <div class="sst-stat-icon" style="background:linear-gradient(135deg,#6366f1,#818cf8)"><i class="bi bi-calendar2-range"></i></div>
@@ -163,26 +163,26 @@
     {{-- ========== TOOLBAR: VISTA + LEYENDA ========== --}}
     <div class="sst-toolbar">
         <div class="sst-view-switcher">
-            <button class="sst-view-btn active" data-view="anual" onclick="switchView('anual')">
+            <button class="sst-view-btn active" data-view="anual" onclick="switchView('anual')" title="Ver los 12 meses del año" aria-label="Ver los 12 meses del año">
                 <i class="bi bi-calendar3-range"></i> Anual
             </button>
-            <button class="sst-view-btn" data-view="semestral" onclick="switchView('semestral')">
+            <button class="sst-view-btn" data-view="semestral" onclick="switchView('semestral')" title="Ver el semestre seleccionado" aria-label="Ver el semestre seleccionado">
                 <i class="bi bi-calendar3-event"></i> Semestre
             </button>
-            <button class="sst-view-btn" data-view="mensual" onclick="switchView('mensual')">
+            <button class="sst-view-btn" data-view="mensual" onclick="switchView('mensual')" title="Ver solo el mes seleccionado" aria-label="Ver solo el mes seleccionado">
                 <i class="bi bi-calendar-month"></i> Mes
             </button>
-            <button class="sst-view-btn" data-view="semanal" onclick="switchView('semanal')">
+            <button class="sst-view-btn" data-view="semanal" onclick="switchView('semanal')" title="Ver semanas del mes seleccionado" aria-label="Ver semanas del mes seleccionado">
                 <i class="bi bi-calendar-week"></i> Semana
             </button>
         </div>
 
         {{-- Navegación período --}}
         <div class="sst-period-nav" id="periodNav" style="display:none">
-            <button class="sst-icon-btn" onclick="navigatePeriod(-1)" title="Anterior"><i class="bi bi-chevron-left"></i></button>
+            <button class="sst-icon-btn" onclick="navigatePeriod(-1)" title="Periodo anterior" aria-label="Periodo anterior"><i class="bi bi-chevron-left"></i></button>
             <span id="periodLabel" style="font-weight:600;font-size:.85rem;min-width:150px;text-align:center"></span>
-            <button class="sst-icon-btn" onclick="navigatePeriod(1)" title="Siguiente"><i class="bi bi-chevron-right"></i></button>
-            <button class="sst-btn sst-btn-sm sst-btn-outline" onclick="navigateToToday()" style="margin-left:.3rem"><i class="bi bi-geo-alt"></i> Hoy</button>
+            <button class="sst-icon-btn" onclick="navigatePeriod(1)" title="Periodo siguiente" aria-label="Periodo siguiente"><i class="bi bi-chevron-right"></i></button>
+            <button class="sst-btn sst-btn-sm sst-btn-outline" onclick="navigateToToday()" style="margin-left:.3rem" title="Volver al periodo actual" aria-label="Volver al periodo actual"><i class="bi bi-geo-alt"></i> Hoy</button>
         </div>
 
         <div class="sst-legend">
@@ -220,7 +220,7 @@
             </div>
             <div style="display:flex;gap:.35rem">
                 @if($puedeCrear)
-                <button class="sst-btn sst-btn-sm sst-btn-primary" onclick="toggleAddActividad({{ $categoria->id }})" title="Crear una nueva actividad en esta categoría">
+                <button class="sst-btn sst-btn-sm sst-btn-primary" onclick="toggleAddActividad({{ $categoria->id }})" title="Crear una nueva actividad en {{ $categoria->nombre }}" aria-label="Crear una nueva actividad en {{ $categoria->nombre }}">
                     <i class="bi bi-plus-lg"></i> Actividad
                 </button>
                 @endif
@@ -228,7 +228,7 @@
                 <form method="POST" action="{{ route('carta-gantt.categorias.destroy', $categoria) }}"
                       onsubmit="return confirm('¿Eliminar esta categoría y todas sus actividades?')">
                     @csrf @method('DELETE')
-                    <button type="submit" class="sst-btn sst-btn-sm sst-btn-danger"><i class="bi bi-trash3"></i></button>
+                    <button type="submit" class="sst-btn sst-btn-sm sst-btn-danger" title="Eliminar categoría {{ $categoria->nombre }}" aria-label="Eliminar categoría {{ $categoria->nombre }}"><i class="bi bi-trash3"></i></button>
                 </form>
                 @endif
             </div>
@@ -279,7 +279,7 @@
                 @foreach(['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'] as $idx => $mesNom)
                 <th class="sst-th-mes {{ ($idx + 1) === $mesActual ? 'sst-mes-actual' : '' }}">{{ $mesNom }}</th>
                 @endforeach
-                <th class="sst-actions-sticky" style="width:82px"></th>
+                <th class="sst-actions-sticky" style="width:92px" title="Acciones disponibles para cada actividad" aria-label="Acciones">Acc.</th>
             </tr></thead>
             <tbody>
             @forelse($catActs as $act)
@@ -299,7 +299,7 @@
     {{-- ========== AGREGAR CATEGORÍA ========== --}}
     @if($puedeCrear)
     <div class="sst-add-cat-card">
-        <button class="sst-btn sst-btn-outline" onclick="toggleAddCat()" style="width:100%" title="Crear una nueva categoría de actividades">
+        <button class="sst-btn sst-btn-outline" onclick="toggleAddCat()" style="width:100%" title="Crear una nueva categoría de actividades" aria-label="Crear una nueva categoría de actividades">
             <i class="bi bi-folder-plus"></i> Agregar Categoría
         </button>
         <div id="addCat" style="display:none;margin-top:1rem">
@@ -321,7 +321,7 @@
     <div class="sst-modal" style="max-width:640px">
         <div class="sst-modal-header">
             <h3 style="margin:0;font-size:1rem;font-weight:700"><i class="bi bi-pencil-square"></i> Editar Actividad</h3>
-            <button onclick="document.getElementById('editModal').style.display='none'" class="sst-icon-btn"><i class="bi bi-x-lg"></i></button>
+            <button onclick="document.getElementById('editModal').style.display='none'" class="sst-icon-btn" title="Cerrar edición" aria-label="Cerrar edición"><i class="bi bi-x-lg"></i></button>
         </div>
         <div class="sst-modal-body">
             <form id="editForm" method="POST">
@@ -366,7 +366,7 @@
     <div class="sst-modal" style="max-width:720px">
         <div class="sst-modal-header" style="background:linear-gradient(135deg,var(--accent-color),#818cf8);border-bottom:none">
             <h3 style="margin:0;font-size:1rem;font-weight:700;color:#fff"><i class="bi bi-cloud-upload"></i> Importar Actividades desde CSV</h3>
-            <button onclick="document.getElementById('importModal').style.display='none'" class="sst-icon-btn" style="color:#fff;border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.1)"><i class="bi bi-x-lg"></i></button>
+            <button onclick="document.getElementById('importModal').style.display='none'" class="sst-icon-btn" style="color:#fff;border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.1)" title="Cerrar importación" aria-label="Cerrar importación"><i class="bi bi-x-lg"></i></button>
         </div>
         <div class="sst-modal-body" style="padding:1.25rem">
             {{-- Pasos --}}
@@ -533,7 +533,7 @@
     <div class="sst-modal" style="max-width:700px">
         <div class="sst-modal-header">
             <h3 id="detail-title" style="margin:0;font-size:1rem;font-weight:700"><i class="bi bi-info-circle"></i> Detalle</h3>
-            <button onclick="document.getElementById('detailModal').style.display='none'" class="sst-icon-btn"><i class="bi bi-x-lg"></i></button>
+            <button onclick="document.getElementById('detailModal').style.display='none'" class="sst-icon-btn" title="Cerrar detalle" aria-label="Cerrar detalle"><i class="bi bi-x-lg"></i></button>
         </div>
         <div class="sst-modal-body" id="detail-body"></div>
     </div>
@@ -544,7 +544,7 @@
     <div class="sst-modal" style="max-width:480px">
         <div class="sst-modal-header" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;">
             <h3 style="margin:0;font-size:1rem;font-weight:700"><i class="bi bi-calendar2-range"></i> Reprogramar Actividad</h3>
-            <button onclick="closeReprogramar()" class="sst-icon-btn" style="color:#fff"><i class="bi bi-x-lg"></i></button>
+            <button onclick="closeReprogramar()" class="sst-icon-btn" style="color:#fff" title="Cerrar reprogramación" aria-label="Cerrar reprogramación"><i class="bi bi-x-lg"></i></button>
         </div>
         <div class="sst-modal-body">
             <form method="POST" id="reprogramarForm">

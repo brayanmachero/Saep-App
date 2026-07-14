@@ -222,6 +222,9 @@ function rebuildTableRows(table, columns) {
             const cantProg = actData.cantidad_programada || 1;
             const cantReal = (seg && seg.cantidad_realizada) ? seg.cantidad_realizada : 0;
             const parcial = prog && !real && cantReal > 0;
+            const mesNombre = MESES[col.mes] || MESES_CORTO[col.mes] || ('Mes ' + col.mes);
+            const estadoMes = real ? 'realizado' : (parcial ? 'parcial' : 'programado');
+            const readOnlySuffix = PUEDE_EDITAR ? '' : ' Solo lectura.';
 
             if (col.type === 'month' && prog) {
                 const vencido = !real && isPastProgramMonth(col.mes);
@@ -229,11 +232,13 @@ function rebuildTableRows(table, columns) {
                 if (cantProg > 1) {
                     btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : (parcial ? 'gantt-partial' : 'gantt-plan')));
                     btn.textContent = real ? '✓' : (cantReal > 0 ? cantReal+'/'+cantProg : '0/'+cantProg);
-                    btn.title = cantReal+'/'+cantProg + (PUEDE_EDITAR ? (' — clic para ' + (real ? 'resetear' : 'avanzar')) : '');
+                    btn.title = actData.nombre + ' - ' + mesNombre + ': ' + (vencido ? 'vencido' : estadoMes) + '. Avance ' + cantReal + '/' + cantProg + '.' + (PUEDE_EDITAR ? (' Clic para ' + (real ? 'resetear avance.' : 'avanzar una repetición.')) : readOnlySuffix);
+                    btn.setAttribute('aria-label', actData.nombre + ' - ' + mesNombre + ': ' + (vencido ? 'vencido' : estadoMes) + '. Avance ' + cantReal + ' de ' + cantProg + '.');
                 } else {
                     btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : 'gantt-plan'));
                     btn.textContent = real ? '✓' : (vencido ? '!' : '○');
-                    btn.title = real ? 'Realizado' : (vencido ? (PUEDE_EDITAR ? 'Vencido — clic para marcar' : 'Vencido') : (PUEDE_EDITAR ? 'Programado — clic para marcar' : 'Programado'));
+                    btn.title = actData.nombre + ' - ' + mesNombre + ': ' + (real ? 'realizado' : (vencido ? 'vencido' : 'programado')) + '.' + (PUEDE_EDITAR ? (real ? ' Clic para desmarcar.' : ' Clic para marcar realizado.') : readOnlySuffix);
+                    btn.setAttribute('aria-label', btn.title);
                 }
                 if (PUEDE_EDITAR) btn.onclick = function() { toggleSeguimiento(actId, col.mes, btn); };
                 else btn.style.cursor = 'default';
@@ -244,11 +249,13 @@ function rebuildTableRows(table, columns) {
                 if (cantProg > 1) {
                     btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : (parcial ? 'gantt-partial' : 'gantt-plan')));
                     btn.textContent = real ? '✓' : (cantReal > 0 ? cantReal+'/'+cantProg : '0/'+cantProg);
+                    btn.title = actData.nombre + ' - ' + mesNombre + ': ' + (vencido ? 'vencido' : estadoMes) + '. Avance ' + cantReal + '/' + cantProg + '.' + (PUEDE_EDITAR ? ' Clic para actualizar avance.' : readOnlySuffix);
                 } else {
                     btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : 'gantt-plan'));
                     btn.textContent = real ? '✓' : (vencido ? '!' : '○');
+                    btn.title = actData.nombre + ' - ' + mesNombre + ': ' + (real ? 'realizado' : (vencido ? 'vencido' : 'programado')) + '.' + (PUEDE_EDITAR ? ' Clic para actualizar seguimiento.' : readOnlySuffix);
                 }
-                btn.title = real ? 'Realizado' : (vencido ? 'Vencido' : 'Programado');
+                btn.setAttribute('aria-label', btn.title);
                 if (PUEDE_EDITAR) btn.onclick = function() { toggleSeguimiento(actId, col.mes, btn); };
                 else btn.style.cursor = 'default';
                 td.appendChild(btn);
@@ -257,7 +264,8 @@ function rebuildTableRows(table, columns) {
                 const dot = document.createElement('span');
                 dot.style.cssText = 'display:inline-block;width:10px;height:10px;border-radius:50%;' + (PUEDE_EDITAR ? 'cursor:pointer;' : 'cursor:default;');
                 dot.style.background = real ? '#10b981' : (vencido ? '#ef4444' : (parcial ? '#f59e0b' : '#6366f1'));
-                dot.title = cantProg > 1 ? (cantReal+'/'+cantProg) : (real ? 'Realizado' : (vencido ? 'Vencido' : 'Programado'));
+                dot.title = actData.nombre + ' - ' + mesNombre + ': ' + (real ? 'realizado' : (vencido ? 'vencido' : (parcial ? 'parcial' : 'programado'))) + (cantProg > 1 ? ('. Avance ' + cantReal + '/' + cantProg + '.') : '.');
+                dot.setAttribute('aria-label', dot.title);
                 if (PUEDE_EDITAR) dot.onclick = function() { toggleSeguimiento(actId, col.mes, dot); };
                 td.appendChild(dot);
             }
