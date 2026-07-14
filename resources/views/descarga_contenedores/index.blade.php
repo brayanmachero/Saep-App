@@ -302,6 +302,7 @@
                 <tbody>
                     @forelse($descargas as $descarga)
                     @php
+                        $puedeEditarDescarga = auth()->user()->puedeEditarDescargaContenedor($descarga);
                         $blockers = $descarga->validationBlockers();
                         $visibleBlockers = $blockers->map(function ($blocker) use ($puedeGestionarCostos) {
                             if ($puedeGestionarCostos) {
@@ -376,7 +377,7 @@
                         <td><span class="{{ $descarga->estadoBadge['class'] }}">{{ $descarga->estadoBadge['label'] }}</span></td>
                         <td style="white-space:nowrap">
                             <a href="{{ route('descarga-contenedores.show', $descarga) }}" class="icon-btn" title="Ver"><i class="bi bi-eye-fill"></i></a>
-                            @if(auth()->user()->tieneAcceso('descarga_contenedores', 'puede_editar'))
+                            @if($puedeEditarContenedores)
                                 @if($descarga->estado === 'borrador')
                                     @if($blockers->isEmpty())
                                         <form method="POST" action="{{ route('descarga-contenedores.validar', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Validar este registro de contenedor?')">
@@ -403,9 +404,9 @@
                                         <button class="icon-btn" title="Reabrir como validado"><i class="bi bi-arrow-up-circle"></i></button>
                                     </form>
                                 @endif
-                                @if($descarga->estado !== 'liquidado')
-                                <a href="{{ route('descarga-contenedores.edit', $descarga) }}" class="icon-btn" title="Editar"><i class="bi bi-pencil-fill"></i></a>
-                                @endif
+                            @endif
+                            @if($puedeEditarDescarga && $descarga->estado !== 'liquidado')
+                            <a href="{{ route('descarga-contenedores.edit', $descarga) }}" class="icon-btn" title="{{ $puedeEditarContenedores ? 'Editar registro' : 'Completar mi borrador' }}"><i class="bi bi-pencil-fill"></i></a>
                             @endif
                             @if(auth()->user()->tieneAcceso('descarga_contenedores', 'puede_eliminar'))
                                 @if($descarga->estado !== 'liquidado')

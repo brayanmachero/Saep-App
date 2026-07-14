@@ -9,7 +9,8 @@
     $progress = $descarga->estado === 'liquidado'
         ? 100
         : (int) round($doneCount * 100 / $totalCount);
-    $canEdit = auth()->user()->tieneAcceso('descarga_contenedores', 'puede_editar');
+    $canManageStatus = $puedeGestionarEstadoDescarga ?? auth()->user()->tieneAcceso('descarga_contenedores', 'puede_editar');
+    $canEdit = $puedeEditarDescarga ?? auth()->user()->puedeEditarDescargaContenedor($descarga);
     $visibleBlockers = $blockers->map(function ($blocker) use ($puedeGestionarCostos) {
         if ($puedeGestionarCostos) {
             return $blocker;
@@ -62,7 +63,7 @@
         @if($blockers->isEmpty())
             <div class="workflow-action success">
                 <span><strong>Listo para validar.</strong> La coordinación puede pasar este registro a estado validado.</span>
-                @if($canEdit)
+                @if($canManageStatus)
                     <form method="POST" action="{{ route('descarga-contenedores.validar', $descarga) }}" onsubmit="return confirm('¿Validar este registro de contenedor?')">
                         @csrf @method('PATCH')
                         <button class="btn-premium" type="submit"><i class="bi bi-check2-circle"></i> Validar</button>
@@ -80,7 +81,7 @@
     @elseif($descarga->estado === 'validado')
         <div class="workflow-action success">
             <span><strong>Validado.</strong> {{ $puedeGestionarCostos ? 'Puede revisarse en liquidación o reabrirse si se detecta una corrección.' : 'Queda disponible para seguimiento operativo.' }}</span>
-            @if($puedeGestionarCostos && $canEdit)
+            @if($puedeGestionarCostos && $canManageStatus)
                 <form method="POST" action="{{ route('descarga-contenedores.liquidar', $descarga) }}" onsubmit="return confirm('¿Marcar este registro como liquidado?')">
                     @csrf @method('PATCH')
                     <button class="btn-premium" type="submit"><i class="bi bi-cash-stack"></i> Liquidar</button>

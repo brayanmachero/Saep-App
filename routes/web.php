@@ -231,16 +231,13 @@ Route::middleware('auth')->group(function () {
             ->name('descarga-contenedores.volver-validado')
             ->middleware('modulo:descarga_contenedores,puede_editar');
         Route::delete('descarga-contenedores/{descarga}/evidencias/{archivo}', [DescargaContenedorController::class, 'destroyEvidencia'])
-            ->name('descarga-contenedores.evidencias.destroy')
-            ->middleware('modulo:descarga_contenedores,puede_editar');
+            ->name('descarga-contenedores.evidencias.destroy');
         Route::get('descarga-contenedores/{descarga}', [DescargaContenedorController::class, 'show'])
             ->name('descarga-contenedores.show');
         Route::get('descarga-contenedores/{descarga}/edit', [DescargaContenedorController::class, 'edit'])
-            ->name('descarga-contenedores.edit')
-            ->middleware('modulo:descarga_contenedores,puede_editar');
+            ->name('descarga-contenedores.edit');
         Route::match(['put', 'patch'], 'descarga-contenedores/{descarga}', [DescargaContenedorController::class, 'update'])
-            ->name('descarga-contenedores.update')
-            ->middleware('modulo:descarga_contenedores,puede_editar');
+            ->name('descarga-contenedores.update');
         Route::delete('descarga-contenedores/{descarga}', [DescargaContenedorController::class, 'destroy'])
             ->name('descarga-contenedores.destroy')
             ->middleware('modulo:descarga_contenedores,puede_eliminar');

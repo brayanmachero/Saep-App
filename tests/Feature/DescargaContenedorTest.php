@@ -166,12 +166,6 @@ class DescargaContenedorTest extends TestCase
             ->get(route('descarga-contenedores.evidencias.ver', $evidencia))
             ->assertOk();
 
-        $this->actingAs($capturador)
-            ->delete(route('descarga-contenedores.evidencias.destroy', [$descarga, $evidencia]))
-            ->assertForbidden();
-
-        Storage::disk('local')->assertExists($evidencia->ruta);
-
         $sinModuloRole = Rol::firstOrCreate(
             ['codigo' => 'SIN_CONTENEDORES'],
             ['nombre' => 'Sin Contenedores']
@@ -189,6 +183,156 @@ class DescargaContenedorTest extends TestCase
         $this->actingAs($sinModulo)
             ->get(route('archivos.descargar', $evidencia))
             ->assertForbidden();
+
+        $this->actingAs($capturador)
+            ->delete(route('descarga-contenedores.evidencias.destroy', [$descarga, $evidencia]))
+            ->assertRedirect();
+
+        Storage::disk('local')->assertMissing($evidencia->ruta);
+        $this->assertDatabaseMissing('archivos_adjuntos', ['id' => $evidencia->id]);
+    }
+
+    public function test_capture_user_can_edit_only_own_draft_without_status_actions(): void
+    {
+        $admin = $this->createSuperAdminUser();
+        $capturador = $this->createContainerModuleUser(false);
+        $otroCapturador = $this->createContainerModuleUser(false, 'CONTENEDORES_CAPTURADOR_ALT', 'Capturador Contenedores Alt');
+        $centro = $this->createCentroCosto('LTS Capturador Edicion QA');
+        $tarifa = $this->createTarifa('CNTCAPEDIT', 75000, 36000, 'CAPTURADOR EDICION QA', false, $centro);
+        $worker = $this->createTalanaWorker('Trabajador Capturador Edicion QA', $centro);
+
+        $this->actingAs($capturador)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'LTS Capturador Edicion QA',
+                'fecha' => '2026-07-02',
+                'contenedor' => 'CONT-CAP-EDIT-001',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([$worker->id]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descargaPropia = DescargaContenedor::where('contenedor', 'CONT-CAP-EDIT-001')->firstOrFail();
+
+        $this->actingAs($capturador)
+            ->get(route('descarga-contenedores.index'))
+            ->assertOk()
+            ->assertSee('Completar mi borrador', false)
+            ->assertDontSee('Validar registro');
+
+        $this->actingAs($capturador)
+            ->get(route('descarga-contenedores.show', $descargaPropia))
+            ->assertOk()
+            ->assertSee('Editar')
+            ->assertDontSee('Validar')
+            ->assertDontSee('Liquidar');
+
+        $this->actingAs($capturador)
+            ->get(route('descarga-contenedores.edit', $descargaPropia))
+            ->assertOk()
+            ->assertDontSee('Pago estimado')
+            ->assertDontSee('"pago_colaborador"', false);
+
+        $this->actingAs($capturador)
+            ->put(route('descarga-contenedores.update', $descargaPropia), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'LTS Capturador Edicion QA',
+                'fecha' => '2026-07-03',
+                'contenedor' => 'CONT-CAP-EDIT-002',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([$worker->id]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descargaPropia->refresh();
+        $this->assertSame('CONT-CAP-EDIT-002', $descargaPropia->contenedor);
+        $this->assertSame('borrador', $descargaPropia->estado);
+
+        $this->actingAs($otroCapturador)
+            ->get(route('descarga-contenedores.edit', $descargaPropia))
+            ->assertForbidden();
+
+        $descargaPropia->update([
+            'estado' => 'validado',
+            'validado_por' => $admin->id,
+            'validado_at' => now(),
+        ]);
+
+        $this->actingAs($capturador)
+            ->get(route('descarga-contenedores.edit', $descargaPropia))
+            ->assertForbidden();
+    }
+
+    public function test_edit_form_keeps_existing_center_tariff_and_workers_outside_current_selector_scope(): void
+    {
+        $capturador = $this->createContainerModuleUser(false);
+        $centro = $this->createCentroCosto('Centro Externo Selector QA');
+        $tarifa = $this->createTarifa('CNTEXTERNO', 75000, 36000, 'EXTERNO SELECTOR QA', false, $centro);
+        $worker = $this->createTalanaWorker('Trabajador Externo Selector QA', $centro, [
+            'cargo_nombre' => 'Cargo Fuera Filtro QA',
+            'centro_costo_nombre' => 'Centro Externo Selector QA',
+        ]);
+
+        $descarga = DescargaContenedor::create([
+            'estado' => 'borrador',
+            'origen' => 'manual',
+            'operacion' => 'Walmart',
+            'centro_costo_id' => $centro->id,
+            'bodega' => $centro->nombre,
+            'fecha' => '2026-07-02',
+            'contenedor' => 'CONT-EXTERNO-SELECTOR-001',
+            'tarifa_id' => $tarifa->id,
+            'fact_codigo' => $tarifa->codigo,
+            'tarifa_cliente_snapshot' => $tarifa->cliente,
+            'tarifa_proceso_snapshot' => $tarifa->proceso,
+            'costo_unitario_snapshot' => $tarifa->costo_unitario,
+            'pago_colaborador_snapshot' => $tarifa->pago_colaborador,
+            'creado_por' => $capturador->id,
+            'supervisor_id' => $capturador->id,
+        ]);
+
+        $descarga->participantes()->create([
+            'talana_trabajador_id' => $worker->id,
+            'nombre_snapshot' => $worker->nombre_completo ?: $worker->nombre,
+            'rut_snapshot' => $worker->rut,
+            'cargo_snapshot' => $worker->cargo_nombre,
+            'centro_costo_id_snapshot' => $centro->id,
+            'centro_costo_snapshot' => $centro->nombre,
+            'rol_en_descarga' => 'descargador',
+            'porcentaje_participacion' => 100,
+            'monto_calculado' => 36000,
+        ]);
+
+        $this->actingAs($capturador)
+            ->get(route('descarga-contenedores.edit', $descarga))
+            ->assertOk()
+            ->assertSee('Centro Externo Selector QA')
+            ->assertSee('CNTEXTERNO')
+            ->assertSee('Trabajador Externo Selector QA');
+
+        $this->actingAs($capturador)
+            ->put(route('descarga-contenedores.update', $descarga), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => $centro->nombre,
+                'fecha' => '2026-07-03',
+                'contenedor' => 'CONT-EXTERNO-SELECTOR-002',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([
+                    ['id' => $worker->id, 'porcentaje' => 100],
+                ]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga->refresh();
+        $this->assertSame('CONT-EXTERNO-SELECTOR-002', $descarga->contenedor);
+        $this->assertSame(1, $descarga->participantes()->count());
+        $this->assertSame($worker->id, $descarga->participantes()->first()->talana_trabajador_id);
     }
 
     public function test_tariff_changes_do_not_rewrite_existing_descarga_snapshots(): void

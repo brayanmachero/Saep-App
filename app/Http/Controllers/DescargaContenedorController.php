@@ -180,7 +180,7 @@ class DescargaContenedorController extends Controller
         $descarga = $descarga->load(['participantes', 'evidencias.subidoPor']);
 
         return view('descarga_contenedores.edit', array_merge(
-            $this->formData(),
+            $this->formData($descarga),
             compact('descarga')
         ));
     }
@@ -1049,6 +1049,7 @@ class DescargaContenedorController extends Controller
 
     private function ensureEditable(DescargaContenedor $descarga): void
     {
+        abort_unless(auth()->user()?->puedeEditarDescargaContenedor($descarga), 403);
         abort_if($descarga->estado === 'liquidado', 403, 'No se puede editar un registro liquidado.');
     }
 
@@ -1193,26 +1194,62 @@ class DescargaContenedorController extends Controller
         ])));
     }
 
-    private function formData(): array
+    private function formData(?DescargaContenedor $descarga = null): array
     {
+        $centros = $this->centrosOperacion();
+        if ($descarga?->centro_costo_id && !$centros->contains('id', $descarga->centro_costo_id)) {
+            $centroActual = CentroCosto::find($descarga->centro_costo_id);
+            if ($centroActual) {
+                $centros = $centros->push($centroActual)->unique('id')->sortBy('nombre')->values();
+            }
+        }
+
+        $tarifas = DescargaContenedorTarifa::with('centroCosto')
+            ->where('activo', true)
+            ->orderBy('cliente')
+            ->orderBy('centro_costo_id')
+            ->orderBy('codigo')
+            ->get();
+
+        if ($descarga?->tarifa_id && !$tarifas->contains('id', $descarga->tarifa_id)) {
+            $tarifaActual = DescargaContenedorTarifa::with('centroCosto')->find($descarga->tarifa_id);
+            if ($tarifaActual) {
+                $tarifas = $tarifas->push($tarifaActual)->unique('id')->sortBy([
+                    ['cliente', 'asc'],
+                    ['centro_costo_id', 'asc'],
+                    ['codigo', 'asc'],
+                ])->values();
+            }
+        }
+
         return [
-            'centros' => $this->centrosOperacion(),
-            'tarifas' => DescargaContenedorTarifa::with('centroCosto')
-                ->where('activo', true)
-                ->orderBy('cliente')
-                ->orderBy('centro_costo_id')
-                ->orderBy('codigo')
-                ->get(),
-            'trabajadores' => $this->trabajadoresSelector(),
+            'centros' => $centros,
+            'tarifas' => $tarifas,
+            'trabajadores' => $this->trabajadoresSelector($descarga),
             'supervisorSistema' => auth()->user()?->loadMissing(['cargo', 'centroCosto']),
         ];
     }
 
-    private function trabajadoresSelector()
+    private function trabajadoresSelector(?DescargaContenedor $descarga = null)
     {
+        $selectedIds = $descarga?->participantes
+            ?->pluck('talana_trabajador_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all() ?? [];
+
         $query = TalanaTrabajador::with(['cargo', 'centroCosto', 'centroOperativo'])
-            ->where('activo', true);
-        $this->applyTrabajadoresDotacionFilter($query);
+            ->where(function ($q) use ($selectedIds) {
+                $q->where(function ($base) {
+                    $base->where('activo', true);
+                    $this->applyTrabajadoresDotacionFilter($base);
+                });
+
+                if ($selectedIds) {
+                    $q->orWhereIn('id', $selectedIds);
+                }
+            });
 
         return $query->orderBy('nombre')
             ->orderBy('apellido_paterno')
@@ -1411,6 +1448,11 @@ class DescargaContenedorController extends Controller
         $participantes = $this->normalizeParticipantesPayload($participantesPayload);
         $trabajadorIds = $participantes->pluck('id')
             ->values();
+        $existingWorkerIds = $descarga->participantes()
+            ->whereNotNull('talana_trabajador_id')
+            ->pluck('talana_trabajador_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
 
         $descarga->participantes()->delete();
 
@@ -1419,8 +1461,16 @@ class DescargaContenedorController extends Controller
         }
 
         $trabajadoresQuery = TalanaTrabajador::with(['cargo', 'centroCosto', 'centroOperativo'])
-            ->whereIn('id', $trabajadorIds);
-        $this->applyTrabajadoresDotacionFilter($trabajadoresQuery);
+            ->whereIn('id', $trabajadorIds)
+            ->where(function ($q) use ($existingWorkerIds) {
+                $q->where(function ($allowed) {
+                    $this->applyTrabajadoresDotacionFilter($allowed);
+                });
+
+                if ($existingWorkerIds) {
+                    $q->orWhereIn('id', $existingWorkerIds);
+                }
+            });
         $trabajadores = $trabajadoresQuery->get()->keyBy('id');
 
         $pagoTotal = $this->pagoTotalColaboradores($descarga);

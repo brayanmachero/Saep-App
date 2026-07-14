@@ -3,6 +3,8 @@
 @section('content')
 @php
     $puedeGestionarCostos = auth()->user()->puedeGestionarCostosDescargaContenedores();
+    $puedeGestionarEstadoDescarga = auth()->user()->tieneAcceso('descarga_contenedores', 'puede_editar');
+    $puedeEditarDescarga = auth()->user()->puedeEditarDescargaContenedor($descarga);
     $participantesColspan = $puedeGestionarCostos ? 6 : 5;
     $blockers = $descarga->validationBlockers();
     $visibleBlockers = $blockers->map(function ($blocker) use ($puedeGestionarCostos) {
@@ -30,7 +32,7 @@
             <a href="{{ route('descarga-contenedores.index') }}" class="btn-secondary">
                 <i class="bi bi-arrow-left"></i> Volver
             </a>
-            @if(auth()->user()->tieneAcceso('descarga_contenedores', 'puede_editar'))
+            @if($puedeGestionarEstadoDescarga)
             @if($descarga->estado === 'borrador')
                 @if($blockers->isEmpty())
                 <form method="POST" action="{{ route('descarga-contenedores.validar', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Validar este registro de contenedor?')">
@@ -59,11 +61,11 @@
                 <button class="btn-secondary" type="submit"><i class="bi bi-arrow-up-circle"></i> Reabrir como validado</button>
             </form>
             @endif
-            @if($descarga->estado !== 'liquidado')
+            @endif
+            @if($puedeEditarDescarga && $descarga->estado !== 'liquidado')
             <a href="{{ route('descarga-contenedores.edit', $descarga) }}" class="btn-premium">
                 <i class="bi bi-pencil"></i> Editar
             </a>
-            @endif
             @endif
         </div>
     </div>
@@ -86,6 +88,8 @@
     @include('descarga_contenedores._workflow_status', [
         'descarga' => $descarga,
         'puedeGestionarCostos' => $puedeGestionarCostos,
+        'puedeGestionarEstadoDescarga' => $puedeGestionarEstadoDescarga,
+        'puedeEditarDescarga' => $puedeEditarDescarga,
         'blockers' => $blockers,
     ])
 
@@ -199,7 +203,7 @@
                         <span>{{ $evidencia->nombre_original }}</span>
                         <small>{{ $evidencia->tamanio_formateado }} · {{ $evidencia->created_at?->format('d/m/Y H:i') }}</small>
                     </div>
-                    @if(auth()->user()->tieneAcceso('descarga_contenedores', 'puede_editar') && $descarga->estado !== 'liquidado')
+                    @if($puedeEditarDescarga && $descarga->estado !== 'liquidado')
                     <form method="POST" action="{{ route('descarga-contenedores.evidencias.destroy', [$descarga, $evidencia]) }}" onsubmit="return confirm('¿Eliminar esta evidencia?')">
                         @csrf @method('DELETE')
                         <button type="submit" class="icon-btn danger" title="Eliminar evidencia"><i class="bi bi-trash-fill"></i></button>

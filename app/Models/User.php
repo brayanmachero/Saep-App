@@ -127,6 +127,17 @@ class User extends Authenticatable
             || $codigo === 'CONTENEDORES_COORDINADOR';
     }
 
+    public function puedeEditarDescargaContenedor(DescargaContenedor $descarga): bool
+    {
+        if ($this->tieneAcceso('descarga_contenedores', 'puede_editar')) {
+            return true;
+        }
+
+        return $descarga->estado === 'borrador'
+            && (int) $descarga->creado_por === (int) $this->id
+            && $this->tieneAcceso('descarga_contenedores', 'puede_crear');
+    }
+
     /**
      * The attributes that should be hidden for serialization.
      *
