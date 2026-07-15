@@ -314,6 +314,8 @@ class CartaGanttAsignacionesTest extends TestCase
             ->assertSee('Comentario desde usuario asignado con solo lectura global.')
             ->assertSee('Bitácora de cambios')
             ->assertSee('Editar actividad: Avance actualizado por asignado')
+            ->assertSee('Últimos movimientos del equipo')
+            ->assertSee('Registro rápido de avances')
             ->assertSee('Acciones rápidas')
             ->assertSee('Ir a actividad')
             ->assertSee('Comentar')

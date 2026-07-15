@@ -99,6 +99,12 @@
         ];
     })->filter()->values()->take(6);
     $usuarioTieneAlcancePrograma = !$puedeAdministrarPrograma && $cartaGantt->estaAsignadoA(auth()->user());
+    $movimientosRecientes = $allActividades->flatMap(function($actividad) {
+        return $actividad->logs->map(fn($log) => [
+            'log' => $log,
+            'actividad' => $actividad,
+        ]);
+    })->sortByDesc(fn($item) => $item['log']->created_at?->timestamp ?? 0)->take(6)->values();
 @endphp
 <div class="page-container">
 
@@ -194,6 +200,34 @@
                     @endif
                 </div>
             </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
+
+    @if($puedeGestionarActividades && $movimientosRecientes->count())
+    <div class="sst-recent-activity">
+        <div class="sst-recent-activity-head">
+            <div>
+                <div class="sst-recent-activity-title"><i class="bi bi-clock-history"></i> Últimos movimientos del equipo</div>
+                <div class="sst-recent-activity-subtitle">Registro rápido de avances, comentarios, planes y reprogramaciones realizadas por usuario.</div>
+            </div>
+            <span class="sst-recent-activity-count">{{ $movimientosRecientes->count() }} recientes</span>
+        </div>
+        <div class="sst-recent-activity-list">
+            @foreach($movimientosRecientes as $item)
+            @php
+                $log = $item['log'];
+                $actividad = $item['actividad'];
+            @endphp
+            <button type="button" class="sst-recent-activity-item" onclick="scrollToActividad({{ $actividad->id }})">
+                <span class="sst-recent-activity-icon"><i class="bi bi-arrow-right-short"></i></span>
+                <span class="sst-recent-activity-body">
+                    <strong>{{ $actividad->nombre }}</strong>
+                    <span>{{ str_replace('_', ' ', $log->accion) }} · {{ $log->usuario?->nombre_completo ?? 'Usuario eliminado' }} · {{ $log->created_at?->format('d/m/Y H:i') }}</span>
+                    <small>{{ $log->resumen }}</small>
+                </span>
+            </button>
             @endforeach
         </div>
     </div>
