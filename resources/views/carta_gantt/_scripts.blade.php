@@ -2,6 +2,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     updateStats();
+    applyActivityFilter();
 
     // CSV file input: toggle placeholder/file info
     const csvInput = document.getElementById('csvFileInput');
@@ -25,6 +26,7 @@ const ANIO = {{ $anioPrograma }};
 const ANIO_ACTUAL = new Date().getFullYear();
 const MES_ACTUAL = {{ $mesActual }};
 const PUEDE_EDITAR = {{ ($puedeEditar ?? false) ? 'true' : 'false' }};
+const CURRENT_USER_ID = {{ auth()->id() ?? 0 }};
 const MESES = @json($mesesNombres);
 const MESES_CORTO = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const actividadesData = @json($actividadesJson);
@@ -32,6 +34,7 @@ const actividadesData = @json($actividadesJson);
 let currentView = 'anual';
 let periodoSem = MES_ACTUAL <= 6 ? 1 : 2;
 let periodoMes = MES_ACTUAL;
+let currentActivityFilter = 'all';
 
 function isPastProgramMonth(mes) {
     return ANIO < ANIO_ACTUAL || (ANIO === ANIO_ACTUAL && mes < MES_ACTUAL);
@@ -95,6 +98,8 @@ function rebuildAllTables() {
         rebuildTableHeaders(table, columns);
         rebuildTableRows(table, columns);
     });
+
+    applyActivityFilter();
 }
 
 function buildAnualColumns() {
@@ -275,6 +280,108 @@ function rebuildTableRows(table, columns) {
     });
 }
 
+// ============ ACTIVITY FILTERS ============
+function setActivityFilter(filter) {
+    currentActivityFilter = filter;
+    document.querySelectorAll('.sst-filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+    applyActivityFilter();
+}
+
+function getSelectedActivityMonth() {
+    return parseInt(document.getElementById('mesFilterSelect')?.value || selectedStatMonth || MES_ACTUAL);
+}
+
+function getActividadData(actId) {
+    return actividadesData.find(a => parseInt(a.id) === parseInt(actId));
+}
+
+function getSeguimientoMes(actData, mes) {
+    return actData?.seguimiento?.[mes] || actData?.seguimiento?.[String(mes)] || null;
+}
+
+function actividadTieneVencidos(actData) {
+    if (!actData?.seguimiento) return false;
+    for (let m = 1; m <= 12; m++) {
+        const s = getSeguimientoMes(actData, m);
+        const cantidadRealizada = parseInt(s?.cantidad_realizada || 0);
+        if (s?.programado && !s?.realizado && isPastProgramMonth(m) && cantidadRealizada === 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function matchesActivityFilter(actData) {
+    if (!actData || currentActivityFilter === 'all') return true;
+
+    const mes = getSelectedActivityMonth();
+    const seg = getSeguimientoMes(actData, mes);
+
+    if (currentActivityFilter === 'mine') {
+        return parseInt(actData.responsable_id || 0) === parseInt(CURRENT_USER_ID);
+    }
+    if (currentActivityFilter === 'pending') {
+        return !!(seg?.programado && !seg?.realizado && parseInt(seg?.cantidad_realizada || 0) === 0);
+    }
+    if (currentActivityFilter === 'overdue') {
+        return actividadTieneVencidos(actData);
+    }
+    if (currentActivityFilter === 'done') {
+        return !!(seg?.programado && seg?.realizado);
+    }
+
+    return true;
+}
+
+function closeActivityDetailRows(actId) {
+    ['planes-', 'comentarios-', 'reprog-', 'historial-'].forEach(prefix => {
+        const row = document.getElementById(prefix + actId);
+        if (row) row.style.display = 'none';
+    });
+}
+
+function applyActivityFilter() {
+    const rows = Array.from(document.querySelectorAll('.sst-act-row'));
+    let visible = 0;
+
+    rows.forEach(row => {
+        const actId = parseInt(row.dataset.actividadId);
+        const actData = getActividadData(actId);
+        const show = matchesActivityFilter(actData);
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+        else closeActivityDetailRows(actId);
+    });
+
+    document.querySelectorAll('.sst-cat-card').forEach(card => {
+        const cardRows = Array.from(card.querySelectorAll('.sst-act-row'));
+        const visibleRows = cardRows.filter(row => row.style.display !== 'none');
+        const count = card.querySelector('[data-filter-count]');
+        card.style.display = visibleRows.length > 0 ? '' : 'none';
+        if (count) {
+            const pct = card.querySelector('.sst-cat-progress-fill')?.style.width || '0%';
+            const pctText = pct.replace('%', '') || '0';
+            count.textContent = currentActivityFilter === 'all'
+                ? cardRows.length + ' actividades · ' + pctText + '% avance'
+                : visibleRows.length + '/' + cardRows.length + ' visibles · ' + pctText + '% avance';
+        }
+    });
+
+    const info = document.getElementById('activityFilterInfo');
+    if (info) {
+        const labels = {
+            all: 'Mostrando todas las actividades del programa.',
+            mine: 'Mostrando solo actividades donde figuras como responsable.',
+            pending: 'Mostrando actividades pendientes del mes seleccionado.',
+            overdue: 'Mostrando actividades vencidas sin avance.',
+            done: 'Mostrando actividades completadas del mes seleccionado.'
+        };
+        info.textContent = (labels[currentActivityFilter] || labels.all) + ' ' + visible + ' de ' + rows.length + ' visibles.';
+    }
+}
+
 // ============ SEGUIMIENTO AJAX ============
 function toggleSeguimiento(actId, mes, el) {
     el.style.opacity = '.5';
@@ -300,6 +407,7 @@ function toggleSeguimiento(actId, mes, el) {
         // Rebuild the current view to reflect changes
         rebuildAllTables();
         updateStats();
+        applyActivityFilter();
     })
     .catch(err => { console.error(err); alert('Error al actualizar seguimiento.'); })
     .finally(() => { el.style.opacity = '1'; el.style.pointerEvents = ''; });
@@ -485,6 +593,7 @@ let selectedStatMonth = MES_ACTUAL;
 function filterByMonth(mes) {
     selectedStatMonth = parseInt(mes);
     updateStats();
+    applyActivityFilter();
 }
 
 function updateStats() {
@@ -585,11 +694,12 @@ function updateStats() {
         const catPct = catProg > 0 ? Math.round(catReal / catProg * 100) : 0;
         const catFill = card.querySelector('.sst-cat-progress-fill');
         if (catFill) catFill.style.width = catPct + '%';
-        const catInfo = card.querySelector('.sst-cat-header span[style*="font-size:.72rem"]');
+        const catInfo = card.querySelector('[data-filter-count]');
         if (catInfo) {
             const count = card.querySelectorAll('.sst-act-row').length;
             catInfo.textContent = count + ' actividades · ' + catPct + '% avance';
         }
     });
+    applyActivityFilter();
 }
 </script>

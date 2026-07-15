@@ -40,6 +40,14 @@
 .sst-period-nav{display:flex;align-items:center;gap:.3rem}
 .sst-legend{display:flex;gap:.85rem;font-size:.74rem;color:var(--text-muted);align-items:center;margin-left:auto;flex-wrap:wrap}
 .sst-legend span{display:flex;align-items:center;gap:.3rem}
+.sst-activity-filter{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin:-.45rem 0 1.2rem;padding:.75rem .9rem;background:var(--surface-color);border:1px solid var(--surface-border);border-radius:10px;box-shadow:var(--shadow-sm)}
+.sst-activity-filter-title{font-size:.82rem;font-weight:800;color:var(--text-main);display:flex;align-items:center;gap:.35rem}
+.sst-activity-filter-title i{color:var(--accent-color,#6366f1)}
+.sst-activity-filter-help{font-size:.72rem;color:var(--text-muted);margin-top:.12rem;line-height:1.35}
+.sst-activity-filter-buttons{display:flex;gap:.3rem;flex-wrap:wrap;justify-content:flex-end}
+.sst-filter-btn{border:1px solid var(--surface-border);background:var(--bg-color);color:var(--text-muted);border-radius:999px;padding:.32rem .62rem;font-size:.74rem;font-weight:800;cursor:pointer;transition:all .16s}
+.sst-filter-btn:hover{color:var(--text-main);border-color:rgba(99,102,241,.35);background:rgba(99,102,241,.07)}
+.sst-filter-btn.active{background:var(--accent-color,#6366f1);border-color:var(--accent-color,#6366f1);color:#fff;box-shadow:0 2px 6px rgba(99,102,241,.22)}
 
 /* ===== CATEGORY CARDS ===== */
 .sst-cat-card{background:var(--surface-color);border:1px solid var(--surface-border);border-radius:12px;margin-bottom:1.1rem;overflow:hidden}
@@ -136,6 +144,8 @@ body.dark-mode .sst-highlight-col{background:rgba(99,102,241,.1)!important}
     .sst-view-switcher{order:1;width:100%;justify-content:center}
     .sst-period-nav{order:2;justify-content:center}
     .sst-legend{order:3;justify-content:center}
+    .sst-activity-filter{flex-direction:column;gap:.65rem}
+    .sst-activity-filter-buttons{justify-content:flex-start}
     .sst-detail-grid{grid-template-columns:1fr}
     .sst-seg-grid{grid-template-columns:repeat(4,1fr)}
     .sst-gantt{font-size:.75rem}
@@ -151,6 +161,7 @@ body.dark-mode .sst-highlight-col{background:rgba(99,102,241,.1)!important}
     .sst-quick-actions-head{flex-direction:column;gap:.45rem}
     .sst-quick-actions-grid{grid-template-columns:1fr;padding:.7rem}
     .sst-quick-buttons .sst-btn{width:100%;justify-content:center}
+    .sst-filter-btn{flex:1;min-width:calc(50% - .2rem);text-align:center}
 }
 
 /* ===== DARK MODE PATCHES ===== */

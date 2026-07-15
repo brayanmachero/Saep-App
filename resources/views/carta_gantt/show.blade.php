@@ -345,6 +345,20 @@
         </div>
     </div>
 
+    <div class="sst-activity-filter" aria-label="Filtros rápidos de actividades">
+        <div>
+            <div class="sst-activity-filter-title"><i class="bi bi-funnel"></i> Filtro rápido</div>
+            <div class="sst-activity-filter-help" id="activityFilterInfo">Mostrando todas las actividades del programa.</div>
+        </div>
+        <div class="sst-activity-filter-buttons">
+            <button type="button" class="sst-filter-btn active" data-filter="all" onclick="setActivityFilter('all')">Todas</button>
+            <button type="button" class="sst-filter-btn" data-filter="mine" onclick="setActivityFilter('mine')">Mis actividades</button>
+            <button type="button" class="sst-filter-btn" data-filter="pending" onclick="setActivityFilter('pending')">Pendientes mes</button>
+            <button type="button" class="sst-filter-btn" data-filter="overdue" onclick="setActivityFilter('overdue')">Vencidas</button>
+            <button type="button" class="sst-filter-btn" data-filter="done" onclick="setActivityFilter('done')">Completadas mes</button>
+        </div>
+    </div>
+
     {{-- ========== VISTA ANUAL (por defecto) ========== --}}
     <div id="view-anual">
     @foreach($cartaGantt->categorias as $categoria)
@@ -366,7 +380,7 @@
                 <div class="sst-cat-icon"><i class="bi bi-folder2-open"></i></div>
                 <div>
                     <h3 class="sst-cat-title">{{ $categoria->nombre }}</h3>
-                    <span style="font-size:.72rem;color:var(--text-muted)">{{ $catActs->count() }} actividades · {{ $catPct }}% avance</span>
+                    <span style="font-size:.72rem;color:var(--text-muted)" data-filter-count>{{ $catActs->count() }} actividades · {{ $catPct }}% avance</span>
                 </div>
                 <div class="sst-cat-progress"><div class="sst-cat-progress-fill" style="width:{{ $catPct }}%"></div></div>
             </div>
