@@ -48,6 +48,8 @@
 .sst-filter-btn{border:1px solid var(--surface-border);background:var(--bg-color);color:var(--text-muted);border-radius:999px;padding:.32rem .62rem;font-size:.74rem;font-weight:800;cursor:pointer;transition:all .16s}
 .sst-filter-btn:hover{color:var(--text-main);border-color:rgba(99,102,241,.35);background:rgba(99,102,241,.07)}
 .sst-filter-btn.active{background:var(--accent-color,#6366f1);border-color:var(--accent-color,#6366f1);color:#fff;box-shadow:0 2px 6px rgba(99,102,241,.22)}
+.sst-filter-btn span{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;margin-left:.25rem;border-radius:999px;background:rgba(148,163,184,.16);color:inherit;font-size:.66rem;line-height:1;padding:0 .28rem}
+.sst-filter-btn.active span{background:rgba(255,255,255,.22);color:#fff}
 .sst-filter-empty{align-items:center;gap:.75rem;margin:-.7rem 0 1.2rem;padding:.8rem .95rem;border:1px dashed rgba(99,102,241,.35);border-radius:10px;background:rgba(99,102,241,.06);color:var(--text-main)}
 .sst-filter-empty>i{font-size:1.05rem;color:var(--accent-color,#6366f1)}
 .sst-filter-empty div{display:flex;flex-direction:column;gap:.12rem;min-width:0;flex:1}

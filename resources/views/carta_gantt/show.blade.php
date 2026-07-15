@@ -98,6 +98,7 @@
             'meses_vencidos' => $mesesVencidos,
         ];
     })->filter()->values()->take(6);
+    $usuarioTieneAlcancePrograma = !$puedeAdministrarPrograma && $cartaGantt->estaAsignadoA(auth()->user());
 @endphp
 <div class="page-container">
 
@@ -351,11 +352,11 @@
             <div class="sst-activity-filter-help" id="activityFilterInfo">Mostrando todas las actividades del programa.</div>
         </div>
         <div class="sst-activity-filter-buttons">
-            <button type="button" class="sst-filter-btn active" data-filter="all" onclick="setActivityFilter('all')">Todas</button>
-            <button type="button" class="sst-filter-btn" data-filter="mine" onclick="setActivityFilter('mine')">Mis actividades</button>
-            <button type="button" class="sst-filter-btn" data-filter="pending" onclick="setActivityFilter('pending')">Pendientes mes</button>
-            <button type="button" class="sst-filter-btn" data-filter="overdue" onclick="setActivityFilter('overdue')">Vencidas</button>
-            <button type="button" class="sst-filter-btn" data-filter="done" onclick="setActivityFilter('done')">Completadas mes</button>
+            <button type="button" class="sst-filter-btn active" data-filter="all" onclick="setActivityFilter('all')">Todas <span data-filter-badge="all">0</span></button>
+            <button type="button" class="sst-filter-btn" data-filter="mine" onclick="setActivityFilter('mine')">Mi alcance <span data-filter-badge="mine">0</span></button>
+            <button type="button" class="sst-filter-btn" data-filter="pending" onclick="setActivityFilter('pending')">Pendientes mes <span data-filter-badge="pending">0</span></button>
+            <button type="button" class="sst-filter-btn" data-filter="overdue" onclick="setActivityFilter('overdue')">Vencidas <span data-filter-badge="overdue">0</span></button>
+            <button type="button" class="sst-filter-btn" data-filter="done" onclick="setActivityFilter('done')">Completadas mes <span data-filter-badge="done">0</span></button>
         </div>
     </div>
     <div class="sst-filter-empty" id="activityFilterEmpty" style="display:none">

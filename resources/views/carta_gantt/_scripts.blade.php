@@ -27,6 +27,7 @@ const ANIO_ACTUAL = new Date().getFullYear();
 const MES_ACTUAL = {{ $mesActual }};
 const PUEDE_EDITAR = {{ ($puedeEditar ?? false) ? 'true' : 'false' }};
 const CURRENT_USER_ID = {{ auth()->id() ?? 0 }};
+const USER_HAS_PROGRAM_SCOPE = {{ ($usuarioTieneAlcancePrograma ?? false) ? 'true' : 'false' }};
 const MESES = @json($mesesNombres);
 const MESES_CORTO = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const actividadesData = @json($actividadesJson);
@@ -313,26 +314,40 @@ function actividadTieneVencidos(actData) {
     return false;
 }
 
-function matchesActivityFilter(actData) {
-    if (!actData || currentActivityFilter === 'all') return true;
+function matchesFilter(actData, filter) {
+    if (!actData || filter === 'all') return true;
 
     const mes = getSelectedActivityMonth();
     const seg = getSeguimientoMes(actData, mes);
 
-    if (currentActivityFilter === 'mine') {
+    if (filter === 'mine') {
+        if (USER_HAS_PROGRAM_SCOPE) return true;
         return parseInt(actData.responsable_id || 0) === parseInt(CURRENT_USER_ID);
     }
-    if (currentActivityFilter === 'pending') {
+    if (filter === 'pending') {
         return !!(seg?.programado && !seg?.realizado && parseInt(seg?.cantidad_realizada || 0) === 0);
     }
-    if (currentActivityFilter === 'overdue') {
+    if (filter === 'overdue') {
         return actividadTieneVencidos(actData);
     }
-    if (currentActivityFilter === 'done') {
+    if (filter === 'done') {
         return !!(seg?.programado && seg?.realizado);
     }
 
     return true;
+}
+
+function matchesActivityFilter(actData) {
+    return matchesFilter(actData, currentActivityFilter);
+}
+
+function updateActivityFilterBadges() {
+    const filters = ['all', 'mine', 'pending', 'overdue', 'done'];
+    filters.forEach(filter => {
+        const count = actividadesData.filter(actData => matchesFilter(actData, filter)).length;
+        const badge = document.querySelector('[data-filter-badge="' + filter + '"]');
+        if (badge) badge.textContent = count;
+    });
 }
 
 function closeActivityDetailRows(actId) {
@@ -343,6 +358,8 @@ function closeActivityDetailRows(actId) {
 }
 
 function applyActivityFilter() {
+    updateActivityFilterBadges();
+
     const rows = Array.from(document.querySelectorAll('.sst-act-row'));
     let visible = 0;
 
@@ -373,7 +390,7 @@ function applyActivityFilter() {
     if (info) {
         const labels = {
             all: 'Mostrando todas las actividades del programa.',
-            mine: 'Mostrando solo actividades donde figuras como responsable.',
+            mine: USER_HAS_PROGRAM_SCOPE ? 'Mostrando el alcance asignado a tu usuario en este programa.' : 'Mostrando solo actividades donde figuras como responsable.',
             pending: 'Mostrando actividades pendientes del mes seleccionado.',
             overdue: 'Mostrando actividades vencidas sin avance.',
             done: 'Mostrando actividades completadas del mes seleccionado.'

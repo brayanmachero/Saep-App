@@ -318,7 +318,7 @@ class CartaGanttAsignacionesTest extends TestCase
             ->assertSee('Ir a actividad')
             ->assertSee('Comentar')
             ->assertSee('Filtro rápido')
-            ->assertSee('Mis actividades')
+            ->assertSee('Mi alcance')
             ->assertSee('Pendientes mes')
             ->assertSee('No hay actividades para este filtro.')
             ->assertDontSee('Editar datos generales del programa')
