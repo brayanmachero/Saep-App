@@ -28,10 +28,21 @@ class CartaGanttAsignacionesTest extends TestCase
         $hidden = $this->createPrograma($creator, 'Programa oculto no asignado');
         $visible->asignados()->sync([$assigned->id]);
 
-        $this->actingAs($assigned)
-            ->get(route('carta-gantt.index'))
-            ->assertOk()
+        $categoria = SstCategoria::create([
+            'programa_id' => $visible->id,
+            'nombre' => 'Operación mensual',
+            'orden' => 1,
+        ]);
+        $pendienteMes = $this->createActividad($categoria, 'Pendiente visible en listado');
+        $pendienteMes->seguimiento()->create(['mes' => (int) date('n'), 'programado' => true]);
+
+        $response = $this->actingAs($assigned)
+            ->get(route('carta-gantt.index'));
+
+        $response->assertOk()
             ->assertSee('Programa visible asignado')
+            ->assertSee('Mi rol: Equipo asignado')
+            ->assertSee('Mes actual: 1')
             ->assertDontSee('Programa oculto no asignado');
 
         $this->actingAs($assigned)

@@ -1,6 +1,16 @@
 @extends('layouts.app')
 @section('title','Carta Gantt SST')
 @section('content')
+<style>
+.gantt-row-title{display:flex;flex-direction:column;gap:.25rem}
+.gantt-row-role{display:inline-flex;align-items:center;gap:.25rem;color:var(--text-muted);font-size:.7rem;font-weight:600}
+.gantt-row-insights{display:flex;align-items:center;gap:.3rem;flex-wrap:wrap;margin-top:.2rem}
+.gantt-row-chip{display:inline-flex;align-items:center;gap:.25rem;border:1px solid var(--border-color,#e5e7eb);border-radius:999px;padding:.13rem .42rem;font-size:.66rem;font-weight:700;color:var(--text-muted);background:var(--surface-bg,#f8fafc);white-space:nowrap}
+.gantt-row-chip.is-ok{color:#047857;background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.18)}
+.gantt-row-chip.is-warn{color:#b45309;background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.2)}
+.gantt-row-chip.is-danger{color:#b91c1c;background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.2)}
+@media(max-width:768px){.gantt-row-insights{gap:.25rem}.gantt-row-chip{font-size:.62rem}}
+</style>
 <div class="page-container">
 
     <div class="page-header">
@@ -88,10 +98,43 @@
                 @php
                     $puedeAdministrarFila = ($puedeAccesoGlobal ?? false) || auth()->id() === $prog->creado_por;
                     $equipoAsignado = $prog->asignados->pluck('nombre_completo')->filter()->values();
+                    $resumenOperativo = $prog->resumen_operativo ?? [];
                 @endphp
                 <tr>
                     <td><code style="background:var(--surface-bg);padding:.15rem .4rem;border-radius:4px;font-size:.8rem;font-weight:600;">{{ $prog->codigo ?? '—' }}</code></td>
-                    <td><strong>{{ $prog->nombre }}</strong></td>
+                    <td>
+                        <div class="gantt-row-title">
+                            <strong>{{ $prog->nombre }}</strong>
+                            @if(!empty($resumenOperativo['rol']))
+                            <span class="gantt-row-role"><i class="bi bi-person-check"></i> Mi rol: {{ $resumenOperativo['rol'] }}</span>
+                            @endif
+                            <div class="gantt-row-insights" aria-label="Resumen operativo del programa">
+                                <span class="gantt-row-chip">
+                                    <i class="bi bi-list-check"></i> {{ $resumenOperativo['total_actividades'] ?? 0 }} act.
+                                </span>
+                                @if(($resumenOperativo['vencidas'] ?? 0) > 0)
+                                <span class="gantt-row-chip is-danger" title="Actividades programadas en meses anteriores sin avance">
+                                    <i class="bi bi-exclamation-triangle"></i> Vencidas: {{ $resumenOperativo['vencidas'] }}
+                                </span>
+                                @endif
+                                @if(($resumenOperativo['pendientes_mes'] ?? 0) > 0)
+                                <span class="gantt-row-chip is-warn" title="Actividades programadas para el mes actual sin cierre">
+                                    <i class="bi bi-calendar-event"></i> Mes actual: {{ $resumenOperativo['pendientes_mes'] }}
+                                </span>
+                                @endif
+                                @if(($resumenOperativo['parciales_mes'] ?? 0) > 0)
+                                <span class="gantt-row-chip is-warn" title="Actividades del mes actual con avance parcial">
+                                    <i class="bi bi-hourglass-split"></i> Parciales: {{ $resumenOperativo['parciales_mes'] }}
+                                </span>
+                                @endif
+                                @if(($resumenOperativo['total_actividades'] ?? 0) > 0 && ($resumenOperativo['vencidas'] ?? 0) === 0 && ($resumenOperativo['pendientes_mes'] ?? 0) === 0)
+                                <span class="gantt-row-chip is-ok">
+                                    <i class="bi bi-check2-circle"></i> Sin críticos
+                                </span>
+                                @endif
+                            </div>
+                        </div>
+                    </td>
                     <td>{{ $prog->anio }}</td>
                     <td>{{ $prog->centroCosto->nombre ?? '—' }}</td>
                     <td>

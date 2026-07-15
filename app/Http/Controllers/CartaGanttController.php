@@ -34,7 +34,14 @@ class CartaGanttController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = ProgramaSst::with(['creador', 'centroCosto', 'responsable', 'asignados']);
+        $puedeAccesoGlobal = $this->canAccessAllProgramas($user);
+        $query = ProgramaSst::with([
+            'creador',
+            'centroCosto',
+            'responsable',
+            'asignados',
+            'categorias.actividades.seguimiento',
+        ]);
         $this->scopeVisibleProgramas($query, $user);
 
         if ($request->filled('anio')) {
@@ -48,6 +55,9 @@ class CartaGanttController extends Controller
         }
 
         $programas = $query->orderByDesc('anio')->orderByDesc('created_at')->get();
+        $programas->each(function (ProgramaSst $programa) use ($user, $puedeAccesoGlobal) {
+            $programa->setAttribute('resumen_operativo', $this->resumenOperativoPrograma($programa, $user, $puedeAccesoGlobal));
+        });
 
         $programasVisibles = ProgramaSst::query();
         $this->scopeVisibleProgramas($programasVisibles, $user);
@@ -68,7 +78,6 @@ class CartaGanttController extends Controller
         $aniosQuery = ProgramaSst::query();
         $this->scopeVisibleProgramas($aniosQuery, $user);
         $anios = $aniosQuery->distinct()->orderByDesc('anio')->pluck('anio');
-        $puedeAccesoGlobal = $this->canAccessAllProgramas($user);
 
         return view('carta_gantt.index', compact('programas', 'stats', 'centros', 'anios', 'puedeAccesoGlobal'));
     }
@@ -834,6 +843,59 @@ class CartaGanttController extends Controller
                 ->orWhereHas('asignados', fn ($asignados) => $asignados->where('users.id', $user->id))
                 ->orWhereHas('categorias.actividades', fn ($actividad) => $actividad->where('responsable_id', $user->id));
         });
+    }
+
+    private function resumenOperativoPrograma(ProgramaSst $programa, User $user, bool $puedeAccesoGlobal): array
+    {
+        $anioActual = (int) now()->format('Y');
+        $mesActual = (int) now()->format('n');
+        $anioPrograma = (int) $programa->anio;
+
+        $actividades = $programa->categorias
+            ->flatMap(fn (SstCategoria $categoria) => $categoria->actividades);
+
+        $pendientesMes = 0;
+        $parcialesMes = 0;
+        $vencidas = 0;
+
+        foreach ($actividades as $actividad) {
+            foreach ($actividad->seguimiento as $seguimiento) {
+                if (!$seguimiento->programado || $seguimiento->realizado) {
+                    continue;
+                }
+
+                $mes = (int) $seguimiento->mes;
+                $cantidadRealizada = (int) ($seguimiento->cantidad_realizada ?? 0);
+
+                if ($anioPrograma === $anioActual && $mes === $mesActual) {
+                    $cantidadRealizada > 0 ? $parcialesMes++ : $pendientesMes++;
+                }
+
+                $mesVencido = $anioPrograma < $anioActual || ($anioPrograma === $anioActual && $mes < $mesActual);
+                if ($mesVencido && $cantidadRealizada === 0) {
+                    $vencidas++;
+                }
+            }
+        }
+
+        $rol = null;
+        if ($puedeAccesoGlobal || (int) $programa->creado_por === (int) $user->id) {
+            $rol = 'Coordinador';
+        } elseif ((int) $programa->responsable_id === (int) $user->id) {
+            $rol = 'Responsable';
+        } elseif ($programa->estaAsignadoA($user)) {
+            $rol = 'Equipo asignado';
+        } elseif ($actividades->contains(fn ($actividad) => (int) $actividad->responsable_id === (int) $user->id)) {
+            $rol = 'Responsable de actividad';
+        }
+
+        return [
+            'rol' => $rol,
+            'total_actividades' => $actividades->count(),
+            'pendientes_mes' => $pendientesMes,
+            'parciales_mes' => $parcialesMes,
+            'vencidas' => $vencidas,
+        ];
     }
 
     private function canViewPrograma(ProgramaSst $programa): bool
