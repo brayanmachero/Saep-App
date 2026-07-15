@@ -358,6 +358,14 @@
             <button type="button" class="sst-filter-btn" data-filter="done" onclick="setActivityFilter('done')">Completadas mes</button>
         </div>
     </div>
+    <div class="sst-filter-empty" id="activityFilterEmpty" style="display:none">
+        <i class="bi bi-search"></i>
+        <div>
+            <strong>No hay actividades para este filtro.</strong>
+            <span>Cambia el mes o vuelve a ver todas las actividades del programa.</span>
+        </div>
+        <button type="button" class="sst-btn sst-btn-sm sst-btn-outline" onclick="setActivityFilter('all')">Ver todas</button>
+    </div>
 
     {{-- ========== VISTA ANUAL (por defecto) ========== --}}
     <div id="view-anual">

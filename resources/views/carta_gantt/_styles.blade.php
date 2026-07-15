@@ -48,6 +48,11 @@
 .sst-filter-btn{border:1px solid var(--surface-border);background:var(--bg-color);color:var(--text-muted);border-radius:999px;padding:.32rem .62rem;font-size:.74rem;font-weight:800;cursor:pointer;transition:all .16s}
 .sst-filter-btn:hover{color:var(--text-main);border-color:rgba(99,102,241,.35);background:rgba(99,102,241,.07)}
 .sst-filter-btn.active{background:var(--accent-color,#6366f1);border-color:var(--accent-color,#6366f1);color:#fff;box-shadow:0 2px 6px rgba(99,102,241,.22)}
+.sst-filter-empty{align-items:center;gap:.75rem;margin:-.7rem 0 1.2rem;padding:.8rem .95rem;border:1px dashed rgba(99,102,241,.35);border-radius:10px;background:rgba(99,102,241,.06);color:var(--text-main)}
+.sst-filter-empty>i{font-size:1.05rem;color:var(--accent-color,#6366f1)}
+.sst-filter-empty div{display:flex;flex-direction:column;gap:.12rem;min-width:0;flex:1}
+.sst-filter-empty strong{font-size:.84rem}
+.sst-filter-empty span{font-size:.74rem;color:var(--text-muted)}
 
 /* ===== CATEGORY CARDS ===== */
 .sst-cat-card{background:var(--surface-color);border:1px solid var(--surface-border);border-radius:12px;margin-bottom:1.1rem;overflow:hidden}
@@ -146,6 +151,7 @@ body.dark-mode .sst-highlight-col{background:rgba(99,102,241,.1)!important}
     .sst-legend{order:3;justify-content:center}
     .sst-activity-filter{flex-direction:column;gap:.65rem}
     .sst-activity-filter-buttons{justify-content:flex-start}
+    .sst-filter-empty{align-items:flex-start;flex-wrap:wrap}
     .sst-detail-grid{grid-template-columns:1fr}
     .sst-seg-grid{grid-template-columns:repeat(4,1fr)}
     .sst-gantt{font-size:.75rem}

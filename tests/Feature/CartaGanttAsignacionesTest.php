@@ -320,6 +320,7 @@ class CartaGanttAsignacionesTest extends TestCase
             ->assertSee('Filtro rápido')
             ->assertSee('Mis actividades')
             ->assertSee('Pendientes mes')
+            ->assertSee('No hay actividades para este filtro.')
             ->assertDontSee('Editar datos generales del programa')
             ->assertDontSee('Importar CSV')
             ->assertDontSee(route('carta-gantt.importar', $programa), false)

@@ -380,6 +380,11 @@ function applyActivityFilter() {
         };
         info.textContent = (labels[currentActivityFilter] || labels.all) + ' ' + visible + ' de ' + rows.length + ' visibles.';
     }
+
+    const empty = document.getElementById('activityFilterEmpty');
+    if (empty) {
+        empty.style.display = rows.length > 0 && visible === 0 ? 'flex' : 'none';
+    }
 }
 
 // ============ SEGUIMIENTO AJAX ============
