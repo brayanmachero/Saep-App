@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Mail\SstActividadAlertaMail;
+use App\Mail\SstResumenActividadesMail;
 use App\Models\Configuracion;
 use App\Models\ProgramaSst;
 use App\Models\SstActividad;
@@ -10,6 +10,7 @@ use App\Models\SstNotificacionLog;
 use App\Models\User;
 use App\Notifications\AppNotification;
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -17,6 +18,8 @@ class SstEnviarRecordatorios extends Command
 {
     protected $signature = 'sst:enviar-recordatorios';
     protected $description = 'Envía recordatorios SST según periodicidad a responsable, jefe y superadmins';
+
+    private array $usuariosPorEmail = [];
 
     public function handle(): int
     {
@@ -28,8 +31,7 @@ class SstEnviarRecordatorios extends Command
 
         $mesActual   = (int) now()->format('n');
         $mesAnterior = $mesActual === 1 ? 12 : $mesActual - 1;
-        $hoy         = now()->toDateString();
-        $enviados    = 0;
+        $alertasPorEmail = collect();
 
         // Config values
         $diasAntesVencer  = (int) Configuracion::get('sst_notif_dias_antes_vencer', '7');
@@ -62,8 +64,7 @@ class SstEnviarRecordatorios extends Command
                     // ── 1) RECORDATORIO POR PERIODICIDAD ──
                     if ($notifRecordatorio && $actividad->periodicidad && $actividad->debeRecordarHoy($mesActual)) {
                         if (!$this->yaEnviadoHoy($actividad->id, 'recordatorio', $mesActual)) {
-                            $this->enviarAlerta($actividad, 'recordatorio', $mesActual, $jefeEmail, $superAdminEmails);
-                            $enviados++;
+                            $this->agregarAlerta($alertasPorEmail, $actividad, 'recordatorio', $mesActual, $jefeEmail, $superAdminEmails);
                         }
                     }
 
@@ -72,8 +73,7 @@ class SstEnviarRecordatorios extends Command
                         $segAnterior = $actividad->seguimiento->firstWhere('mes', $mesAnterior);
                         if ($segAnterior && $segAnterior->programado && !$segAnterior->realizado) {
                             if (!$this->yaEnviadoHoy($actividad->id, 'seguimiento_pendiente', $mesAnterior)) {
-                                $this->enviarAlerta($actividad, 'seguimiento_pendiente', $mesAnterior, $jefeEmail, $superAdminEmails);
-                                $enviados++;
+                                $this->agregarAlerta($alertasPorEmail, $actividad, 'seguimiento_pendiente', $mesAnterior, $jefeEmail, $superAdminEmails);
                             }
                         }
                     }
@@ -85,8 +85,7 @@ class SstEnviarRecordatorios extends Command
                         && $actividad->fecha_fin->diffInDays(now()) <= $diasAntesVencer
                     ) {
                         if (!$this->yaEnviadoHoy($actividad->id, 'vencimiento')) {
-                            $this->enviarAlerta($actividad, 'vencimiento', $mesActual, $jefeEmail, $superAdminEmails);
-                            $enviados++;
+                            $this->agregarAlerta($alertasPorEmail, $actividad, 'vencimiento', $mesActual, $jefeEmail, $superAdminEmails);
                         }
                     }
 
@@ -104,34 +103,39 @@ class SstEnviarRecordatorios extends Command
 
                         $enviar = !$ultimoEnvio || $ultimoEnvio->created_at->diffInDays(now()) >= $frecuenciaVencida;
                         if ($enviar) {
-                            $this->enviarAlerta($actividad, 'vencida', $mesActual, $jefeEmail, $superAdminEmails);
-                            $enviados++;
+                            $this->agregarAlerta($alertasPorEmail, $actividad, 'vencida', $mesActual, $jefeEmail, $superAdminEmails);
                         }
                     }
                 }
             }
         }
 
-        $this->info("Recordatorios enviados: {$enviados}");
-        Log::info("SST Recordatorios: {$enviados} emails enviados");
+        $totalAlertas = $alertasPorEmail->count();
+        $enviados = $this->enviarResumenes($alertasPorEmail);
+
+        $this->info("Resumenes enviados: {$enviados}. Alertas consolidadas: {$totalAlertas}");
+        Log::info("SST Recordatorios: {$enviados} resumenes enviados para {$totalAlertas} alertas");
 
         return self::SUCCESS;
     }
 
     /**
-     * Envía la alerta al responsable con CC al jefe del programa y superadmins.
+     * Agrega una alerta al resumen diario del responsable, jefe del programa y superadmins.
      */
-    private function enviarAlerta(
+    private function agregarAlerta(
+        Collection $alertasPorEmail,
         SstActividad $actividad,
         string $tipo,
         ?int $mes,
         ?string $jefeEmail,
-        \Illuminate\Support\Collection $superAdminEmails
+        Collection $superAdminEmails
     ): void {
+        $actividad->loadMissing(['categoria.programa', 'responsableUser']);
+
         $responsable = $actividad->responsableUser;
         $responsableEmail = $responsable?->email;
 
-        // Construir CC: jefe + superadmins (sin duplicar al responsable)
+        // Construir destinatarios: responsable + jefe + superadmins (sin duplicados).
         $ccEmails = collect();
         if ($jefeEmail) {
             $ccEmails->push($jefeEmail);
@@ -154,46 +158,102 @@ class SstEnviarRecordatorios extends Command
             return;
         }
 
-        try {
-            $mail = Mail::to($toEmail);
-            if ($ccEmails->isNotEmpty()) {
-                $mail->cc($ccEmails->all());
-            }
-            $mail->send(new SstActividadAlertaMail($actividad, $tipo));
+        $programaId = $actividad->categoria->programa_id ?? 0;
+        $dias = $actividad->fecha_fin
+            ? (int) now()->startOfDay()->diffInDays($actividad->fecha_fin->copy()->startOfDay(), false)
+            : null;
 
-            // Notificación in-app
-            $tipoMap = ['asignacion' => 'info', 'vencimiento' => 'warning', 'vencida' => 'danger', 'recordatorio' => 'warning', 'seguimiento_pendiente' => 'warning'];
-            $tituloMap = ['asignacion' => 'Actividad SST asignada', 'vencimiento' => 'Actividad SST por vencer', 'vencida' => 'Actividad SST vencida', 'recordatorio' => 'Recordatorio SST', 'seguimiento_pendiente' => 'Seguimiento SST pendiente'];
-            $programaId = $actividad->categoria->programa_id ?? 0;
-            foreach (collect([$toEmail])->merge($ccEmails)->unique() as $ue) {
-                User::where('email', $ue)->first()?->notify(new AppNotification(
-                    $tituloMap[$tipo] ?? 'Alerta SST',
-                    $actividad->nombre,
-                    $tipoMap[$tipo] ?? 'info',
-                    route('carta-gantt.show', $programaId)
-                ));
-            }
+        foreach (collect([$toEmail])->merge($ccEmails)->filter()->unique() as $email) {
+            $rolDest = match (true) {
+                $email === $responsableEmail => 'responsable',
+                $superAdminEmails->contains($email) => 'superadmin',
+                default => 'jefe',
+            };
 
-            // Registrar en log para cada destinatario
-            $allRecipients = collect([$toEmail])->merge($ccEmails);
-            foreach ($allRecipients as $email) {
-                $rolDest = match (true) {
-                    $email === $responsableEmail => 'responsable',
-                    $superAdminEmails->contains($email) => 'superadmin',
-                    default => 'jefe',
-                };
-                SstNotificacionLog::create([
-                    'actividad_id'     => $actividad->id,
-                    'user_id'          => User::where('email', $email)->value('id'),
-                    'email'            => $email,
-                    'tipo'             => $tipo,
-                    'mes'              => $mes,
-                    'rol_destinatario' => $rolDest,
-                ]);
-            }
-        } catch (\Exception $e) {
-            Log::warning("SST Recordatorio ({$tipo}): error actividad #{$actividad->id}: {$e->getMessage()}");
+            $alertasPorEmail->push([
+                'email' => $email,
+                'user' => $this->usuarioPorEmail($email),
+                'actividad' => $actividad,
+                'programa' => $actividad->categoria?->programa,
+                'categoria' => $actividad->categoria,
+                'tipo' => $tipo,
+                'mes' => $mes,
+                'dias' => $dias,
+                'rol_destinatario' => $rolDest,
+                'url' => $programaId ? route('carta-gantt.show', $programaId) : route('carta-gantt.index'),
+            ]);
         }
+    }
+
+    /**
+     * Envia un solo correo por destinatario y registra cada actividad notificada.
+     */
+    private function enviarResumenes(Collection $alertasPorEmail): int
+    {
+        $enviados = 0;
+
+        $alertasPorEmail = $alertasPorEmail->unique(function (array $alerta) {
+            return implode('|', [
+                $alerta['email'],
+                $alerta['actividad']->id,
+                $alerta['tipo'],
+                $alerta['mes'] ?? 'sin-mes',
+            ]);
+        })->values();
+
+        foreach ($alertasPorEmail->groupBy('email') as $email => $items) {
+            $items = $items->values();
+            $usuario = $items->first()['user'] ?? $this->usuarioPorEmail($email);
+
+            try {
+                Mail::to($email)->send(new SstResumenActividadesMail(
+                    email: $email,
+                    items: $items,
+                    nombre: $usuario?->nombre_completo ?: null
+                ));
+
+                if ($usuario) {
+                    $primera = $items->first();
+                    $usuario->notify(new AppNotification(
+                        'Resumen Carta Gantt pendiente',
+                        $items->count() . ' actividad(es) requieren revision o seguimiento.',
+                        $items->contains(fn ($item) => in_array($item['tipo'], ['vencida', 'vencimiento'], true)) ? 'warning' : 'info',
+                        $primera['url'] ?? route('carta-gantt.index')
+                    ));
+                }
+
+                foreach ($items as $item) {
+                    $this->registrarLogAlerta($item);
+                }
+
+                $enviados++;
+            } catch (\Exception $e) {
+                Log::warning("SST Resumen: error enviando a {$email}: {$e->getMessage()}");
+            }
+        }
+
+        return $enviados;
+    }
+
+    private function registrarLogAlerta(array $item): void
+    {
+        SstNotificacionLog::create([
+            'actividad_id'     => $item['actividad']->id,
+            'user_id'          => $item['user']?->id,
+            'email'            => $item['email'],
+            'tipo'             => $item['tipo'],
+            'mes'              => $item['mes'],
+            'rol_destinatario' => $item['rol_destinatario'],
+        ]);
+    }
+
+    private function usuarioPorEmail(string $email): ?User
+    {
+        if (!array_key_exists($email, $this->usuariosPorEmail)) {
+            $this->usuariosPorEmail[$email] = User::where('email', $email)->first();
+        }
+
+        return $this->usuariosPorEmail[$email];
     }
 
     /**
