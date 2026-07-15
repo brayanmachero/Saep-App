@@ -304,7 +304,9 @@ class CartaGanttAsignacionesTest extends TestCase
             ->assertSee('Bitácora de cambios')
             ->assertSee('Editar actividad: Avance actualizado por asignado')
             ->assertDontSee('Editar datos generales del programa')
-            ->assertDontSee('Importar CSV');
+            ->assertDontSee('Importar CSV')
+            ->assertDontSee(route('carta-gantt.importar', $programa), false)
+            ->assertDontSee(route('carta-gantt.actividades.store', $categoria), false);
     }
 
     public function test_coordinator_role_can_view_all_programs(): void

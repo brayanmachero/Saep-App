@@ -299,6 +299,7 @@
             </div>
         </div>
 
+        @if($puedeCrear)
         {{-- Formulario Agregar Actividad (oculto) --}}
         <div id="addAct-{{ $categoria->id }}" style="display:none" class="sst-add-form">
             <form method="POST" action="{{ route('carta-gantt.actividades.store', $categoria) }}">
@@ -332,6 +333,7 @@
                 </div>
             </form>
         </div>
+        @endif
 
         {{-- Tabla Gantt Anual --}}
         <div class="sst-table-wrap">
@@ -426,6 +428,7 @@
     </div>
 </div>
 
+@if($puedeCrear)
 {{-- ========== MODAL IMPORTACIÓN CSV ========== --}}
 <div id="importModal" class="sst-modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
     <div class="sst-modal" style="max-width:720px">
@@ -592,6 +595,7 @@
         </div>
     </div>
 </div>
+@endif
 
 {{-- ========== MODAL DETALLE ACTIVIDAD ========== --}}
 <div id="detailModal" class="sst-modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
