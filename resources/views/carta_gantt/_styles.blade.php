@@ -11,6 +11,26 @@
 .sst-help-tooltip{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:.2rem;border-radius:999px;border:1px solid var(--surface-border);color:var(--text-muted);font-size:.62rem;line-height:1;cursor:help;text-transform:none;letter-spacing:0;vertical-align:middle}
 .sst-help-tooltip:hover{color:var(--accent-color,#6366f1);border-color:rgba(99,102,241,.35);background:rgba(99,102,241,.08)}
 
+/* ===== QUICK ACTIONS ===== */
+.sst-quick-actions{background:var(--surface-color);border:1px solid rgba(99,102,241,.2);border-radius:12px;margin:0 0 1.2rem;box-shadow:var(--shadow-sm);overflow:hidden}
+.sst-quick-actions-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:.85rem 1rem;border-bottom:1px solid var(--surface-border);background:rgba(99,102,241,.045)}
+.sst-quick-actions-title{font-size:.9rem;font-weight:800;color:var(--text-main);display:flex;align-items:center;gap:.4rem}
+.sst-quick-actions-title i{color:var(--accent-color,#6366f1)}
+.sst-quick-actions-subtitle{font-size:.74rem;color:var(--text-muted);margin-top:.15rem;line-height:1.35}
+.sst-quick-actions-count{font-size:.68rem;font-weight:800;color:var(--accent-color,#6366f1);background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.2);border-radius:999px;padding:.2rem .55rem;white-space:nowrap}
+.sst-quick-actions-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:.65rem;padding:.85rem 1rem}
+.sst-quick-card{border:1px solid var(--surface-border);background:var(--bg-color);border-radius:10px;padding:.7rem .75rem;display:flex;flex-direction:column;gap:.65rem}
+.sst-quick-card-vencida{border-color:rgba(239,68,68,.22);background:rgba(239,68,68,.045)}
+.sst-quick-card-parcial{border-color:rgba(245,158,11,.24);background:rgba(245,158,11,.045)}
+.sst-quick-card-pendiente{border-color:rgba(99,102,241,.22);background:rgba(99,102,241,.045)}
+.sst-quick-card-main{display:flex;gap:.6rem;align-items:flex-start}
+.sst-quick-icon{width:32px;height:32px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;background:var(--surface-color);border:1px solid var(--surface-border);color:var(--accent-color,#6366f1);flex-shrink:0}
+.sst-quick-card-vencida .sst-quick-icon{color:#ef4444}.sst-quick-card-parcial .sst-quick-icon{color:#f59e0b}
+.sst-quick-name{font-size:.84rem;font-weight:800;color:var(--text-main);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.sst-quick-meta{font-size:.68rem;color:var(--text-muted);margin-top:.05rem}
+.sst-quick-summary{font-size:.74rem;color:var(--text-main);font-weight:600;margin-top:.25rem;line-height:1.35}
+.sst-quick-buttons{display:flex;gap:.35rem;flex-wrap:wrap}
+
 /* ===== TOOLBAR ===== */
 .sst-toolbar{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.2rem;padding:.6rem .8rem;background:var(--surface-color);border:1px solid var(--surface-border);border-radius:10px}
 .sst-view-switcher{display:flex;gap:.25rem;background:var(--bg-color);padding:3px;border-radius:8px}
@@ -66,6 +86,7 @@ body.dark-mode .sst-mes-actual{background:rgba(99,102,241,.1)!important}
 
 /* Activity row hover */
 .sst-act-row:hover td{background-color:rgba(99,102,241,.03)}
+.sst-act-row.sst-row-focus td{background-color:rgba(99,102,241,.11)!important;transition:background-color .25s ease}
 
 /* ===== BUTTONS ===== */
 .sst-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .85rem;border-radius:8px;border:none;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .2s;text-decoration:none;line-height:1.3}
@@ -127,6 +148,9 @@ body.dark-mode .sst-highlight-col{background:rgba(99,102,241,.1)!important}
     .sst-seg-grid{grid-template-columns:repeat(3,1fr)}
     .sst-import-tips{grid-template-columns:1fr !important}
     .sst-form-grid{grid-template-columns:1fr !important}
+    .sst-quick-actions-head{flex-direction:column;gap:.45rem}
+    .sst-quick-actions-grid{grid-template-columns:1fr;padding:.7rem}
+    .sst-quick-buttons .sst-btn{width:100%;justify-content:center}
 }
 
 /* ===== DARK MODE PATCHES ===== */

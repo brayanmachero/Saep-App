@@ -316,6 +316,28 @@ function toggleComentarios(actId) {
     if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
 }
 
+function scrollToActividad(actId) {
+    const row = document.querySelector('[data-actividad-id="' + actId + '"]');
+    if (!row) return;
+
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.add('sst-row-focus');
+    setTimeout(() => row.classList.remove('sst-row-focus'), 1800);
+}
+
+function openActividadComentarios(actId) {
+    const row = document.getElementById('comentarios-' + actId);
+    if (row && row.style.display === 'none') {
+        toggleComentarios(actId);
+    }
+
+    scrollToActividad(actId);
+    setTimeout(() => {
+        const target = document.getElementById('comentarios-' + actId);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 220);
+}
+
 function toggleReprogramaciones(actId) {
     const row = document.getElementById('reprog-' + actId);
     if (row) row.style.display = row.style.display === 'none' ? '' : 'none';

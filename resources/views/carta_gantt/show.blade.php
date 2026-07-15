@@ -50,6 +50,54 @@
             ])->values()->toArray(),
         ];
     })->values();
+    $accionesAsignado = $allActividades->map(function($a) use ($anioPrograma, $anioActual, $mesActual, $mesesNombres) {
+        $seg = $a->seguimiento_por_mes;
+        $cantProg = max(1, (int) ($a->cantidad_programada ?? 1));
+        $mesesVencidos = [];
+        foreach ($seg as $mes => $estadoMes) {
+            $mes = (int) $mes;
+            $cantidadRealizada = (int) ($estadoMes['cantidad_realizada'] ?? 0);
+            if (($estadoMes['programado'] ?? false)
+                && !($estadoMes['realizado'] ?? false)
+                && ($anioPrograma < $anioActual || ($anioPrograma === $anioActual && $mes < $mesActual))
+                && $cantidadRealizada === 0) {
+                $mesesVencidos[] = $mes;
+            }
+        }
+
+        $mesActualSeg = $seg[$mesActual] ?? null;
+        $pendienteMesActual = $mesActualSeg
+            && ($mesActualSeg['programado'] ?? false)
+            && !($mesActualSeg['realizado'] ?? false);
+
+        if (empty($mesesVencidos) && !$pendienteMesActual) {
+            return null;
+        }
+
+        if (!empty($mesesVencidos)) {
+            $resumen = 'Mes vencido: ' . collect($mesesVencidos)->map(fn($mes) => $mesesNombres[$mes] ?? "Mes {$mes}")->join(', ');
+            $tipo = 'vencida';
+            $icono = 'bi-exclamation-triangle-fill';
+        } elseif ((int) ($mesActualSeg['cantidad_realizada'] ?? 0) > 0) {
+            $resumen = 'Avance parcial: ' . (int) $mesActualSeg['cantidad_realizada'] . '/' . $cantProg . ' en ' . ($mesesNombres[$mesActual] ?? 'mes actual');
+            $tipo = 'parcial';
+            $icono = 'bi-hourglass-split';
+        } else {
+            $resumen = 'Pendiente de registrar en ' . ($mesesNombres[$mesActual] ?? 'mes actual');
+            $tipo = 'pendiente';
+            $icono = 'bi-calendar-check';
+        }
+
+        return [
+            'id' => $a->id,
+            'nombre' => $a->nombre,
+            'categoria' => $a->categoria->nombre ?? 'Sin categoría',
+            'resumen' => $resumen,
+            'tipo' => $tipo,
+            'icono' => $icono,
+            'meses_vencidos' => $mesesVencidos,
+        ];
+    })->filter()->values()->take(6);
 @endphp
 <div class="page-container">
 
@@ -107,6 +155,45 @@
             <div style="font-size:.76rem;color:var(--text-muted);line-height:1.45">
                 Puedes actualizar avances, agregar comentarios, crear planes de acción y reprogramar actividades habilitadas. La edición de datos generales, equipo asignado y cierre del programa queda para coordinadores o administradores.
             </div>
+        </div>
+    </div>
+    @endif
+
+    @if(!$puedeAdministrarPrograma && $puedeGestionarActividades && $accionesAsignado->count())
+    <div class="sst-quick-actions" id="quick-actions-panel">
+        <div class="sst-quick-actions-head">
+            <div>
+                <div class="sst-quick-actions-title"><i class="bi bi-lightning-charge-fill"></i> Acciones rápidas</div>
+                <div class="sst-quick-actions-subtitle">Atajos para cerrar pendientes sin buscar iconos pequeños en la tabla.</div>
+            </div>
+            <span class="sst-quick-actions-count">{{ $accionesAsignado->count() }} por revisar</span>
+        </div>
+        <div class="sst-quick-actions-grid">
+            @foreach($accionesAsignado as $accion)
+            <div class="sst-quick-card sst-quick-card-{{ $accion['tipo'] }}">
+                <div class="sst-quick-card-main">
+                    <span class="sst-quick-icon"><i class="bi {{ $accion['icono'] }}"></i></span>
+                    <div style="min-width:0">
+                        <div class="sst-quick-name" title="{{ $accion['nombre'] }}">{{ $accion['nombre'] }}</div>
+                        <div class="sst-quick-meta">{{ $accion['categoria'] }}</div>
+                        <div class="sst-quick-summary">{{ $accion['resumen'] }}</div>
+                    </div>
+                </div>
+                <div class="sst-quick-buttons">
+                    <button type="button" class="sst-btn sst-btn-sm sst-btn-outline" onclick="scrollToActividad({{ $accion['id'] }})">
+                        <i class="bi bi-crosshair"></i> Ir a actividad
+                    </button>
+                    <button type="button" class="sst-btn sst-btn-sm sst-btn-outline" onclick="openActividadComentarios({{ $accion['id'] }})">
+                        <i class="bi bi-chat-left-text"></i> Comentar
+                    </button>
+                    @if(!empty($accion['meses_vencidos']))
+                    <button type="button" class="sst-btn sst-btn-sm sst-btn-primary" onclick="openReprogramar({{ $accion['id'] }}, {{ json_encode($accion['meses_vencidos']) }})">
+                        <i class="bi bi-calendar2-range"></i> Reprogramar
+                    </button>
+                    @endif
+                </div>
+            </div>
+            @endforeach
         </div>
     </div>
     @endif
