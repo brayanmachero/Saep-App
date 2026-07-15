@@ -75,6 +75,24 @@
                     </select>
                 </div>
             </div>
+            @php $asignadosOld = collect(old('asignados', []))->map(fn($id) => (int) $id); @endphp
+            <div class="form-group" style="margin-top:1rem">
+                <label>Equipo asignado</label>
+                <div style="border:1px solid var(--surface-border);border-radius:10px;background:var(--surface-color);max-height:240px;overflow:auto;padding:.35rem">
+                    @foreach($usuarios as $u)
+                    <label style="display:flex;align-items:center;gap:.55rem;padding:.45rem .55rem;border-radius:8px;cursor:pointer">
+                        <input type="checkbox" name="asignados[]" value="{{ $u->id }}" {{ $asignadosOld->contains($u->id) ? 'checked' : '' }}>
+                        <span style="display:flex;flex-direction:column;line-height:1.2">
+                            <strong style="font-size:.82rem">{{ $u->nombre_completo ?: $u->name }}</strong>
+                            <small style="color:var(--text-muted);font-size:.72rem">{{ $u->email }}</small>
+                        </span>
+                    </label>
+                    @endforeach
+                </div>
+                <small style="color:var(--text-muted);display:block;margin-top:.35rem">
+                    Las personas seleccionadas podrán ver y trabajar esta Carta Gantt, sin acceder a las demás.
+                </small>
+            </div>
         </div>
 
         <div style="display:flex;gap:1rem;justify-content:flex-end;">

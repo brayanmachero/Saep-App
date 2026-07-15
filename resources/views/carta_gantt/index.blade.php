@@ -85,12 +85,24 @@
                 </tr></thead>
                 <tbody>
                 @forelse($programas as $prog)
+                @php
+                    $puedeAdministrarFila = ($puedeAccesoGlobal ?? false) || auth()->id() === $prog->creado_por;
+                    $equipoAsignado = $prog->asignados->pluck('nombre_completo')->filter()->values();
+                @endphp
                 <tr>
                     <td><code style="background:var(--surface-bg);padding:.15rem .4rem;border-radius:4px;font-size:.8rem;font-weight:600;">{{ $prog->codigo ?? '—' }}</code></td>
                     <td><strong>{{ $prog->nombre }}</strong></td>
                     <td>{{ $prog->anio }}</td>
                     <td>{{ $prog->centroCosto->nombre ?? '—' }}</td>
-                    <td>{{ $prog->responsable->nombre_completo ?? '—' }}</td>
+                    <td>
+                        <div>{{ $prog->responsable->nombre_completo ?? '—' }}</div>
+                        @if($equipoAsignado->isNotEmpty())
+                        <small style="display:block;color:var(--text-muted);font-size:.68rem;margin-top:.15rem">
+                            <i class="bi bi-people"></i>
+                            {{ $equipoAsignado->take(2)->join(', ') }}{{ $equipoAsignado->count() > 2 ? ' +' . ($equipoAsignado->count() - 2) : '' }}
+                        </small>
+                        @endif
+                    </td>
                     <td>
                         <div style="display:flex;align-items:center;gap:.5rem;">
                             <div style="flex:1;background:#e5e7eb;border-radius:9999px;height:8px;min-width:80px;">
@@ -104,10 +116,10 @@
                         <div style="display:flex;gap:.35rem;">
                             <a href="{{ route('carta-gantt.show', $prog) }}" class="icon-btn" title="Ver Gantt"><i class="bi bi-grid-3x3-gap-fill"></i></a>
                             <a href="{{ route('carta-gantt.reporte-pdf', $prog) }}" class="icon-btn" title="Reporte PDF" target="_blank"><i class="bi bi-file-earmark-pdf-fill"></i></a>
-                            @if(auth()->user()->tieneAcceso('carta_gantt', 'puede_editar'))
+                            @if($puedeAdministrarFila && auth()->user()->tieneAcceso('carta_gantt', 'puede_editar'))
                             <a href="{{ route('carta-gantt.edit', $prog) }}" class="icon-btn" title="Editar"><i class="bi bi-pencil-fill"></i></a>
                             @endif
-                            @if(auth()->user()->tieneAcceso('carta_gantt', 'puede_eliminar'))
+                            @if($puedeAdministrarFila && auth()->user()->tieneAcceso('carta_gantt', 'puede_eliminar'))
                             <form method="POST" action="{{ route('carta-gantt.destroy', $prog) }}" style="display:inline" onsubmit="return confirm('¿Cerrar este programa?')">
                                 @csrf @method('DELETE')
                                 <button class="icon-btn danger" title="Cerrar"><i class="bi bi-archive-fill"></i></button>

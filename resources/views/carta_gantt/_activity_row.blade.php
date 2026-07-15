@@ -56,7 +56,10 @@
         </span>
     </td>
     {{-- 12 meses Gantt --}}
-    @php $cantProg = max(1, (int) ($act->cantidad_programada ?? 1)); $rolPuedeEditar = $puedeEditar ?? false; @endphp
+    @php
+        $cantProg = max(1, (int) ($act->cantidad_programada ?? 1));
+        $rolPuedeEditar = $puedeGestionarActividades ?? ($puedeEditar ?? false);
+    @endphp
     @for($m = 1; $m <= 12; $m++)
     @php
         $s = $seg[$m] ?? null;
@@ -115,8 +118,8 @@
         $esSuperAdmin = $user->rol && $user->rol->codigo === 'SUPER_ADMIN';
         $esCreador = $user->id === $cartaGantt->creado_por;
         $esResponsable = $user->id === $act->responsable_id;
-        $puedeEditarLocal = ($esSuperAdmin || $esCreador) && ($puedeEditar ?? false);
-        $puedeEliminarLocal = ($esSuperAdmin || $esCreador) && ($puedeEliminar ?? false);
+        $puedeEditarLocal = $puedeGestionarActividades ?? (($esSuperAdmin || $esCreador) && ($puedeEditar ?? false));
+        $puedeEliminarLocal = $puedeEliminarEstructura ?? (($esSuperAdmin || $esCreador) && ($puedeEliminar ?? false));
         // Meses vencidos (programado, no realizado, mes pasado)
         $mesesVencidos = collect($seg)->filter(fn($s, $m) => $s['programado'] && !$s['realizado'] && $esMesVencido((int) $m) && (int) ($s['cantidad_realizada'] ?? 0) === 0)->keys()->all();
     @endphp

@@ -22,6 +22,28 @@ class ProgramaSst extends Model
     public function responsable() { return $this->belongsTo(User::class, 'responsable_id'); }
     public function categorias()  { return $this->hasMany(SstCategoria::class, 'programa_id'); }
     public function creador()     { return $this->belongsTo(User::class, 'creado_por'); }
+    public function asignados()
+    {
+        return $this->belongsToMany(User::class, 'programa_sst_asignados', 'programa_sst_id', 'user_id')
+            ->withTimestamps();
+    }
+
+    public function estaAsignadoA(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ((int) $this->responsable_id === (int) $user->id) {
+            return true;
+        }
+
+        if ($this->relationLoaded('asignados')) {
+            return $this->asignados->contains('id', $user->id);
+        }
+
+        return $this->asignados()->whereKey($user->id)->exists();
+    }
 
     // === Auto-código ===
     protected static function booted(): void

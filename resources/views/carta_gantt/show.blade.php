@@ -73,6 +73,12 @@
                 <span><i class="bi bi-calendar3"></i> {{ $cartaGantt->anio }}</span>
                 @if($cartaGantt->centroCosto)<span><i class="bi bi-building"></i> {{ $cartaGantt->centroCosto->nombre }}</span>@endif
                 @if($cartaGantt->responsable)<span><i class="bi bi-person-fill"></i> {{ $cartaGantt->responsable->nombre_completo }}</span>@endif
+                @if($cartaGantt->asignados->isNotEmpty())
+                <span title="{{ $cartaGantt->asignados->pluck('email')->filter()->join(', ') }}">
+                    <i class="bi bi-people-fill"></i>
+                    Equipo: {{ $cartaGantt->asignados->pluck('nombre_completo')->filter()->take(3)->join(', ') }}{{ $cartaGantt->asignados->count() > 3 ? ' +' . ($cartaGantt->asignados->count() - 3) : '' }}
+                </span>
+                @endif
             </div>
         </div>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
@@ -84,7 +90,7 @@
                 <i class="bi bi-cloud-upload"></i> Importar CSV
             </button>
             @endif
-            @if($puedeEditar)
+            @if($puedeAdministrarPrograma)
             <a href="{{ route('carta-gantt.edit', $cartaGantt) }}" class="sst-btn sst-btn-outline" title="Editar datos generales del programa" aria-label="Editar datos generales del programa"><i class="bi bi-pencil"></i> Editar</a>
             @endif
             <a href="{{ route('carta-gantt.index') }}" class="sst-btn sst-btn-outline" title="Volver al listado de programas" aria-label="Volver al listado de programas"><i class="bi bi-arrow-left"></i> Volver</a>
