@@ -10,7 +10,7 @@
     $estLabels = \App\Models\SstActividad::estadosMap();
     $mesesCorto = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 @endphp
-<tr class="sst-act-row" data-actividad-id="{{ $act->id }}"
+<tr id="actividad-{{ $act->id }}" class="sst-act-row" data-actividad-id="{{ $act->id }}"
     data-act="{{ json_encode([
         'id' => $act->id,
         'nombre' => $act->nombre,

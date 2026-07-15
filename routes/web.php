@@ -320,6 +320,10 @@ Route::middleware('auth')->group(function () {
             ->name('carta-gantt.reporte-pdf');
         Route::get('carta-gantt', [CartaGanttController::class, 'index'])
             ->name('carta-gantt.index');
+        Route::get('carta-gantt/mis-tareas', [CartaGanttController::class, 'misTareas'])
+            ->name('carta-gantt.mis-tareas');
+        Route::get('carta-gantt/notificaciones', [CartaGanttController::class, 'notificaciones'])
+            ->name('carta-gantt.notificaciones');
         Route::get('carta-gantt/create', [CartaGanttController::class, 'create'])
             ->name('carta-gantt.create')
             ->middleware('modulo:carta_gantt,puede_crear');

@@ -137,6 +137,9 @@
             </div>
         </div>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <a href="{{ route('carta-gantt.mis-tareas') }}" class="sst-btn sst-btn-outline" title="Ver mis actividades pendientes en Carta Gantt">
+                <i class="bi bi-list-task"></i> Mis tareas
+            </a>
             <a href="{{ route('carta-gantt.reporte-pdf', $cartaGantt) }}" class="sst-btn sst-btn-outline" target="_blank" title="Descargar reporte PDF del programa" aria-label="Descargar reporte PDF del programa">
                 <i class="bi bi-file-earmark-pdf"></i> Reporte PDF
             </a>

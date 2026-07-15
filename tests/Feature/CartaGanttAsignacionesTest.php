@@ -9,6 +9,7 @@ use App\Models\Rol;
 use App\Models\SstActividad;
 use App\Models\SstActividadComentario;
 use App\Models\SstCategoria;
+use App\Models\SstNotificacionLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
@@ -52,6 +53,132 @@ class CartaGanttAsignacionesTest extends TestCase
         $this->actingAs($assigned)
             ->get(route('carta-gantt.show', $hidden))
             ->assertForbidden();
+    }
+
+    public function test_assigned_user_can_open_my_tasks_dashboard_with_visible_activities(): void
+    {
+        $creator = $this->createCartaGanttUser(['puede_ver' => true, 'puede_crear' => true, 'puede_editar' => true]);
+        $assigned = $this->createCartaGanttUser(['puede_ver' => true]);
+
+        $visible = $this->createPrograma($creator, 'Programa mis tareas visible');
+        $hidden = $this->createPrograma($creator, 'Programa mis tareas oculto');
+        $visible->asignados()->sync([$assigned->id]);
+
+        $visibleCategoria = SstCategoria::create([
+            'programa_id' => $visible->id,
+            'nombre' => 'Operación visible',
+            'orden' => 1,
+        ]);
+        $visibleActividad = $this->createActividad($visibleCategoria, 'Tarea visible vencida');
+        $visibleActividad->update(['fecha_fin' => now()->subDay()->toDateString()]);
+        $visibleActividad->seguimiento()->create([
+            'mes' => max(1, (int) date('n') - 1),
+            'programado' => true,
+            'realizado' => false,
+            'cantidad_realizada' => 0,
+        ]);
+
+        $hiddenCategoria = SstCategoria::create([
+            'programa_id' => $hidden->id,
+            'nombre' => 'Operación oculta',
+            'orden' => 1,
+        ]);
+        $this->createActividad($hiddenCategoria, 'Tarea oculta para otro equipo');
+
+        $this->actingAs($assigned)
+            ->get(route('carta-gantt.mis-tareas'))
+            ->assertOk()
+            ->assertSee('Mis tareas Carta Gantt')
+            ->assertSee('Tarea visible vencida')
+            ->assertSee('Vencida')
+            ->assertSee('Comentar actividad')
+            ->assertSee('Reprogramar meses vencidos')
+            ->assertDontSee('Tarea oculta para otro equipo');
+    }
+
+    public function test_assigned_user_can_advance_current_month_from_my_tasks_endpoint(): void
+    {
+        $creator = $this->createCartaGanttUser(['puede_ver' => true, 'puede_crear' => true, 'puede_editar' => true]);
+        $assigned = $this->createCartaGanttUser(['puede_ver' => true]);
+        $programa = $this->createPrograma($creator, 'Programa avance mis tareas');
+        $programa->asignados()->sync([$assigned->id]);
+
+        $categoria = SstCategoria::create([
+            'programa_id' => $programa->id,
+            'nombre' => 'Avance rápido',
+            'orden' => 1,
+        ]);
+
+        $actividad = $this->createActividad($categoria, 'Actividad avance rápido');
+        $mes = (int) date('n');
+        $actividad->seguimiento()->create([
+            'mes' => $mes,
+            'programado' => true,
+            'realizado' => false,
+            'cantidad_realizada' => 0,
+        ]);
+
+        $this->actingAs($assigned)
+            ->get(route('carta-gantt.mis-tareas'))
+            ->assertOk()
+            ->assertSee('Avanzar');
+
+        $this->actingAs($assigned)
+            ->patchJson(route('carta-gantt.seguimiento.update', $actividad), ['mes' => $mes])
+            ->assertOk()
+            ->assertJson(['success' => true, 'realizado' => true]);
+
+        $this->assertDatabaseHas('sst_seguimiento', [
+            'actividad_id' => $actividad->id,
+            'mes' => $mes,
+            'realizado' => true,
+            'actualizado_por' => $assigned->id,
+        ]);
+        $this->assertDatabaseHas('sst_actividad_logs', [
+            'actividad_id' => $actividad->id,
+            'user_id' => $assigned->id,
+            'accion' => 'seguimiento_actualizado',
+        ]);
+    }
+
+    public function test_assigned_user_notification_audit_only_shows_own_recipients(): void
+    {
+        $creator = $this->createCartaGanttUser(['puede_ver' => true, 'puede_crear' => true, 'puede_editar' => true]);
+        $assigned = $this->createCartaGanttUser(['puede_ver' => true]);
+        $programa = $this->createPrograma($creator, 'Programa notificaciones asignado');
+        $programa->asignados()->sync([$assigned->id]);
+
+        $categoria = SstCategoria::create([
+            'programa_id' => $programa->id,
+            'nombre' => 'Notificaciones',
+            'orden' => 1,
+        ]);
+        $actividad = $this->createActividad($categoria, 'Actividad notificada');
+
+        SstNotificacionLog::create([
+            'actividad_id' => $actividad->id,
+            'user_id' => $assigned->id,
+            'email' => $assigned->email,
+            'tipo' => 'vencida',
+            'mes' => (int) date('n'),
+            'rol_destinatario' => 'responsable',
+        ]);
+
+        SstNotificacionLog::create([
+            'actividad_id' => $actividad->id,
+            'user_id' => $creator->id,
+            'email' => $creator->email,
+            'tipo' => 'vencida',
+            'mes' => (int) date('n'),
+            'rol_destinatario' => 'jefe',
+        ]);
+
+        $this->actingAs($assigned)
+            ->get(route('carta-gantt.notificaciones'))
+            ->assertOk()
+            ->assertSee('Notificaciones Carta Gantt')
+            ->assertSee($assigned->email)
+            ->assertDontSee($creator->email);
     }
 
     public function test_assigned_editor_can_update_follow_up_and_reprogram_assigned_activity(): void

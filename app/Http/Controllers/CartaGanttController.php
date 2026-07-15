@@ -82,6 +82,184 @@ class CartaGanttController extends Controller
         return view('carta_gantt.index', compact('programas', 'stats', 'centros', 'anios', 'puedeAccesoGlobal'));
     }
 
+    public function misTareas(Request $request)
+    {
+        $user = $request->user();
+        abort_unless($user?->tieneAcceso('carta_gantt', 'puede_ver'), 403);
+
+        $puedeAccesoGlobal = $this->canAccessAllProgramas($user);
+
+        $programasQuery = ProgramaSst::with(['responsable', 'asignados'])
+            ->orderByDesc('anio')
+            ->orderBy('titulo');
+        $this->scopeVisibleProgramas($programasQuery, $user);
+        $programas = $programasQuery->get();
+
+        $actividadesQuery = SstActividad::with([
+            'categoria.programa.responsable',
+            'categoria.programa.asignados',
+            'responsableUser',
+            'seguimiento',
+            'comentarios',
+            'logs.usuario',
+        ])->whereNotIn('estado', ['COMPLETADA', 'CANCELADA'])
+            ->whereHas('categoria.programa', function ($q) use ($user) {
+                $this->scopeVisibleProgramas($q, $user);
+            });
+
+        if ($request->filled('programa_id')) {
+            $actividadesQuery->whereHas('categoria.programa', fn ($q) => $q->whereKey($request->integer('programa_id')));
+        }
+
+        if ($puedeAccesoGlobal && $request->filled('responsable_id')) {
+            $actividadesQuery->where('responsable_id', $request->integer('responsable_id'));
+        }
+
+        if (!$puedeAccesoGlobal && $request->input('alcance') === 'responsable') {
+            $actividadesQuery->where('responsable_id', $user->id);
+        }
+
+        $actividades = $actividadesQuery->get()
+            ->map(function (SstActividad $actividad) {
+                $actividad->setAttribute('estado_operativo', $this->estadoOperativoActividad($actividad));
+                $actividad->setAttribute('puede_gestionar', $this->canManageActividadStructure($actividad));
+                return $actividad;
+            });
+
+        if ($request->filled('estado_operativo')) {
+            $estado = $request->input('estado_operativo');
+            $actividades = $actividades->filter(fn (SstActividad $actividad) => ($actividad->estado_operativo['clave'] ?? null) === $estado);
+        }
+
+        if ($request->filled('prioridad')) {
+            $prioridad = strtoupper((string) $request->input('prioridad'));
+            $actividades = $actividades->filter(fn (SstActividad $actividad) => $actividad->prioridad === $prioridad);
+        }
+
+        if ($request->filled('buscar')) {
+            $buscar = mb_strtolower(trim((string) $request->input('buscar')));
+            $actividades = $actividades->filter(function (SstActividad $actividad) use ($buscar) {
+                $texto = mb_strtolower(collect([
+                    $actividad->nombre,
+                    $actividad->descripcion,
+                    $actividad->responsableUser?->nombre_completo,
+                    $actividad->responsableUser?->email,
+                    $actividad->categoria?->nombre,
+                    $actividad->categoria?->programa?->nombre,
+                    $actividad->categoria?->programa?->codigo,
+                ])->filter()->join(' '));
+
+                return str_contains($texto, $buscar);
+            });
+        }
+
+        $prioridadOrden = ['vencida' => 1, 'proxima' => 2, 'pendiente_mes' => 3, 'parcial_mes' => 4, 'al_dia' => 5];
+        $actividades = $actividades
+            ->sortBy(function (SstActividad $actividad) use ($prioridadOrden) {
+                return sprintf(
+                    '%02d|%020d|%s',
+                    $prioridadOrden[$actividad->estado_operativo['clave'] ?? 'al_dia'] ?? 99,
+                    optional($actividad->fecha_fin)->timestamp ?? PHP_INT_MAX,
+                    $actividad->categoria?->programa?->titulo ?? ''
+                );
+            })
+            ->values();
+
+        $stats = [
+            'total' => $actividades->count(),
+            'vencidas' => $actividades->where('estado_operativo.clave', 'vencida')->count(),
+            'proximas' => $actividades->where('estado_operativo.clave', 'proxima')->count(),
+            'pendientes_mes' => $actividades->where('estado_operativo.clave', 'pendiente_mes')->count(),
+            'parciales_mes' => $actividades->where('estado_operativo.clave', 'parcial_mes')->count(),
+        ];
+
+        $responsables = collect();
+        if ($puedeAccesoGlobal) {
+            $responsableIds = (clone $actividadesQuery)
+                ->whereNotNull('responsable_id')
+                ->distinct()
+                ->pluck('responsable_id');
+            $responsables = User::whereIn('id', $responsableIds)->orderBy('name')->get();
+        }
+
+        return view('carta_gantt.mis_tareas', compact(
+            'actividades',
+            'programas',
+            'responsables',
+            'stats',
+            'puedeAccesoGlobal'
+        ));
+    }
+
+    public function notificaciones(Request $request)
+    {
+        $user = $request->user();
+        abort_unless($user?->tieneAcceso('carta_gantt', 'puede_ver'), 403);
+
+        $puedeAccesoGlobal = $this->canAccessAllProgramas($user);
+
+        $logsQuery = SstNotificacionLog::with([
+            'user',
+            'actividad.responsableUser',
+            'actividad.categoria.programa',
+        ])->whereHas('actividad.categoria.programa', function ($q) use ($user) {
+            $this->scopeVisibleProgramas($q, $user);
+        });
+
+        if (!$puedeAccesoGlobal) {
+            $logsQuery->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                    ->orWhere('email', $user->email);
+            });
+        }
+
+        if ($request->filled('tipo')) {
+            $logsQuery->where('tipo', $request->input('tipo'));
+        }
+
+        if ($request->filled('email')) {
+            $logsQuery->where('email', 'like', '%' . trim((string) $request->input('email')) . '%');
+        }
+
+        if ($request->filled('programa_id')) {
+            $logsQuery->whereHas('actividad.categoria.programa', fn ($q) => $q->whereKey($request->integer('programa_id')));
+        }
+
+        if ($request->filled('desde')) {
+            $logsQuery->whereDate('created_at', '>=', $request->date('desde'));
+        }
+
+        if ($request->filled('hasta')) {
+            $logsQuery->whereDate('created_at', '<=', $request->date('hasta'));
+        }
+
+        $logs = $logsQuery->latest()->paginate(40)->withQueryString();
+
+        $programasQuery = ProgramaSst::orderByDesc('anio')->orderBy('titulo');
+        $this->scopeVisibleProgramas($programasQuery, $user);
+        $programas = $programasQuery->get();
+
+        $statsQuery = SstNotificacionLog::whereHas('actividad.categoria.programa', function ($q) use ($user) {
+            $this->scopeVisibleProgramas($q, $user);
+        });
+
+        if (!$puedeAccesoGlobal) {
+            $statsQuery->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                    ->orWhere('email', $user->email);
+            });
+        }
+
+        $stats = [
+            'hoy' => (clone $statsQuery)->whereDate('created_at', now()->toDateString())->count(),
+            'semana' => (clone $statsQuery)->where('created_at', '>=', now()->subDays(7))->count(),
+            'vencidas' => (clone $statsQuery)->where('tipo', 'vencida')->count(),
+            'total' => (clone $statsQuery)->count(),
+        ];
+
+        return view('carta_gantt.notificaciones', compact('logs', 'programas', 'stats', 'puedeAccesoGlobal'));
+    }
+
     public function create()
     {
         abort_unless(auth()->user()?->tieneAcceso('carta_gantt', 'puede_crear'), 403);
@@ -895,6 +1073,104 @@ class CartaGanttController extends Controller
             'pendientes_mes' => $pendientesMes,
             'parciales_mes' => $parcialesMes,
             'vencidas' => $vencidas,
+        ];
+    }
+
+    private function estadoOperativoActividad(SstActividad $actividad): array
+    {
+        $actividad->loadMissing(['seguimiento', 'categoria.programa']);
+
+        $hoy = now()->startOfDay();
+        $mesActual = (int) now()->format('n');
+        $anioActual = (int) now()->format('Y');
+        $anioPrograma = (int) ($actividad->categoria?->programa?->anio ?? $anioActual);
+        $fechaFin = $actividad->fecha_fin?->copy()->startOfDay();
+        $diasFechaFin = $fechaFin ? (int) $hoy->diffInDays($fechaFin, false) : null;
+
+        $mesesVencidos = $actividad->seguimiento
+            ->filter(function ($seguimiento) use ($anioPrograma, $anioActual, $mesActual) {
+                $mes = (int) $seguimiento->mes;
+                $mesVencido = $anioPrograma < $anioActual || ($anioPrograma === $anioActual && $mes < $mesActual);
+
+                return $seguimiento->programado
+                    && !$seguimiento->realizado
+                    && $mesVencido
+                    && (int) ($seguimiento->cantidad_realizada ?? 0) === 0;
+            })
+            ->pluck('mes')
+            ->map(fn ($mes) => (int) $mes)
+            ->values();
+
+        $seguimientoMesActual = $actividad->seguimiento->firstWhere('mes', $mesActual);
+        $pendienteMesActual = $seguimientoMesActual
+            && $seguimientoMesActual->programado
+            && !$seguimientoMesActual->realizado;
+        $cantidadRealizada = $pendienteMesActual ? (int) ($seguimientoMesActual->cantidad_realizada ?? 0) : 0;
+        $cantidadProgramada = max(1, (int) ($actividad->cantidad_programada ?? 1));
+
+        if (($diasFechaFin !== null && $diasFechaFin < 0) || $mesesVencidos->isNotEmpty()) {
+            return [
+                'clave' => 'vencida',
+                'label' => 'Vencida',
+                'badge' => 'danger',
+                'icono' => 'bi-exclamation-triangle-fill',
+                'detalle' => $mesesVencidos->isNotEmpty()
+                    ? 'Mes(es) vencidos sin avance: ' . $mesesVencidos->join(', ')
+                    : 'Fecha limite vencida hace ' . abs($diasFechaFin) . ' dia(s)',
+                'dias' => $diasFechaFin,
+                'meses_vencidos' => $mesesVencidos,
+                'avance_mes' => $pendienteMesActual ? "{$cantidadRealizada}/{$cantidadProgramada}" : null,
+            ];
+        }
+
+        if ($diasFechaFin !== null && $diasFechaFin <= 7) {
+            return [
+                'clave' => 'proxima',
+                'label' => $diasFechaFin === 0 ? 'Vence hoy' : 'Por vencer',
+                'badge' => 'warning',
+                'icono' => 'bi-clock-fill',
+                'detalle' => $diasFechaFin === 0 ? 'Vence hoy' : "Quedan {$diasFechaFin} dia(s)",
+                'dias' => $diasFechaFin,
+                'meses_vencidos' => collect(),
+                'avance_mes' => $pendienteMesActual ? "{$cantidadRealizada}/{$cantidadProgramada}" : null,
+            ];
+        }
+
+        if ($pendienteMesActual && $cantidadRealizada > 0) {
+            return [
+                'clave' => 'parcial_mes',
+                'label' => 'Parcial',
+                'badge' => 'warning',
+                'icono' => 'bi-hourglass-split',
+                'detalle' => "Avance parcial del mes: {$cantidadRealizada}/{$cantidadProgramada}",
+                'dias' => $diasFechaFin,
+                'meses_vencidos' => collect(),
+                'avance_mes' => "{$cantidadRealizada}/{$cantidadProgramada}",
+            ];
+        }
+
+        if ($pendienteMesActual) {
+            return [
+                'clave' => 'pendiente_mes',
+                'label' => 'Mes actual',
+                'badge' => 'info',
+                'icono' => 'bi-calendar-check-fill',
+                'detalle' => 'Pendiente de registrar en el mes actual',
+                'dias' => $diasFechaFin,
+                'meses_vencidos' => collect(),
+                'avance_mes' => "0/{$cantidadProgramada}",
+            ];
+        }
+
+        return [
+            'clave' => 'al_dia',
+            'label' => 'Sin criticos',
+            'badge' => 'success',
+            'icono' => 'bi-check2-circle',
+            'detalle' => 'Sin alertas operativas inmediatas',
+            'dias' => $diasFechaFin,
+            'meses_vencidos' => collect(),
+            'avance_mes' => null,
         ];
     }
 

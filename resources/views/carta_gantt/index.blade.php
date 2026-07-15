@@ -23,6 +23,12 @@
             <i class="bi bi-plus-lg"></i> Nuevo Programa
         </a>
         @endif
+        <a href="{{ route('carta-gantt.mis-tareas') }}" class="btn-ghost">
+            <i class="bi bi-list-task"></i> Mis tareas
+        </a>
+        <a href="{{ route('carta-gantt.notificaciones') }}" class="btn-ghost">
+            <i class="bi bi-envelope-check"></i> Notificaciones
+        </a>
     </div>
 
     @include('partials._alerts')
