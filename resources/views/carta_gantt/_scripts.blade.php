@@ -311,8 +311,18 @@ function togglePlanes(actId) {
     if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
 }
 
+function toggleComentarios(actId) {
+    const row = document.getElementById('comentarios-' + actId);
+    if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
 function toggleReprogramaciones(actId) {
     const row = document.getElementById('reprog-' + actId);
+    if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+function toggleHistorial(actId) {
+    const row = document.getElementById('historial-' + actId);
     if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
 }
 

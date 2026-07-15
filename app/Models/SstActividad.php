@@ -102,6 +102,8 @@ class SstActividad extends Model
     public function seguimiento()    { return $this->hasMany(SstSeguimiento::class, 'actividad_id')->orderBy('mes'); }
     public function planesAccion()   { return $this->hasMany(SstPlanAccion::class, 'actividad_id'); }
     public function reprogramaciones() { return $this->hasMany(SstReprogramacion::class, 'actividad_id'); }
+    public function comentarios() { return $this->hasMany(SstActividadComentario::class, 'actividad_id')->latest(); }
+    public function logs() { return $this->hasMany(SstActividadLog::class, 'actividad_id')->latest(); }
 
     // === Accessors ===
     public function getNombreResponsableAttribute(): string

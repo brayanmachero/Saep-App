@@ -133,6 +133,12 @@
             <button class="sst-icon-btn sst-icon-btn-xs" onclick="togglePlanes({{ $act->id }})" title="Ver o agregar planes de acción: {{ $act->nombre }}" aria-label="Ver o agregar planes de acción: {{ $act->nombre }}">
                 <i class="bi bi-clipboard-check"></i>
             </button>
+            <button class="sst-icon-btn sst-icon-btn-xs" onclick="toggleComentarios({{ $act->id }})" title="Ver o agregar comentarios: {{ $act->nombre }}" aria-label="Ver o agregar comentarios: {{ $act->nombre }}">
+                <i class="bi bi-chat-left-text"></i>
+                @if($act->comentarios->count() > 0)
+                <span style="font-size:.6rem;position:absolute;top:-2px;right:-4px;background:#0ea5e9;color:#fff;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;font-weight:700;">{{ $act->comentarios->count() }}</span>
+                @endif
+            </button>
             @if(count($mesesVencidos) > 0 && $puedeEditarLocal)
             <button class="sst-icon-btn sst-icon-btn-xs" style="color:#6366f1" onclick="openReprogramar({{ $act->id }}, {{ json_encode($mesesVencidos) }})" title="Reprogramar meses vencidos sin avance: {{ $act->nombre }}" aria-label="Reprogramar meses vencidos sin avance: {{ $act->nombre }}">
                 <i class="bi bi-calendar2-range"></i>
@@ -142,6 +148,12 @@
             <button class="sst-icon-btn sst-icon-btn-xs" style="color:#8b5cf6" onclick="toggleReprogramaciones({{ $act->id }})" title="Historial de reprogramaciones de {{ $act->nombre }} ({{ $act->reprogramaciones->count() }})" aria-label="Historial de reprogramaciones de {{ $act->nombre }}">
                 <i class="bi bi-clock-history"></i>
                 <span style="font-size:.6rem;position:absolute;top:-2px;right:-4px;background:#8b5cf6;color:#fff;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;font-weight:700;">{{ $act->reprogramaciones->count() }}</span>
+            </button>
+            @endif
+            @if($act->logs->count() > 0)
+            <button class="sst-icon-btn sst-icon-btn-xs" style="color:#64748b" onclick="toggleHistorial({{ $act->id }})" title="Bitácora de cambios de {{ $act->nombre }} ({{ $act->logs->count() }})" aria-label="Bitácora de cambios de {{ $act->nombre }}">
+                <i class="bi bi-list-check"></i>
+                <span style="font-size:.6rem;position:absolute;top:-2px;right:-4px;background:#64748b;color:#fff;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;font-weight:700;">{{ $act->logs->count() }}</span>
             </button>
             @endif
             @if($puedeEliminarLocal)
@@ -154,6 +166,54 @@
             </form>
             @endif
         </div>
+    </td>
+</tr>
+
+{{-- Fila expandible: Comentarios operativos --}}
+<tr id="comentarios-{{ $act->id }}" style="display:none" class="sst-planes-row">
+    <td colspan="17" style="padding:.65rem 1rem;background:var(--surface-color)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;gap:.75rem;flex-wrap:wrap">
+            <h4 style="margin:0;font-size:.82rem;font-weight:700;color:var(--text-main)"><i class="bi bi-chat-left-text"></i> Comentarios — {{ $act->nombre }}</h4>
+            <span style="font-size:.7rem;color:var(--text-muted)">Registro visible para el equipo asignado y coordinadores.</span>
+        </div>
+
+        @if($act->comentarios->count())
+        <div style="display:grid;gap:.45rem;margin-bottom:.65rem">
+            @foreach($act->comentarios as $comentario)
+            @php
+                $puedeEliminarComentario = ((int) $comentario->user_id === (int) auth()->id()) || $puedeEliminarLocal;
+            @endphp
+            <div style="border:1px solid var(--surface-border);background:var(--bg-color);border-radius:8px;padding:.55rem .65rem">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.25rem">
+                    <div style="font-size:.72rem;color:var(--text-muted)">
+                        <strong style="color:var(--text-main)">{{ $comentario->usuario?->nombre_completo ?? 'Usuario eliminado' }}</strong>
+                        <span>· {{ $comentario->created_at?->format('d/m/Y H:i') }}</span>
+                    </div>
+                    @if($puedeEliminarComentario)
+                    <form method="POST" action="{{ route('carta-gantt.comentarios.destroy', $comentario) }}" onsubmit="return confirm('¿Eliminar este comentario?')" style="display:inline">
+                        @csrf @method('DELETE')
+                        <button type="submit" class="sst-icon-btn sst-icon-btn-xs" title="Eliminar comentario" aria-label="Eliminar comentario"><i class="bi bi-x-lg"></i></button>
+                    </form>
+                    @endif
+                </div>
+                <div style="font-size:.8rem;line-height:1.45;color:var(--text-main);white-space:pre-line">{{ $comentario->comentario }}</div>
+            </div>
+            @endforeach
+        </div>
+        @else
+        <p style="color:var(--text-muted);font-size:.78rem;font-style:italic;margin:0 0 .65rem">Sin comentarios todavía.</p>
+        @endif
+
+        @if($puedeEditarLocal)
+        <form method="POST" action="{{ route('carta-gantt.comentarios.store', $act) }}" style="display:flex;gap:.45rem;align-items:flex-end;flex-wrap:wrap">
+            @csrf
+            <div style="flex:1;min-width:260px">
+                <label class="sst-label">Nuevo comentario</label>
+                <textarea name="comentario" required maxlength="1000" class="form-input" rows="2" placeholder="Agregar novedad, acuerdo, bloqueo o contexto operativo..." style="font-size:.78rem;resize:vertical"></textarea>
+            </div>
+            <button type="submit" class="sst-btn sst-btn-sm sst-btn-primary" style="font-size:.75rem"><i class="bi bi-send"></i> Comentar</button>
+        </form>
+        @endif
     </td>
 </tr>
 
@@ -247,6 +307,54 @@
             @endforeach
             </tbody>
         </table>
+    </td>
+</tr>
+@endif
+
+{{-- Fila expandible: Bitacora de cambios --}}
+@if($act->logs->count() > 0)
+<tr id="historial-{{ $act->id }}" style="display:none" class="sst-planes-row">
+    <td colspan="17" style="padding:.65rem 1rem;background:var(--surface-color)">
+        <h4 style="margin:0 0 .5rem;font-size:.82rem;font-weight:700;color:#64748b">
+            <i class="bi bi-list-check"></i> Bitácora de cambios — {{ $act->nombre }}
+        </h4>
+        <table style="width:100%;font-size:.76rem;border-collapse:collapse">
+            <thead>
+                <tr style="background:var(--bg-color)">
+                    <th style="padding:.35rem .5rem;text-align:left;width:125px">Fecha</th>
+                    <th style="padding:.35rem .5rem;text-align:left;width:170px">Usuario</th>
+                    <th style="padding:.35rem .5rem;text-align:left;width:150px">Acción</th>
+                    <th style="padding:.35rem .5rem;text-align:left">Detalle</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($act->logs->take(12) as $log)
+                <tr style="border-bottom:1px solid var(--surface-border)">
+                    <td style="padding:.35rem .5rem;color:var(--text-muted);white-space:nowrap">{{ $log->created_at?->format('d/m/Y H:i') }}</td>
+                    <td style="padding:.35rem .5rem;color:var(--text-main)">
+                        {{ $log->usuario?->nombre_completo ?? 'Usuario eliminado' }}
+                    </td>
+                    <td style="padding:.35rem .5rem">
+                        <span style="background:rgba(100,116,139,.12);color:#64748b;padding:.12rem .45rem;border-radius:999px;font-weight:700;font-size:.68rem">
+                            {{ str_replace('_', ' ', $log->accion) }}
+                        </span>
+                    </td>
+                    <td style="padding:.35rem .5rem;color:var(--text-muted);line-height:1.35">
+                        {{ $log->resumen }}
+                        @if(!empty($log->cambios))
+                            <details style="margin-top:.25rem">
+                                <summary style="cursor:pointer;color:var(--accent-color);font-weight:600">Ver datos registrados</summary>
+                                <pre style="white-space:pre-wrap;word-break:break-word;margin:.35rem 0 0;padding:.45rem;background:var(--bg-color);border:1px solid var(--surface-border);border-radius:6px;font-size:.68rem;line-height:1.35">{{ json_encode($log->cambios, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
+                            </details>
+                        @endif
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+        @if($act->logs->count() > 12)
+        <div style="font-size:.7rem;color:var(--text-muted);margin-top:.45rem">Se muestran los últimos 12 movimientos de {{ $act->logs->count() }} registrados.</div>
+        @endif
     </td>
 </tr>
 @endif

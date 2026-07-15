@@ -7,6 +7,7 @@ use App\Models\Modulo;
 use App\Models\ProgramaSst;
 use App\Models\Rol;
 use App\Models\SstActividad;
+use App\Models\SstActividadComentario;
 use App\Models\SstCategoria;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -97,6 +98,38 @@ class CartaGanttAsignacionesTest extends TestCase
             'nombre' => 'Seguimiento asignado actualizado',
             'prioridad' => 'ALTA',
         ]);
+        $this->assertDatabaseHas('sst_actividad_logs', [
+            'actividad_id' => $seguimiento->id,
+            'user_id' => $assigned->id,
+            'accion' => 'seguimiento_actualizado',
+        ]);
+        $this->assertDatabaseHas('sst_actividad_logs', [
+            'actividad_id' => $reprogramable->id,
+            'user_id' => $assigned->id,
+            'accion' => 'actividad_reprogramada',
+        ]);
+        $this->assertDatabaseHas('sst_actividad_logs', [
+            'actividad_id' => $seguimiento->id,
+            'user_id' => $assigned->id,
+            'accion' => 'actividad_actualizada',
+        ]);
+
+        $this->actingAs($assigned)
+            ->post(route('carta-gantt.comentarios.store', $seguimiento), [
+                'comentario' => 'Se deja comentario operativo desde el equipo asignado.',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('sst_actividad_comentarios', [
+            'actividad_id' => $seguimiento->id,
+            'user_id' => $assigned->id,
+            'comentario' => 'Se deja comentario operativo desde el equipo asignado.',
+        ]);
+        $this->assertDatabaseHas('sst_actividad_logs', [
+            'actividad_id' => $seguimiento->id,
+            'user_id' => $assigned->id,
+            'accion' => 'comentario_creado',
+        ]);
     }
 
     public function test_unassigned_user_cannot_view_or_modify_program(): void
@@ -123,6 +156,155 @@ class CartaGanttAsignacionesTest extends TestCase
                 'cantidad_programada' => 1,
             ])
             ->assertForbidden();
+
+        $this->actingAs($outsider)
+            ->post(route('carta-gantt.comentarios.store', $actividad), [
+                'comentario' => 'Intento externo de comentario.',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_assigned_user_can_delete_own_comment_but_not_other_comment(): void
+    {
+        $creator = $this->createCartaGanttUser(['puede_ver' => true, 'puede_crear' => true, 'puede_editar' => true]);
+        $assigned = $this->createCartaGanttUser(['puede_ver' => true, 'puede_editar' => true]);
+        $otherAssigned = $this->createCartaGanttUser(['puede_ver' => true, 'puede_editar' => true]);
+        $programa = $this->createPrograma($creator, 'Programa comentarios asignados');
+        $programa->asignados()->sync([$assigned->id, $otherAssigned->id]);
+        $categoria = SstCategoria::create([
+            'programa_id' => $programa->id,
+            'nombre' => 'Comentarios',
+            'orden' => 1,
+        ]);
+        $actividad = $this->createActividad($categoria, 'Actividad con comentarios');
+
+        $propio = SstActividadComentario::create([
+            'actividad_id' => $actividad->id,
+            'user_id' => $assigned->id,
+            'comentario' => 'Comentario propio.',
+        ]);
+        $ajeno = SstActividadComentario::create([
+            'actividad_id' => $actividad->id,
+            'user_id' => $otherAssigned->id,
+            'comentario' => 'Comentario de otro usuario.',
+        ]);
+
+        $this->actingAs($assigned)
+            ->delete(route('carta-gantt.comentarios.destroy', $ajeno))
+            ->assertForbidden();
+
+        $this->actingAs($assigned)
+            ->delete(route('carta-gantt.comentarios.destroy', $propio))
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('sst_actividad_comentarios', [
+            'id' => $propio->id,
+        ]);
+        $this->assertDatabaseHas('sst_actividad_logs', [
+            'actividad_id' => $actividad->id,
+            'user_id' => $assigned->id,
+            'accion' => 'comentario_eliminado',
+        ]);
+    }
+
+    public function test_assigned_user_plan_actions_are_logged(): void
+    {
+        $creator = $this->createCartaGanttUser(['puede_ver' => true, 'puede_crear' => true, 'puede_editar' => true, 'puede_eliminar' => true]);
+        $assigned = $this->createCartaGanttUser(['puede_ver' => true, 'puede_editar' => true, 'puede_eliminar' => true]);
+        $programa = $this->createPrograma($creator, 'Programa planes trazables');
+        $programa->asignados()->sync([$assigned->id]);
+        $categoria = SstCategoria::create([
+            'programa_id' => $programa->id,
+            'nombre' => 'Planes',
+            'orden' => 1,
+        ]);
+        $actividad = $this->createActividad($categoria, 'Actividad con plan');
+
+        $this->actingAs($assigned)
+            ->post(route('carta-gantt.plan-accion.store', $actividad), [
+                'accion' => 'Revisar evidencia pendiente',
+                'responsable' => 'Equipo asignado',
+                'fecha_compromiso' => now()->addDays(3)->toDateString(),
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('sst_actividad_logs', [
+            'actividad_id' => $actividad->id,
+            'user_id' => $assigned->id,
+            'accion' => 'plan_creado',
+        ]);
+    }
+
+    public function test_assigned_view_only_user_can_operate_assigned_gantt_with_audit_log(): void
+    {
+        $creator = $this->createCartaGanttUser(['puede_ver' => true, 'puede_crear' => true, 'puede_editar' => true]);
+        $assigned = $this->createCartaGanttUser(['puede_ver' => true]);
+        $programa = $this->createPrograma($creator, 'Programa operativo asignado');
+        $programa->asignados()->sync([$assigned->id]);
+        $categoria = SstCategoria::create([
+            'programa_id' => $programa->id,
+            'nombre' => 'Operacion asignada',
+            'orden' => 1,
+        ]);
+
+        $seguimiento = $this->createActividad($categoria, 'Avance sin permiso editar');
+        $seguimiento->seguimiento()->create(['mes' => 1, 'programado' => true]);
+
+        $reprogramable = $this->createActividad($categoria, 'Reprogramacion sin permiso editar');
+        $reprogramable->seguimiento()->create(['mes' => 1, 'programado' => true]);
+
+        $this->actingAs($assigned)
+            ->patchJson(route('carta-gantt.seguimiento.update', $seguimiento), ['mes' => 1])
+            ->assertOk();
+
+        $this->actingAs($assigned)
+            ->post(route('carta-gantt.comentarios.store', $seguimiento), [
+                'comentario' => 'Comentario desde usuario asignado con solo lectura global.',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($assigned)
+            ->put(route('carta-gantt.actividades.update', $seguimiento), [
+                'nombre' => 'Avance actualizado por asignado',
+                'prioridad' => 'ALTA',
+                'estado' => 'EN_PROGRESO',
+                'cantidad_programada' => 1,
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($assigned)
+            ->post(route('carta-gantt.actividades.reprogramar', $reprogramable), [
+                'mes_original' => 1,
+                'mes_nuevo' => max(2, (int) date('n')),
+                'motivo' => 'Reprogramacion autorizada por asignacion directa.',
+            ])
+            ->assertRedirect();
+
+        foreach (['seguimiento_actualizado', 'comentario_creado', 'actividad_actualizada'] as $accion) {
+            $this->assertDatabaseHas('sst_actividad_logs', [
+                'actividad_id' => $seguimiento->id,
+                'user_id' => $assigned->id,
+                'accion' => $accion,
+            ]);
+        }
+
+        $this->assertDatabaseHas('sst_actividad_logs', [
+            'actividad_id' => $reprogramable->id,
+            'user_id' => $assigned->id,
+            'accion' => 'actividad_reprogramada',
+        ]);
+
+        $this->actingAs($assigned)
+            ->get(route('carta-gantt.show', $programa))
+            ->assertOk()
+            ->assertSee('Modo equipo asignado')
+            ->assertSee('Puedes actualizar avances')
+            ->assertSee('Comentarios')
+            ->assertSee('Comentario desde usuario asignado con solo lectura global.')
+            ->assertSee('Bitácora de cambios')
+            ->assertSee('Editar actividad: Avance actualizado por asignado')
+            ->assertDontSee('Editar datos generales del programa')
+            ->assertDontSee('Importar CSV');
     }
 
     public function test_coordinator_role_can_view_all_programs(): void
@@ -164,6 +346,84 @@ class CartaGanttAsignacionesTest extends TestCase
                 'asignados' => [$assigned->id],
             ])
             ->assertForbidden();
+    }
+
+    public function test_program_admin_actions_are_logged_and_visible_to_admin(): void
+    {
+        $creator = $this->createCartaGanttUser([
+            'puede_ver' => true,
+            'puede_crear' => true,
+            'puede_editar' => true,
+            'puede_eliminar' => true,
+        ]);
+        $assigned = $this->createCartaGanttUser(['puede_ver' => true]);
+        $programa = $this->createPrograma($creator, 'Programa trazabilidad general');
+
+        $this->actingAs($creator)
+            ->put(route('carta-gantt.update', $programa), [
+                'nombre' => 'Programa trazabilidad editado',
+                'anio' => $programa->anio,
+                'estado' => 'ACTIVO',
+                'responsable_id' => $assigned->id,
+                'asignados' => [$assigned->id],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('sst_actividad_logs', [
+            'programa_id' => $programa->id,
+            'actividad_id' => null,
+            'user_id' => $creator->id,
+            'accion' => 'programa_actualizado',
+        ]);
+
+        $this->actingAs($creator)
+            ->post(route('carta-gantt.categorias.store', $programa), [
+                'nombre' => 'Categoria trazable',
+                'orden' => 1,
+            ])
+            ->assertRedirect();
+
+        $categoria = SstCategoria::where('programa_id', $programa->id)
+            ->where('nombre', 'Categoria trazable')
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('sst_actividad_logs', [
+            'programa_id' => $programa->id,
+            'actividad_id' => null,
+            'user_id' => $creator->id,
+            'accion' => 'categoria_creada',
+        ]);
+
+        $this->actingAs($creator)
+            ->delete(route('carta-gantt.categorias.destroy', $categoria))
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('sst_actividad_logs', [
+            'programa_id' => $programa->id,
+            'actividad_id' => null,
+            'user_id' => $creator->id,
+            'accion' => 'categoria_eliminada',
+        ]);
+
+        $this->actingAs($creator)
+            ->delete(route('carta-gantt.destroy', $programa))
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('sst_actividad_logs', [
+            'programa_id' => $programa->id,
+            'actividad_id' => null,
+            'user_id' => $creator->id,
+            'accion' => 'programa_cerrado',
+        ]);
+
+        $this->actingAs($creator)
+            ->get(route('carta-gantt.show', $programa))
+            ->assertOk()
+            ->assertSee('Bitácora del programa')
+            ->assertSee('programa actualizado')
+            ->assertSee('categoria creada')
+            ->assertSee('categoria eliminada')
+            ->assertSee('programa cerrado');
     }
 
     private function createCartaGanttUser(array $permissions, ?string $roleCode = null): User

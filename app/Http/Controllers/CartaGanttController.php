@@ -11,6 +11,8 @@ use App\Models\SstNotificacionLog;
 use App\Models\SstSeguimiento;
 use App\Models\SstPlanAccion;
 use App\Models\SstReprogramacion;
+use App\Models\SstActividadComentario;
+use App\Models\SstActividadLog;
 use App\Models\CentroCosto;
 use App\Models\User;
 use App\Http\Controllers\Controller;
@@ -105,7 +107,11 @@ class CartaGanttController extends Controller
             'creado_por'      => auth()->id(),
         ]);
 
-        $this->syncProgramaAsignados($programa, $request);
+        $asignacion = $this->syncProgramaAsignados($programa, $request);
+        $this->registrarProgramaLog($programa, 'programa_creado', 'Programa creado.', [
+            'programa' => $this->programaSnapshot($programa->fresh('asignados')),
+            'equipo_asignado' => $asignacion['despues'] ?? [],
+        ], $request);
 
         return redirect()->route('carta-gantt.show', $programa)
             ->with('success', "Programa SST creado — Código: {$programa->codigo}");
@@ -120,11 +126,13 @@ class CartaGanttController extends Controller
             'categorias.actividades.responsableUser',
             'categorias.actividades.planesAccion',
             'categorias.actividades.reprogramaciones.usuario',
-            'centroCosto', 'responsable', 'creador', 'asignados',
+            'categorias.actividades.comentarios.usuario',
+            'categorias.actividades.logs.usuario',
+            'centroCosto', 'responsable', 'creador', 'asignados', 'logs.usuario',
         ]);
         $usuarios = User::orderBy('name')->get();
 
-        $puedeCrear = $this->canManageProgramaStructure($cartaGantt, 'puede_crear');
+        $puedeCrear = $this->canAdministratePrograma($cartaGantt, 'puede_crear');
         $puedeEditar = $this->canManageProgramaStructure($cartaGantt, 'puede_editar');
         $puedeEliminar = $this->canManageProgramaStructure($cartaGantt, 'puede_eliminar');
         $puedeAdministrarPrograma = $this->canAdministratePrograma($cartaGantt, 'puede_editar');
@@ -232,6 +240,8 @@ class CartaGanttController extends Controller
     public function update(Request $request, ProgramaSst $cartaGantt)
     {
         $this->abortUnlessCanAdministratePrograma($cartaGantt);
+        $cartaGantt->loadMissing('asignados');
+        $antes = $this->programaSnapshot($cartaGantt);
 
         $request->validate([
             'nombre'          => 'required|string|max:300',
@@ -252,7 +262,12 @@ class CartaGanttController extends Controller
             'responsable_id'  => $request->responsable_id,
         ]);
 
-        $this->syncProgramaAsignados($cartaGantt, $request);
+        $asignacion = $this->syncProgramaAsignados($cartaGantt, $request);
+        $cartaGantt->refresh()->load('asignados');
+        $this->registrarProgramaLog($cartaGantt, 'programa_actualizado', 'Programa actualizado.', [
+            'campos' => $this->diffCambios($antes, $this->programaSnapshot($cartaGantt)),
+            'equipo_asignado' => $asignacion['cambio'] ? $asignacion : null,
+        ], $request);
 
         return redirect()->route('carta-gantt.show', $cartaGantt)
             ->with('success', 'Programa actualizado.');
@@ -263,6 +278,9 @@ class CartaGanttController extends Controller
         $this->abortUnlessCanAdministratePrograma($cartaGantt, 'puede_eliminar');
 
         $cartaGantt->update(['estado' => 'CERRADO']);
+        $this->registrarProgramaLog($cartaGantt, 'programa_cerrado', 'Programa cerrado.', [
+            'estado' => 'CERRADO',
+        ], request());
         return redirect()->route('carta-gantt.index')
             ->with('success', 'Programa cerrado correctamente.');
     }
@@ -273,16 +291,21 @@ class CartaGanttController extends Controller
 
     public function storeCategoria(Request $request, ProgramaSst $cartaGantt)
     {
-        $this->abortUnlessCanManageProgramaStructure($cartaGantt, 'puede_crear');
+        $this->abortUnlessCanAdministratePrograma($cartaGantt, 'puede_crear');
 
         $request->validate([
             'nombre' => 'required|string|max:200',
             'orden'  => 'nullable|integer|min:1',
         ]);
-        $cartaGantt->categorias()->create([
+        $categoria = $cartaGantt->categorias()->create([
             'nombre' => $request->nombre,
             'orden'  => $request->orden ?? ($cartaGantt->categorias()->max('orden') + 1),
         ]);
+        $this->registrarProgramaLog($cartaGantt, 'categoria_creada', 'Categoria creada.', [
+            'categoria_id' => $categoria->id,
+            'nombre' => $categoria->nombre,
+            'orden' => $categoria->orden,
+        ], $request);
         return back()->with('success', 'Categoría agregada.');
     }
 
@@ -290,6 +313,12 @@ class CartaGanttController extends Controller
     {
         $categoria->loadMissing('programa');
         $this->abortUnlessCanManageProgramaStructure($categoria->programa, 'puede_eliminar');
+
+        $this->registrarProgramaLog($categoria->programa, 'categoria_eliminada', 'Categoria eliminada.', [
+            'categoria_id' => $categoria->id,
+            'nombre' => $categoria->nombre,
+            'orden' => $categoria->orden,
+        ], request());
 
         $categoria->delete();
         return back()->with('success', 'Categoría eliminada.');
@@ -302,7 +331,7 @@ class CartaGanttController extends Controller
     public function storeActividad(Request $request, SstCategoria $categoria)
     {
         $categoria->loadMissing('programa');
-        $this->abortUnlessCanManageProgramaStructure($categoria->programa, 'puede_crear');
+        $this->abortUnlessCanAdministratePrograma($categoria->programa, 'puede_crear');
 
         $request->validate([
             'nombre'              => 'required|string|max:300',
@@ -365,6 +394,10 @@ class CartaGanttController extends Controller
 
         // Notificar al responsable + CC jefe del programa + superadmins
         $this->enviarNotificacionActividad($actividad, 'asignacion');
+        $this->registrarActividadLog($actividad, 'actividad_creada', 'Actividad creada.', [
+            'actividad' => $this->actividadSnapshot($actividad->fresh(['seguimiento'])),
+            'meses_programados' => collect($mesesProg)->map(fn ($mes) => (int) $mes)->values()->all(),
+        ], $request);
 
         return back()->with('success', 'Actividad agregada.');
     }
@@ -372,6 +405,14 @@ class CartaGanttController extends Controller
     public function updateActividad(Request $request, SstActividad $actividad)
     {
         $this->abortUnlessCanManageActividadStructure($actividad);
+        $actividad->loadMissing('seguimiento');
+        $antes = $this->actividadSnapshot($actividad);
+        $mesesAntes = $actividad->seguimiento
+            ->where('programado', true)
+            ->pluck('mes')
+            ->map(fn ($mes) => (int) $mes)
+            ->values()
+            ->all();
 
         $request->validate([
             'nombre'              => 'required|string|max:300',
@@ -422,6 +463,19 @@ class CartaGanttController extends Controller
         }
 
         $this->recalcularEstadoActividad($actividad);
+        $actividad->refresh()->load('seguimiento');
+        $despues = $this->actividadSnapshot($actividad);
+        $mesesDespues = $actividad->seguimiento
+            ->where('programado', true)
+            ->pluck('mes')
+            ->map(fn ($mes) => (int) $mes)
+            ->values()
+            ->all();
+
+        $this->registrarActividadLog($actividad, 'actividad_actualizada', 'Actividad actualizada.', [
+            'campos' => $this->diffCambios($antes, $despues),
+            'meses_programados' => $this->diffCambios(['meses' => $mesesAntes], ['meses' => $mesesDespues])['meses'] ?? null,
+        ], $request);
 
         return back()->with('success', 'Actividad actualizada.');
     }
@@ -429,6 +483,10 @@ class CartaGanttController extends Controller
     public function destroyActividad(SstActividad $actividad)
     {
         $this->abortUnlessCanManageActividadStructure($actividad, 'puede_eliminar');
+        $actividad->loadMissing('seguimiento');
+        $this->registrarActividadLog($actividad, 'actividad_eliminada', 'Actividad eliminada.', [
+            'actividad' => $this->actividadSnapshot($actividad),
+        ], request());
 
         $actividad->delete();
         return back()->with('success', 'Actividad eliminada.');
@@ -451,6 +509,7 @@ class CartaGanttController extends Controller
 
         $cantProg = max(1, (int) $actividad->cantidad_programada);
         $seg = $actividad->seguimiento()->where('mes', $request->mes)->first();
+        $antes = $seg ? $seg->only(['programado', 'realizado', 'cantidad_realizada', 'observacion']) : null;
 
         if ($cantProg <= 1) {
             // Comportamiento original: toggle binario
@@ -463,7 +522,7 @@ class CartaGanttController extends Controller
             $nuevoRealizado = $nuevaCantReal >= $cantProg;
         }
 
-        $actividad->seguimiento()->updateOrCreate(
+        $segActualizado = $actividad->seguimiento()->updateOrCreate(
             ['mes' => $request->mes],
             [
                 'programado'          => true,
@@ -476,6 +535,11 @@ class CartaGanttController extends Controller
         );
 
         $this->recalcularEstadoActividad($actividad);
+        $this->registrarActividadLog($actividad, 'seguimiento_actualizado', "Seguimiento actualizado para mes {$request->mes}.", [
+            'mes' => (int) $request->mes,
+            'antes' => $antes,
+            'despues' => $segActualizado->only(['programado', 'realizado', 'cantidad_realizada', 'observacion']),
+        ], $request);
 
         return response()->json([
             'success'            => true,
@@ -500,7 +564,7 @@ class CartaGanttController extends Controller
             'fecha_compromiso'  => 'nullable|date',
         ]);
 
-        $actividad->planesAccion()->create([
+        $plan = $actividad->planesAccion()->create([
             'accion'           => $request->accion,
             'responsable'      => $request->responsable,
             'fecha_compromiso' => $request->fecha_compromiso,
@@ -508,6 +572,10 @@ class CartaGanttController extends Controller
             'observacion'      => $request->observacion,
             'creado_por'       => auth()->id(),
         ]);
+        $this->registrarActividadLog($actividad, 'plan_creado', 'Plan de accion creado.', [
+            'plan_id' => $plan->id,
+            'plan' => $plan->only(['accion', 'responsable', 'fecha_compromiso', 'estado', 'observacion']),
+        ], $request);
 
         return back()->with('success', 'Plan de acción creado.');
     }
@@ -516,6 +584,7 @@ class CartaGanttController extends Controller
     {
         $plan->loadMissing('actividad.categoria.programa');
         $this->abortUnlessCanManageActividadStructure($plan->actividad);
+        $antes = $plan->only(['estado', 'observacion']);
 
         $request->validate([
             'estado'      => 'required|string|in:' . implode(',', array_keys(SstPlanAccion::estadosMap())),
@@ -526,6 +595,11 @@ class CartaGanttController extends Controller
             'estado'      => $request->estado,
             'observacion' => $request->observacion,
         ]);
+        $plan->refresh();
+        $this->registrarActividadLog($plan->actividad, 'plan_actualizado', 'Plan de accion actualizado.', [
+            'plan_id' => $plan->id,
+            'campos' => $this->diffCambios($antes, $plan->only(['estado', 'observacion'])),
+        ], $request);
 
         return back()->with('success', 'Plan de acción actualizado.');
     }
@@ -534,9 +608,60 @@ class CartaGanttController extends Controller
     {
         $plan->loadMissing('actividad.categoria.programa');
         $this->abortUnlessCanManageActividadStructure($plan->actividad, 'puede_eliminar');
+        $this->registrarActividadLog($plan->actividad, 'plan_eliminado', 'Plan de accion eliminado.', [
+            'plan_id' => $plan->id,
+            'plan' => $plan->only(['accion', 'responsable', 'fecha_compromiso', 'estado', 'observacion']),
+        ], request());
 
         $plan->delete();
         return back()->with('success', 'Plan de acción eliminado.');
+    }
+
+    // =====================================================
+    // COMENTARIOS OPERATIVOS
+    // =====================================================
+
+    public function storeComentario(Request $request, SstActividad $actividad)
+    {
+        $this->abortUnlessCanManageActividadStructure($actividad);
+
+        $request->validate([
+            'comentario' => 'required|string|max:1000',
+        ]);
+
+        $comentario = $actividad->comentarios()->create([
+            'user_id' => auth()->id(),
+            'comentario' => trim($request->comentario),
+        ]);
+        $this->registrarActividadLog($actividad, 'comentario_creado', 'Comentario agregado.', [
+            'comentario_id' => $comentario->id,
+            'comentario' => $comentario->comentario,
+        ], $request);
+
+        return back()->with('success', 'Comentario agregado.');
+    }
+
+    public function destroyComentario(SstActividadComentario $comentario)
+    {
+        $comentario->loadMissing('actividad.categoria.programa');
+        $actividad = $comentario->actividad;
+        $programa = $actividad?->categoria?->programa;
+        $user = auth()->user();
+
+        $esAutor = $user && (int) $comentario->user_id === (int) $user->id;
+        $puedeEliminar = ($esAutor && $this->canManageActividadStructure($actividad))
+            || ($programa && $this->canAdministratePrograma($programa, 'puede_eliminar'));
+
+        abort_unless($puedeEliminar, 403);
+        $this->registrarActividadLog($actividad, 'comentario_eliminado', 'Comentario eliminado.', [
+            'comentario_id' => $comentario->id,
+            'comentario' => $comentario->comentario,
+            'autor_id' => $comentario->user_id,
+        ], request());
+
+        $comentario->delete();
+
+        return back()->with('success', 'Comentario eliminado.');
     }
 
     // =====================================================
@@ -614,6 +739,11 @@ class CartaGanttController extends Controller
         });
 
         $this->recalcularEstadoActividad($actividad);
+        $this->registrarActividadLog($actividad, 'actividad_reprogramada', 'Actividad reprogramada.', [
+            'mes_original' => $mesOrig,
+            'mes_nuevo' => $mesNuevo,
+            'motivo' => $request->motivo,
+        ], $request);
 
         $meses = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
         return back()->with('success', "Actividad reprogramada de {$meses[$mesOrig]} a {$meses[$mesNuevo]}.");
@@ -623,8 +753,16 @@ class CartaGanttController extends Controller
     // HELPERS
     // =====================================================
 
-    private function syncProgramaAsignados(ProgramaSst $programa, Request $request): void
+    private function syncProgramaAsignados(ProgramaSst $programa, Request $request): array
     {
+        $programa->loadMissing('asignados');
+        $antesIds = $programa->asignados
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->sort()
+            ->values()
+            ->all();
+
         $asignados = collect($request->input('asignados', []))
             ->push($request->input('responsable_id'))
             ->filter()
@@ -634,6 +772,33 @@ class CartaGanttController extends Controller
             ->all();
 
         $programa->asignados()->sync($asignados);
+        $despuesIds = collect($asignados)->sort()->values()->all();
+
+        return [
+            'antes' => $this->usuariosResumenPorIds($antesIds),
+            'despues' => $this->usuariosResumenPorIds($despuesIds),
+            'agregados' => $this->usuariosResumenPorIds(array_values(array_diff($despuesIds, $antesIds))),
+            'removidos' => $this->usuariosResumenPorIds(array_values(array_diff($antesIds, $despuesIds))),
+            'cambio' => $antesIds !== $despuesIds,
+        ];
+    }
+
+    private function usuariosResumenPorIds(array $ids): array
+    {
+        if (empty($ids)) {
+            return [];
+        }
+
+        return User::whereIn('id', $ids)
+            ->orderBy('name')
+            ->get()
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'nombre' => $user->nombre_completo,
+                'email' => $user->email,
+            ])
+            ->values()
+            ->all();
     }
 
     private function canAccessAllProgramas(?User $user): bool
@@ -666,7 +831,8 @@ class CartaGanttController extends Controller
         $query->where(function ($q) use ($user) {
             $q->where('creado_por', $user->id)
                 ->orWhere('responsable_id', $user->id)
-                ->orWhereHas('asignados', fn ($asignados) => $asignados->where('users.id', $user->id));
+                ->orWhereHas('asignados', fn ($asignados) => $asignados->where('users.id', $user->id))
+                ->orWhereHas('categorias.actividades', fn ($actividad) => $actividad->where('responsable_id', $user->id));
         });
     }
 
@@ -680,12 +846,20 @@ class CartaGanttController extends Controller
 
         return $this->canAccessAllProgramas($user)
             || (int) $programa->creado_por === (int) $user->id
-            || $programa->estaAsignadoA($user);
+            || $programa->estaAsignadoA($user)
+            || $this->hasResponsibleActivity($programa, $user);
     }
 
     private function abortUnlessCanViewPrograma(ProgramaSst $programa): void
     {
         abort_unless($this->canViewPrograma($programa), 403);
+    }
+
+    private function hasResponsibleActivity(ProgramaSst $programa, User $user): bool
+    {
+        return $programa->categorias()
+            ->whereHas('actividades', fn ($actividad) => $actividad->where('responsable_id', $user->id))
+            ->exists();
     }
 
     private function canAdministratePrograma(ProgramaSst $programa, string $accion = 'puede_editar'): bool
@@ -713,7 +887,7 @@ class CartaGanttController extends Controller
 
         $user = auth()->user();
 
-        if (!$user || !$user->tieneAcceso('carta_gantt', $accion)) {
+        if (!$user || !$user->tieneAcceso('carta_gantt', 'puede_ver')) {
             return false;
         }
 
@@ -721,9 +895,16 @@ class CartaGanttController extends Controller
             return $this->canAdministratePrograma($programa, $accion);
         }
 
+        if ($programa->estaAsignadoA($user)) {
+            return true;
+        }
+
+        if (!$user->tieneAcceso('carta_gantt', $accion)) {
+            return false;
+        }
+
         return $this->canAccessAllProgramas($user)
-            || (int) $programa->creado_por === (int) $user->id
-            || $programa->estaAsignadoA($user);
+            || (int) $programa->creado_por === (int) $user->id;
     }
 
     private function abortUnlessCanManageProgramaStructure(?ProgramaSst $programa, string $accion = 'puede_editar'): void
@@ -745,6 +926,110 @@ class CartaGanttController extends Controller
     private function abortUnlessCanManageActividadStructure(?SstActividad $actividad, string $accion = 'puede_editar'): void
     {
         abort_unless($this->canManageActividadStructure($actividad, $accion), 403);
+    }
+
+    private function registrarProgramaLog(?ProgramaSst $programa, string $accion, string $resumen, array $cambios = [], ?Request $request = null): void
+    {
+        if (!$programa) {
+            return;
+        }
+
+        try {
+            $request ??= request();
+
+            SstActividadLog::create([
+                'programa_id' => $programa->id,
+                'actividad_id' => null,
+                'user_id' => auth()->id(),
+                'accion' => $accion,
+                'resumen' => $resumen,
+                'cambios' => array_filter($cambios, fn ($value) => $value !== null && $value !== []),
+                'ip_address' => $request?->ip(),
+                'user_agent' => $request ? substr((string) $request->userAgent(), 0, 500) : null,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning("Carta Gantt: no se pudo registrar bitacora de programa {$accion}", [
+                'programa_id' => $programa->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function registrarActividadLog(?SstActividad $actividad, string $accion, string $resumen, array $cambios = [], ?Request $request = null): void
+    {
+        if (!$actividad) {
+            return;
+        }
+
+        try {
+            $actividad->loadMissing('categoria.programa');
+            $request ??= request();
+
+            SstActividadLog::create([
+                'programa_id' => $actividad->categoria?->programa?->id,
+                'actividad_id' => $actividad->exists ? $actividad->id : null,
+                'user_id' => auth()->id(),
+                'accion' => $accion,
+                'resumen' => $resumen,
+                'cambios' => array_filter($cambios, fn ($value) => $value !== null && $value !== []),
+                'ip_address' => $request?->ip(),
+                'user_agent' => $request ? substr((string) $request->userAgent(), 0, 500) : null,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning("Carta Gantt: no se pudo registrar bitacora {$accion}", [
+                'actividad_id' => $actividad->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function programaSnapshot(ProgramaSst $programa): array
+    {
+        return [
+            'titulo' => $programa->titulo,
+            'anio' => (int) $programa->anio,
+            'descripcion' => $programa->descripcion,
+            'estado' => $programa->estado,
+            'centro_costo_id' => $programa->centro_costo_id,
+            'responsable_id' => $programa->responsable_id,
+            'asignados' => $programa->relationLoaded('asignados')
+                ? $programa->asignados->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all()
+                : [],
+        ];
+    }
+
+    private function actividadSnapshot(SstActividad $actividad): array
+    {
+        return [
+            'nombre' => $actividad->nombre,
+            'descripcion' => $actividad->descripcion,
+            'responsable_id' => $actividad->responsable_id,
+            'responsable' => $actividad->responsable,
+            'fecha_inicio' => optional($actividad->fecha_inicio)->toDateString(),
+            'fecha_fin' => optional($actividad->fecha_fin)->toDateString(),
+            'prioridad' => $actividad->prioridad,
+            'estado' => $actividad->estado,
+            'periodicidad' => $actividad->periodicidad,
+            'cantidad_programada' => (int) ($actividad->cantidad_programada ?? 1),
+        ];
+    }
+
+    private function diffCambios(array $antes, array $despues): array
+    {
+        $cambios = [];
+        foreach (array_unique(array_merge(array_keys($antes), array_keys($despues))) as $campo) {
+            $valorAntes = $antes[$campo] ?? null;
+            $valorDespues = $despues[$campo] ?? null;
+
+            if ($valorAntes !== $valorDespues) {
+                $cambios[$campo] = [
+                    'antes' => $valorAntes,
+                    'despues' => $valorDespues,
+                ];
+            }
+        }
+
+        return $cambios;
     }
 
     /**
@@ -904,7 +1189,7 @@ class CartaGanttController extends Controller
 
     public function importarActividades(Request $request, ProgramaSst $cartaGantt)
     {
-        $this->abortUnlessCanManageProgramaStructure($cartaGantt, 'puede_crear');
+        $this->abortUnlessCanAdministratePrograma($cartaGantt, 'puede_crear');
 
         $request->validate([
             'archivo' => 'required|file|mimes:csv,txt|max:5120',
@@ -1038,8 +1323,21 @@ class CartaGanttController extends Controller
                     $actividad->update(['fecha_fin' => \Carbon\Carbon::create($anio, max($mesesProg))->endOfMonth()->toDateString()]);
                 }
 
+                $this->registrarActividadLog($actividad->fresh(['seguimiento']), 'actividad_importada', 'Actividad importada desde CSV.', [
+                    'actividad' => $this->actividadSnapshot($actividad->fresh(['seguimiento'])),
+                    'fila_csv' => $fila,
+                    'meses_programados' => collect($mesesProg)->map(fn ($mes) => (int) $mes)->values()->all(),
+                ], $request);
+
                 $creadas++;
             }
+
+            $this->registrarProgramaLog($cartaGantt, 'importacion_actividades', 'Importacion de actividades CSV.', [
+                'archivo' => $request->file('archivo')?->getClientOriginalName(),
+                'filas_leidas' => count($rows),
+                'actividades_creadas' => $creadas,
+                'advertencias' => array_slice($errores, 0, 10),
+            ], $request);
 
             DB::commit();
         } catch (\Exception $e) {

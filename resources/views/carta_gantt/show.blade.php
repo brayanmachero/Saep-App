@@ -99,6 +99,65 @@
 
     @include('partials._alerts')
 
+    @if(!$puedeAdministrarPrograma && $puedeGestionarActividades)
+    <div style="display:flex;align-items:flex-start;gap:.65rem;margin:-.35rem 0 1rem;padding:.75rem .9rem;border:1px solid rgba(99,102,241,.22);background:rgba(99,102,241,.06);border-radius:10px;color:var(--text-main)">
+        <i class="bi bi-person-check-fill" style="color:var(--accent-color);font-size:1.05rem;margin-top:.05rem"></i>
+        <div>
+            <div style="font-size:.82rem;font-weight:700;margin-bottom:.15rem">Modo equipo asignado</div>
+            <div style="font-size:.76rem;color:var(--text-muted);line-height:1.45">
+                Puedes actualizar avances, agregar comentarios, crear planes de acción y reprogramar actividades habilitadas. La edición de datos generales, equipo asignado y cierre del programa queda para coordinadores o administradores.
+            </div>
+        </div>
+    </div>
+    @endif
+
+    @if($puedeAdministrarPrograma && $cartaGantt->logs->count())
+    <details style="margin:0 0 1rem;border:1px solid var(--surface-border);background:var(--card-bg);border-radius:10px;box-shadow:var(--shadow-sm);overflow:hidden">
+        <summary style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.75rem .9rem;list-style:none">
+            <span style="font-size:.82rem;font-weight:800;color:var(--text-main);text-transform:uppercase;letter-spacing:.04em">
+                <i class="bi bi-journal-text"></i> Bitácora del programa
+            </span>
+            <span style="font-size:.72rem;color:var(--text-muted);font-weight:600">
+                Últimos {{ min($cartaGantt->logs->count(), 12) }} movimientos
+            </span>
+        </summary>
+        <div style="border-top:1px solid var(--surface-border);overflow-x:auto">
+            <table style="width:100%;font-size:.76rem;border-collapse:collapse;min-width:760px">
+                <thead>
+                    <tr style="background:var(--surface-color);color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">
+                        <th style="padding:.45rem .65rem;text-align:left;width:130px">Fecha</th>
+                        <th style="padding:.45rem .65rem;text-align:left;width:180px">Usuario</th>
+                        <th style="padding:.45rem .65rem;text-align:left;width:170px">Acción</th>
+                        <th style="padding:.45rem .65rem;text-align:left">Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($cartaGantt->logs->take(12) as $log)
+                    <tr style="border-top:1px solid var(--surface-border)">
+                        <td style="padding:.45rem .65rem;color:var(--text-muted);white-space:nowrap">{{ $log->created_at?->format('d/m/Y H:i') }}</td>
+                        <td style="padding:.45rem .65rem;color:var(--text-main)">{{ $log->usuario?->nombre_completo ?? 'Usuario eliminado' }}</td>
+                        <td style="padding:.45rem .65rem">
+                            <span style="display:inline-flex;align-items:center;padding:.15rem .5rem;border-radius:999px;background:rgba(99,102,241,.12);color:var(--accent-color);font-size:.68rem;font-weight:800">
+                                {{ str_replace('_', ' ', $log->accion) }}
+                            </span>
+                        </td>
+                        <td style="padding:.45rem .65rem;color:var(--text-muted);line-height:1.35">
+                            {{ $log->resumen }}
+                            @if(!empty($log->cambios))
+                                <details style="margin-top:.25rem">
+                                    <summary style="cursor:pointer;color:var(--accent-color);font-weight:700">Ver datos registrados</summary>
+                                    <pre style="white-space:pre-wrap;word-break:break-word;margin:.35rem 0 0;padding:.45rem;background:var(--surface-color);border:1px solid var(--surface-border);border-radius:6px;font-size:.68rem;line-height:1.35">{{ json_encode($log->cambios, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
+                                </details>
+                            @endif
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </details>
+    @endif
+
     {{-- ========== STATS CARDS ========== --}}
     <div class="sst-stats-grid">
         <div class="sst-stat-card">

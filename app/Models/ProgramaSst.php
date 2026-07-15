@@ -22,6 +22,7 @@ class ProgramaSst extends Model
     public function responsable() { return $this->belongsTo(User::class, 'responsable_id'); }
     public function categorias()  { return $this->hasMany(SstCategoria::class, 'programa_id'); }
     public function creador()     { return $this->belongsTo(User::class, 'creado_por'); }
+    public function logs()        { return $this->hasMany(SstActividadLog::class, 'programa_id')->whereNull('actividad_id')->latest(); }
     public function asignados()
     {
         return $this->belongsToMany(User::class, 'programa_sst_asignados', 'programa_sst_id', 'user_id')
