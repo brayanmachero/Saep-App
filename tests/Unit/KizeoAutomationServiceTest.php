@@ -126,6 +126,47 @@ class KizeoAutomationServiceTest extends TestCase
         $this->assertSame('CCU CENTRAL', $context['centro_de_distribucion']);
     }
 
+    public function test_build_context_resolves_advanced_list_id_from_result_when_value_is_empty(): void
+    {
+        $kizeo = Mockery::mock(KizeoService::class);
+        $kizeo->shouldReceive('rawGet')
+            ->once()
+            ->with('forms/1156826', 20)
+            ->andReturn([
+                'form' => [
+                    'fields' => [
+                        'centro_de_distribucion' => [
+                            'caption' => 'Centro de Distribucion',
+                            'type' => 'select',
+                            'list_id' => '483239',
+                            'list_is_advanced' => true,
+                        ],
+                    ],
+                ],
+            ]);
+
+        $kizeo->shouldReceive('getListItems')
+            ->once()
+            ->with('483239', false)
+            ->andReturn([
+                ['id' => 'a1386ffb-fbf9-4d43-a662-d7264fb80280', 'label' => 'CCU RANCAGUA'],
+            ]);
+
+        $context = $this->buildContext($kizeo, [
+            'fields' => [
+                'centro_de_distribucion' => [
+                    'type' => 'select',
+                    'value' => null,
+                    'result' => 'a1386ffb-fbf9-4d43-a662-d7264fb80280',
+                ],
+            ],
+            'create_time' => '2026-07-15 09:34:00',
+        ]);
+
+        $this->assertSame('CCU RANCAGUA', $context['centro_de_distribucion']);
+        $this->assertSame('a1386ffb-fbf9-4d43-a662-d7264fb80280', $context['centro_de_distribucion_id']);
+    }
+
     private function buildContext(KizeoService $kizeo, array $record): array
     {
         $service = new KizeoAutomationService($kizeo, Mockery::mock(OneDriveService::class));

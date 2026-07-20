@@ -436,7 +436,11 @@ class KizeoAutomationService
         }
 
         if (array_key_exists('value', $value)) {
-            return $this->extractRawValue($value['value']);
+            $rawValue = $this->extractRawValue($value['value']);
+
+            if ($rawValue !== '') {
+                return $rawValue;
+            }
         }
 
         if (!empty($value['valuesAsArray']) && is_array($value['valuesAsArray'])) {
@@ -463,7 +467,10 @@ class KizeoAutomationService
             return null;
         }
 
-        $values = collect($field['valuesAsArray'] ?? [$field['value'] ?? null])
+        $values = collect($field['valuesAsArray'] ?? [
+            $field['value'] ?? null,
+            $field['result'] ?? null,
+        ])
             ->map(fn ($id) => trim((string) $id))
             ->filter(fn ($id) => $id !== '')
             ->values()
