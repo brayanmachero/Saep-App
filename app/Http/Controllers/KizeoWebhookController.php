@@ -345,13 +345,13 @@ class KizeoWebhookController extends Controller
                     'defaultFont'           => 'DejaVu Sans',
                 ]);
 
-            $filename = "Acta_{$tipoActa}_Vehiculo_{$data['patente']}_" . preg_replace('/[^a-zA-Z0-9]/', '', $fechaRef) . '.pdf';
+            $filename = "Acta_{$tipoActa}_Vehiculo_{$data['patente']}_" . preg_replace('/[^a-zA-Z0-9]/', '', $fechaRef) . "_Registro_{$dataId}.pdf";
             $pdfContent = $pdf->output();
 
             // Subir PDF a OneDrive (carpeta por patente)
             $conductorSlug = $this->cleanPathSegment($data['conductor_nombre'], 'Sin conductor', 80);
             $fechaSlug = date('Y-m-d');
-            $remotePath = "{$data['patente']}/{$tipoActa}_{$fechaSlug}_{$conductorSlug}.pdf";
+            $remotePath = "{$data['patente']}/{$tipoActa}_{$fechaSlug}_{$conductorSlug}_Registro_{$dataId}.pdf";
             $sharepointPath = $this->uploadPdfToSharePoint($pdfContent, $remotePath, "Acta de {$tipoActa}", false);
 
             // Enviar correo con PDF adjunto
@@ -446,21 +446,7 @@ class KizeoWebhookController extends Controller
             $recordMeta = $record ?? [];
 
             // Helper para extraer valor simple de un campo
-            $getVal = function (string $key) use ($fields) {
-                if (!isset($fields[$key])) return '-';
-                $field = $fields[$key];
-                $res = $field['result'] ?? $field['value'] ?? $field;
-                if ($res === null) return '-';
-                if (is_string($res)) return $res;
-                if (isset($res['value'])) {
-                    $val = $res['value'];
-                    if (is_array($val) && isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
-                    if (is_array($val) && isset($val['date'])) return $val['date'];
-                    if (is_string($val)) return $val;
-                    if (is_bool($val)) return $val ? 'Sí' : 'No';
-                }
-                return is_string($res) ? $res : '-';
-            };
+            $getVal = fn (string $key) => $this->getKizeoFieldValue($fields, $key);
 
             // Extraer datos del formulario de Charla SST
             $fecha      = $getVal('fecha_de_actividad_');
@@ -512,10 +498,8 @@ class KizeoWebhookController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
             }
 
-            // Nombre: 2026-03-31 - Titulo Actividad (Juan Pérez).pdf
-            $tituloClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $titulo);
-            $relatorClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $relator);
-            $filename = "{$fechaSlug} - " . substr(trim($tituloClean), 0, 60) . " ({$relatorClean}).pdf";
+            // Nombre unico para evitar reemplazos en SharePoint cuando se repite tema/relator.
+            $filename = $this->uniqueKizeoFilename($fechaSlug, $titulo, $relator, $dataId);
 
             // Estructura: Charlas SST / 2026 / 03 - Marzo / CD Santiago / Capacitación / archivo.pdf
             $rootFolder = config('services.kizeo.charla_sharepoint_folder', 'Charlas SST');
@@ -613,21 +597,7 @@ class KizeoWebhookController extends Controller
             $fields = $record['fields'] ?? [];
             $recordMeta = $record ?? [];
 
-            $getVal = function (string $key) use ($fields) {
-                if (!isset($fields[$key])) return '-';
-                $field = $fields[$key];
-                $res = $field['result'] ?? $field['value'] ?? $field;
-                if ($res === null) return '-';
-                if (is_string($res)) return $res;
-                if (isset($res['value'])) {
-                    $val = $res['value'];
-                    if (is_array($val) && isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
-                    if (is_array($val) && isset($val['date'])) return $val['date'];
-                    if (is_string($val)) return $val;
-                    if (is_bool($val)) return $val ? 'Sí' : 'No';
-                }
-                return is_string($res) ? $res : '-';
-            };
+            $getVal = fn (string $key) => $this->getKizeoFieldValue($fields, $key);
 
             // Extraer datos
             $fecha        = $getVal('fecha');
@@ -680,10 +650,8 @@ class KizeoWebhookController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
             }
 
-            // Nombre: 2026-04-01 - Nombre Observador (Positiva).pdf
-            $observadorClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $observador);
-            $tipoClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $tipoObs);
-            $filename = "{$fechaSlug} - " . substr(trim($observadorClean), 0, 60) . " ({$tipoClean}).pdf";
+            // Nombre unico para evitar reemplazos en SharePoint cuando se repite observador/tipo.
+            $filename = $this->uniqueKizeoFilename($fechaSlug, $observador, $tipoObs, $dataId);
 
             // Estructura: Observaciones Conducta / 2026 / 04 - Abril / CD Santiago / archivo.pdf
             $rootFolder = config('services.kizeo.observacion_sharepoint_folder', 'Observaciones Conducta');
@@ -746,21 +714,7 @@ class KizeoWebhookController extends Controller
             $fields = $record['fields'] ?? [];
             $recordMeta = $record ?? [];
 
-            $getVal = function (string $key) use ($fields) {
-                if (!isset($fields[$key])) return '-';
-                $field = $fields[$key];
-                $res = $field['result'] ?? $field['value'] ?? $field;
-                if ($res === null) return '-';
-                if (is_string($res)) return $res;
-                if (isset($res['value'])) {
-                    $val = $res['value'];
-                    if (is_array($val) && isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
-                    if (is_array($val) && isset($val['date'])) return $val['date'];
-                    if (is_string($val)) return $val;
-                    if (is_bool($val)) return $val ? 'Sí' : 'No';
-                }
-                return is_string($res) ? $res : '-';
-            };
+            $getVal = fn (string $key) => $this->getKizeoFieldValue($fields, $key);
 
             // Extraer datos
             $fecha       = $getVal('fecha_');
@@ -811,10 +765,8 @@ class KizeoWebhookController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
             }
 
-            // Nombre: 2026-04-01 - Áreas inspeccionadas (Inspector).pdf
-            $areasClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $areas);
-            $inspectorClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $inspector);
-            $filename = "{$fechaSlug} - " . substr(trim($areasClean), 0, 60) . " ({$inspectorClean}).pdf";
+            // Nombre unico para evitar reemplazos en SharePoint cuando se repite area/inspector.
+            $filename = $this->uniqueKizeoFilename($fechaSlug, $areas, $inspector, $dataId);
 
             // Estructura: Inspecciones SST / 2026 / 04 - Abril / CD Santiago / archivo.pdf
             $rootFolder = config('services.kizeo.inspeccion_sharepoint_folder', 'Inspecciones SST');
@@ -876,21 +828,7 @@ class KizeoWebhookController extends Controller
             $fields = $record['fields'] ?? [];
             $recordMeta = $record ?? [];
 
-            $getVal = function (string $key) use ($fields) {
-                if (!isset($fields[$key])) return '-';
-                $field = $fields[$key];
-                $res = $field['result'] ?? $field['value'] ?? $field;
-                if ($res === null) return '-';
-                if (is_string($res)) return $res;
-                if (isset($res['value'])) {
-                    $val = $res['value'];
-                    if (is_array($val) && isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
-                    if (is_array($val) && isset($val['date'])) return $val['date'];
-                    if (is_string($val)) return $val;
-                    if (is_bool($val)) return $val ? 'Sí' : 'No';
-                }
-                return is_string($res) ? $res : '-';
-            };
+            $getVal = fn (string $key) => $this->getKizeoFieldValue($fields, $key);
 
             // Extraer datos
             $fecha      = $getVal('fecha');
@@ -939,10 +877,8 @@ class KizeoWebhookController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
             }
 
-            // Nombre: 2026-04-01 - Sección (Realizador).pdf
-            $seccionClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $seccion);
-            $realizadorClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $realizador);
-            $filename = "{$fechaSlug} - " . substr(trim($seccionClean), 0, 60) . " ({$realizadorClean}).pdf";
+            // Nombre unico para evitar reemplazos en SharePoint cuando se repite seccion/realizador.
+            $filename = $this->uniqueKizeoFilename($fechaSlug, $seccion, $realizador, $dataId);
 
             // Estructura: Visitas Terreno / 2026 / 04 - Abril / CD Santiago / archivo.pdf
             $rootFolder = config('services.kizeo.visita_sharepoint_folder', 'Visitas Terreno');
@@ -1003,21 +939,7 @@ class KizeoWebhookController extends Controller
             $fields = $record['fields'] ?? [];
             $recordMeta = $record ?? [];
 
-            $getVal = function (string $key) use ($fields) {
-                if (!isset($fields[$key])) return '-';
-                $field = $fields[$key];
-                $res = $field['result'] ?? $field['value'] ?? $field;
-                if ($res === null) return '-';
-                if (is_string($res)) return $res;
-                if (isset($res['value'])) {
-                    $val = $res['value'];
-                    if (is_array($val) && isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
-                    if (is_array($val) && isset($val['date'])) return $val['date'];
-                    if (is_string($val)) return $val;
-                    if (is_bool($val)) return $val ? 'Sí' : 'No';
-                }
-                return is_string($res) ? $res : '-';
-            };
+            $getVal = fn (string $key) => $this->getKizeoFieldValue($fields, $key);
 
             // Extraer datos
             $fechaAccidente = $getVal('fecha_del_accidente');
@@ -1065,10 +987,8 @@ class KizeoWebhookController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
             }
 
-            // Nombre: 2026-04-01 - Juan Pérez (Accidente Trabajo).pdf
-            $lesionadoClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $lesionado);
-            $tipoClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $tipoIncidente);
-            $filename = "{$fechaSlug} - " . substr(trim($lesionadoClean), 0, 60) . " ({$tipoClean}).pdf";
+            // Nombre unico para evitar reemplazos en SharePoint cuando se repite trabajador/tipo.
+            $filename = $this->uniqueKizeoFilename($fechaSlug, $lesionado, $tipoIncidente, $dataId);
 
             // Estructura: Accidentes SST / 2026 / 04 - Abril / CD Santiago / archivo.pdf
             $rootFolder = config('services.kizeo.accidente_sharepoint_folder', 'Accidentes SST');
@@ -1133,21 +1053,7 @@ class KizeoWebhookController extends Controller
             $fields = $record['fields'] ?? [];
             $recordMeta = $record ?? [];
 
-            $getVal = function (string $key) use ($fields) {
-                if (!isset($fields[$key])) return '-';
-                $field = $fields[$key];
-                $res = $field['result'] ?? $field['value'] ?? $field;
-                if ($res === null) return '-';
-                if (is_string($res)) return $res;
-                if (isset($res['value'])) {
-                    $val = $res['value'];
-                    if (is_array($val) && isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
-                    if (is_array($val) && isset($val['date'])) return $val['date'];
-                    if (is_string($val)) return $val;
-                    if (is_bool($val)) return $val ? 'Sí' : 'No';
-                }
-                return is_string($res) ? $res : '-';
-            };
+            $getVal = fn (string $key) => $this->getKizeoFieldValue($fields, $key);
 
             // Extraer datos
             $fechaHora     = $getVal('fecha_y_hora1');
@@ -1198,9 +1104,8 @@ class KizeoWebhookController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
             }
 
-            // Nombre: 2026-04-01 - Juan Pérez (Declaración Incidente).pdf
-            $trabajadorClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $trabajador);
-            $filename = "{$fechaSlug} - " . substr(trim($trabajadorClean), 0, 60) . " (Declaracion Incidente).pdf";
+            // Nombre unico para evitar reemplazos en SharePoint cuando se repite trabajador/fecha.
+            $filename = $this->uniqueKizeoFilename($fechaSlug, $trabajador, 'Declaracion Incidente', $dataId);
 
             // Estructura: Declaraciones SST / 2026 / 04 - Abril / CD Santiago / archivo.pdf
             $rootFolder = config('services.kizeo.declaracion_sharepoint_folder', 'Declaraciones SST');
@@ -1263,21 +1168,7 @@ class KizeoWebhookController extends Controller
             $fields     = $record['fields'] ?? [];
             $recordMeta = $record ?? [];
 
-            $getVal = function (string $key) use ($fields) {
-                if (!isset($fields[$key])) return '-';
-                $field = $fields[$key];
-                $res = $field['result'] ?? $field['value'] ?? $field;
-                if ($res === null) return '-';
-                if (is_string($res)) return $res;
-                if (isset($res['value'])) {
-                    $val = $res['value'];
-                    if (is_array($val) && isset($val['date'], $val['hour'])) return $val['date'] . ' ' . $val['hour'];
-                    if (is_array($val) && isset($val['date'])) return $val['date'];
-                    if (is_string($val)) return $val;
-                    if (is_bool($val)) return $val ? 'Sí' : 'No';
-                }
-                return is_string($res) ? $res : '-';
-            };
+            $getVal = fn (string $key) => $this->getKizeoFieldValue($fields, $key);
 
             // Extraer campos principales
             $fechaHora   = $getVal('fecha_y_hora_reunion');
@@ -1334,10 +1225,9 @@ class KizeoWebhookController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
             }
 
-            // Nombre: 2026-04-30 - Reunión CPHS - Centro Santiago (Abril).pdf
-            $centroClean = preg_replace('/[\\\\\/\:*?"<>|]/u', '', $centro);
+            // Nombre unico para evitar reemplazos en SharePoint cuando se repite centro/mes.
             $mesLabel    = $meses[$mesNum] ?? $mesNum;
-            $filename    = "{$fechaSlug} - Reunion CPHS - " . substr(trim($centroClean), 0, 50) . " ({$mesLabel}).pdf";
+            $filename    = $this->uniqueKizeoFilename($fechaSlug, 'Reunion CPHS - ' . $centro, $mesLabel, $dataId, 70);
 
             // Estructura SharePoint: Reuniones CPHS / 2026 / 04 - Abril / Centro Santiago / archivo.pdf
             $rootFolder = config('services.kizeo.cphs_sharepoint_folder', 'Reuniones CPHS');
@@ -1402,6 +1292,92 @@ class KizeoWebhookController extends Controller
         Log::info("{$label} subido a SharePoint", ['path' => $remotePath]);
 
         return $remotePath;
+    }
+
+    private function getKizeoFieldValue(array $fields, string $key, string $default = '-'): string
+    {
+        if (!array_key_exists($key, $fields)) {
+            return $default;
+        }
+
+        $value = $this->extractKizeoFieldValue($fields[$key]);
+
+        return $value !== '' ? $value : $default;
+    }
+
+    private function extractKizeoFieldValue(mixed $value): string
+    {
+        if (is_bool($value)) {
+            return $value ? 'Si' : 'No';
+        }
+
+        if (is_scalar($value) || $value === null) {
+            return trim((string) $value);
+        }
+
+        if (!is_array($value)) {
+            return '';
+        }
+
+        if (array_key_exists('result', $value)) {
+            $result = $this->extractKizeoFieldValue($value['result']);
+
+            if ($result !== '') {
+                return $result;
+            }
+        }
+
+        if (array_key_exists('value', $value)) {
+            $result = $this->extractKizeoFieldValue($value['value']);
+
+            if ($result !== '') {
+                return $result;
+            }
+        }
+
+        if (array_key_exists('text', $value)) {
+            $result = $this->extractKizeoFieldValue($value['text']);
+
+            if ($result !== '') {
+                return $result;
+            }
+        }
+
+        if (isset($value['date'], $value['hour'])) {
+            return trim($value['date'] . ' ' . $value['hour']);
+        }
+
+        if (isset($value['date'])) {
+            return trim((string) $value['date']);
+        }
+
+        foreach (['label', 'name', 'title', 'code', 'file'] as $key) {
+            if (isset($value[$key])) {
+                $result = $this->extractKizeoFieldValue($value[$key]);
+
+                if ($result !== '') {
+                    return $result;
+                }
+            }
+        }
+
+        if (array_is_list($value)) {
+            return collect($value)
+                ->map(fn ($item) => $this->extractKizeoFieldValue($item))
+                ->filter(fn ($item) => $item !== '')
+                ->implode(', ');
+        }
+
+        return '';
+    }
+
+    private function uniqueKizeoFilename(string $fechaSlug, string $title, string $suffix, string $dataId, int $maxTitle = 60): string
+    {
+        $title = $this->cleanPathSegment($title, 'Sin especificar', $maxTitle);
+        $suffix = $this->cleanPathSegment($suffix, 'Sin especificar', 80);
+        $recordId = $this->cleanPathSegment($dataId, 'Sin registro', 40);
+
+        return "{$fechaSlug} - {$title} ({$suffix}) - Registro {$recordId}.pdf";
     }
 
     private function cleanSharePointPath(string $path): string
