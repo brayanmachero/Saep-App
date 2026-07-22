@@ -373,13 +373,16 @@ class ContratacionController extends Controller
     public function configuracion()
     {
         $emails = Configuracion::get('contratacion_emails_notificacion', '');
-        return view('contratacion.admin.configuracion', compact('emails'));
+        $cierreEmails = Configuracion::get('contratacion_cierre_diario_emails', 'mmejias@saep.cl, bmachero@saep.cl');
+
+        return view('contratacion.admin.configuracion', compact('emails', 'cierreEmails'));
     }
 
     public function guardarConfiguracion(Request $request)
     {
         $request->validate([
             'emails' => 'nullable|string|max:1000',
+            'cierre_emails' => 'nullable|string|max:1000',
         ]);
 
         // Validar cada email individualmente
@@ -390,9 +393,57 @@ class ContratacionController extends Controller
                     return back()->withErrors(['emails' => "El correo '{$email}' no es válido."])->withInput();
                 }
             }
-            Configuracion::set('contratacion_emails_notificacion', implode(', ', $lista));
+            Configuracion::updateOrCreate(
+                ['clave' => 'contratacion_emails_notificacion'],
+                [
+                    'valor' => implode(', ', $lista),
+                    'tipo' => 'TEXT',
+                    'categoria' => 'contratacion',
+                    'descripcion' => 'Correos que reciben aviso inmediato por cada nueva postulacion.',
+                    'editable' => true,
+                ]
+            );
         } else {
-            Configuracion::set('contratacion_emails_notificacion', '');
+            Configuracion::updateOrCreate(
+                ['clave' => 'contratacion_emails_notificacion'],
+                [
+                    'valor' => '',
+                    'tipo' => 'TEXT',
+                    'categoria' => 'contratacion',
+                    'descripcion' => 'Correos que reciben aviso inmediato por cada nueva postulacion.',
+                    'editable' => true,
+                ]
+            );
+        }
+
+        if ($request->filled('cierre_emails')) {
+            $listaCierre = array_map('trim', explode(',', $request->cierre_emails));
+            foreach ($listaCierre as $email) {
+                if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    return back()->withErrors(['cierre_emails' => "El correo '{$email}' no es válido."])->withInput();
+                }
+            }
+            Configuracion::updateOrCreate(
+                ['clave' => 'contratacion_cierre_diario_emails'],
+                [
+                    'valor' => implode(', ', $listaCierre),
+                    'tipo' => 'TEXT',
+                    'categoria' => 'contratacion',
+                    'descripcion' => 'Destinatarios del cierre diario de postulantes RRHH.',
+                    'editable' => true,
+                ]
+            );
+        } else {
+            Configuracion::updateOrCreate(
+                ['clave' => 'contratacion_cierre_diario_emails'],
+                [
+                    'valor' => '',
+                    'tipo' => 'TEXT',
+                    'categoria' => 'contratacion',
+                    'descripcion' => 'Destinatarios del cierre diario de postulantes RRHH.',
+                    'editable' => true,
+                ]
+            );
         }
 
         return back()->with('success', 'Configuración guardada.');

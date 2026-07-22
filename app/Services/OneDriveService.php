@@ -250,6 +250,45 @@ class OneDriveService
     }
 
     /**
+     * Obtener URL web de un archivo o carpeta en un sitio SharePoint especifico.
+     */
+    public function getItemWebUrlForSite(string $site, string $remotePath): ?string
+    {
+        $this->lastError = null;
+
+        if (!$this->isConfigured()) {
+            return null;
+        }
+
+        $token = $this->getAccessToken();
+        if (!$token) {
+            return null;
+        }
+
+        $siteId = $this->getSiteIdForSite($site);
+        if (!$siteId) {
+            return null;
+        }
+
+        $fullPath = $this->sanitizePath($remotePath);
+        $response = Http::withToken($token)->get($this->driveRootUrl($siteId, $fullPath));
+
+        if ($response->successful()) {
+            return $response->json('webUrl');
+        }
+
+        if ($response->status() !== 404) {
+            $this->recordUploadError('SharePoint: Error obteniendo URL web', [
+                'path' => $fullPath,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+        }
+
+        return null;
+    }
+
+    /**
      * Sanitizar ruta para SharePoint (remover caracteres inválidos).
      */
     private function sanitizePath(string $path): string

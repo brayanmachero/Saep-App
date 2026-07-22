@@ -34,3 +34,6 @@ Schedule::command('kanban:alertas-vencimiento')->dailyAt('08:15')->withoutOverla
 
 // Kanban: crear instancias de tareas recurrentes (cada día a las 07:00 AM)
 Schedule::command('kanban:tareas-recurrentes')->dailyAt('07:00')->withoutOverlapping();
+
+// RRHH: cierre diario de postulantes ingresados en el portal (17:00 Chile)
+Schedule::command('contratacion:cierre-diario')->dailyAt('17:00')->timezone('America/Santiago')->withoutOverlapping();

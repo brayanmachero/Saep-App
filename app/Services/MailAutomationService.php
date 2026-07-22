@@ -43,6 +43,13 @@ class MailAutomationService
                 'default' => true,
                 'critical' => false,
             ],
+            'ContratacionCierreDiarioMail' => [
+                'label' => 'Cierre diario postulantes',
+                'category' => 'Contratacion',
+                'description' => 'Resumen diario de postulantes ingresados con enlaces a SharePoint.',
+                'default' => true,
+                'critical' => false,
+            ],
             'ComercialCotizacionMail' => [
                 'label' => 'Cotizacion comercial',
                 'category' => 'Comercial',
