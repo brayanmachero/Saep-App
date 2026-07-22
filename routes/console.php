@@ -66,3 +66,6 @@ Schedule::command('talana:reporte-asistencia')
     ->cron('15 8 * * 1-6')
     ->withoutOverlapping()
     ->skip(fn() => ! config('services.talana.alerta_email') || ! config('services.talana.token'));
+
+// RRHH: cierre diario de postulantes ingresados en el portal (17:00 Chile)
+Schedule::command('contratacion:cierre-diario')->dailyAt('17:00')->timezone('America/Santiago')->withoutOverlapping();
