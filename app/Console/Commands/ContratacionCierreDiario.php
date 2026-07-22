@@ -11,6 +11,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 
 class ContratacionCierreDiario extends Command
 {
@@ -69,12 +70,15 @@ class ContratacionCierreDiario extends Command
                 Mail::to($email)->send(new ContratacionCierreDiarioMail($fecha, $postulantes, $filas, $resumen));
                 $sent++;
             } catch (\Throwable $e) {
-                MailLog::recordFailed(
-                    $email,
-                    'Cierre diario postulaciones RRHH - ' . $fecha->format('d/m/Y'),
-                    $e->getMessage(),
-                    'ContratacionCierreDiarioMail'
-                );
+                if ($this->canUseMailLog()) {
+                    MailLog::recordFailed(
+                        $email,
+                        'Cierre diario postulaciones RRHH - ' . $fecha->format('d/m/Y'),
+                        $e->getMessage(),
+                        'ContratacionCierreDiarioMail'
+                    );
+                }
+
                 Log::error('Contratacion cierre diario: fallo envio', [
                     'email' => $email,
                     'fecha' => $fecha->toDateString(),
@@ -189,11 +193,20 @@ class ContratacionCierreDiario extends Command
 
     private function alreadySent(string $email, Carbon $fecha): bool
     {
+        if (!$this->canUseMailLog()) {
+            return false;
+        }
+
         return MailLog::query()
             ->where('mailable', 'ContratacionCierreDiarioMail')
             ->where('to_email', $email)
             ->where('status', 'sent')
             ->where('subject', 'Cierre diario postulaciones RRHH - ' . $fecha->format('d/m/Y'))
             ->exists();
+    }
+
+    private function canUseMailLog(): bool
+    {
+        return Schema::hasTable('mail_logs');
     }
 }
