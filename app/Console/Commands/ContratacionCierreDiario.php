@@ -9,6 +9,8 @@ use App\Models\PostulanteContratacion;
 use App\Services\OneDriveService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
@@ -28,7 +30,7 @@ class ContratacionCierreDiario extends Command
     public function handle(OneDriveService $oneDrive): int
     {
         $fecha = $this->resolveDate();
-        if (!$fecha) {
+        if (! $fecha) {
             return self::FAILURE;
         }
 
@@ -39,12 +41,14 @@ class ContratacionCierreDiario extends Command
 
         if ($postulantes->isEmpty() && $this->option('skip-empty')) {
             $this->info('No hubo postulantes para la fecha indicada. Correo omitido.');
+
             return self::SUCCESS;
         }
 
         $destinatarios = $this->resolveRecipients();
         if (empty($destinatarios)) {
             $this->error('No hay destinatarios validos configurados para el cierre diario.');
+
             return self::FAILURE;
         }
 
@@ -61,19 +65,23 @@ class ContratacionCierreDiario extends Command
 
         $sent = 0;
         foreach ($destinatarios as $email) {
-            if (!$this->option('force') && $this->alreadySent($email, $fecha)) {
+            if (! $this->option('force') && ! $this->reserveDelivery($email, $fecha)) {
                 $this->line("Cierre ya enviado a {$email} para {$fecha->format('Y-m-d')}. Usa --force para reenviar.");
+
                 continue;
             }
 
             try {
                 Mail::to($email)->send(new ContratacionCierreDiarioMail($fecha, $postulantes, $filas, $resumen));
+                $this->markDeliveryAsSent($email, $fecha);
                 $sent++;
             } catch (\Throwable $e) {
+                $this->releaseDelivery($email, $fecha);
+
                 if ($this->canUseMailLog()) {
                     MailLog::recordFailed(
                         $email,
-                        'Cierre diario postulaciones RRHH - ' . $fecha->format('d/m/Y'),
+                        'Cierre diario postulaciones RRHH - '.$fecha->format('d/m/Y'),
                         $e->getMessage(),
                         'ContratacionCierreDiarioMail'
                     );
@@ -104,6 +112,7 @@ class ContratacionCierreDiario extends Command
                 : now($timezone)->startOfDay();
         } catch (\Throwable) {
             $this->error('La fecha debe venir en formato YYYY-MM-DD.');
+
             return null;
         }
     }
@@ -111,7 +120,7 @@ class ContratacionCierreDiario extends Command
     private function resolveRecipients(): array
     {
         $fromOption = array_filter(array_map('trim', (array) $this->option('to')));
-        $raw = !empty($fromOption)
+        $raw = ! empty($fromOption)
             ? implode(',', $fromOption)
             : Configuracion::get('contratacion_cierre_diario_emails', self::DEFAULT_RECIPIENTS);
 
@@ -136,7 +145,7 @@ class ContratacionCierreDiario extends Command
             if ($canResolveSharePoint) {
                 $sharepointUrl = $oneDrive->getItemWebUrlForSite($site, $sharepointFolder);
 
-                if (!$sharepointUrl) {
+                if (! $sharepointUrl) {
                     $sharepointUrl = $oneDrive->getItemWebUrlForSite(
                         $site,
                         "{$sharepointFolder}/{$this->fichaFilename($postulante)}"
@@ -191,18 +200,65 @@ class ContratacionCierreDiario extends Command
             ->implode(', ');
     }
 
-    private function alreadySent(string $email, Carbon $fecha): bool
+    /**
+     * Reserves a recipient/date pair before the mail is sent. The unique index
+     * makes duplicate scheduler invocations harmless even when they finish one
+     * after another.
+     */
+    private function reserveDelivery(string $email, Carbon $fecha): bool
     {
-        if (!$this->canUseMailLog()) {
-            return false;
+        if (! Schema::hasTable('contratacion_cierre_diario_envios')) {
+            return Cache::add(
+                $this->fallbackDeliveryCacheKey($email, $fecha),
+                true,
+                $fecha->copy()->endOfDay()
+            );
         }
 
-        return MailLog::query()
-            ->where('mailable', 'ContratacionCierreDiarioMail')
-            ->where('to_email', $email)
-            ->where('status', 'sent')
-            ->where('subject', 'Cierre diario postulaciones RRHH - ' . $fecha->format('d/m/Y'))
-            ->exists();
+        return DB::table('contratacion_cierre_diario_envios')->insertOrIgnore([
+            'fecha' => $fecha->toDateString(),
+            'destinatario' => mb_strtolower(trim($email)),
+            'estado' => 'enviando',
+            'enviado_en' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]) === 1;
+    }
+
+    private function markDeliveryAsSent(string $email, Carbon $fecha): void
+    {
+        if (! Schema::hasTable('contratacion_cierre_diario_envios')) {
+            return;
+        }
+
+        DB::table('contratacion_cierre_diario_envios')
+            ->where('fecha', $fecha->toDateString())
+            ->where('destinatario', mb_strtolower(trim($email)))
+            ->update([
+                'estado' => 'enviado',
+                'enviado_en' => now(),
+                'updated_at' => now(),
+            ]);
+    }
+
+    private function releaseDelivery(string $email, Carbon $fecha): void
+    {
+        if (! Schema::hasTable('contratacion_cierre_diario_envios')) {
+            Cache::forget($this->fallbackDeliveryCacheKey($email, $fecha));
+
+            return;
+        }
+
+        DB::table('contratacion_cierre_diario_envios')
+            ->where('fecha', $fecha->toDateString())
+            ->where('destinatario', mb_strtolower(trim($email)))
+            ->where('estado', 'enviando')
+            ->delete();
+    }
+
+    private function fallbackDeliveryCacheKey(string $email, Carbon $fecha): string
+    {
+        return 'contratacion:cierre-diario:'.$fecha->toDateString().':'.sha1(mb_strtolower(trim($email)));
     }
 
     private function canUseMailLog(): bool

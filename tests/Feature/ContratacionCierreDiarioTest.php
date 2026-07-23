@@ -59,7 +59,7 @@ class ContratacionCierreDiarioTest extends TestCase
         $oneDrive->shouldReceive('isConfigured')->once()->andReturn(true);
         $oneDrive->shouldReceive('getItemWebUrlForSite')
             ->once()
-            ->with('RRH', 'Postulantes Documents/' . $today->rut . ' - ' . $today->nombre)
+            ->with('RRH', 'Postulantes Documents/'.$today->rut.' - '.$today->nombre)
             ->andReturn('https://sharepoint.example.test/postulante-dia');
         $this->app->instance(OneDriveService::class, $oneDrive);
 
@@ -126,5 +126,43 @@ class ContratacionCierreDiarioTest extends TestCase
         $this->assertStringContainsString('Postulante Render QA', $html);
         $this->assertStringContainsString('https://sharepoint.example.test/render', $html);
         $this->assertStringContainsString('SharePoint', $html);
+    }
+
+    public function test_daily_close_only_sends_once_when_the_scheduler_invokes_it_twice(): void
+    {
+        Mail::fake();
+
+        Configuracion::updateOrCreate(
+            ['clave' => 'contratacion_cierre_diario_emails'],
+            [
+                'valor' => 'rrhh.duplicado@example.test',
+                'tipo' => 'TEXT',
+                'categoria' => 'contratacion',
+                'descripcion' => 'Destinatario QA',
+                'editable' => true,
+            ]
+        );
+
+        $postulante = PostulanteContratacion::create([
+            'nombre' => 'Postulante Doble Ejecucion QA',
+            'rut' => '13.333.333-3',
+            'email' => 'duplicado@example.test',
+        ]);
+        $postulante->forceFill([
+            'created_at' => '2026-07-23 10:00:00',
+            'updated_at' => '2026-07-23 10:00:00',
+        ])->save();
+
+        $oneDrive = Mockery::mock(OneDriveService::class);
+        $oneDrive->shouldReceive('isConfigured')->zeroOrMoreTimes()->andReturn(false);
+        $this->app->instance(OneDriveService::class, $oneDrive);
+
+        $firstExit = Artisan::call('contratacion:cierre-diario', ['--date' => '2026-07-23']);
+        $secondExit = Artisan::call('contratacion:cierre-diario', ['--date' => '2026-07-23']);
+
+        $this->assertSame(0, $firstExit);
+        $this->assertSame(0, $secondExit);
+
+        Mail::assertSent(ContratacionCierreDiarioMail::class, 1);
     }
 }
