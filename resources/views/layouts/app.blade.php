@@ -92,7 +92,7 @@
             </div>
 
             {{-- SST --}}
-            @if(auth()->user()->tieneAcceso('kizeo_analytics') || auth()->user()->tieneAcceso('charlas') || auth()->user()->tieneAcceso('carta_gantt') || auth()->user()->tieneAcceso('visitas_sst') || auth()->user()->tieneAcceso('auditorias_sst') || auth()->user()->tieneAcceso('accidentes_sst') || auth()->user()->tieneAcceso('ley_karin') || auth()->user()->tieneAcceso('ley_karin_denuncia') || auth()->user()->tieneAcceso('stop_dashboard') || auth()->user()->tieneAcceso('pdr_ccu_dashboard'))
+            @if(auth()->user()->tieneAcceso('kizeo_analytics') || auth()->user()->tieneAcceso('charlas') || auth()->user()->tieneAcceso('carta_gantt') || auth()->user()->tieneAcceso('visitas_sst') || auth()->user()->tieneAcceso('auditorias_sst') || auth()->user()->tieneAcceso('accidentes_sst') || auth()->user()->tieneAcceso('ley_karin') || auth()->user()->tieneAcceso('ley_karin_denuncia') || auth()->user()->tieneAcceso('stop_dashboard') || auth()->user()->tieneAcceso('pdr_ccu_dashboard') || auth()->user()->tieneAcceso('pdr_inspecciones_dashboard'))
             <div class="nav-section" data-nav-section="sst">
                 <button type="button" class="nav-section-toggle" aria-expanded="false">
                     <span>Prevención SST</span>
@@ -119,6 +119,12 @@
                     <a href="{{ route('pdr-ccu-dashboard.index') }}" class="nav-item {{ request()->routeIs('pdr-ccu-dashboard.*') ? 'active' : '' }}">
                         <i class="bi bi-clipboard2-pulse-fill"></i>
                         <span>Observaciones CCU</span>
+                    </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('pdr_inspecciones_dashboard') && \Illuminate\Support\Facades\Route::has('pdr-inspecciones-dashboard.index'))
+                    <a href="{{ route('pdr-inspecciones-dashboard.index') }}" class="nav-item {{ request()->routeIs('pdr-inspecciones-dashboard.*') ? 'active' : '' }}">
+                        <i class="bi bi-clipboard2-check-fill"></i>
+                        <span>Inspecciones PDR</span>
                     </a>
                     @endif
                     @if(auth()->user()->tieneAcceso('charlas'))

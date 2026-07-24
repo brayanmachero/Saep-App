@@ -46,7 +46,7 @@ return [
         'charla_sharepoint_folder'    => env('KIZEO_CHARLA_SHAREPOINT_FOLDER', 'Charlas SST'),
         'observacion_form_id'         => env('KIZEO_OBSERVACION_FORM_ID'),
         'observacion_sharepoint_folder' => env('KIZEO_OBSERVACION_SHAREPOINT_FOLDER', 'Observaciones Conducta'),
-        'inspeccion_form_id'          => env('KIZEO_INSPECCION_FORM_ID'),
+        'inspeccion_form_id'          => env('KIZEO_INSPECCION_FORM_ID', '973787'),
         'inspeccion_sharepoint_folder' => env('KIZEO_INSPECCION_SHAREPOINT_FOLDER', 'Inspecciones SST'),
         'visita_form_id'              => env('KIZEO_VISITA_FORM_ID'),
         'visita_sharepoint_folder'    => env('KIZEO_VISITA_SHAREPOINT_FOLDER', 'Visitas Terreno'),

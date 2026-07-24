@@ -35,6 +35,7 @@ use App\Http\Controllers\VisitaSstController;
 use App\Http\Controllers\LeyKarinPublicoController;
 use App\Http\Controllers\StopDashboardController;
 use App\Http\Controllers\ObservacionConductaCcuDashboardController;
+use App\Http\Controllers\InspeccionPreventivaPdrDashboardController;
 use App\Http\Controllers\CampoOpcionController;
 use App\Http\Controllers\MisFormulariosController;
 use App\Http\Controllers\ContratacionController;
@@ -427,6 +428,21 @@ Route::middleware('auth')->group(function () {
         Route::post('observaciones-ccu/sync', [ObservacionConductaCcuDashboardController::class, 'sync'])
             ->middleware('modulo:pdr_ccu_dashboard,puede_editar')
             ->name('pdr-ccu-dashboard.sync');
+    });
+
+    // --- PDR: INSPECCIONES PREVENTIVAS (Kizeo) ---
+    Route::middleware('modulo:pdr_inspecciones_dashboard')->group(function () {
+        Route::get('inspecciones-preventivas', [InspeccionPreventivaPdrDashboardController::class, 'index'])
+            ->name('pdr-inspecciones-dashboard.index');
+        Route::get('inspecciones-preventivas/reporte/excel', [InspeccionPreventivaPdrDashboardController::class, 'downloadExcel'])
+            ->name('pdr-inspecciones-dashboard.excel');
+        Route::get('inspecciones-preventivas/reporte/preview', [InspeccionPreventivaPdrDashboardController::class, 'emailPreview'])
+            ->name('pdr-inspecciones-dashboard.email-preview');
+        Route::post('inspecciones-preventivas/reporte/enviar-mi-correo', [InspeccionPreventivaPdrDashboardController::class, 'sendToCurrentUser'])
+            ->name('pdr-inspecciones-dashboard.email-self');
+        Route::post('inspecciones-preventivas/sync', [InspeccionPreventivaPdrDashboardController::class, 'sync'])
+            ->middleware('modulo:pdr_inspecciones_dashboard,puede_editar')
+            ->name('pdr-inspecciones-dashboard.sync');
     });
 
     // --- SST: INSPECCIONES ---

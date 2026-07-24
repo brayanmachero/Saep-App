@@ -14,6 +14,9 @@ Schedule::command('kizeo:cache-warm')->everyFourHours()->withoutOverlapping();
 // Actualizar el dashboard de Observaciones de Conducta CCU desde Kizeo.
 Schedule::command('kizeo:sync-observaciones-ccu')->everyThirtyMinutes()->withoutOverlapping();
 
+// Actualizar el dashboard de PDR Inspección Preventiva desde Kizeo.
+Schedule::command('kizeo:sync-inspecciones-preventivas')->everyThirtyMinutes()->withoutOverlapping();
+
 // Sincronizar seguimiento de charlas desde Kizeo (cada 6 horas)
 Schedule::command('kizeo:sync-charla-tracking')->everySixHours()->withoutOverlapping();
 
