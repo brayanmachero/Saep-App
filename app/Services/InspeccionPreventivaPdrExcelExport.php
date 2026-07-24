@@ -58,7 +58,7 @@ class InspeccionPreventivaPdrExcelExport
         }
 
         $row = 8;
-        foreach (['Por centro' => 'centros', 'Por objetivo' => 'objetivos', 'Frecuencia de medidas' => 'frecuencias', 'Verificación' => 'verificaciones', 'Áreas inspeccionadas' => 'areas'] as $title => $key) {
+        foreach (['Por centro' => 'centros', 'Por inspector y cargo' => 'inspectores_cargo', 'Día de inspección' => 'dias_inspeccion', 'Por objetivo' => 'objetivos', 'Frecuencia de medidas' => 'frecuencias', 'Verificación' => 'verificaciones', 'Áreas inspeccionadas' => 'areas'] as $title => $key) {
             $sheet->mergeCells("A{$row}:B{$row}")->setCellValue("A{$row}", $title);
             $sheet->getStyle("A{$row}:B{$row}")->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],

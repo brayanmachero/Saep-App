@@ -65,6 +65,8 @@ class InspeccionPreventivaPdrDashboardTest extends TestCase
         $this->assertSame(2, $analytics['medidas']);
         $this->assertSame(2, $analytics['inmediatas']);
         $this->assertSame(['CCU RENCA' => 1], $analytics['centros']);
+        $this->assertSame(['Flavio Liguen · Prevencionista' => 1], $analytics['inspectores_cargo']);
+        $this->assertSame(['Miércoles' => 1], $analytics['dias_inspeccion']);
         $this->assertContains('Inmediata', $analytics['filter_options']['frecuencias']);
     }
 
@@ -111,8 +113,8 @@ class InspeccionPreventivaPdrDashboardTest extends TestCase
     private function createInspection(string $center, string $inspector, string $frequency, string $date, int $conditions, int $measures): void
     {
         InspeccionPreventivaPdr::create([
-            'kizeo_data_id' => uniqid('inspection-', true), 'fecha_inspeccion' => $date, 'centro' => $center,
-            'inspector_nombre' => $inspector, 'area_inspeccionada' => 'Bodega picking', 'objetivo' => 'Insp. Planeada.',
+            'kizeo_data_id' => uniqid('inspection-'), 'fecha_inspeccion' => $date, 'centro' => $center,
+            'inspector_nombre' => $inspector, 'inspector_cargo' => 'Prevencionista', 'area_inspeccionada' => 'Bodega picking', 'objetivo' => 'Insp. Planeada.',
             'condiciones_count' => $conditions, 'evidencias_count' => 1, 'medidas_count' => $measures,
             'frecuencias_text' => implode('', array_fill(0, $measures, '|' . $frequency)) . '|',
             'verificaciones_text' => implode('', array_fill(0, $measures, '|Durante el día')) . '|', 'synced_at' => now(),

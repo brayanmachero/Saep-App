@@ -46,6 +46,8 @@ class InspeccionPreventivaPdrAnalyticsService
             'by_month' => $this->monthlyBreakdown($rows),
             'centros' => $this->groupCount($rows, 'centro', 10),
             'objetivos' => $this->groupCount($rows, 'objetivo', 10),
+            'inspectores_cargo' => $this->inspectorRoleBreakdown($rows, 8),
+            'dias_inspeccion' => $this->weekdayBreakdown($rows),
             'areas' => $this->groupCount($rows, 'area_inspeccionada', 10),
             'frecuencias' => $frequencies,
             'verificaciones' => $verifications,
@@ -114,6 +116,34 @@ class InspeccionPreventivaPdrAnalyticsService
         return $rows->flatMap(function ($row) use ($field) {
             return array_filter(explode('|', trim((string) $row->{$field}, '|')));
         })->countBy()->sortDesc()->all();
+    }
+
+    private function inspectorRoleBreakdown(Collection $rows, int $limit): array
+    {
+        return $rows
+            ->map(function (InspeccionPreventivaPdr $row) {
+                $name = trim((string) $row->inspector_nombre);
+                $role = trim((string) $row->inspector_cargo);
+
+                return $name === '' ? null : ($role === '' ? $name : "{$name} · {$role}");
+            })
+            ->filter()
+            ->countBy()
+            ->sortDesc()
+            ->take($limit)
+            ->all();
+    }
+
+    private function weekdayBreakdown(Collection $rows): array
+    {
+        $labels = [1 => 'Lunes', 2 => 'Martes', 3 => 'Miércoles', 4 => 'Jueves', 5 => 'Viernes', 6 => 'Sábado', 7 => 'Domingo'];
+
+        return $rows
+            ->filter(fn (InspeccionPreventivaPdr $row) => $row->fecha_inspeccion)
+            ->countBy(fn (InspeccionPreventivaPdr $row) => $row->fecha_inspeccion->dayOfWeekIso)
+            ->sortKeys()
+            ->mapWithKeys(fn (int $count, int $day) => [$labels[$day] => $count])
+            ->all();
     }
 
     private function monthlyBreakdown(Collection $rows): array
