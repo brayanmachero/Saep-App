@@ -77,19 +77,21 @@ class ObservacionConductaCcuDashboardTest extends TestCase
     {
         ObservacionConductaCcu::query()->delete();
 
-        $this->createObservation('CCU CENTRAL', 'Positiva', '2026-07-05');
-        $this->createObservation('CCU CENTRAL', 'Negativa', '2026-07-06');
-        $this->createObservation('CCU RENCA', 'Negativa', '2026-07-06');
+        $this->createObservation('CCU CENTRAL', 'Positiva', '2026-07-05', 'Ana Trabajadora');
+        $this->createObservation('CCU CENTRAL', 'Negativa', '2026-07-06', 'Ana Trabajadora');
+        $this->createObservation('CCU RENCA', 'Negativa', '2026-07-06', 'Luis Trabajador');
 
         $analytics = (new ObservacionConductaCcuAnalyticsService())->getFilteredAnalytics([
             'centro' => 'CCU CENTRAL',
             'clasificacion' => 'Negativa',
+            'trabajador_nombre' => 'Ana Trabajadora',
         ]);
 
         $this->assertSame(1, $analytics['total']);
         $this->assertSame(0, $analytics['positivas']);
         $this->assertSame(1, $analytics['negativas']);
         $this->assertSame(['CCU CENTRAL' => 1], $analytics['centros']);
+        $this->assertContains('Ana Trabajadora', $analytics['filter_options']['trabajadores']);
     }
 
     public function test_report_email_is_branded_and_includes_filtered_detail(): void
@@ -165,14 +167,14 @@ class ObservacionConductaCcuDashboardTest extends TestCase
         ];
     }
 
-    private function createObservation(string $center, string $classification, string $date): void
+    private function createObservation(string $center, string $classification, string $date, string $worker = 'Trabajador de prueba'): void
     {
         ObservacionConductaCcu::create([
             'kizeo_data_id' => uniqid('ccu-', true),
             'fecha_observacion' => $date,
             'centro' => $center,
             'observador_nombre' => 'Observador de prueba',
-            'trabajador_nombre' => 'Trabajador de prueba',
+            'trabajador_nombre' => $worker,
             'tipo_observacion' => 'Regla de prueba',
             'clasificacion' => $classification,
             'medida_control' => $classification === 'Negativa' ? 'RI' : null,

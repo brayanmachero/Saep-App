@@ -114,7 +114,7 @@ class ObservacionConductaCcuDashboardController extends Controller
     private function filtersFromRequest(Request $request, bool $defaultCurrentMonth): array
     {
         $isClean = !$request->hasAny([
-            'centro', 'clasificacion', 'observador_nombre', 'tipo_observacion',
+            'centro', 'clasificacion', 'observador_nombre', 'trabajador_nombre', 'tipo_observacion',
             'fecha_desde', 'fecha_hasta', 'todo',
         ]);
 
@@ -122,6 +122,7 @@ class ObservacionConductaCcuDashboardController extends Controller
             'centro' => $request->input('centro'),
             'clasificacion' => $request->input('clasificacion'),
             'observador_nombre' => $request->input('observador_nombre'),
+            'trabajador_nombre' => $request->input('trabajador_nombre'),
             'tipo_observacion' => $request->input('tipo_observacion'),
             'fecha_desde' => $request->input('fecha_desde', $defaultCurrentMonth && $isClean ? now()->startOfMonth()->toDateString() : null),
             'fecha_hasta' => $request->input('fecha_hasta', $defaultCurrentMonth && $isClean ? now()->endOfMonth()->toDateString() : null),

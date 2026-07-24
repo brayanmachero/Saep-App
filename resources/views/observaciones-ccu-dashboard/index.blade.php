@@ -22,7 +22,7 @@
     .ccu-header p { margin:.3rem 0 0; color:var(--text-muted); font-size:.84rem; }
     .ccu-actions { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
     .ccu-filter-panel { padding:1rem; margin-bottom:1rem; }
-    .ccu-filter-grid { display:grid; grid-template-columns:repeat(6, minmax(130px, 1fr)); gap:.7rem; align-items:end; }
+    .ccu-filter-grid { display:grid; grid-template-columns:repeat(7, minmax(130px, 1fr)); gap:.7rem; align-items:end; }
     .ccu-filter-grid label { display:block; margin-bottom:.25rem; color:var(--text-muted); font-size:.71rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
     .ccu-filter-grid select, .ccu-filter-grid input { width:100%; min-height:38px; border:1px solid var(--border-color, #d9e0ea); border-radius:6px; background:var(--input-bg, var(--card-bg, #fff)); color:var(--text-primary); padding:.45rem .55rem; font-size:.8rem; }
     .ccu-kpis { display:grid; grid-template-columns:repeat(6, minmax(145px, 1fr)); gap:.75rem; margin-bottom:1rem; }
@@ -69,7 +69,7 @@
     .ccu-badge.negative { background:#fee2e2; color:#b91c1c; }
     .ccu-badge.review { background:#e2e8f0; color:#334155; }
     .ccu-empty { padding:2.2rem 1rem; color:var(--text-muted); text-align:center; }
-    @media (max-width: 1180px) { .ccu-filter-grid { grid-template-columns:repeat(3, minmax(160px, 1fr)); } .ccu-kpis { grid-template-columns:repeat(3, 1fr); } .ccu-grid, .ccu-grid-three { grid-template-columns:1fr; } }
+    @media (max-width: 1180px) { .ccu-filter-grid { grid-template-columns:repeat(4, minmax(160px, 1fr)); } .ccu-kpis { grid-template-columns:repeat(3, 1fr); } .ccu-grid, .ccu-grid-three { grid-template-columns:1fr; } }
     @media (max-width: 720px) { .ccu-header { flex-direction:column; } .ccu-actions { width:100%; } .ccu-filter-grid, .ccu-kpis { grid-template-columns:1fr 1fr; } .ccu-kpi { min-height:92px; } .ccu-bar-row { grid-template-columns:minmax(90px, 1.2fr) minmax(80px, 1fr) 28px; } }
 </style>
 
@@ -149,6 +149,15 @@
                     <option value="">Todos los observadores</option>
                     @foreach($options['observadores'] ?? [] as $option)
                         <option value="{{ $option }}" @selected(($filters['observador_nombre'] ?? '') === $option)>{{ $option }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label for="ccu-trabajador">Trabajador observado</label>
+                <select id="ccu-trabajador" name="trabajador_nombre">
+                    <option value="">Todos los trabajadores</option>
+                    @foreach($options['trabajadores'] ?? [] as $option)
+                        <option value="{{ $option }}" @selected(($filters['trabajador_nombre'] ?? '') === $option)>{{ $option }}</option>
                     @endforeach
                 </select>
             </div>
