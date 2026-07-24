@@ -68,6 +68,7 @@ class ObservacionConductaCcuDashboardTest extends TestCase
         $this->assertSame(3, $summary['created']);
         $this->assertSame(0, $summary['failed']);
         $this->assertSame('CCU CENTRAL', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-positive')->value('centro'));
+        $this->assertSame('Turno A', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-positive')->value('turno'));
         $this->assertSame('Positiva', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-positive')->value('clasificacion'));
         $this->assertSame('Negativa', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-negative')->value('clasificacion'));
         $this->assertSame('Por revisar', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-review')->value('clasificacion'));
@@ -77,14 +78,15 @@ class ObservacionConductaCcuDashboardTest extends TestCase
     {
         ObservacionConductaCcu::query()->delete();
 
-        $this->createObservation('CCU CENTRAL', 'Positiva', '2026-07-05', 'Ana Trabajadora');
-        $this->createObservation('CCU CENTRAL', 'Negativa', '2026-07-06', 'Ana Trabajadora');
-        $this->createObservation('CCU RENCA', 'Negativa', '2026-07-06', 'Luis Trabajador');
+        $this->createObservation('CCU CENTRAL', 'Positiva', '2026-07-05', 'Ana Trabajadora', 'Turno A');
+        $this->createObservation('CCU CENTRAL', 'Negativa', '2026-07-06', 'Ana Trabajadora', 'Turno B');
+        $this->createObservation('CCU RENCA', 'Negativa', '2026-07-06', 'Luis Trabajador', 'Turno A');
 
         $analytics = (new ObservacionConductaCcuAnalyticsService())->getFilteredAnalytics([
             'centro' => 'CCU CENTRAL',
             'clasificacion' => 'Negativa',
             'trabajador_nombre' => 'Ana Trabajadora',
+            'turno' => 'Turno B',
         ]);
 
         $this->assertSame(1, $analytics['total']);
@@ -92,6 +94,7 @@ class ObservacionConductaCcuDashboardTest extends TestCase
         $this->assertSame(1, $analytics['negativas']);
         $this->assertSame(['CCU CENTRAL' => 1], $analytics['centros']);
         $this->assertContains('Ana Trabajadora', $analytics['filter_options']['trabajadores']);
+        $this->assertContains('Turno B', $analytics['filter_options']['turnos']);
     }
 
     public function test_report_email_is_branded_and_includes_filtered_detail(): void
@@ -150,6 +153,7 @@ class ObservacionConductaCcuDashboardTest extends TestCase
             'fields' => [
                 'centro_de_distribucion' => ['value' => 'center-id'],
                 'fecha' => ['value' => '2026-07-20'],
+                'turno' => ['value' => 'Turno A'],
                 'negativa_1' => [
                     'value' => is_array($type) ? implode(', ', $type) : $type,
                     'valuesAsArray' => is_array($type) ? $type : [$type],
@@ -167,12 +171,13 @@ class ObservacionConductaCcuDashboardTest extends TestCase
         ];
     }
 
-    private function createObservation(string $center, string $classification, string $date, string $worker = 'Trabajador de prueba'): void
+    private function createObservation(string $center, string $classification, string $date, string $worker = 'Trabajador de prueba', string $turno = 'Turno A'): void
     {
         ObservacionConductaCcu::create([
             'kizeo_data_id' => uniqid('ccu-', true),
             'fecha_observacion' => $date,
             'centro' => $center,
+            'turno' => $turno,
             'observador_nombre' => 'Observador de prueba',
             'trabajador_nombre' => $worker,
             'tipo_observacion' => 'Regla de prueba',

@@ -22,7 +22,7 @@
     .ccu-header p { margin:.3rem 0 0; color:var(--text-muted); font-size:.84rem; }
     .ccu-actions { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
     .ccu-filter-panel { padding:1rem; margin-bottom:1rem; }
-    .ccu-filter-grid { display:grid; grid-template-columns:repeat(7, minmax(130px, 1fr)); gap:.7rem; align-items:end; }
+    .ccu-filter-grid { display:grid; grid-template-columns:repeat(8, minmax(130px, 1fr)); gap:.7rem; align-items:end; }
     .ccu-filter-grid label { display:block; margin-bottom:.25rem; color:var(--text-muted); font-size:.71rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
     .ccu-filter-grid select, .ccu-filter-grid input { width:100%; min-height:38px; border:1px solid var(--border-color, #d9e0ea); border-radius:6px; background:var(--input-bg, var(--card-bg, #fff)); color:var(--text-primary); padding:.45rem .55rem; font-size:.8rem; }
     .ccu-kpis { display:grid; grid-template-columns:repeat(6, minmax(145px, 1fr)); gap:.75rem; margin-bottom:1rem; }
@@ -131,6 +131,15 @@
                     <option value="">Todos los centros</option>
                     @foreach($options['centros'] ?? [] as $option)
                         <option value="{{ $option }}" @selected(($filters['centro'] ?? '') === $option)>{{ $option }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label for="ccu-turno">Turno</label>
+                <select id="ccu-turno" name="turno">
+                    <option value="">Todos los turnos</option>
+                    @foreach($options['turnos'] ?? [] as $option)
+                        <option value="{{ $option }}" @selected(($filters['turno'] ?? '') === $option)>{{ $option }}</option>
                     @endforeach
                 </select>
             </div>
@@ -340,12 +349,13 @@
             <h3><i class="bi bi-clock-history"></i> Registros recientes</h3>
             <div class="ccu-table-wrap">
                 <table class="ccu-table">
-                    <thead><tr><th>Fecha</th><th>Centro</th><th>Trabajador observado</th><th>Conducta</th><th>Resultado</th><th>Medida</th><th>Observador</th></tr></thead>
+                    <thead><tr><th>Fecha</th><th>Centro</th><th>Turno</th><th>Trabajador observado</th><th>Conducta</th><th>Resultado</th><th>Medida</th><th>Observador</th></tr></thead>
                     <tbody>
                         @forelse($recent as $record)
                             <tr>
                                 <td>{{ $record->fecha_observacion?->format('d/m/Y') ?? 'Sin fecha' }}</td>
                                 <td>{{ $record->centro ?: 'Sin centro' }}</td>
+                                <td>{{ $record->turno ?: 'Sin turno' }}</td>
                                 <td><strong>{{ $record->trabajador_nombre ?: 'Sin identificar' }}</strong><br><span class="ccu-muted">{{ $record->trabajador_cargo }}</span></td>
                                 <td title="{{ $record->tipo_observacion }}">{{ \Illuminate\Support\Str::limit($record->tipo_observacion, 72) }}</td>
                                 <td><span class="ccu-badge {{ $record->clasificacion === 'Negativa' ? 'negative' : ($record->clasificacion === 'Positiva' ? 'positive' : 'review') }}">{{ $record->clasificacion }}</span></td>
@@ -353,7 +363,7 @@
                                 <td>{{ $record->observador_nombre ?: 'Sin identificar' }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="7" class="ccu-empty">No hay registros para los filtros seleccionados.</td></tr>
+                            <tr><td colspan="8" class="ccu-empty">No hay registros para los filtros seleccionados.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

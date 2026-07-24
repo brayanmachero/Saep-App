@@ -8,6 +8,8 @@ use Illuminate\Support\Collection;
 
 class ObservacionConductaCcuAnalyticsService
 {
+    private const TURNOS_KIZEO = ['Turno A', 'Turno B', 'Turno C'];
+
     public function hasSyncedData(): bool
     {
         return ObservacionConductaCcu::query()->exists();
@@ -76,6 +78,12 @@ class ObservacionConductaCcuAnalyticsService
     {
         return [
             'centros' => $this->distinctValues('centro'),
+            'turnos' => collect([...self::TURNOS_KIZEO, ...$this->distinctValues('turno')])
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values()
+                ->all(),
             'observadores' => $this->distinctValues('observador_nombre'),
             'trabajadores' => $this->distinctValues('trabajador_nombre'),
             'tipos' => $this->distinctValues('tipo_observacion'),
@@ -94,7 +102,7 @@ class ObservacionConductaCcuAnalyticsService
 
     private function applyFilters(Builder $query, array $filters): void
     {
-        foreach (['centro', 'clasificacion', 'observador_nombre', 'trabajador_nombre', 'tipo_observacion'] as $field) {
+        foreach (['centro', 'turno', 'clasificacion', 'observador_nombre', 'trabajador_nombre', 'tipo_observacion'] as $field) {
             if (!empty($filters[$field])) {
                 $query->where($field, $filters[$field]);
             }

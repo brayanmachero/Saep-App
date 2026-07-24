@@ -124,6 +124,7 @@ class ObservacionConductaCcuSyncService
             'fecha_observacion' => $this->dateValue($this->fieldValue($fields, 'fecha'))
                 ?? $this->dateValue($record['answer_time'] ?? $metadata['answer_time'] ?? null),
             'centro' => $this->limit($centers[$centerRaw] ?? $centerRaw, 160),
+            'turno' => $this->limit($this->fieldValue($fields, 'turno'), 50),
             'observador_nombre' => $this->limit($this->fieldValue($fields, 'nombre_del_observador'), 200),
             'observador_cargo' => $this->limit($this->fieldValue($fields, 'cargo'), 180),
             'trabajador_rut' => $this->limit($this->fieldValue($fields, 'nombre_del_trabajador'), 30),

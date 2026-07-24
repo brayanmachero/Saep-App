@@ -163,7 +163,7 @@
                                 @endphp
                                 <tr>
                                     <td style="padding:10px;border-top:1px solid #e2e8f0;font-size:11px;color:#475569;vertical-align:top;white-space:nowrap;">{{ $record->fecha_observacion?->format('d/m/Y') ?? 'Sin fecha' }}</td>
-                                    <td style="padding:10px;border-top:1px solid #e2e8f0;vertical-align:top;"><div style="font-size:12px;font-weight:800;color:#111827;">{{ $record->trabajador_nombre ?: 'Sin identificar' }}</div><div style="font-size:11px;color:#64748b;margin-top:3px;">{{ $record->centro ?: 'Sin centro' }} · {{ $record->trabajador_cargo }}</div></td>
+                                    <td style="padding:10px;border-top:1px solid #e2e8f0;vertical-align:top;"><div style="font-size:12px;font-weight:800;color:#111827;">{{ $record->trabajador_nombre ?: 'Sin identificar' }}</div><div style="font-size:11px;color:#64748b;margin-top:3px;">{{ $record->centro ?: 'Sin centro' }} · {{ $record->turno ?: 'Sin turno' }} · {{ $record->trabajador_cargo }}</div></td>
                                     <td style="padding:10px;border-top:1px solid #e2e8f0;vertical-align:top;"><span style="display:inline-block;background:{{ $resultColor }}18;color:{{ $resultColor }};border:1px solid {{ $resultColor }}44;font-size:10px;font-weight:800;padding:4px 6px;border-radius:4px;">{{ $record->clasificacion }}</span></td>
                                     <td style="padding:10px;border-top:1px solid #e2e8f0;font-size:11px;color:#475569;vertical-align:top;">{{ strtoupper(trim((string) $record->medida_control)) === 'RI' ? 'Reinducción inmediata (RI)' : ($record->medida_control ?: 'Sin medida') }}</td>
                                 </tr>

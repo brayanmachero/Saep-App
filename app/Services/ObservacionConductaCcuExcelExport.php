@@ -114,11 +114,11 @@ class ObservacionConductaCcuExcelExport
         $sheet = $book->createSheet();
         $sheet->setTitle('Registros');
 
-        $headers = ['Kizeo', 'Fecha', 'Centro', 'Resultado', 'RUT trabajador', 'Trabajador', 'Cargo', 'Antigüedad', 'Conducta', 'Medida de control', 'Retroalimentación', 'Observador', 'Cargo observador'];
+        $headers = ['Kizeo', 'Fecha', 'Centro', 'Turno', 'Resultado', 'RUT trabajador', 'Trabajador', 'Cargo', 'Antigüedad', 'Conducta', 'Medida de control', 'Retroalimentación', 'Observador', 'Cargo observador'];
         $sheet->fromArray($headers, null, 'A1');
-        $this->styleTableHeader($sheet, 'A1:M1');
+        $this->styleTableHeader($sheet, 'A1:N1');
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:M1');
+        $sheet->setAutoFilter('A1:N1');
 
         $row = 2;
         foreach ($records as $record) {
@@ -126,6 +126,7 @@ class ObservacionConductaCcuExcelExport
                 $record->kizeo_record_number,
                 $record->fecha_observacion?->format('d/m/Y'),
                 $record->centro,
+                $record->turno,
                 $record->clasificacion,
                 $record->trabajador_rut,
                 $record->trabajador_nombre,
@@ -140,15 +141,15 @@ class ObservacionConductaCcuExcelExport
                 $record->observador_cargo,
             ], null, "A{$row}");
             if ($row % 2 === 0) {
-                $sheet->getStyle("A{$row}:M{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FF' . self::GRAY);
+                $sheet->getStyle("A{$row}:N{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FF' . self::GRAY);
             }
             $row++;
         }
 
-        foreach (range('A', 'M') as $column) {
-            $sheet->getColumnDimension($column)->setWidth(in_array($column, ['I', 'K'], true) ? 55 : 20);
+        foreach (range('A', 'N') as $column) {
+            $sheet->getColumnDimension($column)->setWidth(in_array($column, ['J', 'L'], true) ? 55 : 20);
         }
-        $sheet->getStyle("A2:M" . max(2, $row - 1))->getAlignment()->setVertical(Alignment::VERTICAL_TOP)->setWrapText(true);
+        $sheet->getStyle("A2:N" . max(2, $row - 1))->getAlignment()->setVertical(Alignment::VERTICAL_TOP)->setWrapText(true);
     }
 
     private function styleTableHeader($sheet, string $range): void

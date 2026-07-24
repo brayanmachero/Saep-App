@@ -114,12 +114,13 @@ class ObservacionConductaCcuDashboardController extends Controller
     private function filtersFromRequest(Request $request, bool $defaultCurrentMonth): array
     {
         $isClean = !$request->hasAny([
-            'centro', 'clasificacion', 'observador_nombre', 'trabajador_nombre', 'tipo_observacion',
+            'centro', 'turno', 'clasificacion', 'observador_nombre', 'trabajador_nombre', 'tipo_observacion',
             'fecha_desde', 'fecha_hasta', 'todo',
         ]);
 
         $filters = array_filter([
             'centro' => $request->input('centro'),
+            'turno' => $request->input('turno'),
             'clasificacion' => $request->input('clasificacion'),
             'observador_nombre' => $request->input('observador_nombre'),
             'trabajador_nombre' => $request->input('trabajador_nombre'),
