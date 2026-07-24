@@ -52,6 +52,11 @@ class ObservacionConductaCcuAnalyticsService
             'observadores_activos' => $rows->pluck('observador_nombre')->filter()->unique()->count(),
             'by_month' => $this->monthlyBreakdown($rows),
             'centros' => $this->groupCount($rows, 'centro', 10),
+            'turnos' => $rows
+                ->map(fn ($row) => $row->turno ?: 'Sin turno')
+                ->countBy()
+                ->sortDesc()
+                ->all(),
             'tipos' => $this->groupCount($rows, 'tipo_observacion', 10),
             'cargos' => $this->groupCount($rows, 'trabajador_cargo', 10),
             'antiguedades' => $this->groupCount($rows, 'antiguedad_cargo', 10),

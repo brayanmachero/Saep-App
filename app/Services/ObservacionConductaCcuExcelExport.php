@@ -81,6 +81,7 @@ class ObservacionConductaCcuExcelExport
         $row = 8;
         foreach ([
             'Por centro' => $analytics['centros'] ?? [],
+            'Por turno' => $analytics['turnos'] ?? [],
             'Por cargo' => $analytics['cargos'] ?? [],
             'Por antigüedad' => $analytics['antiguedades'] ?? [],
             'Medidas de control' => $analytics['medidas'] ?? [],

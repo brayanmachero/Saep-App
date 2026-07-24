@@ -13,6 +13,17 @@
     $maxAntiguedad = max([1, ...array_values($analytics['antiguedades'] ?? [])]);
     $maxWorker = max([1, ...array_values($analytics['top_trabajadores_negativos'] ?? [])]);
     $maxObserver = max([1, ...array_values($analytics['top_observadores'] ?? [])]);
+    $turnos = $analytics['turnos'] ?? [];
+    $turnTotal = max(1, array_sum($turnos));
+    $turnColors = ['Turno A' => '#2563eb', 'Turno B' => '#8b5cf6', 'Turno C' => '#f97316', 'Sin turno' => '#94a3b8'];
+    $turnCursor = 0;
+    $turnStops = [];
+    foreach ($turnos as $label => $count) {
+        $turnEnd = $turnCursor + (($count / $turnTotal) * 100);
+        $turnStops[] = ($turnColors[$label] ?? '#64748b') . " {$turnCursor}% {$turnEnd}%";
+        $turnCursor = $turnEnd;
+    }
+    $turnGradient = $turnStops ? 'conic-gradient(' . implode(', ', $turnStops) . ')' : '#e2e8f0';
 @endphp
 
 <style>
@@ -58,6 +69,15 @@
     .ccu-legend .positive::before { background:#22c55e; }
     .ccu-legend .negative::before { background:#ef4444; }
     .ccu-legend .review::before { background:#64748b; }
+    .ccu-turn-layout { display:flex; align-items:center; justify-content:center; gap:1.25rem; min-height:176px; flex-wrap:wrap; }
+    .ccu-donut { width:142px; height:142px; border-radius:50%; background:var(--turn-gradient); position:relative; flex:0 0 auto; }
+    .ccu-donut::after { content:''; position:absolute; inset:27px; border-radius:50%; background:var(--card-bg, #fff); border:1px solid var(--border-color, #d9e0ea); }
+    .ccu-donut-center { position:absolute; inset:0; z-index:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-primary); font-size:1.4rem; font-weight:800; }
+    .ccu-donut-center small { color:var(--text-muted); font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; margin-top:.1rem; }
+    .ccu-turn-legend { display:grid; gap:.48rem; min-width:150px; }
+    .ccu-turn-legend-row { display:grid; grid-template-columns:10px minmax(0, 1fr) auto; gap:.45rem; align-items:center; color:var(--text-primary); font-size:.77rem; }
+    .ccu-turn-swatch { width:10px; height:10px; border-radius:50%; }
+    .ccu-turn-percent { color:var(--text-muted); font-variant-numeric:tabular-nums; }
     .ccu-table-wrap { overflow-x:auto; }
     .ccu-table { width:100%; border-collapse:collapse; min-width:800px; }
     .ccu-table th { padding:.55rem .6rem; color:var(--text-muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.03em; text-align:left; border-bottom:1px solid var(--border-color, #d9e0ea); white-space:nowrap; }
@@ -336,13 +356,34 @@
             </article>
 
             <article class="glass-card ccu-panel">
-                <h3><i class="bi bi-info-circle-fill"></i> Lectura del resultado</h3>
-                <p class="ccu-muted" style="font-size:.8rem;line-height:1.6;margin:0">
-                    <strong style="color:#166534">Positiva:</strong> la selección contiene solo conductas seguras.
-                    <br><strong style="color:#b91c1c">Negativa:</strong> contiene una conducta de riesgo o incumplimiento.
-                    <br><strong style="color:#334155">Por revisar:</strong> Kizeo entregó una selección múltiple con ambos tipos; se mantiene separada para no alterar los indicadores.
-                </p>
+                <h3><i class="bi bi-pie-chart-fill"></i> Distribución por turno</h3>
+                <div class="ccu-turn-layout">
+                    <div class="ccu-donut" style="--turn-gradient:{{ $turnGradient }}" role="img" aria-label="Distribución de {{ array_sum($turnos) }} observaciones por turno">
+                        <div class="ccu-donut-center">{{ array_sum($turnos) }}<small>registros</small></div>
+                    </div>
+                    <div class="ccu-turn-legend">
+                        @forelse($turnos as $label => $count)
+                            @php $color = $turnColors[$label] ?? '#64748b'; @endphp
+                            <div class="ccu-turn-legend-row" title="{{ $label }}: {{ $count }} observaciones">
+                                <span class="ccu-turn-swatch" style="background:{{ $color }}"></span>
+                                <span>{{ $label }}</span>
+                                <span class="ccu-turn-percent">{{ $count }} · {{ number_format(($count / $turnTotal) * 100, 1) }}%</span>
+                            </div>
+                        @empty
+                            <span class="ccu-muted">Sin registros para mostrar.</span>
+                        @endforelse
+                    </div>
+                </div>
             </article>
+        </section>
+
+        <section class="glass-card ccu-panel" style="margin-bottom:1rem">
+            <h3><i class="bi bi-info-circle-fill"></i> Lectura del resultado</h3>
+            <p class="ccu-muted" style="font-size:.8rem;line-height:1.6;margin:0">
+                <strong style="color:#166534">Positiva:</strong> la selección contiene solo conductas seguras.
+                <br><strong style="color:#b91c1c">Negativa:</strong> contiene una conducta de riesgo o incumplimiento.
+                <br><strong style="color:#334155">Por revisar:</strong> Kizeo entregó una selección múltiple con ambos tipos; se mantiene separada para no alterar los indicadores.
+            </p>
         </section>
 
         <section class="glass-card ccu-panel" style="margin-bottom:1rem">

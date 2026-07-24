@@ -93,6 +93,7 @@ class ObservacionConductaCcuDashboardTest extends TestCase
         $this->assertSame(0, $analytics['positivas']);
         $this->assertSame(1, $analytics['negativas']);
         $this->assertSame(['CCU CENTRAL' => 1], $analytics['centros']);
+        $this->assertSame(['Turno B' => 1], $analytics['turnos']);
         $this->assertContains('Ana Trabajadora', $analytics['filter_options']['trabajadores']);
         $this->assertContains('Turno B', $analytics['filter_options']['turnos']);
     }
