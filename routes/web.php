@@ -34,6 +34,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VisitaSstController;
 use App\Http\Controllers\LeyKarinPublicoController;
 use App\Http\Controllers\StopDashboardController;
+use App\Http\Controllers\ObservacionConductaCcuDashboardController;
 use App\Http\Controllers\CampoOpcionController;
 use App\Http\Controllers\MisFormulariosController;
 use App\Http\Controllers\ContratacionController;
@@ -411,6 +412,21 @@ Route::middleware('auth')->group(function () {
         Route::get('stop-dashboard/reporte/excel', [StopDashboardController::class, 'downloadExcelReport'])->name('stop-dashboard.reporte.excel');
         Route::post('stop-dashboard/reporte/test-send', [StopDashboardController::class, 'sendTestReport'])->name('stop-dashboard.reporte.test-send');
         Route::post('stop-dashboard/reporte/send-now', [StopDashboardController::class, 'sendReportNow'])->name('stop-dashboard.reporte.send-now');
+    });
+
+    // --- OBSERVACIONES DE CONDUCTA CCU (Kizeo) ---
+    Route::middleware('modulo:pdr_ccu_dashboard')->group(function () {
+        Route::get('observaciones-ccu', [ObservacionConductaCcuDashboardController::class, 'index'])
+            ->name('pdr-ccu-dashboard.index');
+        Route::get('observaciones-ccu/reporte/excel', [ObservacionConductaCcuDashboardController::class, 'downloadExcel'])
+            ->name('pdr-ccu-dashboard.excel');
+        Route::get('observaciones-ccu/reporte/preview', [ObservacionConductaCcuDashboardController::class, 'emailPreview'])
+            ->name('pdr-ccu-dashboard.email-preview');
+        Route::post('observaciones-ccu/reporte/enviar-mi-correo', [ObservacionConductaCcuDashboardController::class, 'sendToCurrentUser'])
+            ->name('pdr-ccu-dashboard.email-self');
+        Route::post('observaciones-ccu/sync', [ObservacionConductaCcuDashboardController::class, 'sync'])
+            ->middleware('modulo:pdr_ccu_dashboard,puede_editar')
+            ->name('pdr-ccu-dashboard.sync');
     });
 
     // --- SST: INSPECCIONES ---
