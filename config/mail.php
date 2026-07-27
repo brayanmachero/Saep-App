@@ -16,6 +16,10 @@ return [
 
     'default' => env('MAIL_MAILER', 'log'),
 
+    // Resend limits the complete encoded message to 40 MB. Keep a lower raw
+    // attachment budget so response notifications are delivered reliably.
+    'response_attachment_max_bytes' => (int) env('MAIL_RESPONSE_ATTACHMENT_MAX_BYTES', 25 * 1024 * 1024),
+
     /*
     |--------------------------------------------------------------------------
     | Mailer Configurations

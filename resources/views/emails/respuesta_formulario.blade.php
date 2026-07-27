@@ -69,6 +69,17 @@
                 @endforeach
             </table>
 
+            @if($adjuntosOmitidos !== [])
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;margin:0 0 20px;">
+                    <tr>
+                        <td style="padding:14px 16px;font-size:13px;color:#9a3412;line-height:1.55;">
+                            <strong>Documentos disponibles en SAEP</strong><br>
+                            {{ count($adjuntosOmitidos) }} archivo(s) no se adjuntaron para mantener este correo dentro del límite seguro de envío. Revísalos desde la respuesta completa.
+                        </td>
+                    </tr>
+                </table>
+            @endif
+
             @include('emails.partials.saep_button', [
                 'url' => route('respuestas.show', $respuesta),
                 'label' => 'Ver respuesta completa',

@@ -12,6 +12,7 @@ use App\Models\Respuesta;
 use App\Models\User;
 use App\Notifications\AppNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -162,8 +163,19 @@ class RespuestaController extends Controller
                 }
             }
 
+            $emailFailures = 0;
+
             foreach (array_unique($emailsDestinatarios) as $email) {
-                Mail::to($email)->send(new RespuestaFormularioMail($respuesta, $pdfContent, $pdfFilename));
+                try {
+                    Mail::to($email)->send(new RespuestaFormularioMail($respuesta, $pdfContent, $pdfFilename));
+                } catch (\Throwable $e) {
+                    $emailFailures++;
+                    Log::error('Respuesta de formulario guardada, pero falló el correo de notificación', [
+                        'respuesta_id' => $respuesta->id,
+                        'formulario_id' => $formulario->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
         }
 
@@ -171,8 +183,14 @@ class RespuestaController extends Controller
             ? 'Formulario enviado para aprobación.'
             : ($respuesta->estado === 'Borrador' ? 'Borrador guardado correctamente.' : 'Formulario completado exitosamente.');
 
-        return redirect()->route('respuestas.show', $respuesta)
+        $redirect = redirect()->route('respuestas.show', $respuesta)
             ->with('success', $msg);
+
+        if (($emailFailures ?? 0) > 0) {
+            $redirect->with('warning', 'La respuesta fue guardada, pero uno o más correos no se enviaron.');
+        }
+
+        return $redirect;
     }
 
     public function reenviarMail(Respuesta $respuesta)
