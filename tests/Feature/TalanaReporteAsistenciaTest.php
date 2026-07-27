@@ -93,7 +93,7 @@ class TalanaReporteAsistenciaTest extends TestCase
         $this->assertSame(0, $reporte['total_alertas']);
     }
 
-    public function test_email_renders_data_coverage_and_non_evaluation_state(): void
+    public function test_email_prioritizes_actions_and_keeps_informational_data_separate(): void
     {
         $mail = new TalanaAsistenciaReporteMail([
             'total_activos' => 10,
@@ -107,8 +107,18 @@ class TalanaReporteAsistenciaTest extends TestCase
             'total_revision' => 0,
             'total_alertas' => 2,
             'total_jornadas_cubiertas' => 4,
-            'incompletas' => [],
-            'sin_marcacion' => [],
+            'incompletas' => [[
+                'nombre' => 'María Prueba',
+                'rut' => '12.345.678-5',
+                'centro_costo' => 'Centro QA',
+                'marcas' => '08:00:00 (Entrada)',
+            ]],
+            'sin_marcacion' => [[
+                'nombre' => 'Pedro Prueba',
+                'rut' => '12.345.678-5',
+                'centro_costo' => 'Centro QA',
+                'motivo' => 'Jornada confirmada sin marca registrada',
+            ]],
             'sin_historial' => [],
             'descanso' => [],
             'ausencias' => [],
@@ -119,9 +129,12 @@ class TalanaReporteAsistenciaTest extends TestCase
 
         $html = $mail->render();
 
-        $this->assertStringContainsString('Sin evaluación de jornada', $html);
-        $this->assertStringContainsString('Sólo se alerta', $html);
-        $this->assertStringContainsString('Contratos recientes sin historial de marca', $html);
+        $this->assertStringContainsString('Qué se debe revisar', $html);
+        $this->assertStringContainsString('Información que no requiere acción inmediata', $html);
+        $this->assertStringContainsString('Sin jornada informada', $html);
+        $this->assertStringContainsString('Detalle completo en el Excel adjunto', $html);
+        $this->assertStringContainsString('María Prueba', $html);
+        $this->assertStringContainsString('Validar y completar', $html);
     }
 
     private function agrupar(array $raw): array

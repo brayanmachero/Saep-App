@@ -46,40 +46,7 @@ class TalanaAsistenciaReporteMail extends Mailable
     {
         $r = $this->reporte;
         $dia = Carbon::parse($this->fecha)->locale('es')->isoFormat('dddd D [de] MMMM YYYY');
-
-        // Agrupar por empresa → centro de costo
-        $sinMarcacionPorEmpresaCC = [];
-        foreach ($r['sin_marcacion'] as $t) {
-            $emp = $t['empresa'] ?? 'Sin empresa';
-            $cc = $t['centro_costo'] ?? 'Sin clasificar';
-            $sinMarcacionPorEmpresaCC[$emp][$cc][] = $t;
-        }
-        ksort($sinMarcacionPorEmpresaCC);
-        foreach ($sinMarcacionPorEmpresaCC as &$_g) {
-            ksort($_g);
-        } unset($_g);
-
-        $incompletasPorEmpresaCC = [];
-        foreach ($r['incompletas'] as $t) {
-            $emp = $t['empresa'] ?? 'Sin empresa';
-            $cc = $t['centro_costo'] ?? 'Sin clasificar';
-            $incompletasPorEmpresaCC[$emp][$cc][] = $t;
-        }
-        ksort($incompletasPorEmpresaCC);
-        foreach ($incompletasPorEmpresaCC as &$_g) {
-            ksort($_g);
-        } unset($_g);
-
-        $revisionPorEmpresaCC = [];
-        foreach ($r['revision'] ?? [] as $t) {
-            $emp = $t['empresa'] ?? 'Sin empresa';
-            $cc = $t['centro_costo'] ?? 'Sin clasificar';
-            $revisionPorEmpresaCC[$emp][$cc][] = $t;
-        }
-        ksort($revisionPorEmpresaCC);
-        foreach ($revisionPorEmpresaCC as &$_g) {
-            ksort($_g);
-        } unset($_g);
+        $limiteDetalle = 8;
 
         return new Content(
             view: 'emails.talana_asistencia_reporte',
@@ -87,9 +54,10 @@ class TalanaAsistenciaReporteMail extends Mailable
                 'reporte' => $r,
                 'dia' => $dia,
                 'fecha' => $this->fecha,
-                'sinMarcacionPorEmpresaCC' => $sinMarcacionPorEmpresaCC,
-                'incompletasPorEmpresaCC' => $incompletasPorEmpresaCC,
-                'revisionPorEmpresaCC' => $revisionPorEmpresaCC,
+                'limiteDetalle' => $limiteDetalle,
+                'incompletasDestacadas' => array_slice($r['incompletas'] ?? [], 0, $limiteDetalle),
+                'sinMarcacionDestacados' => array_slice($r['sin_marcacion'] ?? [], 0, $limiteDetalle),
+                'revisionDestacados' => array_slice($r['revision'] ?? [], 0, $limiteDetalle),
                 'generadoEn' => now()->format('d/m/Y H:i'),
             ],
         );
