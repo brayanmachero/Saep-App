@@ -43,6 +43,18 @@ return [
             'after_commit' => false,
         ],
 
+        // Long-running manual dashboard syncs must never consume PHP-FPM workers.
+        // This isolated connection also prevents the default 90-second retry window
+        // from re-queuing an in-progress Kizeo or Google Sheets synchronization.
+        'dashboard_sync' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => 'dashboard-sync',
+            'retry_after' => (int) env('DASHBOARD_SYNC_RETRY_AFTER', 900),
+            'after_commit' => false,
+        ],
+
         'beanstalkd' => [
             'driver' => 'beanstalkd',
             'host' => env('BEANSTALKD_QUEUE_HOST', 'localhost'),

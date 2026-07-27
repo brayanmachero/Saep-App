@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\DashboardSyncJob;
 use App\Mail\ObservacionConductaCcuReporteMail;
 use App\Services\ObservacionConductaCcuAnalyticsService;
 use App\Services\ObservacionConductaCcuExcelExport;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
 
 class ObservacionConductaCcuDashboardController extends Controller
@@ -30,12 +30,20 @@ class ObservacionConductaCcuDashboardController extends Controller
     public function sync()
     {
         try {
-            Artisan::call('kizeo:sync-observaciones-ccu', ['--force' => true]);
-
-            return back()->with('success', trim(Artisan::output()) ?: 'Datos de Observaciones CCU sincronizados.');
+            $queued = DashboardSyncJob::dispatchOnce(
+                'observaciones-ccu',
+                'kizeo:sync-observaciones-ccu',
+                ['--force' => true],
+            );
         } catch (\Throwable $e) {
-            return back()->with('error', 'No fue posible sincronizar Observaciones CCU: ' . $e->getMessage());
+            return back()->with('error', 'No fue posible iniciar la sincronización de Observaciones CCU: ' . $e->getMessage());
         }
+
+        if (! $queued) {
+            return back()->with('error', 'Ya hay una sincronización de Observaciones CCU en curso. Espera a que termine antes de iniciar otra.');
+        }
+
+        return back()->with('success', 'Sincronización iniciada en segundo plano. Puedes continuar usando la plataforma mientras termina.');
     }
 
     public function downloadExcel(Request $request)

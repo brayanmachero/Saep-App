@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Console\Commands\KizeoCharlaWeeklyReport;
+use App\Jobs\DashboardSyncJob;
 use App\Mail\CharlaTrackingReporteMail;
 use App\Models\CharlaTrackingActionLog;
 use App\Models\ConsentimientoDatos;
@@ -13,9 +14,10 @@ use App\Support\PrivacyPolicy;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
-use RuntimeException;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class CharlaTrackingTest extends TestCase
@@ -81,28 +83,35 @@ class CharlaTrackingTest extends TestCase
         $this->assertSame('01/06/2026 al 30/06/2026', $data['periodo']);
     }
 
-    public function test_sync_failure_is_reported_and_audited(): void
+    public function test_sync_is_queued_and_audited(): void
     {
         $user = $this->createSuperAdminUser();
         CharlaTrackingActionLog::query()->delete();
-
-        Artisan::shouldReceive('call')
-            ->once()
-            ->with('kizeo:sync-charla-tracking', ['--months' => 6])
-            ->andThrow(new RuntimeException('fallo kizeo'));
+        Cache::forget(DashboardSyncJob::runningKey('charlas'));
+        Queue::fake();
 
         $this->actingAs($user)
             ->post(route('charla-tracking.sync'))
             ->assertRedirect()
-            ->assertSessionHas('error', fn ($message) => str_contains($message, 'fallo kizeo'))
-            ->assertSessionMissing('success');
+            ->assertSessionHas('success', fn ($message) => str_contains($message, 'segundo plano'))
+            ->assertSessionMissing('error');
+
+        Queue::assertPushed(DashboardSyncJob::class, function (DashboardSyncJob $job) use ($user) {
+            return $job->key === 'charlas'
+                && $job->command === 'kizeo:sync-charla-tracking'
+                && $job->arguments === ['--months' => 6]
+                && $job->requestedByUserId === $user->id
+                && $job->auditChannel === 'charla'
+                && $job->queue === DashboardSyncJob::QUEUE
+                && $job->connection === DashboardSyncJob::CONNECTION;
+        });
 
         $log = CharlaTrackingActionLog::query()->where('action', 'sync')->latest()->first();
 
         $this->assertNotNull($log);
-        $this->assertSame('failed', $log->status);
+        $this->assertSame('queued', $log->status);
         $this->assertSame($user->id, $log->user_id);
-        $this->assertSame('fallo kizeo', $log->metadata['error'] ?? null);
+        $this->assertSame(DashboardSyncJob::QUEUE, $log->metadata['queue'] ?? null);
     }
 
     public function test_send_now_passes_active_filters_and_is_audited(): void

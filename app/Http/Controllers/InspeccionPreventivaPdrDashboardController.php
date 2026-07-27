@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\DashboardSyncJob;
 use App\Mail\InspeccionPreventivaPdrReporteMail;
 use App\Services\InspeccionPreventivaPdrAnalyticsService;
 use App\Services\InspeccionPreventivaPdrExcelExport;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
 
 class InspeccionPreventivaPdrDashboardController extends Controller
@@ -30,11 +30,20 @@ class InspeccionPreventivaPdrDashboardController extends Controller
     public function sync()
     {
         try {
-            Artisan::call('kizeo:sync-inspecciones-preventivas', ['--force' => true]);
-            return back()->with('success', trim(Artisan::output()) ?: 'Datos de inspecciones preventivas sincronizados.');
+            $queued = DashboardSyncJob::dispatchOnce(
+                'inspecciones-pdr',
+                'kizeo:sync-inspecciones-preventivas',
+                ['--force' => true],
+            );
         } catch (\Throwable $e) {
-            return back()->with('error', 'No fue posible sincronizar las inspecciones preventivas: ' . $e->getMessage());
+            return back()->with('error', 'No fue posible iniciar la sincronización de inspecciones preventivas: ' . $e->getMessage());
         }
+
+        if (! $queued) {
+            return back()->with('error', 'Ya hay una sincronización de inspecciones preventivas en curso. Espera a que termine antes de iniciar otra.');
+        }
+
+        return back()->with('success', 'Sincronización iniciada en segundo plano. Puedes continuar usando la plataforma mientras termina.');
     }
 
     public function downloadExcel(Request $request)

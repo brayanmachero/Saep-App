@@ -3,13 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Console\Commands\StopWeeklyReport;
+use App\Jobs\DashboardSyncJob;
 use App\Mail\StopReporteMail;
 use App\Models\StopActionLog;
 use App\Services\GoogleDriveService;
 use App\Services\StopAnalyticsService;
 use App\Services\StopExcelExport;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
 
 class StopDashboardController extends Controller
@@ -100,28 +100,33 @@ class StopDashboardController extends Controller
 
     public function sync(Request $request)
     {
-        $drive = new GoogleDriveService();
+        $userId = $request->user()?->id;
 
-        // Ejecutar sincronización a MySQL
         try {
-            Artisan::call('stop:sync-sheets', ['--force' => true]);
-            $output = Artisan::output();
-
-            // También limpiar caché de Google Drive
-            $drive->clearCache();
-
-            $this->recordStopAction($request, 'sync', 'success', 'Sincronización manual de datos STOP completada.', [], [
-                'output' => trim($output),
-            ]);
-
-            return back()->with('success', 'Datos sincronizados exitosamente desde Google Sheets. ' . trim($output));
+            $queued = DashboardSyncJob::dispatchOnce(
+                'stop',
+                'stop:sync-sheets',
+                ['--force' => true],
+                $userId,
+                'stop',
+            );
         } catch (\Throwable $e) {
-            $this->recordStopAction($request, 'sync', 'failed', 'Error durante sincronización manual de datos STOP.', [], [
+            $this->recordStopAction($request, 'sync', 'failed', 'No fue posible encolar la sincronización manual STOP.', [], [
                 'error' => $e->getMessage(),
             ]);
 
-            return back()->with('error', 'Error durante sincronización: ' . $e->getMessage());
+            return back()->with('error', 'No fue posible iniciar la sincronización: ' . $e->getMessage());
         }
+
+        if (! $queued) {
+            return back()->with('error', 'Ya hay una sincronización STOP en curso. Espera a que termine antes de iniciar otra.');
+        }
+
+        $this->recordStopAction($request, 'sync', 'queued', 'Sincronización manual STOP enviada a segundo plano.', [], [
+            'queue' => DashboardSyncJob::QUEUE,
+        ]);
+
+        return back()->with('success', 'Sincronización iniciada en segundo plano. Puedes continuar usando la plataforma mientras termina.');
     }
 
     /**

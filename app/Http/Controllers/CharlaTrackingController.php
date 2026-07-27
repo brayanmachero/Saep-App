@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Console\Commands\KizeoCharlaWeeklyReport;
+use App\Jobs\DashboardSyncJob;
 use App\Mail\CharlaTrackingReporteMail;
 use App\Models\CharlaTrackingActionLog;
 use App\Models\KizeoCharlaTracking;
@@ -154,21 +155,30 @@ class CharlaTrackingController extends Controller
     public function sync(Request $request)
     {
         try {
-            Artisan::call('kizeo:sync-charla-tracking', ['--months' => 6]);
-            $output = Artisan::output();
-
-            $this->recordAction($request, 'sync', 'success', 'Sincronización manual de charlas completada.', [], [
-                'output' => trim($output),
-            ]);
-
-            return back()->with('success', 'Sincronización completada. ' . trim($output));
+            $queued = DashboardSyncJob::dispatchOnce(
+                'charlas',
+                'kizeo:sync-charla-tracking',
+                ['--months' => 6],
+                $request->user()?->id,
+                'charla',
+            );
         } catch (\Throwable $e) {
-            $this->recordAction($request, 'sync', 'failed', 'Error durante sincronización manual de charlas.', [], [
+            $this->recordAction($request, 'sync', 'failed', 'No fue posible encolar la sincronización manual de charlas.', [], [
                 'error' => $e->getMessage(),
             ]);
 
-            return back()->with('error', 'Error durante sincronización: ' . $e->getMessage());
+            return back()->with('error', 'No fue posible iniciar la sincronización: ' . $e->getMessage());
         }
+
+        if (! $queued) {
+            return back()->with('error', 'Ya hay una sincronización de charlas en curso. Espera a que termine antes de iniciar otra.');
+        }
+
+        $this->recordAction($request, 'sync', 'queued', 'Sincronización manual de charlas enviada a segundo plano.', [], [
+            'queue' => DashboardSyncJob::QUEUE,
+        ]);
+
+        return back()->with('success', 'Sincronización iniciada en segundo plano. Puedes continuar usando la plataforma mientras termina.');
     }
 
     public function emailPreview(Request $request)

@@ -8,46 +8,54 @@ use App\Models\Rol;
 use App\Models\StopActionLog;
 use App\Models\StopObservacion;
 use App\Models\User;
+use App\Jobs\DashboardSyncJob;
 use App\Mail\StopReporteMail;
 use App\Console\Commands\StopWeeklyReport;
 use App\Services\StopAnalyticsService;
 use App\Services\StopExcelExport;
 use App\Support\PrivacyPolicy;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use PhpOffice\PhpSpreadsheet\IOFactory;
-use RuntimeException;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class StopDashboardTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_sync_failure_is_reported_as_error_flash(): void
+    public function test_sync_is_queued_without_blocking_the_web_request(): void
     {
         $user = $this->createSuperAdminUser();
         StopActionLog::query()->delete();
-
-        Artisan::shouldReceive('call')
-            ->once()
-            ->with('stop:sync-sheets', ['--force' => true])
-            ->andThrow(new RuntimeException('fallo de prueba'));
+        Cache::forget(DashboardSyncJob::runningKey('stop'));
+        Queue::fake();
 
         $this->actingAs($user)
             ->post(route('stop-dashboard.sync'))
             ->assertRedirect()
-            ->assertSessionHas('error', fn ($message) => str_contains($message, 'fallo de prueba'))
-            ->assertSessionMissing('success');
+            ->assertSessionHas('success', fn ($message) => str_contains($message, 'segundo plano'))
+            ->assertSessionMissing('error');
+
+        Queue::assertPushed(DashboardSyncJob::class, function (DashboardSyncJob $job) use ($user) {
+            return $job->key === 'stop'
+                && $job->command === 'stop:sync-sheets'
+                && $job->arguments === ['--force' => true]
+                && $job->requestedByUserId === $user->id
+                && $job->auditChannel === 'stop'
+                && $job->queue === DashboardSyncJob::QUEUE
+                && $job->connection === DashboardSyncJob::CONNECTION;
+        });
 
         $log = StopActionLog::query()->where('action', 'sync')->latest()->first();
 
         $this->assertNotNull($log);
-        $this->assertSame('failed', $log->status);
+        $this->assertSame('queued', $log->status);
         $this->assertSame($user->id, $log->user_id);
-        $this->assertSame('fallo de prueba', $log->metadata['error'] ?? null);
+        $this->assertSame(DashboardSyncJob::QUEUE, $log->metadata['queue'] ?? null);
     }
 
     public function test_checklist_analytics_respect_active_filters(): void
