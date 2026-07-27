@@ -496,11 +496,14 @@ document.getElementById('rut').addEventListener('input', function () {
 
 // ─── Subida individual de archivos ───────────────────────────────
 const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
+const MAX_UPLOAD_RETRIES = 2;
+const UPLOAD_TIMEOUT_MS = 120 * 1000;
 const PREUPLOAD_URL = @json(route('contratacion-publico.documento.preupload'));
 const DISCARD_UPLOAD_URL = @json(route('contratacion-publico.documento.descartar'));
 const UPLOAD_ERROR_URL = @json(route('contratacion-publico.documento.error'));
 const CSRF_TOKEN = @json(csrf_token());
 const uploadActivos = new Set();
+const uploadsEnCurso = new Map();
 let envioEnCurso = false;
 
 function inputArchivo(campo) {
@@ -655,10 +658,20 @@ function mensajeErrorUpload(xhr) {
     return 'No se pudo subir el archivo. Revisa tu conexión e inténtalo nuevamente.';
 }
 
+function esperar(ms) {
+    return new Promise(function (resolve) {
+        window.setTimeout(resolve, ms);
+    });
+}
+
 function subirDocumento(input) {
     const campo = input.dataset.campo || input.name;
     const file = input.files && input.files[0] ? input.files[0] : null;
     const hidden = hiddenUpload(campo);
+
+    if (uploadsEnCurso.has(campo)) {
+        return uploadsEnCurso.get(campo);
+    }
 
     if (!file) {
         return Promise.resolve(Boolean(hidden && hidden.value));
@@ -673,7 +686,7 @@ function subirDocumento(input) {
         return Promise.resolve(false);
     }
 
-    return archivoEsLegible(file).then(function (legible) {
+    const carga = archivoEsLegible(file).then(function (legible) {
         if (!legible) {
             const msg = 'Chrome no pudo leer este archivo. Vuelve a seleccionarlo desde Galería o Archivos/Descargas y evita moverlo o editarlo antes de enviar.';
             registrarErrorUpload(campo, 'client_file_unreadable', msg, input);
@@ -687,7 +700,8 @@ function subirDocumento(input) {
         actualizarBotonEnvio();
         setEstadoArchivo(campo, 'uploading', 'Subiendo ' + file.name + '...', { remove: false });
 
-        return new Promise(function (resolve) {
+        function intentarSubida(intentos) {
+            return new Promise(function (resolve) {
             const xhr = new XMLHttpRequest();
             const formData = new FormData();
             formData.append('_token', CSRF_TOKEN);
@@ -695,6 +709,7 @@ function subirDocumento(input) {
             formData.append('documento', file);
 
             xhr.open('POST', PREUPLOAD_URL, true);
+            xhr.timeout = UPLOAD_TIMEOUT_MS;
             xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
             xhr.setRequestHeader('Accept', 'application/json');
 
@@ -705,10 +720,9 @@ function subirDocumento(input) {
             };
 
             xhr.onload = function () {
-                uploadActivos.delete(campo);
-                actualizarBotonEnvio();
-
                 if (xhr.status >= 200 && xhr.status < 300) {
+                    uploadActivos.delete(campo);
+                    actualizarBotonEnvio();
                     const data = JSON.parse(xhr.responseText || '{}');
                     if (hidden) hidden.value = data.token || '';
                     input.value = '';
@@ -721,6 +735,13 @@ function subirDocumento(input) {
                     return;
                 }
 
+                if ([502, 503, 504].includes(xhr.status)) {
+                    reintentarOFinalizar('server_temporarily_unavailable', 'El servidor tardó demasiado en responder. Revisa la señal e intenta nuevamente.');
+                    return;
+                }
+
+                uploadActivos.delete(campo);
+                actualizarBotonEnvio();
                 const msg = mensajeErrorUpload(xhr);
                 registrarErrorUpload(campo, 'server_upload_rejected', msg, input, xhr);
                 mostrarErrorArchivo(campo, msg);
@@ -728,19 +749,47 @@ function subirDocumento(input) {
                 resolve(false);
             };
 
-            xhr.onerror = function () {
+            function reintentarOFinalizar(fase, mensaje) {
+                if (intentos < MAX_UPLOAD_RETRIES) {
+                    const siguienteIntento = intentos + 1;
+                    const espera = siguienteIntento * 1000;
+                    setEstadoArchivo(campo, 'uploading', 'Reconectando ' + file.name + '... intento ' + (siguienteIntento + 1) + ' de ' + (MAX_UPLOAD_RETRIES + 1), { remove: false });
+
+                    esperar(espera).then(function () {
+                        intentarSubida(siguienteIntento).then(resolve);
+                    });
+                    return;
+                }
+
                 uploadActivos.delete(campo);
                 actualizarBotonEnvio();
-                const msg = 'No se pudo conectar para subir el archivo. Revisa la señal e intenta nuevamente.';
-                registrarErrorUpload(campo, 'network_error', msg, input, xhr);
-                mostrarErrorArchivo(campo, msg);
+                registrarErrorUpload(campo, fase, mensaje, input, xhr);
+                mostrarErrorArchivo(campo, mensaje);
                 setEstadoArchivo(campo, 'error', 'Error de conexión: ' + file.name, { retry: true });
                 resolve(false);
+            }
+
+            xhr.onerror = function () {
+                reintentarOFinalizar('network_error', 'No se pudo conectar para subir el archivo. Revisa la señal e intenta nuevamente.');
+            };
+
+            xhr.ontimeout = function () {
+                reintentarOFinalizar('network_timeout', 'La carga tardó demasiado. Revisa la señal e intenta nuevamente.');
             };
 
             xhr.send(formData);
-        });
+            });
+        }
+
+        return intentarSubida(0);
     });
+
+    uploadsEnCurso.set(campo, carga);
+    carga.finally(function () {
+        uploadsEnCurso.delete(campo);
+    });
+
+    return carga;
 }
 
 function mostrarArchivo(input) {
