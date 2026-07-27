@@ -467,12 +467,22 @@ class KizeoAutomationService
             return null;
         }
 
-        $values = collect($field['valuesAsArray'] ?? [
+        $rawValues = $field['valuesAsArray'] ?? [
             $field['value'] ?? null,
             $field['result'] ?? null,
-        ])
-            ->map(fn ($id) => trim((string) $id))
+        ];
+
+        // Kizeo can return advanced-list selections either as plain IDs or
+        // as nested value objects, depending on the form version and field.
+        // Keep the webhook resilient to both payload formats.
+        if (!is_array($rawValues) || !array_is_list($rawValues)) {
+            $rawValues = [$rawValues];
+        }
+
+        $values = collect($rawValues)
+            ->flatMap(fn ($value) => $this->advancedListValueCandidates($value))
             ->filter(fn ($id) => $id !== '')
+            ->unique()
             ->values()
             ->all();
 
@@ -489,6 +499,52 @@ class KizeoAutomationService
         }
 
         return $resolved ? implode(', ', $resolved) : null;
+    }
+
+    /**
+     * Extract scalar identifiers from Kizeo's different advanced-list payload shapes.
+     *
+     * @return array<int, string>
+     */
+    private function advancedListValueCandidates(mixed $value): array
+    {
+        if (is_scalar($value) || $value === null) {
+            $candidate = trim((string) $value);
+
+            return $candidate === '' ? [] : [$candidate];
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        if (array_is_list($value)) {
+            return collect($value)
+                ->flatMap(fn ($item) => $this->advancedListValueCandidates($item))
+                ->values()
+                ->all();
+        }
+
+        foreach (['value', 'id', 'uuid', 'key', 'code', 'result'] as $key) {
+            if (!array_key_exists($key, $value)) {
+                continue;
+            }
+
+            $candidates = $this->advancedListValueCandidates($value[$key]);
+
+            if ($candidates !== []) {
+                return $candidates;
+            }
+        }
+
+        // Some Kizeo payloads only contain the already visible label.
+        foreach (['label', 'text', 'name'] as $key) {
+            if (array_key_exists($key, $value)) {
+                return $this->advancedListValueCandidates($value[$key]);
+            }
+        }
+
+        return [];
     }
 
     private function resolveAdvancedListValues(array $values, array $labels): array
