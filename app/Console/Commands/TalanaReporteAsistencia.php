@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Mail\TalanaAsistenciaReporteMail;
 use App\Models\TalanaAusencia;
 use App\Models\TalanaContrato;
+use App\Models\TalanaMarca;
 use App\Services\TalanaService;
 use App\Support\TalanaMarcaDirection;
 use Carbon\Carbon;
@@ -62,13 +63,14 @@ class TalanaReporteAsistencia extends Command
         $this->info("  Talana — Reporte Asistencia: {$fecha}");
         $this->info('═══════════════════════════════════════════');
 
-        // ─── 1. Obtener marcas alrededor del día desde la API ─────────────────
-        // Se incluye historial para no asumir que un contrato reciente está sin enrolar,
-        // y el día siguiente para cerrar correctamente turnos nocturnos.
+        // ─── 1. Obtener las marcas necesarias desde la API ────────────────────
+        // El día siguiente permite cerrar turnos nocturnos. El historial se toma
+        // desde la base local para no convertir el reporte diario en una consulta
+        // de varios días contra la API de Talana.
         $this->line('');
-        $this->line('📡 Obteniendo marcas de asistencia (historial y turnos nocturnos)...');
+        $this->line('📡 Obteniendo marcas de asistencia (día y cierre nocturno)...');
 
-        $desdeMarcas = $fechaAnalisis->copy()->subDays(7)->toDateString();
+        $desdeMarcas = $fechaAnalisis->toDateString();
         $hastaMarcas = $fechaAnalisis->copy()->addDay()->toDateString();
 
         try {
@@ -82,8 +84,12 @@ class TalanaReporteAsistencia extends Command
 
         $this->line("   ✓ {$this->cnt($marcasRaw)} marcas recibidas ({$desdeMarcas} a {$hastaMarcas})");
 
-        // ─── 2. Agrupar marcas por persona ────────────────────────────────────
-        [$marcasPorPersona, $personasConHistorial] = $this->agruparMarcas($marcasRaw, $fechaAnalisis);
+        // ─── 2. Agrupar marcas por persona e historial local ─────────────────
+        [$marcasPorPersona, $personasConMarcasConsultadas] = $this->agruparMarcas($marcasRaw, $fechaAnalisis);
+        $personasConHistorial = $this->personasConHistorialLocal(
+            $fechaAnalisis->copy()->subDays(7),
+            $fechaAnalisis->copy()->subDay()
+        ) + $personasConMarcasConsultadas;
 
         // ─── 3. Cargar trabajadores activos desde DB local ────────────────────
         // (sincronizados en el talana:sync-db diario de las 06:00)
@@ -212,6 +218,22 @@ class TalanaReporteAsistencia extends Command
         }
 
         return $marcas;
+    }
+
+    /**
+     * La sincronización diaria persiste marcas para ambos empleadores. Usarla
+     * como historial evita reconsultar ocho días de API sólo para distinguir
+     * contratos recientes sin marcas previas.
+     */
+    private function personasConHistorialLocal(Carbon $desde, Carbon $hasta): array
+    {
+        return TalanaMarca::query()
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->pluck('persona_talana_id')
+            ->filter()
+            ->unique()
+            ->mapWithKeys(fn ($personaId) => [(int) $personaId => true])
+            ->all();
     }
 
     /**
