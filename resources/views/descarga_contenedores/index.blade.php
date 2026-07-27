@@ -86,7 +86,7 @@
         <div class="review-queue-heading">
             <div>
                 <h3>Bandeja de revisión</h3>
-                <p>Atajos para validar registros completos o completar los que siguen pendientes.</p>
+                <p>Los avisos indican datos faltantes en cada borrador. Usa Completar para ir directamente al campo que requiere atención.</p>
             </div>
             <a href="{{ route('descarga-contenedores.index', ['validacion_estado' => 'listos']) }}" class="btn-secondary">
                 <i class="bi bi-shield-check"></i> Ver listos
@@ -137,6 +137,7 @@
                                 default => $blocker,
                             };
                         });
+                        $nextAction = $item->validationNextAction();
                     @endphp
                     <div class="review-item">
                         <div>
@@ -150,9 +151,12 @@
                                     <span class="badge warning">+{{ $visibleBlockers->count() - 2 }}</span>
                                 @endif
                             </div>
+                            @if($nextAction)
+                            <p class="review-next-step"><i class="bi bi-arrow-right-circle"></i><span><strong>Siguiente:</strong> {{ $nextAction['detail'] }}</span></p>
+                            @endif
                         </div>
                         <div class="review-actions">
-                            <a href="{{ route('descarga-contenedores.edit', $item) }}" class="icon-btn" title="Completar registro"><i class="bi bi-pencil-fill"></i></a>
+                            <a href="{{ route('descarga-contenedores.edit', $item) . ($nextAction['anchor'] ?? '') }}" class="btn-secondary review-complete-btn" title="{{ $nextAction['label'] ?? 'Completar registro' }}"><i class="bi bi-pencil-fill"></i> {{ $nextAction['label'] ?? 'Completar' }}</a>
                             <a href="{{ route('descarga-contenedores.show', $item) }}" class="icon-btn" title="Ver detalle"><i class="bi bi-eye-fill"></i></a>
                         </div>
                     </div>
@@ -566,6 +570,25 @@
     flex-wrap: wrap;
     gap: .25rem;
     margin-top: .35rem;
+}
+.review-next-step {
+    display: flex;
+    gap: .35rem;
+    max-width: 630px;
+    margin: .4rem 0 0;
+    color: var(--text-muted);
+    font-size: .75rem;
+    line-height: 1.4;
+}
+.review-next-step i {
+    flex: 0 0 auto;
+    margin-top: .05rem;
+    color: #d97706;
+}
+.review-next-step strong { display: inline; font-size: inherit; }
+.review-complete-btn {
+    white-space: nowrap;
+    font-size: .75rem;
 }
 .review-empty {
     margin: .3rem 0 0;

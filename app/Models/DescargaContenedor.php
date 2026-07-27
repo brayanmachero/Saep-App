@@ -172,6 +172,52 @@ class DescargaContenedor extends Model
         return $this->estado === 'borrador' && $this->validationBlockers()->isEmpty();
     }
 
+    public function validationNextAction(): ?array
+    {
+        $blockers = $this->validationBlockers();
+
+        if ($blockers->isEmpty()) {
+            return null;
+        }
+
+        if ($blockers->intersect([
+            'falta tarifa asociada',
+            'falta pago colaborador',
+            'tarifa pendiente de revisión',
+        ])->isNotEmpty()) {
+            return [
+                'label' => 'Completar tarifa FACT',
+                'detail' => 'Selecciona la tarifa FACT correcta. El pago de colaboradores se completa automáticamente desde esa tarifa.',
+                'anchor' => '#tarifa_picker',
+            ];
+        }
+
+        if ($blockers->intersect([
+            'falta equipo de trabajadores',
+            'porcentajes no suman 100%',
+        ])->isNotEmpty()) {
+            return [
+                'label' => 'Completar equipo',
+                'detail' => 'Asigna los trabajadores que participaron y ajusta la distribución al 100%.',
+                'anchor' => '#participantes_picker',
+            ];
+        }
+
+        if ($blockers->contains('falta código FACT')) {
+            return [
+                'label' => 'Informar código FACT',
+                'detail' => 'Busca y selecciona la tarifa FACT correspondiente a la descarga.',
+                'anchor' => '#tarifa_picker',
+            ];
+        }
+
+        return [
+            'label' => 'Completar registro',
+            'detail' => 'Completa los datos pendientes antes de solicitar la validación.',
+            'anchor' => '',
+        ];
+    }
+
     public function validationChecklist(): array
     {
         $this->loadMissing('participantes');
