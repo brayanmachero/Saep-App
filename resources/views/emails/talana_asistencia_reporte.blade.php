@@ -90,11 +90,15 @@
         </div>
         <div class="card card-error">
             <div class="num">{{ $reporte['total_sin_marcacion'] }}</div>
-            <div class="label">Sin marcación ❌</div>
+            <div class="label">Sin marca confirmada ❌</div>
         </div>
         <div class="card card-new">
-            <div class="num">{{ $reporte['total_sin_enrolar'] }}</div>
-            <div class="label">Sin enrolar 🆕</div>
+            <div class="num">{{ $reporte['total_sin_historial'] ?? 0 }}</div>
+            <div class="label">Sin historial 🆕</div>
+        </div>
+        <div class="card" style="background:#f8fafc;color:#475569;border:1px solid #cbd5e1;">
+            <div class="num">{{ $reporte['total_sin_evaluacion'] ?? 0 }}</div>
+            <div class="label">Sin evaluación ◌</div>
         </div>
         @if(($reporte['total_revision'] ?? 0) > 0)
         <div class="card" style="background:#fdf4ff;color:#6b21a8;border:1px solid #d8b4fe;">
@@ -106,8 +110,10 @@
 
     {{-- AVISO sin turno --}}
     <div class="notice">
-        <strong>Nota:</strong> Los trabajadores <em>sin marcación</em> pueden estar en día libre, vacaciones o turno no laborable.
-        Esta información requiere validación manual contra turno asignado en Talana.
+        <strong>Alcance de la evaluación:</strong> Talana entregó jornada confirmada para
+        <strong>{{ $reporte['total_jornadas_cubiertas'] ?? 0 }}</strong> de {{ $reporte['total_activos'] }} contratos activos.
+        Sólo se alerta <em>sin marca</em> cuando la jornada laboral está confirmada. Los demás casos quedan como
+        <em>sin evaluación</em> en el Excel, no como ausencia.
     </div>
 
     {{-- SECCIÓN: MARCACIÓN INCOMPLETA --}}
@@ -168,16 +174,16 @@
     </div>
     @endif
 
-    {{-- SECCIÓN: PROBABLE NUEVO SIN ENROLAR --}}
-    @if($reporte['total_sin_enrolar'] > 0)
+    {{-- SECCIÓN: CONTRATO RECIENTE SIN HISTORIAL --}}
+    @if(($reporte['total_sin_historial'] ?? 0) > 0)
     <div class="section">
         <div class="section-title">
-            🆕 Personal probable nuevo sin enrolar
-            <span class="badge-new">{{ $reporte['total_sin_enrolar'] }} trabajador(es)</span>
+            🆕 Contratos recientes sin historial de marca
+            <span class="badge-new">{{ $reporte['total_sin_historial'] }} trabajador(es)</span>
         </div>
         <p style="font-size:12px;color:#166534;margin-bottom:12px;">
-            Tienen contrato vigente reciente y <strong>no registran ninguna marca en los últimos 7 días</strong>.
-            Probablemente no tienen turno cargado o no están enrolados en el sistema biométrico.
+            Tienen contrato vigente reciente y <strong>no registran marcas en los últimos 7 días</strong>.
+            Este dato no confirma falta de enrolamiento; sirve para revisar habilitación, turno o incorporación.
         </p>
         <table>
             <thead>
@@ -191,7 +197,7 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach($reporte['sin_enrolar'] as $t)
+                @foreach($reporte['sin_historial'] as $t)
                 @php
                     $dias = $t['desde'] ? \Carbon\Carbon::parse($t['desde'])->diffInDays(\Carbon\Carbon::parse($fecha)) : null;
                 @endphp
@@ -213,12 +219,12 @@
     @if($reporte['total_sin_marcacion'] > 0)
     <div class="section">
         <div class="section-title">
-            ❌ Sin marcación (contrato activo)
+            ❌ Sin marca con jornada laboral confirmada
             <span class="badge-error">{{ $reporte['total_sin_marcacion'] }} trabajador(es)</span>
         </div>
         <p style="font-size:12px;color:#991b1b;margin-bottom:12px;">
-            Estos trabajadores tienen contrato vigente pero <strong>no registraron ninguna marca</strong> el día {{ \Carbon\Carbon::parse($fecha)->format('d/m/Y') }}.
-            Pueden estar en día libre, vacaciones, licencia o ausencia. Verificar en Talana.
+            Estos trabajadores tienen jornada laboral confirmada por Talana y <strong>no registraron ninguna marca</strong>
+            el día {{ \Carbon\Carbon::parse($fecha)->format('d/m/Y') }}. Requiere revisión en Talana.
         </p>
 
         @foreach($sinMarcacionPorEmpresaCC as $empresa => $ccGroups)
@@ -255,6 +261,20 @@
             @endforeach
         </div>
         @endforeach
+    </div>
+    @endif
+
+    {{-- SECCIÓN: SIN EVALUACIÓN --}}
+    @if(($reporte['total_sin_evaluacion'] ?? 0) > 0)
+    <div class="section">
+        <div class="section-title">
+            ◌ Sin evaluación de jornada
+            <span style="background:#e2e8f0;color:#475569;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;">{{ $reporte['total_sin_evaluacion'] }} trabajador(es)</span>
+        </div>
+        <p style="font-size:12px;color:#475569;">
+            No tienen marca, jornada ni ausencia confirmada en los datos disponibles de Talana. No se consideran alerta;
+            el detalle completo queda en la hoja <strong>Sin evaluar</strong> del archivo Excel.
+        </p>
     </div>
     @endif
 
@@ -307,11 +327,11 @@
     @endif
 
     {{-- Sin anomalías --}}
-    @if($reporte['total_incompletas'] === 0 && $reporte['total_sin_enrolar'] === 0 && $reporte['total_sin_marcacion'] === 0 && ($reporte['total_revision'] ?? 0) === 0)
+    @if(($reporte['total_alertas'] ?? 0) === 0)
     <div class="section" style="text-align:center;padding:40px 36px;">
         <div style="font-size:48px;">✅</div>
-        <div style="font-size:18px;font-weight:700;color:#065f46;margin-top:12px;">Sin anomalías detectadas</div>
-        <div style="color:#64748b;margin-top:6px;">Los {{ $reporte['total_activos'] }} trabajadores activos tienen marcación completa.</div>
+        <div style="font-size:18px;font-weight:700;color:#065f46;margin-top:12px;">Sin alertas verificables</div>
+        <div style="color:#64748b;margin-top:6px;">No se detectaron marcas incompletas, jornadas confirmadas sin marca ni anomalías de jornada.</div>
     </div>
     @endif
 

@@ -6,6 +6,7 @@ use App\Models\TalanaContrato;
 use App\Models\TalanaMarca;
 use App\Models\TalanaPersona;
 use App\Services\TalanaService;
+use App\Support\TalanaMarcaDirection;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
@@ -37,8 +38,8 @@ class TalanaSyncDbCommand extends Command
 
     public function handle(): int
     {
-        $isDry     = $this->option('dry-run');
-        $meses     = (int) $this->option('meses');
+        $isDry = $this->option('dry-run');
+        $meses = (int) $this->option('meses');
         $soloContr = $this->option('solo-contratos');
 
         // Marcar sync en curso (para el panel de estado del dashboard)
@@ -50,7 +51,7 @@ class TalanaSyncDbCommand extends Command
         }
 
         $this->info('─────────────────────────────────────────');
-        $this->info('  Talana → MySQL Sync  ' . ($isDry ? '[DRY-RUN]' : ''));
+        $this->info('  Talana → MySQL Sync  '.($isDry ? '[DRY-RUN]' : ''));
         $this->info('─────────────────────────────────────────');
 
         try {
@@ -66,7 +67,7 @@ class TalanaSyncDbCommand extends Command
             }
 
             $this->info('');
-            $this->info('✅ Sync completado' . ($isDry ? ' (DRY-RUN — nada persistido)' : ''));
+            $this->info('✅ Sync completado'.($isDry ? ' (DRY-RUN — nada persistido)' : ''));
 
             if (! $isDry) {
                 Cache::put('talana_sync_finished_at', now()->toDateTimeString(), now()->addHours(6));
@@ -74,10 +75,11 @@ class TalanaSyncDbCommand extends Command
             }
 
         } catch (\Throwable $e) {
-            $this->error('❌ Sync falló: ' . $e->getMessage());
+            $this->error('❌ Sync falló: '.$e->getMessage());
             if (! $isDry) {
                 Cache::put('talana_sync_error', $e->getMessage(), now()->addHours(2));
             }
+
             return self::FAILURE;
         } finally {
             if (! $isDry) {
@@ -103,21 +105,21 @@ class TalanaSyncDbCommand extends Command
                 return;
             }
 
-            $now  = now();
+            $now = now();
             $lote = [];
 
             foreach ($personas as $p) {
                 $lote[] = [
-                    'talana_id'        => $p['id'],
-                    'rut'              => $this->str($p['rut'] ?? null),
-                    'nombre'           => $this->str($p['name'] ?? null),
+                    'talana_id' => $p['id'],
+                    'rut' => $this->str($p['rut'] ?? null),
+                    'nombre' => $this->str($p['name'] ?? null),
                     'apellido_paterno' => $this->str($p['paternalSurname'] ?? null),
                     'apellido_materno' => $this->str($p['maternalSurname'] ?? null),
-                    'email'            => $this->str($p['email'] ?? null),
-                    'activo'           => (bool) ($p['active'] ?? true),
-                    'synced_at'        => $now,
-                    'created_at'       => $now,
-                    'updated_at'       => $now,
+                    'email' => $this->str($p['email'] ?? null),
+                    'activo' => (bool) ($p['active'] ?? true),
+                    'synced_at' => $now,
+                    'created_at' => $now,
+                    'updated_at' => $now,
                 ];
             }
 
@@ -148,12 +150,13 @@ class TalanaSyncDbCommand extends Command
 
         if (empty($empresas)) {
             $this->warn('   ⚠ No hay empresas configuradas en services.talana.empresas');
+
             return;
         }
 
         try {
             $loteTotal = [];
-            $now       = now();
+            $now = now();
 
             foreach ($empresas as $empresaId => $empresaNombre) {
                 $contratos = $this->talana->contratos(['empresa' => $empresaId]);
@@ -161,41 +164,42 @@ class TalanaSyncDbCommand extends Command
 
                 if ($isDry) {
                     $tipos = array_count_values(array_column(
-                        array_map(fn($c) => ['t' => $c['tipoContratoDetails']['nombre'] ?? 'N/A'], $contratos),
+                        array_map(fn ($c) => ['t' => $c['tipoContratoDetails']['nombre'] ?? 'N/A'], $contratos),
                         't'
                     ));
                     foreach ($tipos as $tipo => $cnt) {
                         $this->line("     • {$tipo}: {$cnt}");
                     }
+
                     continue;
                 }
 
                 foreach ($contratos as $c) {
-                    $emp  = $c['empleadoDetails'] ?? [];
+                    $emp = $c['empleadoDetails'] ?? [];
                     $tipo = $c['tipoContratoDetails'] ?? [];
-                    $jef  = $c['jefe'] ?? [];
+                    $jef = $c['jefe'] ?? [];
 
                     $loteTotal[] = [
-                        'talana_id'           => $c['id'],
-                        'empresa_id'          => $empresaId,
-                        'empresa_nombre'      => $empresaNombre,
-                        'persona_talana_id'   => $emp['id'] ?? null,
-                        'persona_nombre'      => $this->nombreCompleto($emp),
-                        'persona_rut'         => $this->str($emp['rut'] ?? null),
-                        'persona_email'       => $this->str($emp['email'] ?? null),
-                        'tipo_contrato'       => $this->str($tipo['codigo'] ?? $tipo['id'] ?? null),
-                        'tipo_contrato_nombre'=> $this->str($tipo['nombre'] ?? null),
-                        'desde'               => $this->date($c['desde'] ?? null),
-                        'hasta'               => $this->date($c['hasta'] ?? null),
-                        'finiquitado'         => (bool) ($c['finiquitado'] ?? false),
-                        'sucursal_nombre'     => $this->str($c['sucursal']['nombre'] ?? null),
+                        'talana_id' => $c['id'],
+                        'empresa_id' => $empresaId,
+                        'empresa_nombre' => $empresaNombre,
+                        'persona_talana_id' => $emp['id'] ?? null,
+                        'persona_nombre' => $this->nombreCompleto($emp),
+                        'persona_rut' => $this->str($emp['rut'] ?? null),
+                        'persona_email' => $this->str($emp['email'] ?? null),
+                        'tipo_contrato' => $this->str($tipo['codigo'] ?? $tipo['id'] ?? null),
+                        'tipo_contrato_nombre' => $this->str($tipo['nombre'] ?? null),
+                        'desde' => $this->date($c['desde'] ?? null),
+                        'hasta' => $this->date($c['hasta'] ?? null),
+                        'finiquitado' => (bool) ($c['finiquitado'] ?? false),
+                        'sucursal_nombre' => $this->str($c['sucursal']['nombre'] ?? null),
                         'centro_costo_nombre' => $this->str($c['centroCosto']['nombre'] ?? null),
-                        'cargo_nombre'        => $this->str(is_string($c['cargo'] ?? null) ? ($c['cargo'] ?? null) : ($c['cargo']['nombre'] ?? $c['cargoDetails']['nombre'] ?? null)),
-                        'horas_jornada'       => isset($c['jornada']['horasDeLaJornada']) ? (float) $c['jornada']['horasDeLaJornada'] : null,
-                        'jefe_nombre'         => $this->nombreCompleto($jef),
-                        'synced_at'           => $now,
-                        'created_at'          => $now,
-                        'updated_at'          => $now,
+                        'cargo_nombre' => $this->str(is_string($c['cargo'] ?? null) ? ($c['cargo'] ?? null) : ($c['cargo']['nombre'] ?? $c['cargoDetails']['nombre'] ?? null)),
+                        'horas_jornada' => isset($c['jornada']['horasDeLaJornada']) ? (float) $c['jornada']['horasDeLaJornada'] : null,
+                        'jefe_nombre' => $this->nombreCompleto($jef),
+                        'synced_at' => $now,
+                        'created_at' => $now,
+                        'updated_at' => $now,
                     ];
                 }
             }
@@ -216,7 +220,7 @@ class TalanaSyncDbCommand extends Command
                 }
             }
 
-            $activos      = count(array_filter($loteTotal, fn($c) => ! $c['finiquitado']));
+            $activos = count(array_filter($loteTotal, fn ($c) => ! $c['finiquitado']));
             $finiquitados = count($loteTotal) - $activos;
             $this->line("   ✓ {$this->count($loteTotal)} contratos sincronizados ({$activos} activos, {$finiquitados} finiquitados)");
 
@@ -233,20 +237,31 @@ class TalanaSyncDbCommand extends Command
         $this->line("🕐 Sincronizando marcas de asistencia ({$meses} mes(es))...");
 
         // Sync mes por mes para manejar memoria y timeout
-        $hasta  = Carbon::today();
-        $desde  = Carbon::today()->startOfMonth()->subMonths($meses - 1);
+        $hasta = Carbon::today();
+        $desde = Carbon::today()->startOfMonth()->subMonths($meses - 1);
 
         $inicio = clone $desde;
 
         while ($inicio->lte($hasta)) {
-            $fin      = (clone $inicio)->endOfMonth()->min($hasta);
+            $fin = (clone $inicio)->endOfMonth()->min($hasta);
             $desdeStr = $inicio->format('Y-m-d');
             $hastaStr = $fin->format('Y-m-d');
 
             $this->line("   📅 {$desdeStr} → {$hastaStr}");
 
             try {
-                $marcas = $this->talana->marcasAsistencia($desdeStr, $hastaStr, 90);
+                $marcas = [];
+                $empresas = config('services.talana.empresas', []);
+
+                if (empty($empresas)) {
+                    $marcas = $this->talana->marcasAsistencia($desdeStr, $hastaStr, 90);
+                } else {
+                    foreach ($empresas as $empresaId => $empresaNombre) {
+                        $loteEmpresa = $this->talana->marcasAsistencia($desdeStr, $hastaStr, 90, (int) $empresaId);
+                        $this->line("      {$empresaNombre}: {$this->count($loteEmpresa)} marcas");
+                        $marcas = array_merge($marcas, $loteEmpresa);
+                    }
+                }
                 $this->line("      API: {$this->count($marcas)} marcas obtenidas");
 
                 if (! $isDry && ! empty($marcas)) {
@@ -254,12 +269,12 @@ class TalanaSyncDbCommand extends Command
                     $personaMap = $this->buildPersonaMap();
 
                     $lote = [];
-                    $now  = now();
+                    $now = now();
 
                     foreach ($marcas as $m) {
-                        $pid      = $m['person']['id'] ?? ($m['personId'] ?? null);
-                        $tsRaw    = $m['markedAt'] ?? ($m['TS'] ?? ($m['fecha'] ?? null));
-                        $infoCC   = $personaMap[$pid] ?? [];
+                        $pid = $m['person']['id'] ?? ($m['personId'] ?? null);
+                        $tsRaw = $m['markedAt'] ?? ($m['TS'] ?? ($m['fecha'] ?? null));
+                        $infoCC = $personaMap[$pid] ?? [];
 
                         if (! $pid || ! $tsRaw) {
                             continue;
@@ -274,17 +289,17 @@ class TalanaSyncDbCommand extends Command
                         $personData = $m['person'] ?? [];
 
                         $lote[] = [
-                            'persona_talana_id'  => $pid,
-                            'persona_nombre'     => $infoCC['nombre'] ?? $this->nombreCompleto($personData),
-                            'persona_rut'        => $infoCC['rut']    ?? $this->str($personData['rut'] ?? null),
-                            'fecha'              => $ts->toDateString(),
-                            'hora'               => $ts->toTimeString(),
-                            'tipo'               => strtoupper($this->str($m['direction'] ?? $m['tipo'] ?? null)),
-                            'centro_costo_nombre'=> $infoCC['cc'] ?? null,
-                            'raw_ts'             => $ts->toDateTimeString(),
-                            'synced_at'          => $now,
-                            'created_at'         => $now,
-                            'updated_at'         => $now,
+                            'persona_talana_id' => $pid,
+                            'persona_nombre' => $infoCC['nombre'] ?? $this->nombreCompleto($personData),
+                            'persona_rut' => $infoCC['rut'] ?? $this->str($personData['rut'] ?? null),
+                            'fecha' => $ts->toDateString(),
+                            'hora' => $ts->toTimeString(),
+                            'tipo' => TalanaMarcaDirection::normalize($m['direction'] ?? $m['tipo'] ?? null),
+                            'centro_costo_nombre' => $infoCC['cc'] ?? null,
+                            'raw_ts' => $ts->toDateTimeString(),
+                            'synced_at' => $now,
+                            'created_at' => $now,
+                            'updated_at' => $now,
                         ];
                     }
 
@@ -317,10 +332,10 @@ class TalanaSyncDbCommand extends Command
             ->select('persona_talana_id', 'persona_nombre', 'persona_rut', 'centro_costo_nombre')
             ->get()
             ->keyBy('persona_talana_id')
-            ->map(fn($c) => [
+            ->map(fn ($c) => [
                 'nombre' => $c->persona_nombre,
-                'rut'    => $c->persona_rut,
-                'cc'     => $c->centro_costo_nombre,
+                'rut' => $c->persona_rut,
+                'cc' => $c->centro_costo_nombre,
             ])
             ->toArray();
     }
@@ -332,6 +347,7 @@ class TalanaSyncDbCommand extends Command
             $data['paternalSurname'] ?? $data['apellidoPaterno'] ?? null,
             $data['maternalSurname'] ?? $data['apellidoMaterno'] ?? null,
         ]);
+
         return $partes ? trim(implode(' ', $partes)) : null;
     }
 
@@ -340,6 +356,7 @@ class TalanaSyncDbCommand extends Command
         if ($val === null || trim($val) === '') {
             return null;
         }
+
         return mb_substr(trim($val), 0, 200);
     }
 

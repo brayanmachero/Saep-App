@@ -3,9 +3,10 @@
 namespace App\Console\Commands;
 
 use App\Mail\TalanaAsistenciaReporteMail;
+use App\Models\TalanaAusencia;
 use App\Models\TalanaContrato;
-use App\Models\TalanaMarca;
 use App\Services\TalanaService;
+use App\Support\TalanaMarcaDirection;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -40,53 +41,49 @@ class TalanaReporteAsistencia extends Command
 
     public function handle(): int
     {
-        $fecha     = $this->option('fecha') ?: Carbon::yesterday()->toDateString();
-        $isDry     = $this->option('dry-run');
+        $fecha = $this->option('fecha') ?: Carbon::yesterday('America/Santiago')->toDateString();
+        $fechaAnalisis = Carbon::parse($fecha, 'America/Santiago')->startOfDay();
+        $isDry = $this->option('dry-run');
         $diasNuevo = (int) ($this->option('dias-nuevo') ?? 60);
-        $email     = $this->option('email') ?: config('services.talana.alerta_email');
+        $email = $this->option('email') ?: config('services.talana.alerta_email');
 
-        $jornadaNormal  = (float) ($this->option('jornada-normal')   ?? 9);
+        $jornadaNormal = (float) ($this->option('jornada-normal') ?? 9);
         $horasExtrasMax = (float) ($this->option('horas-extras-max') ?? 7);
-        $umbralAltoH    = $jornadaNormal + $horasExtrasMax; // ej. 9+7 = 16h → sospechoso
-        $umbralBajoH    = 7.0;                             // < 7h trabajadas → sospechoso
+        $umbralAltoH = $jornadaNormal + $horasExtrasMax; // ej. 9+7 = 16h → sospechoso
+        $umbralBajoH = 7.0;                             // < 7h trabajadas → sospechoso
 
         if (! $email) {
             $this->error('No hay email configurado. Usa --email= o define TALANA_ALERTA_EMAIL en .env');
+
             return self::FAILURE;
         }
 
-        $this->info("═══════════════════════════════════════════");
+        $this->info('═══════════════════════════════════════════');
         $this->info("  Talana — Reporte Asistencia: {$fecha}");
-        $this->info("═══════════════════════════════════════════");
+        $this->info('═══════════════════════════════════════════');
 
-        // ─── 1. Obtener marcas del día desde la API (todas las empresas) ─────────
+        // ─── 1. Obtener marcas alrededor del día desde la API ─────────────────
+        // Se incluye historial para no asumir que un contrato reciente está sin enrolar,
+        // y el día siguiente para cerrar correctamente turnos nocturnos.
         $this->line('');
-        $this->line('📡 Obteniendo marcas de asistencia...');
+        $this->line('📡 Obteniendo marcas de asistencia (historial y turnos nocturnos)...');
 
-        $empresas  = config('services.talana.empresas', []);
-        $marcasRaw = [];
+        $desdeMarcas = $fechaAnalisis->copy()->subDays(7)->toDateString();
+        $hastaMarcas = $fechaAnalisis->copy()->addDay()->toDateString();
 
         try {
-            if (empty($empresas)) {
-                // Sin config multiempresa: llamada única sin filtro
-                $marcasRaw = $this->talana->marcasAsistencia($fecha, $fecha, 60);
-            } else {
-                foreach ($empresas as $empresaId => $empresaNombre) {
-                    $lote = $this->talana->marcasAsistencia($fecha, $fecha, 60, (int) $empresaId);
-                    $this->line("   {$empresaNombre}: {$this->cnt($lote)} marcas");
-                    $marcasRaw = array_merge($marcasRaw, $lote);
-                }
-            }
+            $marcasRaw = $this->obtenerMarcasPorEmpresas($desdeMarcas, $hastaMarcas);
         } catch (\Throwable $e) {
             $this->error("Error al obtener marcas: {$e->getMessage()}");
             Log::error('TalanaReporteAsistencia: error marcas API', ['error' => $e->getMessage(), 'fecha' => $fecha]);
+
             return self::FAILURE;
         }
 
-        $this->line("   ✓ {$this->cnt($marcasRaw)} marcas recibidas");
+        $this->line("   ✓ {$this->cnt($marcasRaw)} marcas recibidas ({$desdeMarcas} a {$hastaMarcas})");
 
         // ─── 2. Agrupar marcas por persona ────────────────────────────────────
-        $marcasPorPersona = $this->agruparMarcas($marcasRaw, $fecha);
+        [$marcasPorPersona, $personasConHistorial] = $this->agruparMarcas($marcasRaw, $fechaAnalisis);
 
         // ─── 3. Cargar trabajadores activos desde DB local ────────────────────
         // (sincronizados en el talana:sync-db diario de las 06:00)
@@ -97,12 +94,12 @@ class TalanaReporteAsistencia extends Command
             ->where('finiquitado', false)
             ->where(function ($q) use ($fecha) {
                 $q->whereNull('hasta')
-                  ->orWhere('hasta', '>=', $fecha);
+                    ->orWhere('hasta', '>=', $fecha);
             })
             ->where('desde', '<=', $fecha)
             ->get(['talana_id', 'persona_talana_id', 'persona_nombre', 'persona_rut',
-                   'centro_costo_nombre', 'sucursal_nombre', 'tipo_contrato_nombre',
-                   'cargo_nombre', 'desde', 'hasta', 'empresa_id', 'empresa_nombre']);
+                'centro_costo_nombre', 'sucursal_nombre', 'tipo_contrato_nombre',
+                'cargo_nombre', 'desde', 'hasta', 'empresa_id', 'empresa_nombre']);
 
         $this->line("   ✓ {$this->cnt($contratosActivos->toArray())} contratos activos para {$fecha}");
 
@@ -114,9 +111,10 @@ class TalanaReporteAsistencia extends Command
         $this->line('📡 Obteniendo jornada calculada (assignationSummary) de la API...');
 
         $jornadaPorPersona = []; // pid → bool (true=día laboral, false=día de descanso)
-        $horasAsignacion   = []; // pid → working_seconds (int)
+        $horasAsignacion = []; // pid → working_seconds (int)
 
         try {
+            $empresas = config('services.talana.empresas', []);
             $assignSummaries = [];
             if (empty($empresas)) {
                 $assignSummaries = $this->talana->assignationSummary($fecha, $fecha, 120);
@@ -129,10 +127,10 @@ class TalanaReporteAsistencia extends Command
             }
 
             if (empty($assignSummaries)) {
-                $this->warn('   ⚠ Sin datos de jornada en API para ' . $fecha . '. El filtro de días de descanso y horas no estará disponible.');
+                $this->warn('   ⚠ Sin datos de jornada en API para '.$fecha.'. El filtro de días de descanso y horas no estará disponible.');
             } else {
                 foreach ($assignSummaries as $rec) {
-                    $person   = $rec['person'] ?? [];
+                    $person = $rec['person'] ?? [];
                     $personId = is_array($person) ? ($person['id'] ?? null) : $person;
                     if (! $personId) {
                         continue;
@@ -142,11 +140,17 @@ class TalanaReporteAsistencia extends Command
                         $horasAsignacion[$personId] = (int) $rec['workingSeconds'];
                     }
                 }
-                $totalDescansos = count(array_filter($jornadaPorPersona, fn($v) => $v === false));
-                $this->line('   ✓ ' . count($assignSummaries) . " jornadas cargadas ({$totalDescansos} días de descanso)");
+                $totalDescansos = count(array_filter($jornadaPorPersona, fn ($v) => $v === false));
+                $this->line('   ✓ '.count($assignSummaries)." jornadas cargadas ({$totalDescansos} días de descanso)");
             }
         } catch (\Throwable $e) {
-            $this->warn('   ⚠ No se pudo cargar jornada calculada: ' . $e->getMessage());
+            $this->warn('   ⚠ No se pudo cargar jornada calculada: '.$e->getMessage());
+        }
+
+        // Las ausencias sólo se ocupan cuando la sincronización local está vigente.
+        [$ausenciasPorRut, $ausenciasVigentes] = $this->ausenciasActivasPorRut($fechaAnalisis);
+        if (! $ausenciasVigentes) {
+            $this->warn('   ⚠ Ausencias no actualizadas: no se usarán para clasificar inasistencias.');
         }
 
         // ─── 5. Analizar cada trabajador activo ───────────────────────────
@@ -154,11 +158,14 @@ class TalanaReporteAsistencia extends Command
             $contratosActivos,
             $marcasPorPersona,
             $jornadaPorPersona,
-            $fecha,
+            $personasConHistorial,
+            $ausenciasPorRut,
+            $fechaAnalisis,
             $diasNuevo,
             $horasAsignacion,
             $umbralAltoH,
-            $umbralBajoH
+            $umbralBajoH,
+            $ausenciasVigentes
         );
 
         // ─── 6. Mostrar resumen por consola ───────────────────────────────────
@@ -168,12 +175,11 @@ class TalanaReporteAsistencia extends Command
         if ($isDry) {
             $this->line('');
             $this->warn('[DRY-RUN] Email no enviado');
+
             return self::SUCCESS;
         }
 
-        if ($resultado['total_incompletas'] === 0
-            && $resultado['total_sin_marcacion'] === 0
-            && $resultado['total_sin_enrolar'] === 0) {
+        if ($resultado['total_alertas'] === 0) {
             $this->line('');
             $this->info('✅ Sin anomalías — email informativo igualmente enviado');
         }
@@ -184,70 +190,139 @@ class TalanaReporteAsistencia extends Command
         } catch (\Throwable $e) {
             $this->error("Error al enviar email: {$e->getMessage()}");
             Log::error('TalanaReporteAsistencia: error email', ['error' => $e->getMessage()]);
+
             return self::FAILURE;
         }
 
         return self::SUCCESS;
     }
 
+    private function obtenerMarcasPorEmpresas(string $desde, string $hasta): array
+    {
+        $empresas = config('services.talana.empresas', []);
+        if (empty($empresas)) {
+            return $this->talana->marcasAsistencia($desde, $hasta, 120);
+        }
+
+        $marcas = [];
+        foreach ($empresas as $empresaId => $empresaNombre) {
+            $lote = $this->talana->marcasAsistencia($desde, $hasta, 120, (int) $empresaId);
+            $this->line("   {$empresaNombre}: {$this->cnt($lote)} marcas");
+            $marcas = array_merge($marcas, $lote);
+        }
+
+        return $marcas;
+    }
+
+    /**
+     * Las ausencias sólo se usan como evidencia si el último sync tiene menos
+     * de 36 horas. Un dato vencido es menos confiable que no clasificar.
+     */
+    private function ausenciasActivasPorRut(Carbon $fecha): array
+    {
+        $ultimoSync = TalanaAusencia::max('synced_at');
+        if (! $ultimoSync || Carbon::parse($ultimoSync)->lt(now('America/Santiago')->subHours(36))) {
+            return [[], false];
+        }
+
+        $ausencias = TalanaAusencia::query()
+            ->where('aprobada', true)
+            ->whereDate('fecha_desde', '<=', $fecha->toDateString())
+            ->where(function ($query) use ($fecha) {
+                $query->whereNull('fecha_hasta')
+                    ->orWhereDate('fecha_hasta', '>=', $fecha->toDateString());
+            })
+            ->get();
+
+        $porRut = [];
+        foreach ($ausencias as $ausencia) {
+            $rut = $this->normalizarRut($ausencia->persona_rut);
+            if ($rut) {
+                $porRut[$rut] = $ausencia;
+            }
+        }
+
+        return [$porRut, true];
+    }
+
     // ─── Agrupar marcas por persona ───────────────────────────────────────────
 
     /**
-     * Recibe el array plano de marcas de la API y devuelve un mapa
-     * persona_id → ['persona' => [...], 'marcas' => [[ts, dir], ...], 'categoria' => '...']
+     * Devuelve las marcas del día evaluado y los IDs con historial reciente.
+     * Talana usa indistintamente E/Entrada y X/Salida; todas se normalizan
+     * antes de cualquier cálculo.
      */
-    private function agruparMarcas(array $marcasRaw, string $fecha): array
+    private function agruparMarcas(array $marcasRaw, Carbon $fecha): array
     {
-        $mapa = [];
+        $eventosPorPersona = [];
+        $hastaHistorial = $fecha->copy()->endOfDay();
+        $inicioSiguiente = $fecha->copy()->addDay()->startOfDay();
+        $limiteSalidaNocturna = $inicioSiguiente->copy()->addHours(12);
 
         foreach ($marcasRaw as $m) {
-            $personId = $m['person']['id'] ?? null;
+            $personId = $m['person']['id'] ?? ($m['personId'] ?? null);
             if (! $personId) {
                 continue;
             }
 
-            if (! isset($mapa[$personId])) {
-                $mapa[$personId] = [
-                    'persona' => [
-                        'id'     => $personId,
-                        'nombre' => trim(implode(' ', array_filter([
-                            $m['person']['nombre']        ?? null,
-                            $m['person']['apellidoPaterno'] ?? null,
-                            $m['person']['apellidoMaterno'] ?? null,
-                        ]))),
-                        'rut'    => $m['person']['rut'] ?? null,
-                    ],
-                    'marcas' => [],
-                ];
-            }
-
             try {
-                $ts  = Carbon::parse($m['TS'])->setTimezone('America/Santiago');
-                $dir = strtoupper(trim($m['direction'] ?? ''));
-            } catch (\Exception) {
+                $ts = Carbon::parse($m['TS'] ?? $m['markedAt'] ?? null)->setTimezone('America/Santiago');
+            } catch (\Throwable) {
                 continue;
             }
 
-            $mapa[$personId]['marcas'][] = [
-                'ts'        => $ts,
-                'ts_str'    => $ts->format('H:i:s'),
-                'direction' => $dir,
+            $eventosPorPersona[$personId][] = [
+                'ts' => $ts,
+                'ts_str' => $ts->format('H:i:s'),
+                'direction' => TalanaMarcaDirection::normalize($m['direction'] ?? $m['tipo'] ?? null),
+                'dia_siguiente' => false,
             ];
         }
 
-        // Ordenar marcas por hora y categorizar
-        foreach ($mapa as $pid => &$data) {
-            usort($data['marcas'], fn($a, $b) => $a['ts']->getTimestamp() <=> $b['ts']->getTimestamp());
-            $data['categoria'] = $this->categorizarMarcas($data['marcas']);
-        }
-        unset($data);
+        $marcasPorPersona = [];
+        $personasConHistorial = [];
 
-        return $mapa;
+        foreach ($eventosPorPersona as $pid => $eventos) {
+            usort($eventos, fn ($a, $b) => $a['ts']->getTimestamp() <=> $b['ts']->getTimestamp());
+
+            $marcasDelDia = array_values(array_filter(
+                $eventos,
+                fn ($marca) => $marca['ts']->isSameDay($fecha)
+            ));
+
+            foreach ($eventos as $marca) {
+                if ($marca['ts']->lte($hastaHistorial)) {
+                    $personasConHistorial[$pid] = true;
+                    break;
+                }
+            }
+
+            // Una entrada nocturna se completa con la primera salida de la mañana siguiente.
+            if ($this->esEntradaNocturnaSinSalida($marcasDelDia)) {
+                foreach ($eventos as $marca) {
+                    if ($marca['ts']->betweenIncluded($inicioSiguiente, $limiteSalidaNocturna)
+                        && $marca['direction'] === 'S') {
+                        $marca['dia_siguiente'] = true;
+                        $marcasDelDia[] = $marca;
+                        break;
+                    }
+                }
+            }
+
+            if (! empty($marcasDelDia)) {
+                $marcasPorPersona[$pid] = [
+                    'marcas' => $marcasDelDia,
+                    'categoria' => $this->categorizarMarcas($marcasDelDia),
+                ];
+            }
+        }
+
+        return [$marcasPorPersona, $personasConHistorial];
     }
 
     /**
      * Categoriza las marcas de un trabajador en un día:
-     * - completo       → tiene al menos 1 E y 1 S
+     * - completo       → tiene al menos 1 entrada y 1 salida
      * - solo_entrada   → solo tiene E (no salió)
      * - solo_salida    → solo tiene S (entró pero no registró entrada)
      * - multiple       → más de 2 marcas (puede ser turno partido)
@@ -263,12 +338,8 @@ class TalanaReporteAsistencia extends Command
         $tieneE = in_array('E', $dirs, true);
         $tieneS = in_array('S', $dirs, true);
 
-        if (count($marcas) > 2) {
-            return 'multiple';
-        }
-
         if ($tieneE && $tieneS) {
-            return 'completo';
+            return count($marcas) > 2 ? 'multiple' : 'completo';
         }
 
         if ($tieneE && ! $tieneS) {
@@ -282,27 +353,50 @@ class TalanaReporteAsistencia extends Command
         return 'incompleto'; // 2 E o 2 S
     }
 
+    private function esEntradaNocturnaSinSalida(array $marcas): bool
+    {
+        if ($this->categorizarMarcas($marcas) !== 'solo_entrada') {
+            return false;
+        }
+
+        $ultima = end($marcas);
+
+        return $ultima !== false
+            && $ultima['direction'] === 'E'
+            && (int) $ultima['ts']->format('H') >= 18;
+    }
+
     // ─── Analizar trabajadores activos ────────────────────────────────────────
 
     private function analizarTrabajadores(
         $contratosActivos,
         array $marcasPorPersona,
         array $jornadaPorPersona,
-        string $fecha,
+        array $personasConHistorial,
+        array $ausenciasPorRut,
+        Carbon $fecha,
         int $diasNuevo,
         array $horasAsignacion = [],
         float $umbralAltoH = 16.0,
-        float $umbralBajoH = 7.0
+        float $umbralBajoH = 7.0,
+        bool $ausenciasVigentes = false,
     ): array {
-        $completos        = [];
-        $incompletas      = [];
-        $sinMarcacion     = [];
-        $probablesNuevos  = [];
-        $descanso         = []; // Día de descanso según turno (workingDay = false)
-        $revision         = []; // Anomalías que requieren revisión manual
+        $completos = [];
+        $incompletas = [];
+        $sinMarcacion = [];
+        $sinHistorial = [];
+        $descanso = [];
+        $ausencias = [];
+        $sinEvaluacion = [];
+        $revision = [];
+        $jornadasCubiertas = 0;
 
         foreach ($contratosActivos as $contrato) {
             $pid = $contrato->persona_talana_id;
+            $tieneJornada = array_key_exists($pid, $jornadaPorPersona);
+            if ($tieneJornada) {
+                $jornadasCubiertas++;
+            }
 
             if (isset($marcasPorPersona[$pid])) {
                 $data = $marcasPorPersona[$pid];
@@ -314,7 +408,7 @@ class TalanaReporteAsistencia extends Command
                 if ($esDescansoConMarca) {
                     $revision[] = array_merge($fila, [
                         'categoria' => 'revision',
-                        'motivo'    => 'Marcó en día de descanso',
+                        'motivo' => 'Marcó en día de descanso',
                     ]);
                 } else {
                     switch ($data['categoria']) {
@@ -325,7 +419,7 @@ class TalanaReporteAsistencia extends Command
                             if ($horas !== null && $horas > $umbralAltoH) {
                                 $revision[] = array_merge($fila, [
                                     'categoria' => 'revision',
-                                    'motivo'    => sprintf(
+                                    'motivo' => sprintf(
                                         'Horas excesivas: %.1fh trabajadas (máx. %.0fh por día)',
                                         $horas, $umbralAltoH
                                     ),
@@ -334,7 +428,7 @@ class TalanaReporteAsistencia extends Command
                             } elseif ($horas !== null && $horas < $umbralBajoH) {
                                 $revision[] = array_merge($fila, [
                                     'categoria' => 'revision',
-                                    'motivo'    => sprintf(
+                                    'motivo' => sprintf(
                                         'Horas insuficientes: %.1fh trabajadas (mín. %.0fh esperado)',
                                         $horas, $umbralBajoH
                                     ),
@@ -350,48 +444,81 @@ class TalanaReporteAsistencia extends Command
                     }
                 }
             } else {
-                // Sin marcación ese día — verificar si es día de descanso según turno
-                $esDescanso = isset($jornadaPorPersona[$pid]) && $jornadaPorPersona[$pid] === false;
+                // Sólo se alerta si Talana confirma jornada laboral. Sin jornada
+                // confirmada, no es correcto inferir una ausencia.
+                $esDescanso = $tieneJornada && $jornadaPorPersona[$pid] === false;
+                $ausencia = $ausenciasVigentes
+                    ? $this->ausenciaParaContrato($contrato, $ausenciasPorRut)
+                    : null;
 
                 if ($esDescanso) {
                     $descanso[] = $this->buildFilaTrabajador($contrato, [], 'descanso');
+                } elseif ($ausencia) {
+                    $ausencias[] = array_merge(
+                        $this->buildFilaTrabajador($contrato, [], 'ausencia'),
+                        ['motivo' => 'Ausencia aprobada: '.($ausencia->tipo_ausencia ?: 'Sin detalle')]
+                    );
+                } elseif ($tieneJornada && $jornadaPorPersona[$pid] === true) {
+                    $sinMarcacion[] = array_merge(
+                        $this->buildFilaTrabajador($contrato, [], 'sin_marcacion'),
+                        ['motivo' => 'Jornada laboral confirmada por Talana, sin marca registrada']
+                    );
                 } else {
-                    $fila         = $this->buildFilaTrabajador($contrato, [], 'sin_marcacion');
-                    $esSinEnrolar = $this->esProbableNuevoSinEnrolar($contrato, $fecha, $diasNuevo);
+                    $fila = $this->buildFilaTrabajador($contrato, [], 'sin_evaluacion');
+                    $esRecienteSinHistorial = $this->esContratoRecienteSinHistorial(
+                        $contrato,
+                        $fecha,
+                        $diasNuevo,
+                        $personasConHistorial
+                    );
 
-                    if ($esSinEnrolar) {
-                        $probablesNuevos[] = array_merge($fila, ['motivo' => 'Contrato reciente sin marcas previas']);
+                    if ($esRecienteSinHistorial) {
+                        $sinHistorial[] = array_merge($fila, [
+                            'categoria' => 'sin_historial',
+                            'motivo' => 'Contrato reciente sin marcas en los últimos 7 días',
+                        ]);
                     } else {
-                        $sinMarcacion[] = $fila;
+                        $sinEvaluacion[] = array_merge($fila, [
+                            'motivo' => 'Sin marca y sin jornada/ausencia confirmada por Talana',
+                        ]);
                     }
                 }
             }
         }
 
         // Ordenar por nombre
-        $sortNombre = fn($a, $b) => strcmp($a['nombre'], $b['nombre']);
+        $sortNombre = fn ($a, $b) => strcmp($a['nombre'], $b['nombre']);
         usort($completos, $sortNombre);
         usort($incompletas, $sortNombre);
         usort($sinMarcacion, $sortNombre);
-        usort($probablesNuevos, $sortNombre);
+        usort($sinHistorial, $sortNombre);
         usort($descanso, $sortNombre);
+        usort($ausencias, $sortNombre);
+        usort($sinEvaluacion, $sortNombre);
         usort($revision, $sortNombre);
 
         return [
-            'fecha'                => $fecha,
-            'total_activos'        => count($contratosActivos),
-            'total_completos'      => count($completos),
-            'total_incompletas'    => count($incompletas),
-            'total_sin_marcacion'  => count($sinMarcacion),
-            'total_sin_enrolar'    => count($probablesNuevos),
-            'total_descanso'       => count($descanso),
-            'total_revision'       => count($revision),
-            'completos'            => $completos,
-            'incompletas'          => $incompletas,
-            'sin_marcacion'        => $sinMarcacion,
-            'sin_enrolar'          => $probablesNuevos,
-            'descanso'             => $descanso,
-            'revision'             => $revision,
+            'fecha' => $fecha->toDateString(),
+            'total_activos' => count($contratosActivos),
+            'total_completos' => count($completos),
+            'total_incompletas' => count($incompletas),
+            'total_sin_marcacion' => count($sinMarcacion),
+            'total_sin_historial' => count($sinHistorial),
+            'total_descanso' => count($descanso),
+            'total_ausencias' => count($ausencias),
+            'total_sin_evaluacion' => count($sinEvaluacion),
+            'total_revision' => count($revision),
+            'total_alertas' => count($incompletas) + count($sinMarcacion) + count($revision),
+            'total_jornadas_cubiertas' => $jornadasCubiertas,
+            'ausencias_vigentes' => $ausenciasVigentes,
+            'completos' => $completos,
+            'incompletas' => $incompletas,
+            'sin_marcacion' => $sinMarcacion,
+            'sin_historial' => $sinHistorial,
+            'descanso' => $descanso,
+            'ausencias' => $ausencias,
+            'sin_evaluacion' => $sinEvaluacion,
+            'revision' => $revision,
         ];
     }
 
@@ -417,7 +544,8 @@ class TalanaReporteAsistencia extends Command
                 if ($tsS->lte($tsE)) {
                     $tsS->addDay(); // turno nocturno que cruza medianoche
                 }
-                return round($tsS->diffInSeconds($tsE) / 3600, 2);
+
+                return round($tsE->diffInSeconds($tsS, true) / 3600, 2);
             } catch (\Exception) {
                 return null;
             }
@@ -426,44 +554,49 @@ class TalanaReporteAsistencia extends Command
         return null;
     }
 
-    /**
-     * Un trabajador es "probable nuevo sin enrolar" si:
-     * - Su contrato inició hace ≤ $diasNuevo días, Y
-     * - No tiene ninguna marca en la tabla local en los últimos 7 días
-     */
-    private function esProbableNuevoSinEnrolar($contrato, string $fecha, int $diasNuevo): bool
+    private function esContratoRecienteSinHistorial($contrato, Carbon $fecha, int $diasNuevo, array $personasConHistorial): bool
     {
         if (! $contrato->desde) {
             return false;
         }
 
-        $inicio         = Carbon::parse($contrato->desde);
-        $fechaAnalisis  = Carbon::parse($fecha);
-        $diasDesdeInicio = $inicio->diffInDays($fechaAnalisis);
+        $inicio = Carbon::parse($contrato->desde);
+        $diasDesdeInicio = $inicio->diffInDays($fecha);
 
         if ($diasDesdeInicio > $diasNuevo) {
-            return false; // No es nuevo
+            return false;
         }
 
-        // Verificar en DB local: ¿tiene alguna marca en los últimos 7 días?
-        $desde7 = $fechaAnalisis->copy()->subDays(7)->toDateString();
+        return ! isset($personasConHistorial[$contrato->persona_talana_id]);
+    }
 
-        $tieneMarcasRecientes = TalanaMarca::where('persona_talana_id', $contrato->persona_talana_id)
-            ->whereBetween('fecha', [$desde7, $fecha])
-            ->exists();
+    private function ausenciaParaContrato($contrato, array $ausenciasPorRut): ?TalanaAusencia
+    {
+        $rut = $this->normalizarRut($contrato->persona_rut ?? null);
 
-        return ! $tieneMarcasRecientes;
+        return $rut ? ($ausenciasPorRut[$rut] ?? null) : null;
+    }
+
+    private function normalizarRut(?string $rut): ?string
+    {
+        $rut = strtoupper((string) $rut);
+        $rut = preg_replace('/[^0-9K]/', '', $rut);
+
+        return $rut !== '' ? $rut : null;
     }
 
     private function buildFilaTrabajador($contrato, array $marcas, string $categoria): array
     {
-        $primeraEntrada  = null;
-        $ultimaSalida    = null;
-        $marcasStr       = [];
+        $primeraEntrada = null;
+        $ultimaSalida = null;
+        $marcasStr = [];
 
         foreach ($marcas as $m) {
-            $etiqueta     = $m['direction'] === 'E' ? 'Entrada' : ($m['direction'] === 'S' ? 'Salida' : $m['direction']);
-            $marcasStr[]  = "{$m['ts_str']} ({$etiqueta})";
+            $etiqueta = TalanaMarcaDirection::label($m['direction']);
+            if ($m['dia_siguiente'] ?? false) {
+                $etiqueta .= ' día siguiente';
+            }
+            $marcasStr[] = "{$m['ts_str']} ({$etiqueta})";
             if ($m['direction'] === 'E' && ! $primeraEntrada) {
                 $primeraEntrada = $m['ts_str'];
             }
@@ -473,22 +606,22 @@ class TalanaReporteAsistencia extends Command
         }
 
         return [
-            'nombre'           => $contrato->persona_nombre ?? '—',
-            'rut'              => $contrato->persona_rut    ?? '—',
-            'centro_costo'     => $contrato->centro_costo_nombre ?? $contrato->sucursal_nombre ?? '—',
-            'cargo'            => $contrato->cargo_nombre   ?? '—',
-            'tipo_contrato'    => $contrato->tipo_contrato_nombre ?? '—',
-            'empresa_id'       => $contrato->empresa_id     ?? null,
-            'empresa'          => $contrato->empresa_nombre ?? 'Sin empresa',
-            'desde'            => $contrato->desde          ?? null,
-            'hasta'            => $contrato->hasta          ?? null,
-            'primera_entrada'  => $primeraEntrada,
-            'ultima_salida'    => $ultimaSalida,
-            'marcas'           => implode(' / ', $marcasStr),
-            'total_marcas'     => count($marcas),
-            'categoria'        => $categoria,
+            'nombre' => $contrato->persona_nombre ?? '—',
+            'rut' => $contrato->persona_rut ?? '—',
+            'centro_costo' => $contrato->centro_costo_nombre ?? $contrato->sucursal_nombre ?? '—',
+            'cargo' => $contrato->cargo_nombre ?? '—',
+            'tipo_contrato' => $contrato->tipo_contrato_nombre ?? '—',
+            'empresa_id' => $contrato->empresa_id ?? null,
+            'empresa' => $contrato->empresa_nombre ?? 'Sin empresa',
+            'desde' => $contrato->desde ?? null,
+            'hasta' => $contrato->hasta ?? null,
+            'primera_entrada' => $primeraEntrada,
+            'ultima_salida' => $ultimaSalida,
+            'marcas' => implode(' / ', $marcasStr),
+            'total_marcas' => count($marcas),
+            'categoria' => $categoria,
             'horas_trabajadas' => null, // se rellena opcionalmente vía resolverHorasTrabajadas
-            'motivo'           => null, // se rellena opcionalmente para revisión
+            'motivo' => null, // se rellena opcionalmente para revisión
         ];
     }
 
@@ -497,25 +630,28 @@ class TalanaReporteAsistencia extends Command
     private function mostrarResumen(array $r, string $fecha): void
     {
         $this->line('');
-        $this->info("┌─────────────────────────────────────────┐");
+        $this->info('┌─────────────────────────────────────────┐');
         $this->info("│   Resumen Asistencia — {$fecha}   │");
-        $this->info("└─────────────────────────────────────────┘");
+        $this->info('└─────────────────────────────────────────┘');
         $this->line("  Trabajadores activos:          {$r['total_activos']}");
         $this->line("  ✅ Con marcación completa:     {$r['total_completos']}");
-        $this->line("  ⚠️  Marcación incompleta (1m):  {$r['total_incompletas']}");
-        $this->line("  ❌ Sin marcación:               {$r['total_sin_marcacion']}");
-        $this->line("  🆕 Probables nuevos/sin enrolar:{$r['total_sin_enrolar']}");
+        $this->line("  ⚠️  Marcación incompleta:       {$r['total_incompletas']}");
+        $this->line("  ❌ Sin marca con jornada:       {$r['total_sin_marcacion']}");
+        $this->line("  🆕 Reciente sin historial:      {$r['total_sin_historial']}");
         $this->line("  😴 Día de descanso (turno):    {$r['total_descanso']}");
+        $this->line("  📋 Ausencias aprobadas:         {$r['total_ausencias']}");
+        $this->line("  ◌ Sin evaluación de jornada:   {$r['total_sin_evaluacion']}");
         $this->line("  🔍 Revisión (anomalías):        {$r['total_revision']}");
+        $this->line("  📊 Jornadas confirmadas:        {$r['total_jornadas_cubiertas']}");
 
         // Breakdown por empresa
         $empBreakdown = [];
-        $grupos = ['completos', 'incompletas', 'sin_marcacion', 'sin_enrolar', 'descanso', 'revision'];
+        $grupos = ['completos', 'incompletas', 'sin_marcacion', 'sin_historial', 'descanso', 'ausencias', 'sin_evaluacion', 'revision'];
         foreach ($grupos as $g) {
             foreach ($r[$g] as $t) {
                 $emp = $t['empresa'] ?? 'Sin empresa';
                 if (! isset($empBreakdown[$emp])) {
-                    $empBreakdown[$emp] = ['completos' => 0, 'incompletas' => 0, 'sin_marcacion' => 0, 'sin_enrolar' => 0, 'descanso' => 0, 'revision' => 0];
+                    $empBreakdown[$emp] = array_fill_keys($grupos, 0);
                 }
                 $empBreakdown[$emp][$g]++;
             }
@@ -525,7 +661,7 @@ class TalanaReporteAsistencia extends Command
             $this->line('  ─── Por empresa ───────────────────────────');
             foreach ($empBreakdown as $emp => $c) {
                 $total = array_sum($c);
-                $this->line("  {$emp} ({$total}): ✅ {$c['completos']} | ⚠️ {$c['incompletas']} | ❌ {$c['sin_marcacion']} | 😴 {$c['descanso']} | 🔍 {$c['revision']}");
+                $this->line("  {$emp} ({$total}): ✅ {$c['completos']} | ⚠️ {$c['incompletas']} | ❌ {$c['sin_marcacion']} | ◌ {$c['sin_evaluacion']} | 🔍 {$c['revision']}");
             }
         }
 
@@ -546,10 +682,10 @@ class TalanaReporteAsistencia extends Command
             }
         }
 
-        if (! empty($r['sin_enrolar'])) {
+        if (! empty($r['sin_historial'])) {
             $this->line('');
-            $this->warn('  Probables nuevos sin enrolar:');
-            foreach ($r['sin_enrolar'] as $t) {
+            $this->warn('  Contratos recientes sin historial de marca:');
+            foreach ($r['sin_historial'] as $t) {
                 $this->line("    - {$t['nombre']} ({$t['rut']}) | contrato desde: {$t['desde']}");
             }
         }

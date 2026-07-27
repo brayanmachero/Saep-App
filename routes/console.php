@@ -47,6 +47,13 @@ Schedule::command('talana:sync-db')
     ->withoutOverlapping()
     ->skip(fn() => ! config('services.talana.token'));
 
+// Talana: mantener ausencias aprobadas vigentes para no reportar como falta
+// a personas con vacaciones, licencia o permiso registrado.
+Schedule::command('talana:sync-rrhh --solo-ausencias --meses=3')
+    ->dailyAt('05:20')
+    ->withoutOverlapping()
+    ->skip(fn() => ! config('services.talana.token'));
+
 // Talana: contratos próximos a vencer (lunes, miércoles y viernes a las 07:30 AM)
 Schedule::command('talana:alertas-contratos --dias=' . config('services.talana.alerta_dias', 7))
     ->cron('30 7 * * 1,3,5')
