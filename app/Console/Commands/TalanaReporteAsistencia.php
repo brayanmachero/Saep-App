@@ -436,8 +436,12 @@ class TalanaReporteAsistencia extends Command
                     switch ($data['categoria']) {
                         case 'completo':
                         case 'multiple':
-                            // ── Detección de horas anómalas ──────────────────────
-                            $horas = $this->resolverHorasTrabajadas($pid, $horasAsignacion, $fila);
+                            // Sólo se comparan horas cuando Talana informa una
+                            // duración oficial de jornada. Dos marcas completas no
+                            // prueban por sí solas que el turno debía durar 7 horas.
+                            $horas = array_key_exists($pid, $horasAsignacion)
+                                ? $this->resolverHorasTrabajadas($pid, $horasAsignacion, $fila)
+                                : null;
                             if ($horas !== null && $horas > $umbralAltoH) {
                                 $revision[] = array_merge($fila, [
                                     'categoria' => 'revision',

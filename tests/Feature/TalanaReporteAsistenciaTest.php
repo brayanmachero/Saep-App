@@ -74,6 +74,25 @@ class TalanaReporteAsistenciaTest extends TestCase
         $this->assertSame(0, $reporte['total_alertas']);
     }
 
+    public function test_complete_marks_without_official_shift_duration_are_not_short_hour_alerts(): void
+    {
+        [$marcas, $historial] = $this->agrupar([
+            $this->marca(40, '2026-07-26T23:50:00-04:00', 'Entrada'),
+            $this->marca(40, '2026-07-27T04:15:00-04:00', 'Salida'),
+        ]);
+
+        $reporte = $this->analizar(
+            collect([$this->contrato(40, '2026-01-01')]),
+            $marcas,
+            [],
+            $historial
+        );
+
+        $this->assertSame(1, $reporte['total_completos']);
+        $this->assertSame(0, $reporte['total_revision']);
+        $this->assertSame(0, $reporte['total_alertas']);
+    }
+
     public function test_email_renders_data_coverage_and_non_evaluation_state(): void
     {
         $mail = new TalanaAsistenciaReporteMail([
