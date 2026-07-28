@@ -496,6 +496,7 @@ document.getElementById('rut').addEventListener('input', function () {
 
 // ─── Subida individual de archivos ───────────────────────────────
 const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
+const MAX_BUFFERED_FILE_BYTES = 15 * 1024 * 1024;
 const MAX_UPLOAD_RETRIES = 2;
 const UPLOAD_TIMEOUT_MS = 120 * 1000;
 const PREUPLOAD_URL = @json(route('contratacion-publico.documento.preupload'));
@@ -504,6 +505,8 @@ const UPLOAD_ERROR_URL = @json(route('contratacion-publico.documento.error'));
 const CSRF_TOKEN = @json(csrf_token());
 const uploadActivos = new Set();
 const uploadsEnCurso = new Map();
+const colaUploads = [];
+let subidaActiva = false;
 let envioEnCurso = false;
 
 function inputArchivo(campo) {
@@ -629,18 +632,23 @@ function archivoListo(campo) {
         || Boolean(existing && existing.style.display !== 'none');
 }
 
-async function archivoEsLegible(file) {
+async function prepararArchivoParaSubida(file) {
     if (!file || !file.slice || !file.arrayBuffer) {
-        return true;
+        return file;
     }
 
     try {
-        if (file.size > 0) {
+        if (file.size > MAX_BUFFERED_FILE_BYTES) {
             await file.slice(0, Math.min(file.size, 1024)).arrayBuffer();
+            return file;
         }
-        return true;
+
+        // Preserve small mobile documents before the Android file provider can release them.
+        return new Blob([await file.arrayBuffer()], {
+            type: file.type || 'application/octet-stream'
+        });
     } catch (error) {
-        return false;
+        return null;
     }
 }
 
@@ -661,6 +669,31 @@ function mensajeErrorUpload(xhr) {
 function esperar(ms) {
     return new Promise(function (resolve) {
         window.setTimeout(resolve, ms);
+    });
+}
+
+function procesarColaUploads() {
+    if (subidaActiva || colaUploads.length === 0) return;
+
+    const siguiente = colaUploads.shift();
+    subidaActiva = true;
+
+    Promise.resolve()
+        .then(siguiente.tarea)
+        .then(siguiente.resolve)
+        .catch(function () {
+            siguiente.resolve(false);
+        })
+        .then(function () {
+            subidaActiva = false;
+            procesarColaUploads();
+        });
+}
+
+function encolarSubida(tarea) {
+    return new Promise(function (resolve) {
+        colaUploads.push({ tarea: tarea, resolve: resolve });
+        procesarColaUploads();
     });
 }
 
@@ -686,9 +719,17 @@ function subirDocumento(input) {
         return Promise.resolve(false);
     }
 
-    const carga = archivoEsLegible(file).then(function (legible) {
-        if (!legible) {
+    uploadActivos.add(campo);
+    actualizarBotonEnvio();
+    ocultarErrorArchivo(campo);
+    setEstadoArchivo(campo, 'uploading', 'En cola: ' + file.name, { remove: false });
+
+    const carga = encolarSubida(function () {
+        return prepararArchivoParaSubida(file).then(function (archivoParaSubida) {
+        if (!archivoParaSubida) {
             const msg = 'Chrome no pudo leer este archivo. Vuelve a seleccionarlo desde Galería o Archivos/Descargas y evita moverlo o editarlo antes de enviar.';
+            uploadActivos.delete(campo);
+            actualizarBotonEnvio();
             registrarErrorUpload(campo, 'client_file_unreadable', msg, input);
             mostrarErrorArchivo(campo, msg);
             setEstadoArchivo(campo, 'error', 'Archivo no disponible en el teléfono', { retry: true });
@@ -696,8 +737,6 @@ function subirDocumento(input) {
         }
 
         ocultarErrorArchivo(campo);
-        uploadActivos.add(campo);
-        actualizarBotonEnvio();
         setEstadoArchivo(campo, 'uploading', 'Subiendo ' + file.name + '...', { remove: false });
 
         function intentarSubida(intentos) {
@@ -706,7 +745,7 @@ function subirDocumento(input) {
             const formData = new FormData();
             formData.append('_token', CSRF_TOKEN);
             formData.append('campo', campo);
-            formData.append('documento', file);
+            formData.append('documento', archivoParaSubida, file.name);
 
             xhr.open('POST', PREUPLOAD_URL, true);
             xhr.timeout = UPLOAD_TIMEOUT_MS;
@@ -763,14 +802,14 @@ function subirDocumento(input) {
 
                 uploadActivos.delete(campo);
                 actualizarBotonEnvio();
-                registrarErrorUpload(campo, fase, mensaje, input, xhr);
+                registrarErrorUpload(campo, fase + '_after_retries', mensaje, input, xhr);
                 mostrarErrorArchivo(campo, mensaje);
                 setEstadoArchivo(campo, 'error', 'Error de conexión: ' + file.name, { retry: true });
                 resolve(false);
             }
 
             xhr.onerror = function () {
-                reintentarOFinalizar('network_error', 'No se pudo conectar para subir el archivo. Revisa la señal e intenta nuevamente.');
+                reintentarOFinalizar('network_error', 'No se pudo completar la carga después de varios intentos. Revisa la señal y vuelve a elegir el archivo desde Archivos o Descargas.');
             };
 
             xhr.ontimeout = function () {
@@ -782,6 +821,7 @@ function subirDocumento(input) {
         }
 
         return intentarSubida(0);
+        });
     });
 
     uploadsEnCurso.set(campo, carga);
