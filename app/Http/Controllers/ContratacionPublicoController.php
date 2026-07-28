@@ -12,6 +12,7 @@ use App\Services\OneDriveService;
 use App\Support\PrivacyPolicy;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use setasign\Fpdi\Fpdi;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -26,6 +27,7 @@ class ContratacionPublicoController extends Controller
 {
     private const DOCUMENT_MAX_KB = 102400; // 100 MB
     private const DOCUMENT_MAX_MB = 100;
+    private const HEIC_EXTENSIONS = ['heic', 'heif'];
     private const PDF_MEMORY_LIMIT = '1024M';
     private const PRIVACY_VERSION = 'contratacion-v2026-06-17';
     private const PRIVACY_TEXT = 'Autorizo a SAEP el tratamiento de mis datos personales y documentos de postulacion exclusivamente para fines de reclutamiento, seleccion, contratacion, verificacion documental, comunicacion con RRHH y archivo del proceso, incluyendo la generacion y almacenamiento de una ficha PDF consolidada en SharePoint.';
@@ -113,45 +115,52 @@ class ContratacionPublicoController extends Controller
         ], [
             'campo.in'            => 'El tipo de documento no es válido.',
             'documento.required'  => 'Selecciona un archivo para subir.',
-            'documento.mimes'     => 'Solo se permiten archivos JPG, PNG o PDF.',
+            'documento.mimes'     => 'Solo se permiten archivos JPG, PNG, HEIC/HEIF o PDF.',
             'documento.max'       => 'El archivo no puede superar los ' . self::DOCUMENT_MAX_MB . ' MB.',
         ]);
 
         $campo = (string) $request->input('campo');
-        $file = $request->file('documento');
-        $ext = strtolower($file->getClientOriginalExtension());
-        $token = Str::random(48);
-        $folder = self::TEMP_UPLOAD_DIR . '/' . hash('sha256', $googleUser['id'] . '|' . Session::getId());
-        $filename = $campo . '_' . now()->format('YmdHis') . '_' . Str::lower(Str::random(8)) . '.' . $ext;
-        $path = $file->storeAs($folder, $filename, 'local');
+        $preparedDocument = $this->prepareDocumentForStorage($request->file('documento'), $campo);
 
-        if (!$path) {
-            return response()->json(['message' => 'No se pudo guardar el documento temporal. Intenta nuevamente.'], 422);
+        try {
+            $file = $preparedDocument['file'];
+            $ext = strtolower($file->getClientOriginalExtension());
+            $token = Str::random(48);
+            $folder = self::TEMP_UPLOAD_DIR . '/' . hash('sha256', $googleUser['id'] . '|' . Session::getId());
+            $filename = $campo . '_' . now()->format('YmdHis') . '_' . Str::lower(Str::random(8)) . '.' . $ext;
+            $path = $file->storeAs($folder, $filename, 'local');
+
+            if (!$path) {
+                return response()->json(['message' => 'No se pudo guardar el documento temporal. Intenta nuevamente.'], 422);
+            }
+
+            $uploads = Session::get(self::TEMP_UPLOAD_SESSION_KEY, []);
+            $uploads[$token] = [
+                'token'         => $token,
+                'campo'         => $campo,
+                'google_id'     => $googleUser['id'],
+                'path'          => $path,
+                'original_name' => $file->getClientOriginalName(),
+                'extension'     => $ext,
+                'mime'          => $file->getMimeType(),
+                'size'          => $file->getSize(),
+                'uploaded_at'   => now()->timestamp,
+            ];
+            Session::put(self::TEMP_UPLOAD_SESSION_KEY, $uploads);
+            $this->discardTempUploadForField($campo, $googleUser['id'], '', $token);
+
+            return response()->json([
+                'ok'                  => true,
+                'token'               => $token,
+                'campo'               => $campo,
+                'original_name'       => $file->getClientOriginalName(),
+                'size'                => $file->getSize(),
+                'size_label'          => $this->formatBytes((int) $file->getSize()),
+                'converted_from_heic' => $preparedDocument['converted_from_heic'],
+            ]);
+        } finally {
+            $this->cleanupPreparedDocument($preparedDocument);
         }
-
-        $uploads = Session::get(self::TEMP_UPLOAD_SESSION_KEY, []);
-        $uploads[$token] = [
-            'token'         => $token,
-            'campo'         => $campo,
-            'google_id'     => $googleUser['id'],
-            'path'          => $path,
-            'original_name' => $file->getClientOriginalName(),
-            'extension'     => $ext,
-            'mime'          => $file->getMimeType(),
-            'size'          => $file->getSize(),
-            'uploaded_at'   => now()->timestamp,
-        ];
-        Session::put(self::TEMP_UPLOAD_SESSION_KEY, $uploads);
-        $this->discardTempUploadForField($campo, $googleUser['id'], '', $token);
-
-        return response()->json([
-            'ok'            => true,
-            'token'         => $token,
-            'campo'         => $campo,
-            'original_name' => $file->getClientOriginalName(),
-            'size'          => $file->getSize(),
-            'size_label'    => $this->formatBytes((int) $file->getSize()),
-        ]);
     }
 
     public function descartarPreuploadDocumento(Request $request)
@@ -263,7 +272,7 @@ class ContratacionPublicoController extends Controller
             'licencia_conducir_frontal.required'   => 'Debes subir el frontal de la Licencia de Conducir (ya tienes el reverso).',
             'licencia_conducir_reverso.required'   => 'Debes subir el reverso de la Licencia de Conducir (ya tienes el frontal).',
             'consentimiento_datos.accepted'        => 'Debes autorizar el tratamiento de tus datos personales para enviar la postulación.',
-            '*.mimes'                              => 'Solo se permiten archivos JPG, PNG o PDF.',
+            '*.mimes'                              => 'Solo se permiten archivos JPG, PNG, HEIC/HEIF o PDF.',
             '*.max'                                => 'El archivo no puede superar los ' . self::DOCUMENT_MAX_MB . ' MB.',
         ]);
 
@@ -749,7 +758,7 @@ class ContratacionPublicoController extends Controller
 
     private function documentRule(bool $required): string
     {
-        return ($required ? 'required' : 'nullable') . '|file|mimes:jpg,jpeg,png,pdf|max:' . self::DOCUMENT_MAX_KB;
+        return ($required ? 'required' : 'nullable') . '|file|mimes:jpg,jpeg,png,pdf,heic,heif|max:' . self::DOCUMENT_MAX_KB;
     }
 
     private function tempUploadsByField(string $googleId): array
@@ -962,18 +971,107 @@ class ContratacionPublicoController extends Controller
 
     private function storeDocument(Request $request, string $campo, string $rutCarpeta): string
     {
-        $file = $request->file($campo);
-        $ext = strtolower($file->getClientOriginalExtension());
-        $filename = $campo . '_' . now()->format('YmdHis') . '_' . Str::lower(Str::random(8)) . '.' . $ext;
-        $path = $file->storeAs("contratacion/{$rutCarpeta}", $filename, 'local');
+        $preparedDocument = $this->prepareDocumentForStorage($request->file($campo), $campo);
 
-        if (!$path) {
+        try {
+            $file = $preparedDocument['file'];
+            $ext = strtolower($file->getClientOriginalExtension());
+            $filename = $campo . '_' . now()->format('YmdHis') . '_' . Str::lower(Str::random(8)) . '.' . $ext;
+            $path = $file->storeAs("contratacion/{$rutCarpeta}", $filename, 'local');
+
+            if (!$path) {
+                throw ValidationException::withMessages([
+                    $campo => 'No se pudo guardar el documento. Intenta nuevamente.',
+                ]);
+            }
+
+            return $path;
+        } finally {
+            $this->cleanupPreparedDocument($preparedDocument);
+        }
+    }
+
+    /**
+     * Converts HEIC/HEIF files before the PDF and SharePoint workflow.
+     *
+     * @return array{file: UploadedFile, temporary_path: ?string, converted_from_heic: bool}
+     */
+    private function prepareDocumentForStorage(UploadedFile $file, string $campo): array
+    {
+        $extension = strtolower($file->getClientOriginalExtension());
+        if (!in_array($extension, self::HEIC_EXTENSIONS, true)) {
+            return [
+                'file'                => $file,
+                'temporary_path'      => null,
+                'converted_from_heic' => false,
+            ];
+        }
+
+        if (!class_exists(\Imagick::class) || !in_array('HEIC', \Imagick::queryFormats('HEIC'), true)) {
             throw ValidationException::withMessages([
-                $campo => 'No se pudo guardar el documento. Intenta nuevamente.',
+                $campo => 'No fue posible preparar la imagen HEIC. Intenta nuevamente o selecciona una imagen JPG, PNG o PDF.',
             ]);
         }
 
-        return $path;
+        $sourcePath = $file->getRealPath();
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'saep_heic_');
+        if ($sourcePath === false || $temporaryPath === false) {
+            throw ValidationException::withMessages([
+                $campo => 'No fue posible preparar la imagen HEIC. Intenta nuevamente.',
+            ]);
+        }
+
+        $jpegPath = $temporaryPath . '.jpg';
+        @unlink($temporaryPath);
+
+        try {
+            $image = new \Imagick();
+            $image->readImage($sourcePath);
+            $image->setFirstIterator();
+
+            if (method_exists($image, 'autoOrient')) {
+                $image->autoOrient();
+            }
+
+            $image->setImageColorspace(\Imagick::COLORSPACE_SRGB);
+            $image->setImageFormat('jpeg');
+            $image->setImageCompression(\Imagick::COMPRESSION_JPEG);
+            $image->setImageCompressionQuality(88);
+            $image->stripImage();
+            $image->writeImage($jpegPath);
+            $image->clear();
+            $image->destroy();
+
+            if (!is_file($jpegPath) || filesize($jpegPath) === 0) {
+                throw new \RuntimeException('La conversión no generó un archivo JPG.');
+            }
+
+            $baseName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME) ?: 'documento';
+
+            return [
+                'file'                => new UploadedFile($jpegPath, $baseName . '.jpg', 'image/jpeg', null, true),
+                'temporary_path'      => $jpegPath,
+                'converted_from_heic' => true,
+            ];
+        } catch (\Throwable $exception) {
+            @unlink($jpegPath);
+            Log::warning('Contratacion publico: no se pudo convertir HEIC', [
+                'campo'   => $campo,
+                'archivo' => $file->getClientOriginalName(),
+                'error'   => $exception->getMessage(),
+            ]);
+
+            throw ValidationException::withMessages([
+                $campo => 'No fue posible convertir la imagen HEIC. Intenta nuevamente o selecciona una imagen JPG, PNG o PDF.',
+            ]);
+        }
+    }
+
+    private function cleanupPreparedDocument(array $preparedDocument): void
+    {
+        if (!empty($preparedDocument['temporary_path'])) {
+            @unlink($preparedDocument['temporary_path']);
+        }
     }
 
     private function deleteOldDocuments(array $oldPaths, array $newPaths): void

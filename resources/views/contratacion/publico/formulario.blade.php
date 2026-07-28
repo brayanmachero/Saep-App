@@ -323,13 +323,13 @@
                 <i class="bi bi-file-earmark-arrow-up-fill"></i> Documentos Requeridos
             </div>
             <p style="font-size:.85rem;color:#6b7280;margin-bottom:1rem;">
-                Acepta archivos <strong>JPG, PNG o PDF</strong> de máximo <strong>100 MB</strong> cada uno.
+                Acepta archivos <strong>JPG, PNG, HEIC/HEIF o PDF</strong> de máximo <strong>100 MB</strong> cada uno.
                 Los documentos marcados con <span style="color:#ef4444;font-weight:600;">Requerido</span>
                 son obligatorios para completar tu postulación.
             </p>
             <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:.75rem 1rem;margin-bottom:1.5rem;font-size:.82rem;color:#92400e;display:flex;gap:.6rem;align-items:flex-start;">
                 <span style="font-size:1rem;flex-shrink:0;">📱</span>
-                <span><strong>Desde el celular:</strong> si la foto de cámara es muy pesada y el dispositivo no puede procesarla, <strong>usa PDF</strong> o toma la foto en <strong>menor resolución</strong> desde la configuración de tu cámara. Si Chrome indica que el archivo cambió o no se puede leer, vuelve a seleccionarlo desde <strong>Galería</strong> o <strong>Archivos/Descargas</strong> y evita moverlo o editarlo antes de enviar.</span>
+                <span><strong>Desde el celular:</strong> puedes seleccionar fotos HEIC/HEIF desde iPhone; el sistema las convierte automáticamente a JPG. Si la foto es muy pesada y el dispositivo no puede procesarla, <strong>usa PDF</strong> o toma la foto en <strong>menor resolución</strong>. Si Chrome indica que el archivo cambió o no se puede leer, vuelve a seleccionarlo desde <strong>Galería</strong> o <strong>Archivos/Descargas</strong> y evita moverlo o editarlo antes de enviar.</span>
             </div>
 
             <div class="row-2">
@@ -358,7 +358,7 @@
                     </div>
                     <div class="file-drop" id="drop-{{ $doc['campo'] }}">
                         <input type="file" name="{{ $doc['campo'] }}" id="{{ $doc['campo'] }}"
-                            accept=".jpg,.jpeg,.png,.pdf"
+                            accept=".jpg,.jpeg,.png,.heic,.heif,.pdf,image/jpeg,image/png,image/heic,image/heif,application/pdf"
                             data-campo="{{ $doc['campo'] }}"
                             data-required="{{ $doc['req'] ? '1' : '0' }}"
                             data-existing="{{ $postulante && $postulante->{$doc['campo']} ? '1' : '0' }}"
@@ -367,7 +367,7 @@
                         <div class="file-drop__icon"><i class="bi bi-cloud-upload"></i></div>
                         <div class="file-drop__text">
                             <strong>Seleccionar archivo</strong> o arrastrar aquí<br>
-                            <span>JPG, PNG, PDF · Máx. 100 MB</span>
+                            <span>JPG, PNG, HEIC, PDF · Máx. 100 MB</span>
                         </div>
                     </div>
                     @if($postulante && $postulante->{$doc['campo']} && !$tempToken)
@@ -418,7 +418,7 @@
                         </div>
                         <div class="file-drop" id="drop-{{ $lic['campo'] }}">
                             <input type="file" name="{{ $lic['campo'] }}" id="{{ $lic['campo'] }}"
-                                accept=".jpg,.jpeg,.png,.pdf"
+                                accept=".jpg,.jpeg,.png,.heic,.heif,.pdf,image/jpeg,image/png,image/heic,image/heif,application/pdf"
                                 data-campo="{{ $lic['campo'] }}"
                                 data-required="0"
                                 data-existing="{{ $postulante && $postulante->{$lic['campo']} ? '1' : '0' }}"
@@ -427,7 +427,7 @@
                             <div class="file-drop__icon"><i class="bi bi-cloud-upload"></i></div>
                             <div class="file-drop__text">
                                 <strong>Seleccionar archivo</strong> o arrastrar aquí<br>
-                                <span>JPG, PNG, PDF · Máx. 100 MB</span>
+                                <span>JPG, PNG, HEIC, PDF · Máx. 100 MB</span>
                             </div>
                         </div>
                         @if($postulante && $postulante->{$lic['campo']} && !$tempLicToken)
@@ -767,7 +767,8 @@ function subirDocumento(input) {
                     input.value = '';
                     const existing = existingPreview(campo);
                     if (existing) existing.style.display = 'none';
-                    setEstadoArchivo(campo, 'uploaded', 'Subido: ' + (data.original_name || file.name) + (data.size_label ? ' (' + data.size_label + ')' : ''), { retry: false });
+                    const conversionLabel = data.converted_from_heic ? ' (convertido desde HEIC)' : '';
+                    setEstadoArchivo(campo, 'uploaded', 'Subido: ' + (data.original_name || file.name) + (data.size_label ? ' (' + data.size_label + ')' : '') + conversionLabel, { retry: false });
                     ocultarErrorArchivo(campo);
                     actualizarBadgeLicencia();
                     resolve(true);
