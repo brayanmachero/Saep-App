@@ -115,7 +115,6 @@ class ContratacionPublicoController extends Controller
         ], [
             'campo.in'            => 'El tipo de documento no es válido.',
             'documento.required'  => 'Selecciona un archivo para subir.',
-            'documento.mimes'     => 'Solo se permiten archivos JPG, PNG, HEIC/HEIF o PDF.',
             'documento.max'       => 'El archivo no puede superar los ' . self::DOCUMENT_MAX_MB . ' MB.',
         ]);
 
@@ -272,7 +271,6 @@ class ContratacionPublicoController extends Controller
             'licencia_conducir_frontal.required'   => 'Debes subir el frontal de la Licencia de Conducir (ya tienes el reverso).',
             'licencia_conducir_reverso.required'   => 'Debes subir el reverso de la Licencia de Conducir (ya tienes el frontal).',
             'consentimiento_datos.accepted'        => 'Debes autorizar el tratamiento de tus datos personales para enviar la postulación.',
-            '*.mimes'                              => 'Solo se permiten archivos JPG, PNG, HEIC/HEIF o PDF.',
             '*.max'                                => 'El archivo no puede superar los ' . self::DOCUMENT_MAX_MB . ' MB.',
         ]);
 
@@ -756,9 +754,33 @@ class ContratacionPublicoController extends Controller
         }
     }
 
-    private function documentRule(bool $required): string
+    private function documentRule(bool $required): array
     {
-        return ($required ? 'required' : 'nullable') . '|file|mimes:jpg,jpeg,png,pdf,heic,heif|max:' . self::DOCUMENT_MAX_KB;
+        return [
+            $required ? 'required' : 'nullable',
+            'file',
+            'max:' . self::DOCUMENT_MAX_KB,
+            function (string $attribute, mixed $file, \Closure $fail): void {
+                if (!$file instanceof UploadedFile || !$this->isSupportedDocument($file)) {
+                    $fail('Solo se permiten archivos JPG, PNG, HEIC/HEIF o PDF.');
+                }
+            },
+        ];
+    }
+
+    private function isSupportedDocument(UploadedFile $file): bool
+    {
+        $extension = strtolower($file->getClientOriginalExtension());
+        if (in_array($extension, self::HEIC_EXTENSIONS, true)) {
+            return true;
+        }
+
+        return match ($extension) {
+            'jpg', 'jpeg' => in_array($file->getMimeType(), ['image/jpeg', 'image/pjpeg'], true),
+            'png'         => in_array($file->getMimeType(), ['image/png', 'image/x-png'], true),
+            'pdf'         => in_array($file->getMimeType(), ['application/pdf', 'application/x-pdf'], true),
+            default       => false,
+        };
     }
 
     private function tempUploadsByField(string $googleId): array
