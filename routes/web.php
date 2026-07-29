@@ -36,6 +36,7 @@ use App\Http\Controllers\LeyKarinPublicoController;
 use App\Http\Controllers\StopDashboardController;
 use App\Http\Controllers\ObservacionConductaCcuDashboardController;
 use App\Http\Controllers\InspeccionPreventivaPdrDashboardController;
+use App\Http\Controllers\EntregaBodegaDashboardController;
 use App\Http\Controllers\CampoOpcionController;
 use App\Http\Controllers\MisFormulariosController;
 use App\Http\Controllers\ContratacionController;
@@ -443,6 +444,15 @@ Route::middleware('auth')->group(function () {
         Route::post('inspecciones-preventivas/sync', [InspeccionPreventivaPdrDashboardController::class, 'sync'])
             ->middleware('modulo:pdr_inspecciones_dashboard,puede_editar')
             ->name('pdr-inspecciones-dashboard.sync');
+    });
+
+    // --- BODEGA: ENTREGAS DE EPP (Kizeo) ---
+    Route::middleware('modulo:entregas_bodega_dashboard')->group(function () {
+        Route::get('entregas-bodega', [EntregaBodegaDashboardController::class, 'index'])
+            ->name('entregas-bodega-dashboard.index');
+        Route::post('entregas-bodega/sync', [EntregaBodegaDashboardController::class, 'sync'])
+            ->middleware('modulo:entregas_bodega_dashboard,puede_editar')
+            ->name('entregas-bodega-dashboard.sync');
     });
 
     // --- SST: INSPECCIONES ---

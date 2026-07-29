@@ -17,6 +17,9 @@ Schedule::command('kizeo:sync-observaciones-ccu')->everyThirtyMinutes()->without
 // Actualizar el dashboard de PDR Inspección Preventiva desde Kizeo.
 Schedule::command('kizeo:sync-inspecciones-preventivas')->everyThirtyMinutes()->withoutOverlapping();
 
+// Actualizar las entregas de EPP registradas en Bodega desde Kizeo.
+Schedule::command('kizeo:sync-entregas-bodega')->everyThirtyMinutes()->withoutOverlapping();
+
 // Sincronizar seguimiento de charlas desde Kizeo (cada 6 horas)
 Schedule::command('kizeo:sync-charla-tracking')->everySixHours()->withoutOverlapping();
 

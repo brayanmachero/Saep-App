@@ -10,7 +10,7 @@ class AuthController extends Controller
     public function showLogin()
     {
         if (Auth::check()) {
-            return redirect()->route('dashboard');
+            return redirect()->to($this->defaultRedirect(Auth::user()));
         }
         return view('auth.login');
     }
@@ -28,7 +28,13 @@ class AuthController extends Controller
             $user = Auth::user();
             $user->update(['ultimo_acceso' => now()]);
 
-            return redirect()->intended(route('dashboard'));
+            $default = $this->defaultRedirect($user);
+
+            if ($user->tieneAcceso('entregas_bodega_dashboard') && ! $user->tieneAcceso('dashboard')) {
+                return redirect()->to($default);
+            }
+
+            return redirect()->intended($default);
         }
 
         return back()
@@ -42,5 +48,14 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
         return redirect()->route('login');
+    }
+
+    private function defaultRedirect($user): string
+    {
+        if ($user?->tieneAcceso('entregas_bodega_dashboard') && ! $user->tieneAcceso('dashboard')) {
+            return route('entregas-bodega-dashboard.index');
+        }
+
+        return route('dashboard');
     }
 }

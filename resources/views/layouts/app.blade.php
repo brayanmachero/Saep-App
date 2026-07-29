@@ -34,10 +34,12 @@
         </div>
 
         <nav class="sidebar-nav">
+            @if(auth()->user()->tieneAcceso('dashboard'))
             <a href="{{ route('dashboard') }}" class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}">
                 <i class="bi bi-grid-fill"></i>
                 <span>Panel Principal</span>
             </a>
+            @endif
             <a href="{{ route('perfil.show') }}" class="nav-item {{ request()->routeIs('perfil.*') ? 'active' : '' }}">
                 <i class="bi bi-person-circle"></i>
                 <span>Mi Perfil</span>
@@ -65,7 +67,24 @@
             </div>
             @endif
 
+            {{-- BODEGA --}}
+            @if(auth()->user()->tieneAcceso('entregas_bodega_dashboard') && \Illuminate\Support\Facades\Route::has('entregas-bodega-dashboard.index'))
+            <div class="nav-section" data-nav-section="bodega">
+                <button type="button" class="nav-section-toggle" aria-expanded="false">
+                    <span>Bodega</span>
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+                <div class="nav-section-items">
+                    <a href="{{ route('entregas-bodega-dashboard.index') }}" class="nav-item {{ request()->routeIs('entregas-bodega-dashboard.*') ? 'active' : '' }}">
+                        <i class="bi bi-box-seam-fill"></i>
+                        <span>Entregas EPP</span>
+                    </a>
+                </div>
+            </div>
+            @endif
+
             {{-- FORMULARIOS --}}
+            @if(auth()->user()->tieneAcceso('respuestas') || auth()->user()->tieneAcceso('formularios') || auth()->user()->tieneAcceso('categorias_formularios'))
             <div class="nav-section" data-nav-section="formularios">
                 <button type="button" class="nav-section-toggle" aria-expanded="false">
                     <span>Formularios</span>
@@ -90,6 +109,7 @@
                     @endif
                 </div>
             </div>
+            @endif
 
             {{-- SST --}}
             @if(auth()->user()->tieneAcceso('kizeo_analytics') || auth()->user()->tieneAcceso('charlas') || auth()->user()->tieneAcceso('carta_gantt') || auth()->user()->tieneAcceso('visitas_sst') || auth()->user()->tieneAcceso('auditorias_sst') || auth()->user()->tieneAcceso('accidentes_sst') || auth()->user()->tieneAcceso('ley_karin') || auth()->user()->tieneAcceso('ley_karin_denuncia') || auth()->user()->tieneAcceso('stop_dashboard') || auth()->user()->tieneAcceso('pdr_ccu_dashboard') || auth()->user()->tieneAcceso('pdr_inspecciones_dashboard'))

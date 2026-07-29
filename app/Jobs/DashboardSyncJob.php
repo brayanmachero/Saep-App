@@ -156,6 +156,7 @@ class DashboardSyncJob implements ShouldQueue
             'charlas' => 'Sincronización manual de charlas completada.',
             'observaciones-ccu' => 'Sincronización de Observaciones CCU completada.',
             'inspecciones-pdr' => 'Sincronización de Inspecciones Preventivas PDR completada.',
+            'entregas-bodega' => 'Sincronización de Entregas de Bodega completada.',
             default => 'Sincronización manual completada.',
         };
     }
@@ -167,6 +168,7 @@ class DashboardSyncJob implements ShouldQueue
             'charlas' => 'Error durante sincronización manual de charlas.',
             'observaciones-ccu' => 'Error durante sincronización de Observaciones CCU.',
             'inspecciones-pdr' => 'Error durante sincronización de Inspecciones Preventivas PDR.',
+            'entregas-bodega' => 'Error durante sincronización de Entregas de Bodega.',
             default => 'Error durante sincronización manual.',
         };
     }
