@@ -37,9 +37,9 @@ class EntregaBodegaExcelExport
     {
         $sheet = $book->getActiveSheet();
         $sheet->setTitle('Resumen');
-        $sheet->mergeCells('A1:F1');
+        $sheet->mergeCells('A1:H1');
         $sheet->setCellValue('A1', 'ENTREGAS DE BODEGA');
-        $sheet->getStyle('A1:F1')->applyFromArray([
+        $sheet->getStyle('A1:H1')->applyFromArray([
             'font' => ['bold' => true, 'size' => 15, 'color' => ['argb' => 'FFFFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF' . self::PURPLE]],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
@@ -47,9 +47,9 @@ class EntregaBodegaExcelExport
         $sheet->getRowDimension(1)->setRowHeight(30);
 
         $period = trim(($filters['fecha_desde'] ?? 'Inicio') . ' a ' . ($filters['fecha_hasta'] ?? 'hoy'));
-        $sheet->mergeCells('A2:F2');
+        $sheet->mergeCells('A2:H2');
         $sheet->setCellValue('A2', "Periodo: {$period} | Generado: " . now()->format('d/m/Y H:i'));
-        $sheet->getStyle('A2:F2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A2:H2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         $cards = [
             ['Entregas', $analytics['total'] ?? 0],
@@ -74,25 +74,45 @@ class EntregaBodegaExcelExport
             $sheet->getColumnDimension($column)->setWidth(21);
         }
 
-        $row = 8;
+        $columns = [['A', 'B'], ['D', 'E'], ['G', 'H']];
+        $sectionIndex = 0;
         foreach ($this->summaryBreakdowns($records) as $title => $values) {
-            $sheet->mergeCells("A{$row}:B{$row}");
-            $sheet->setCellValue("A{$row}", $title);
-            $this->heading($sheet, "A{$row}:B{$row}", self::PURPLE);
-            $row++;
-            $sheet->fromArray(['Categoria', 'Cantidad'], null, "A{$row}");
-            $this->heading($sheet, "A{$row}:B{$row}");
-            $row++;
-            foreach ($values as $label => $count) {
-                $sheet->fromArray([$label, $count], null, "A{$row}");
-                $row++;
-            }
-            $sheet->fromArray(['Total', array_sum($values)], null, "A{$row}");
-            $sheet->getStyle("A{$row}:B{$row}")->getFont()->setBold(true);
-            $row += 2;
+            [$firstColumn, $lastColumn] = $columns[$sectionIndex++];
+            $this->writeBreakdown(
+                $sheet,
+                $firstColumn,
+                $lastColumn,
+                $title,
+                $values,
+            );
         }
-        $sheet->getColumnDimension('A')->setWidth(65);
-        $sheet->getColumnDimension('B')->setWidth(16);
+
+        foreach (['A', 'D', 'G'] as $column) {
+            $sheet->getColumnDimension($column)->setWidth(36);
+        }
+        foreach (['B', 'E', 'H'] as $column) {
+            $sheet->getColumnDimension($column)->setWidth(16);
+        }
+    }
+
+    private function writeBreakdown($sheet, string $firstColumn, string $lastColumn, string $title, array $values): void
+    {
+        $row = 8;
+        $sheet->mergeCells("{$firstColumn}{$row}:{$lastColumn}{$row}");
+        $sheet->setCellValue("{$firstColumn}{$row}", $title);
+        $this->heading($sheet, "{$firstColumn}{$row}:{$lastColumn}{$row}", self::PURPLE);
+        $row++;
+        $sheet->fromArray(['Categoria', 'Cantidad'], null, "{$firstColumn}{$row}");
+        $this->heading($sheet, "{$firstColumn}{$row}:{$lastColumn}{$row}");
+        $row++;
+
+        foreach ($values as $label => $count) {
+            $sheet->fromArray([$label, $count], null, "{$firstColumn}{$row}");
+            $row++;
+        }
+
+        $sheet->fromArray(['Total', array_sum($values)], null, "{$firstColumn}{$row}");
+        $sheet->getStyle("{$firstColumn}{$row}:{$lastColumn}{$row}")->getFont()->setBold(true);
     }
 
     private function summaryBreakdowns(Collection $records): array
