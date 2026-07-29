@@ -460,18 +460,29 @@
     <!-- Mobile Bottom Navigation -->
     <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
         <div class="bottom-nav-items">
+            @if(auth()->user()->tieneAcceso('dashboard'))
             <a href="{{ route('dashboard') }}" class="bottom-nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}">
                 <i class="bi bi-grid-fill"></i>
                 <span>Inicio</span>
             </a>
+            @elseif(auth()->user()->tieneAcceso('entregas_bodega_dashboard') && \Illuminate\Support\Facades\Route::has('entregas-bodega-dashboard.index'))
+            <a href="{{ route('entregas-bodega-dashboard.index') }}" class="bottom-nav-item {{ request()->routeIs('entregas-bodega-dashboard.*') ? 'active' : '' }}">
+                <i class="bi bi-box-seam-fill"></i>
+                <span>Entregas EPP</span>
+            </a>
+            @endif
+            @if(auth()->user()->tieneAcceso('respuestas') || auth()->user()->tieneAcceso('formularios'))
             <a href="{{ route('mis-formularios.index') }}" class="bottom-nav-item {{ request()->routeIs('mis-formularios.*') ? 'active' : '' }}">
                 <i class="bi bi-clipboard-check-fill"></i>
                 <span>Mis Formularios</span>
             </a>
+            @endif
+            @if(auth()->user()->tieneAcceso('proteccion_datos'))
             <a href="{{ route('proteccion-datos.index') }}" class="bottom-nav-item {{ request()->routeIs('proteccion-datos.*') ? 'active' : '' }}">
                 <i class="bi bi-shield-lock-fill"></i>
                 <span>ARCO</span>
             </a>
+            @endif
             <button class="bottom-nav-item" id="mobile-notif-toggle" style="position:relative;background:none;border:none;">
                 <i class="bi bi-bell-fill"></i>
                 <span id="mobile-notif-badge" style="display:none;position:absolute;top:2px;right:calc(50% - 16px);width:16px;height:16px;border-radius:50%;background:#ef4444;color:#fff;font-size:.6rem;font-weight:700;line-height:16px;text-align:center;">0</span>
