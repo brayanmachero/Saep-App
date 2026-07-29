@@ -450,6 +450,10 @@ Route::middleware('auth')->group(function () {
     Route::middleware('modulo:entregas_bodega_dashboard')->group(function () {
         Route::get('entregas-bodega', [EntregaBodegaDashboardController::class, 'index'])
             ->name('entregas-bodega-dashboard.index');
+        Route::get('entregas-bodega/exportar', [EntregaBodegaDashboardController::class, 'downloadExcel'])
+            ->name('entregas-bodega-dashboard.export');
+        Route::get('entregas-bodega/{entrega}/documento', [EntregaBodegaDashboardController::class, 'viewDocument'])
+            ->name('entregas-bodega-dashboard.document');
         Route::post('entregas-bodega/sync', [EntregaBodegaDashboardController::class, 'sync'])
             ->middleware('modulo:entregas_bodega_dashboard,puede_editar')
             ->name('entregas-bodega-dashboard.sync');
