@@ -22,7 +22,7 @@ class EntregaBodegaExcelExport
             ->setTitle('Entregas de Bodega')
             ->setSubject('Control de Entrega Bodega Kizeo');
 
-        $this->summary($book, $analytics, $filters);
+        $this->summary($book, $analytics, $records, $filters);
         $this->deliveries($book, $records);
         $this->items($book, $records);
         $book->setActiveSheetIndex(0);
@@ -33,7 +33,7 @@ class EntregaBodegaExcelExport
         return $path;
     }
 
-    private function summary(Spreadsheet $book, array $analytics, array $filters): void
+    private function summary(Spreadsheet $book, array $analytics, Collection $records, array $filters): void
     {
         $sheet = $book->getActiveSheet();
         $sheet->setTitle('Resumen');
@@ -75,7 +75,7 @@ class EntregaBodegaExcelExport
         }
 
         $row = 8;
-        foreach (['Entregas por centro' => $analytics['centros'] ?? [], 'Articulos por unidades' => $analytics['articulos'] ?? [], 'Tallas por unidades' => $analytics['tallas'] ?? []] as $title => $values) {
+        foreach ($this->summaryBreakdowns($records) as $title => $values) {
             $sheet->mergeCells("A{$row}:B{$row}");
             $sheet->setCellValue("A{$row}", $title);
             $this->heading($sheet, "A{$row}:B{$row}", self::PURPLE);
@@ -87,10 +87,41 @@ class EntregaBodegaExcelExport
                 $sheet->fromArray([$label, $count], null, "A{$row}");
                 $row++;
             }
+            $sheet->fromArray(['Total', array_sum($values)], null, "A{$row}");
+            $sheet->getStyle("A{$row}:B{$row}")->getFont()->setBold(true);
             $row += 2;
         }
         $sheet->getColumnDimension('A')->setWidth(65);
         $sheet->getColumnDimension('B')->setWidth(16);
+    }
+
+    private function summaryBreakdowns(Collection $records): array
+    {
+        $items = $records->flatMap(fn ($record) => $record->items);
+
+        return [
+            'Entregas por centro' => $records
+                ->map(fn ($record) => $this->labelOrFallback($record->centro, 'Sin centro informado'))
+                ->countBy()
+                ->sortDesc()
+                ->all(),
+            'Articulos por unidades' => $this->itemUnitBreakdown($items, 'articulo', 'Sin articulo informado'),
+            'Tallas por unidades' => $this->itemUnitBreakdown($items, 'talla', 'Sin talla informada'),
+        ];
+    }
+
+    private function itemUnitBreakdown(Collection $items, string $field, string $fallback): array
+    {
+        return $items
+            ->groupBy(fn ($item) => $this->labelOrFallback($item->{$field}, $fallback))
+            ->map(fn (Collection $group) => (int) $group->sum('cantidad'))
+            ->sortDesc()
+            ->all();
+    }
+
+    private function labelOrFallback(?string $value, string $fallback): string
+    {
+        return filled(trim((string) $value)) ? trim((string) $value) : $fallback;
     }
 
     private function deliveries(Spreadsheet $book, Collection $records): void
