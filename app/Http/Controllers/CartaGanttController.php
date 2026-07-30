@@ -338,6 +338,108 @@ class CartaGanttController extends Controller
         ));
     }
 
+    public function duplicate(Request $request, ProgramaSst $cartaGantt)
+    {
+        $this->abortUnlessCanAdministratePrograma($cartaGantt, 'puede_crear');
+
+        $data = $request->validate([
+            'nombre' => 'required|string|max:300',
+        ]);
+
+        $cartaGantt->load([
+            'asignados',
+            'categorias' => fn ($categories) => $categories->orderBy('orden')->with([
+                'actividades' => fn ($activities) => $activities->orderBy('orden')->with([
+                    'seguimiento' => fn ($tracking) => $tracking->orderBy('mes'),
+                    'planesAccion' => fn ($plans) => $plans->orderBy('id'),
+                ]),
+            ]),
+        ]);
+
+        $copy = DB::transaction(function () use ($cartaGantt, $data, $request) {
+            $copy = ProgramaSst::create([
+                'anio' => $cartaGantt->anio,
+                'titulo' => trim($data['nombre']),
+                'descripcion' => $cartaGantt->descripcion,
+                'estado' => 'BORRADOR',
+                'centro_costo_id' => $cartaGantt->centro_costo_id,
+                'responsable_id' => $cartaGantt->responsable_id,
+                'creado_por' => $request->user()->id,
+            ]);
+
+            $copy->asignados()->sync($cartaGantt->asignados->pluck('id')->all());
+
+            $summary = ['categorias' => 0, 'actividades' => 0, 'planes_accion' => 0, 'meses_programados' => 0];
+
+            foreach ($cartaGantt->categorias->sortBy('orden') as $categoria) {
+                $newCategory = $copy->categorias()->create([
+                    'nombre' => $categoria->nombre,
+                    'orden' => $categoria->orden,
+                ]);
+                $summary['categorias']++;
+
+                foreach ($categoria->actividades->sortBy('orden') as $actividad) {
+                    $newActivity = $newCategory->actividades()->create([
+                        'nombre' => $actividad->nombre,
+                        'descripcion' => $actividad->descripcion,
+                        'responsable' => $actividad->responsable,
+                        'responsable_id' => $actividad->responsable_id,
+                        'orden' => $actividad->orden,
+                        'fecha_inicio' => $actividad->fecha_inicio,
+                        'fecha_fin' => $actividad->fecha_fin,
+                        'prioridad' => $actividad->prioridad,
+                        'estado' => 'PENDIENTE',
+                        'periodicidad' => $actividad->periodicidad,
+                        'cantidad_programada' => $actividad->cantidad_programada,
+                    ]);
+                    $summary['actividades']++;
+
+                    foreach ($actividad->seguimiento->where('programado', true) as $seguimiento) {
+                        $newActivity->seguimiento()->create([
+                            'mes' => $seguimiento->mes,
+                            'programado' => true,
+                            'realizado' => false,
+                            'observacion' => null,
+                            'actualizado_por' => null,
+                            'fecha_actualizacion' => null,
+                            'cantidad_realizada' => 0,
+                        ]);
+                        $summary['meses_programados']++;
+                    }
+
+                    foreach ($actividad->planesAccion as $plan) {
+                        $newActivity->planesAccion()->create([
+                            'accion' => $plan->accion,
+                            'responsable' => $plan->responsable,
+                            'fecha_compromiso' => $plan->fecha_compromiso,
+                            'estado' => 'PENDIENTE',
+                            'observacion' => null,
+                            'creado_por' => $request->user()->id,
+                        ]);
+                        $summary['planes_accion']++;
+                    }
+                }
+            }
+
+            $origin = ['programa_id' => $cartaGantt->id, 'codigo' => $cartaGantt->codigo, 'titulo' => $cartaGantt->titulo];
+            $this->registrarProgramaLog($copy, 'programa_duplicado', 'Programa creado desde una copia en borrador.', [
+                'origen' => $origin,
+                'estructura_copiada' => $summary,
+                'avance_reiniciado' => true,
+            ], $request);
+            $this->registrarProgramaLog($cartaGantt, 'programa_duplicado_como_plantilla', 'Se creó una copia en borrador de este programa.', [
+                'copia_id' => $copy->id,
+                'copia_codigo' => $copy->codigo,
+                'copia_titulo' => $copy->titulo,
+            ], $request);
+
+            return $copy;
+        });
+
+        return redirect()->route('carta-gantt.edit', $copy)
+            ->with('success', 'Programa duplicado como borrador. Revisa y ajusta los datos antes de activarlo.');
+    }
+
     public function exportPdf(ProgramaSst $cartaGantt)
     {
         $this->abortUnlessCanViewPrograma($cartaGantt);

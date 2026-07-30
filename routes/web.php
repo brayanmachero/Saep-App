@@ -333,6 +333,9 @@ Route::middleware('auth')->group(function () {
         Route::post('carta-gantt', [CartaGanttController::class, 'store'])
             ->name('carta-gantt.store')
             ->middleware('modulo:carta_gantt,puede_crear');
+        Route::post('carta-gantt/{cartaGantt}/duplicar', [CartaGanttController::class, 'duplicate'])
+            ->name('carta-gantt.duplicate')
+            ->middleware('modulo:carta_gantt,puede_crear');
         Route::get('carta-gantt/{cartaGantt}', [CartaGanttController::class, 'show'])
             ->name('carta-gantt.show');
         Route::get('carta-gantt/{cartaGantt}/edit', [CartaGanttController::class, 'edit'])

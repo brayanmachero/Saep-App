@@ -7,6 +7,7 @@ use App\Http\Middleware\VerificarConsentimientoDatos;
 use App\Models\Modulo;
 use App\Models\ProgramaSst;
 use App\Models\Rol;
+use App\Models\SstReprogramacion;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -69,6 +70,97 @@ class CartaGanttTest extends TestCase
             'programa_id' => $programa->id,
             'nombre' => 'Categoria no autorizada',
         ]);
+    }
+
+    public function test_program_can_be_duplicated_as_a_draft_without_operational_progress(): void
+    {
+        $creator = $this->createCartaGanttUser([
+            'puede_ver' => true,
+            'puede_crear' => true,
+            'puede_editar' => true,
+            'puede_eliminar' => true,
+        ]);
+        $assigned = $this->createCartaGanttUser([
+            'puede_ver' => true,
+            'puede_crear' => false,
+            'puede_editar' => false,
+            'puede_eliminar' => false,
+        ]);
+        $programa = $this->createPrograma($creator);
+        $programa->asignados()->sync([$assigned->id]);
+        $categoria = $programa->categorias()->create(['nombre' => 'Operaciones', 'orden' => 1]);
+        $actividad = $categoria->actividades()->create([
+            'nombre' => 'Actividad de plantilla',
+            'descripcion' => 'Descripción que debe copiarse',
+            'responsable' => $assigned->nombre_completo,
+            'responsable_id' => $assigned->id,
+            'fecha_inicio' => '2026-01-01',
+            'fecha_fin' => '2026-12-31',
+            'prioridad' => 'ALTA',
+            'estado' => 'COMPLETADA',
+            'periodicidad' => 'MENSUAL',
+            'cantidad_programada' => 3,
+            'orden' => 1,
+        ]);
+        $actividad->seguimiento()->create([
+            'mes' => 7,
+            'programado' => true,
+            'realizado' => true,
+            'observacion' => 'Avance original',
+            'actualizado_por' => $creator->id,
+            'fecha_actualizacion' => now(),
+            'cantidad_realizada' => 3,
+        ]);
+        $actividad->planesAccion()->create([
+            'accion' => 'Plan reutilizable',
+            'responsable' => 'Responsable QA',
+            'fecha_compromiso' => '2026-08-15',
+            'estado' => 'COMPLETADO',
+            'observacion' => 'Cierre original',
+            'creado_por' => $creator->id,
+        ]);
+        $actividad->comentarios()->create(['user_id' => $creator->id, 'comentario' => 'Comentario original']);
+        SstReprogramacion::create([
+            'actividad_id' => $actividad->id,
+            'mes_original' => 6,
+            'mes_nuevo' => 7,
+            'motivo' => 'Motivo original',
+            'reprogramado_por' => $creator->id,
+        ]);
+
+        $response = $this->actingAs($creator)
+            ->post(route('carta-gantt.duplicate', $programa), ['nombre' => 'Programa SST duplicado QA']);
+
+        $copy = ProgramaSst::where('titulo', 'Programa SST duplicado QA')->firstOrFail();
+        $response->assertRedirect(route('carta-gantt.edit', $copy));
+        $this->assertSame('BORRADOR', $copy->estado);
+        $this->assertSame($programa->anio, $copy->anio);
+        $this->assertSame($programa->descripcion, $copy->descripcion);
+        $this->assertSame($programa->responsable_id, $copy->responsable_id);
+        $this->assertTrue($copy->asignados()->whereKey($assigned->id)->exists());
+
+        $copyActivity = $copy->categorias()->firstOrFail()->actividades()->firstOrFail();
+        $this->assertSame('Actividad de plantilla', $copyActivity->nombre);
+        $this->assertSame('PENDIENTE', $copyActivity->estado);
+        $this->assertSame($assigned->id, $copyActivity->responsable_id);
+        $this->assertSame(3, $copyActivity->cantidad_programada);
+
+        $copyTracking = $copyActivity->seguimiento()->firstOrFail();
+        $this->assertTrue($copyTracking->programado);
+        $this->assertFalse($copyTracking->realizado);
+        $this->assertSame(0, $copyTracking->cantidad_realizada);
+        $this->assertNull($copyTracking->observacion);
+        $this->assertNull($copyTracking->actualizado_por);
+
+        $copyPlan = $copyActivity->planesAccion()->firstOrFail();
+        $this->assertSame('Plan reutilizable', $copyPlan->accion);
+        $this->assertSame('PENDIENTE', $copyPlan->estado);
+        $this->assertNull($copyPlan->observacion);
+        $this->assertSame($creator->id, $copyPlan->creado_por);
+        $this->assertSame(0, $copyActivity->comentarios()->count());
+        $this->assertSame(0, $copyActivity->reprogramaciones()->count());
+        $this->assertDatabaseHas('sst_actividad_logs', ['programa_id' => $copy->id, 'accion' => 'programa_duplicado']);
+        $this->assertDatabaseHas('sst_actividad_logs', ['programa_id' => $programa->id, 'accion' => 'programa_duplicado_como_plantilla']);
     }
 
     public function test_reprogramming_rejects_month_with_existing_progress(): void

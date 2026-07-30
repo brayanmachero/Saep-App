@@ -148,6 +148,11 @@
                 <i class="bi bi-cloud-upload"></i> Importar CSV
             </button>
             @endif
+            @if($puedeCrear)
+            <button type="button" class="sst-btn sst-btn-outline" onclick="document.getElementById('duplicateProgramModal').style.display='flex'" title="Crear una copia en borrador con la estructura y programación de este programa">
+                <i class="bi bi-copy"></i> Duplicar
+            </button>
+            @endif
             @if($puedeAdministrarPrograma)
             <a href="{{ route('carta-gantt.edit', $cartaGantt) }}" class="sst-btn sst-btn-outline" title="Editar datos generales del programa" aria-label="Editar datos generales del programa"><i class="bi bi-pencil"></i> Editar</a>
             @endif
@@ -574,6 +579,32 @@
         </div>
     </div>
 </div>
+
+@if($puedeCrear)
+<div id="duplicateProgramModal" class="sst-modal-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="duplicateProgramTitle" onclick="if(event.target===this)this.style.display='none'">
+    <div class="sst-modal" style="max-width:560px">
+        <div class="sst-modal-header">
+            <div>
+                <h3 id="duplicateProgramTitle"><i class="bi bi-copy"></i> Duplicar programa</h3>
+                <p>La copia se crea como borrador para que puedas ajustar sus datos.</p>
+            </div>
+            <button type="button" class="sst-icon-btn" onclick="document.getElementById('duplicateProgramModal').style.display='none'" title="Cerrar" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <form method="POST" action="{{ route('carta-gantt.duplicate', $cartaGantt) }}">
+            @csrf
+            <div class="sst-modal-body">
+                <label class="sst-label" for="duplicate-program-name">Nombre del nuevo programa</label>
+                <input id="duplicate-program-name" name="nombre" class="form-input" maxlength="300" required value="Copia de {{ $cartaGantt->nombre }}" autocomplete="off">
+                <p style="margin:.75rem 0 0;color:var(--text-muted);font-size:.78rem;line-height:1.45">Se copian datos generales, responsables, equipo asignado, categorías, actividades, fechas, meses programados y planes de acción. El avance, comentarios, reprogramaciones, notificaciones e historial no se copian.</p>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:.5rem;padding:0 1.1rem 1.1rem">
+                <button type="button" class="sst-btn sst-btn-outline" onclick="document.getElementById('duplicateProgramModal').style.display='none'">Cancelar</button>
+                <button type="submit" class="sst-btn sst-btn-primary"><i class="bi bi-copy"></i> Crear borrador</button>
+            </div>
+        </form>
+    </div>
+</div>
+@endif
 
 @if($puedeCrear)
 {{-- ========== MODAL IMPORTACIÓN CSV ========== --}}

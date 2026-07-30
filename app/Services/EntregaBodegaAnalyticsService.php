@@ -40,6 +40,7 @@ class EntregaBodegaAnalyticsService
             'personas' => $people->pluck('nombre')->unique()->count(),
             'centros_activos' => $rows->pluck('centro')->filter()->unique()->count(),
             'promedio_unidades' => $rows->isNotEmpty() ? round($rows->avg('unidades_total'), 1) : 0,
+            'by_day' => $this->dailyBreakdown($rows),
             'by_month' => $this->monthlyBreakdown($rows),
             'centros' => $this->groupCount($rows, 'centro', 10),
             'articulos' => $this->groupItemUnits($items, 'articulo', 8),
@@ -126,9 +127,10 @@ class EntregaBodegaAnalyticsService
 
     private function centerPeopleBreakdown(Collection $rows): array
     {
-        return $rows->groupBy(fn (EntregaBodega $entrega) => ($entrega->centro ?: 'Sin centro') . '|' . ($entrega->nombre ?: 'Sin identificar'))
+        return $rows->groupBy(fn (EntregaBodega $entrega) => ($entrega->centro ?: 'Sin centro').'|'.($entrega->nombre ?: 'Sin identificar'))
             ->map(function (Collection $group, string $key) {
                 [$centro, $nombre] = array_pad(explode('|', $key, 2), 2, '');
+
                 return [
                     'centro' => $centro,
                     'nombre' => $nombre,
@@ -147,6 +149,18 @@ class EntregaBodegaAnalyticsService
                 'label' => $month,
                 'entregas' => $monthRows->count(),
                 'unidades' => (int) $monthRows->sum('unidades_total'),
+            ])->values()->all();
+    }
+
+    private function dailyBreakdown(Collection $rows): array
+    {
+        return $rows->filter(fn (EntregaBodega $entrega) => $entrega->fecha_pedido)
+            ->groupBy(fn (EntregaBodega $entrega) => $entrega->fecha_pedido->toDateString())
+            ->sortKeys()
+            ->map(fn (Collection $dayRows, string $day) => [
+                'label' => $day,
+                'entregas' => $dayRows->count(),
+                'unidades' => (int) $dayRows->sum('unidades_total'),
             ])->values()->all();
     }
 }
