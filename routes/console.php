@@ -85,3 +85,6 @@ Schedule::command('talana:reporte-asistencia')
 
 // RRHH: cierre diario de postulantes ingresados en el portal (17:00 Chile)
 Schedule::command('contratacion:cierre-diario')->dailyAt('17:00')->timezone('America/Santiago')->withoutOverlapping();
+
+// Bodega: recordar reservas proximas y advertir reservas que superaron su termino.
+Schedule::command('vehiculos:procesar-reservas')->everyFifteenMinutes()->timezone('America/Santiago')->withoutOverlapping();

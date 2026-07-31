@@ -37,6 +37,8 @@ use App\Http\Controllers\StopDashboardController;
 use App\Http\Controllers\ObservacionConductaCcuDashboardController;
 use App\Http\Controllers\InspeccionPreventivaPdrDashboardController;
 use App\Http\Controllers\EntregaBodegaDashboardController;
+use App\Http\Controllers\GestionVehiculosController;
+use App\Http\Controllers\ReservaVehiculoPublicoController;
 use App\Http\Controllers\CampoOpcionController;
 use App\Http\Controllers\MisFormulariosController;
 use App\Http\Controllers\ContratacionController;
@@ -96,6 +98,16 @@ Route::prefix('postulacion')->middleware('throttle:180,1')->group(function () {
     Route::post('/enviar',         [ContratacionPublicoController::class, 'store'])->middleware('throttle:20,1')->name('contratacion-publico.store');
     Route::get('/confirmacion/{folio}', [ContratacionPublicoController::class, 'confirmacion'])->name('contratacion-publico.confirmacion')->middleware('signed');
     Route::post('/logout',         [ContratacionPublicoController::class, 'logout'])->name('contratacion-publico.logout');
+});
+
+// --- RESERVAS DE VEHICULOS (portal publico con cuenta corporativa Microsoft) ---
+Route::prefix('reservas-vehiculos')->middleware('throttle:90,1')->group(function () {
+    Route::get('/', [ReservaVehiculoPublicoController::class, 'inicio'])->name('reservas-vehiculos.inicio');
+    Route::get('/auth/microsoft', [ReservaVehiculoPublicoController::class, 'redirectMicrosoft'])->name('reservas-vehiculos.microsoft.redirect');
+    Route::get('/auth/microsoft/callback', [ReservaVehiculoPublicoController::class, 'callbackMicrosoft'])->name('reservas-vehiculos.microsoft.callback');
+    Route::post('/', [ReservaVehiculoPublicoController::class, 'guardar'])->middleware('throttle:12,1')->name('reservas-vehiculos.store');
+    Route::post('/{reserva}/cancelar', [ReservaVehiculoPublicoController::class, 'cancelar'])->middleware('throttle:12,1')->name('reservas-vehiculos.cancelar');
+    Route::post('/logout', [ReservaVehiculoPublicoController::class, 'logout'])->name('reservas-vehiculos.logout');
 });
 
 // App (requiere autenticación)
@@ -450,7 +462,7 @@ Route::middleware('auth')->group(function () {
     });
 
     // --- BODEGA: ENTREGAS DE EPP (Kizeo) ---
-    Route::middleware('modulo:entregas_bodega_dashboard')->group(function () {
+      Route::middleware('modulo:entregas_bodega_dashboard')->group(function () {
         Route::get('entregas-bodega', [EntregaBodegaDashboardController::class, 'index'])
             ->name('entregas-bodega-dashboard.index');
         Route::get('entregas-bodega/exportar', [EntregaBodegaDashboardController::class, 'downloadExcel'])
@@ -460,7 +472,28 @@ Route::middleware('auth')->group(function () {
         Route::post('entregas-bodega/sync', [EntregaBodegaDashboardController::class, 'sync'])
             ->middleware('modulo:entregas_bodega_dashboard,puede_editar')
             ->name('entregas-bodega-dashboard.sync');
-    });
+      });
+
+      // --- BODEGA: FLOTA Y RESERVAS DE VEHICULOS ---
+      Route::middleware('modulo:gestion_vehiculos')->group(function () {
+          Route::get('gestion-vehiculos', [GestionVehiculosController::class, 'index'])
+              ->name('gestion-vehiculos.index');
+          Route::post('gestion-vehiculos', [GestionVehiculosController::class, 'store'])
+              ->middleware('modulo:gestion_vehiculos,puede_crear')
+              ->name('gestion-vehiculos.store');
+          Route::put('gestion-vehiculos/{vehiculo}', [GestionVehiculosController::class, 'update'])
+              ->middleware('modulo:gestion_vehiculos,puede_editar')
+              ->name('gestion-vehiculos.update');
+          Route::patch('gestion-vehiculos/reservas/{reserva}', [GestionVehiculosController::class, 'actualizarReserva'])
+              ->middleware('modulo:gestion_vehiculos,puede_editar')
+              ->name('gestion-vehiculos.reservas.update');
+          Route::post('gestion-vehiculos/solicitantes', [GestionVehiculosController::class, 'storeSolicitante'])
+              ->middleware('modulo:gestion_vehiculos,puede_crear')
+              ->name('gestion-vehiculos.solicitantes.store');
+          Route::patch('gestion-vehiculos/solicitantes/{solicitante}', [GestionVehiculosController::class, 'updateSolicitante'])
+              ->middleware('modulo:gestion_vehiculos,puede_editar')
+              ->name('gestion-vehiculos.solicitantes.update');
+      });
 
     // --- SST: INSPECCIONES ---
     Route::middleware('modulo:visitas_sst')->group(function () {

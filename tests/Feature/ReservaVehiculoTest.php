@@ -1,0 +1,260 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Http\Middleware\ForcePasswordChange;
+use App\Http\Middleware\VerificarConsentimientoDatos;
+use App\Mail\ReservaVehiculoMail;
+use App\Models\Rol;
+use App\Models\User;
+use App\Models\Vehiculo;
+use App\Services\ReservaVehiculoService;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\ValidationException;
+use Tests\TestCase;
+
+class ReservaVehiculoTest extends TestCase
+{
+    use DatabaseTransactions;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Carbon::setTestNow(Carbon::parse('2026-08-01 08:00:00'));
+        $this->withoutMiddleware([
+            VerificarConsentimientoDatos::class,
+            ForcePasswordChange::class,
+        ]);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
+
+    public function test_vehicle_rejects_overlapping_reservations_but_allows_adjacent_periods(): void
+    {
+        $vehiculo = Vehiculo::create([
+            'patente' => 'TEST-01',
+            'marca' => 'Toyota',
+            'modelo' => 'Yaris',
+            'estado' => 'DISPONIBLE',
+            'reservas_habilitadas' => true,
+        ]);
+        $service = app(ReservaVehiculoService::class);
+        $identity = ['oid' => 'test-oid', 'email' => 'solicitante@saep.cl', 'name' => 'Solicitante QA'];
+
+        $first = $service->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-02 09:00:00',
+            'termino' => '2026-08-02 10:00:00',
+            'motivo' => 'Traslado a centro de trabajo',
+        ], $identity);
+
+        $adjacent = $service->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-02 10:00:00',
+            'termino' => '2026-08-02 11:00:00',
+            'motivo' => 'Segundo traslado operativo',
+        ], $identity);
+
+        $this->assertSame('RV-2026-'.str_pad((string) $first->id, 6, '0', STR_PAD_LEFT), $first->codigo);
+        $this->assertSame('CONFIRMADA', $adjacent->estado);
+        $this->assertDatabaseCount('reserva_vehiculo_eventos', 2);
+
+        try {
+            $service->crearReserva([
+                'vehiculo_id' => $vehiculo->id,
+                'inicio' => '2026-08-02 09:30:00',
+                'termino' => '2026-08-02 10:30:00',
+                'motivo' => 'Intento que no debe cruzarse',
+            ], $identity);
+            $this->fail('La reserva cruzada debio ser rechazada.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('vehiculo_id', $exception->errors());
+        }
+
+        $this->assertDatabaseCount('reservas_vehiculos', 2);
+    }
+
+    public function test_public_portal_only_shows_available_vehicles_for_the_selected_range(): void
+    {
+        $ocupado = Vehiculo::create([
+            'patente' => 'OCPD-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $libre = Vehiculo::create([
+            'patente' => 'LIBR-01', 'marca' => 'Chevrolet', 'modelo' => 'N400', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $ocupado->id,
+            'inicio' => '2026-08-03 08:00:00',
+            'termino' => '2026-08-03 12:00:00',
+            'motivo' => 'Reserva existente de prueba',
+        ], ['oid' => 'existing', 'email' => 'existente@saep.cl', 'name' => 'Usuario Existente']);
+
+        $this->withSession(['reserva_vehiculo_microsoft_identity' => [
+            'oid' => 'viewer', 'email' => 'visor@saep.cl', 'name' => 'Visor QA',
+        ]])->get(route('reservas-vehiculos.inicio', [
+            'inicio' => '2026-08-03T09:00',
+            'termino' => '2026-08-03T10:00',
+        ]))->assertOk()->assertSee('LIBR-01')->assertDontSee('OCPD-01');
+
+        $this->assertTrue($libre->exists);
+    }
+
+    public function test_internal_operator_change_is_logged_with_the_user(): void
+    {
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operator = User::create([
+            'name' => 'Operador',
+            'email' => 'operador.vehiculos@saep.cl',
+            'rol_id' => $role->id,
+            'password' => bcrypt('secret'),
+            'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'LOGS-01', 'marca' => 'Chevrolet', 'modelo' => 'Sail', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-04 09:00:00',
+            'termino' => '2026-08-04 12:00:00',
+            'motivo' => 'Reserva para validacion de bitacora',
+        ], ['oid' => 'booking', 'email' => 'booking@saep.cl', 'name' => 'Booking QA']);
+
+        $this->actingAs($operator)
+            ->patch(route('gestion-vehiculos.reservas.update', $reserva), ['estado' => 'EN_USO'])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('reservas_vehiculos', ['id' => $reserva->id, 'estado' => 'EN_USO']);
+        $this->assertDatabaseHas('reserva_vehiculo_eventos', [
+            'reserva_vehiculo_id' => $reserva->id,
+            'user_id' => $operator->id,
+            'accion' => 'ESTADO_ACTUALIZADO',
+        ]);
+    }
+
+    public function test_corporate_portal_redirects_booking_without_a_microsoft_session(): void
+    {
+        $this->post(route('reservas-vehiculos.store'), [
+            'vehiculo_id' => 1,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 10:00:00',
+            'motivo' => 'No debe llegar al guardado',
+        ])->assertRedirect(route('reservas-vehiculos.inicio'));
+
+        $this->assertDatabaseCount('reservas_vehiculos', 0);
+    }
+
+    public function test_microsoft_authorization_redirect_is_bound_to_the_corporate_tenant(): void
+    {
+        config([
+            'services.reservas_vehiculos_microsoft.tenant_id' => 'tenant-saep-id',
+            'services.reservas_vehiculos_microsoft.client_id' => 'client-saep-id',
+            'services.reservas_vehiculos_microsoft.client_secret' => 'secret-for-test',
+            'services.reservas_vehiculos_microsoft.allowed_domain' => 'saep.cl',
+        ]);
+
+        $response = $this->get(route('reservas-vehiculos.microsoft.redirect'));
+
+        $response->assertRedirect();
+        $location = (string) $response->headers->get('Location');
+        $this->assertStringStartsWith('https://login.microsoftonline.com/tenant-saep-id/oauth2/v2.0/authorize?', $location);
+        $this->assertStringContainsString('client_id=client-saep-id', $location);
+        $this->assertStringContainsString('scope=openid%20profile%20email%20User.Read', $location);
+    }
+
+    public function test_reservation_processor_sends_reminder_and_marks_expired_reservation(): void
+    {
+        Mail::fake();
+        $vehiculo = Vehiculo::create([
+            'patente' => 'MAIL-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $service = app(ReservaVehiculoService::class);
+        $identity = ['oid' => 'mail-user', 'email' => 'mail.user@saep.cl', 'name' => 'Correo QA'];
+
+        $recordatorio = $service->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-01 08:30:00',
+            'termino' => '2026-08-01 09:00:00',
+            'motivo' => 'Reserva para validar recordatorio',
+        ], $identity);
+
+        $resultadoRecordatorio = $service->procesarNotificaciones();
+        $this->assertSame(1, $resultadoRecordatorio['recordatorios']);
+        $this->assertNotNull($recordatorio->fresh()->recordatorio_enviado_at);
+        Mail::assertSent(ReservaVehiculoMail::class, fn (ReservaVehiculoMail $mail) => $mail->tipo === 'recordatorio');
+
+        Carbon::setTestNow(Carbon::parse('2026-08-01 10:00:00'));
+        $resultadoVencimiento = $service->procesarNotificaciones();
+
+        $this->assertSame(1, $resultadoVencimiento['vencidas']);
+        $this->assertSame('VENCIDA', $recordatorio->fresh()->estado);
+        Mail::assertSent(ReservaVehiculoMail::class, fn (ReservaVehiculoMail $mail) => $mail->tipo === 'vencimiento');
+    }
+
+    public function test_reservation_email_renders_vehicle_and_schedule_details(): void
+    {
+        $vehiculo = Vehiculo::where('patente', 'CGVC-41')->firstOrFail();
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Traslado de equipo a centro operativo',
+            'destino' => 'CD Quilicura',
+        ], ['oid' => 'email', 'email' => 'correo@saep.cl', 'name' => 'Correo QA']);
+
+        $html = (new ReservaVehiculoMail($reserva, 'confirmacion'))->render();
+
+        $this->assertStringContainsString('Reserva confirmada', $html);
+        $this->assertStringContainsString('CGVC-41', $html);
+        $this->assertStringContainsString('CD Quilicura', $html);
+        $this->assertStringContainsString($reserva->codigo, $html);
+    }
+
+    public function test_reservation_creates_an_event_in_the_shared_microsoft_calendar_when_enabled(): void
+    {
+        Http::fake([
+            'https://login.microsoftonline.com/*/oauth2/v2.0/token' => Http::response(['access_token' => 'calendar-token'], 200),
+            'https://graph.microsoft.com/v1.0/users/*/calendar/events' => Http::response(['id' => 'graph-event-123'], 201),
+        ]);
+        config([
+            'services.microsoft_graph.tenant_id' => 'tenant-id',
+            'services.microsoft_graph.client_id' => 'client-id',
+            'services.microsoft_graph.client_secret' => 'client-secret',
+            'services.reservas_vehiculos_calendar.enabled' => true,
+            'services.reservas_vehiculos_calendar.mailbox' => 'reservas.vehiculos@saep.cl',
+            'services.reservas_vehiculos_calendar.calendar_id' => null,
+        ]);
+
+        $vehiculo = Vehiculo::create([
+            'patente' => 'CALS-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Traslado al centro de trabajo',
+            'destino' => 'CD Quilicura',
+        ], ['oid' => 'calendar-user', 'email' => 'calendar.user@saep.cl', 'name' => 'Calendario QA']);
+
+        $this->assertSame('graph-event-123', $reserva->calendar_event_id);
+        $this->assertNotNull($reserva->calendar_synced_at);
+        $this->assertDatabaseHas('reserva_vehiculo_eventos', [
+            'reserva_vehiculo_id' => $reserva->id,
+            'accion' => 'CALENDARIO_SINCRONIZADO',
+        ]);
+        Http::assertSent(function ($request) use ($reserva) {
+            return $request->method() === 'POST'
+                && $request->url() === 'https://graph.microsoft.com/v1.0/users/reservas.vehiculos%40saep.cl/calendar/events'
+                && $request['subject'] === $reserva->codigo.' · CALS-01';
+        });
+    }
+}

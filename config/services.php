@@ -76,6 +76,27 @@ return [
         'contratacion_folder' => env('CONTRATACION_SHAREPOINT_FOLDER', 'Postulantes Documents'),
     ],
 
+    // Inicio de sesion delegado para el portal publico de reservas de vehiculos.
+    // No comparte credenciales con Microsoft Graph/SharePoint, que usa client credentials.
+    'reservas_vehiculos_microsoft' => [
+        'tenant_id' => env('VEHICLE_RESERVATION_MICROSOFT_TENANT_ID'),
+        'client_id' => env('VEHICLE_RESERVATION_MICROSOFT_CLIENT_ID'),
+        'client_secret' => env('VEHICLE_RESERVATION_MICROSOFT_CLIENT_SECRET'),
+        'redirect' => env('VEHICLE_RESERVATION_MICROSOFT_REDIRECT_URI'),
+        'allowed_domain' => env('VEHICLE_RESERVATION_MICROSOFT_ALLOWED_DOMAIN', 'saep.cl'),
+        'require_approved_requester' => env('VEHICLE_RESERVATION_REQUIRE_APPROVED_REQUESTER', false),
+    ],
+
+    // Calendario compartido de Bodega. Usa la aplicación Graph existente con
+    // permiso de aplicación Calendars.ReadWrite; se mantiene apagado hasta que
+    // Microsoft 365 autorice dicho permiso y se defina el buzón propietario.
+    'reservas_vehiculos_calendar' => [
+        'enabled' => env('VEHICLE_RESERVATION_CALENDAR_ENABLED', false),
+        'mailbox' => env('VEHICLE_RESERVATION_CALENDAR_MAILBOX'),
+        'calendar_id' => env('VEHICLE_RESERVATION_CALENDAR_ID'),
+        'timezone' => env('VEHICLE_RESERVATION_CALENDAR_TIMEZONE', 'Pacific SA Standard Time'),
+    ],
+
     'openai' => [
         'key' => env('OPENAI_API_KEY'),
     ],

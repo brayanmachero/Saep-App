@@ -68,17 +68,25 @@
             @endif
 
             {{-- BODEGA --}}
-            @if(auth()->user()->tieneAcceso('entregas_bodega_dashboard') && \Illuminate\Support\Facades\Route::has('entregas-bodega-dashboard.index'))
+            @if((auth()->user()->tieneAcceso('entregas_bodega_dashboard') && \Illuminate\Support\Facades\Route::has('entregas-bodega-dashboard.index')) || (auth()->user()->tieneAcceso('gestion_vehiculos') && \Illuminate\Support\Facades\Route::has('gestion-vehiculos.index')))
             <div class="nav-section" data-nav-section="bodega">
                 <button type="button" class="nav-section-toggle" aria-expanded="false">
                     <span>Bodega</span>
                     <i class="bi bi-chevron-down"></i>
                 </button>
                 <div class="nav-section-items">
+                    @if(auth()->user()->tieneAcceso('entregas_bodega_dashboard') && \Illuminate\Support\Facades\Route::has('entregas-bodega-dashboard.index'))
                     <a href="{{ route('entregas-bodega-dashboard.index') }}" class="nav-item {{ request()->routeIs('entregas-bodega-dashboard.*') ? 'active' : '' }}">
                         <i class="bi bi-box-seam-fill"></i>
                         <span>Entregas EPP</span>
                     </a>
+                    @endif
+                    @if(auth()->user()->tieneAcceso('gestion_vehiculos') && \Illuminate\Support\Facades\Route::has('gestion-vehiculos.index'))
+                    <a href="{{ route('gestion-vehiculos.index') }}" class="nav-item {{ request()->routeIs('gestion-vehiculos.*') ? 'active' : '' }}">
+                        <i class="bi bi-car-front-fill"></i>
+                        <span>Vehiculos</span>
+                    </a>
+                    @endif
                 </div>
             </div>
             @endif
@@ -469,6 +477,11 @@
             <a href="{{ route('entregas-bodega-dashboard.index') }}" class="bottom-nav-item {{ request()->routeIs('entregas-bodega-dashboard.*') ? 'active' : '' }}">
                 <i class="bi bi-box-seam-fill"></i>
                 <span>Entregas EPP</span>
+            </a>
+            @elseif(auth()->user()->tieneAcceso('gestion_vehiculos') && \Illuminate\Support\Facades\Route::has('gestion-vehiculos.index'))
+            <a href="{{ route('gestion-vehiculos.index') }}" class="bottom-nav-item {{ request()->routeIs('gestion-vehiculos.*') ? 'active' : '' }}">
+                <i class="bi bi-car-front-fill"></i>
+                <span>Vehiculos</span>
             </a>
             @endif
             @if(auth()->user()->tieneAcceso('respuestas') || auth()->user()->tieneAcceso('formularios'))

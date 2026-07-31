@@ -1,0 +1,137 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\ReservaVehiculo;
+use App\Services\ReservaVehiculoMicrosoftAuthService;
+use App\Services\ReservaVehiculoService;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+
+class ReservaVehiculoPublicoController extends Controller
+{
+    public function __construct(
+        private readonly ReservaVehiculoMicrosoftAuthService $microsoft,
+        private readonly ReservaVehiculoService $reservas,
+    ) {}
+
+    public function inicio(Request $request)
+    {
+        $identidad = $this->microsoft->identidad($request);
+        $periodo = $this->periodo($request);
+
+        return view('reservas_vehiculos.publico.inicio', [
+            'identidad' => $identidad,
+            'microsoftConfigurado' => $this->microsoft->estaConfigurado(),
+            'inicio' => $periodo['inicio'],
+            'termino' => $periodo['termino'],
+            'vehiculos' => $identidad ? $this->reservas->vehiculosDisponibles($periodo['inicio'], $periodo['termino']) : collect(),
+            'misReservas' => $identidad
+                ? ReservaVehiculo::query()->with('vehiculo')->where('solicitante_email', $identidad['email'])->latest('inicio')->take(8)->get()
+                : collect(),
+        ]);
+    }
+
+    public function redirectMicrosoft(Request $request)
+    {
+        try {
+            return redirect()->away($this->microsoft->urlAutorizacion($request));
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return redirect()->route('reservas-vehiculos.inicio')
+                ->with('error', 'El acceso corporativo no esta disponible aun. Solicita a Bodega que revise la configuracion Microsoft.');
+        }
+    }
+
+    public function callbackMicrosoft(Request $request)
+    {
+        try {
+            $this->microsoft->verificarCallback($request);
+
+            return redirect()->route('reservas-vehiculos.inicio')
+                ->with('success', 'Cuenta corporativa verificada. Ya puedes reservar un vehiculo.');
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return redirect()->route('reservas-vehiculos.inicio')
+                ->with('error', $exception->getMessage());
+        }
+    }
+
+    public function guardar(Request $request)
+    {
+        $identidad = $this->microsoft->identidad($request);
+        if (! $identidad) {
+            return redirect()->route('reservas-vehiculos.inicio')
+                ->with('error', 'Debes validar tu cuenta corporativa antes de reservar.');
+        }
+
+        $data = $request->validate([
+            'vehiculo_id' => ['required', 'integer', Rule::exists('vehiculos', 'id')],
+            'inicio' => ['required', 'date', 'after_or_equal:now'],
+            'termino' => ['required', 'date', 'after:inicio'],
+            'solicitante_telefono' => ['nullable', 'string', 'max:50'],
+            'destino' => ['nullable', 'string', 'max:300'],
+            'motivo' => ['required', 'string', 'min:8', 'max:2000'],
+            'pasajeros' => ['nullable', 'integer', 'min:1', 'max:99'],
+        ], [
+            'inicio.after_or_equal' => 'La reserva debe comenzar desde la hora actual en adelante.',
+            'motivo.min' => 'Indica un motivo de al menos 8 caracteres.',
+        ]);
+
+        $reserva = $this->reservas->crearReserva($data, $identidad);
+
+        try {
+            $this->reservas->enviarConfirmacion($reserva);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
+        return redirect()->route('reservas-vehiculos.inicio', [
+            'inicio' => $reserva->inicio->format('Y-m-d\\TH:i'),
+            'termino' => $reserva->termino->format('Y-m-d\\TH:i'),
+        ])->with('success', 'Reserva '.$reserva->codigo.' confirmada. Recibiras un correo de respaldo.');
+    }
+
+    public function cancelar(Request $request, ReservaVehiculo $reserva)
+    {
+        $identidad = $this->microsoft->identidad($request);
+        if (! $identidad || strtolower($reserva->solicitante_email) !== strtolower($identidad['email'])) {
+            abort(403, 'No puedes cancelar una reserva de otra persona.');
+        }
+
+        $data = $request->validate([
+            'motivo_cancelacion' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $this->reservas->cancelarReserva($reserva, $identidad, $data['motivo_cancelacion'] ?? null);
+
+        return back()->with('success', 'La reserva '.$reserva->codigo.' fue cancelada.');
+    }
+
+    public function logout(Request $request)
+    {
+        $this->microsoft->cerrarSesion($request);
+
+        return redirect()->route('reservas-vehiculos.inicio')
+            ->with('success', 'Sesion corporativa cerrada.');
+    }
+
+    private function periodo(Request $request): array
+    {
+        $inicio = $request->filled('inicio')
+            ? Carbon::parse($request->input('inicio'))
+            : now()->addHour()->startOfHour();
+        $termino = $request->filled('termino')
+            ? Carbon::parse($request->input('termino'))
+            : $inicio->copy()->addHours(2);
+
+        if ($termino->lessThanOrEqualTo($inicio)) {
+            $termino = $inicio->copy()->addHours(2);
+        }
+
+        return compact('inicio', 'termino');
+    }
+}
