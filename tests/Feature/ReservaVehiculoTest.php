@@ -298,6 +298,32 @@ class ReservaVehiculoTest extends TestCase
         $this->assertStringContainsString('scope=openid%20profile%20email%20User.Read', $location);
     }
 
+    public function test_microsoft_callback_rejects_an_external_account_with_a_clear_saep_domain_message(): void
+    {
+        config([
+            'services.reservas_vehiculos_microsoft.tenant_id' => 'tenant-saep-id',
+            'services.reservas_vehiculos_microsoft.client_id' => 'client-saep-id',
+            'services.reservas_vehiculos_microsoft.client_secret' => 'secret-for-test',
+            'services.reservas_vehiculos_microsoft.allowed_domain' => 'saep.cl',
+        ]);
+        Http::fake([
+            'https://login.microsoftonline.com/tenant-saep-id/oauth2/v2.0/token' => Http::response(['access_token' => 'token-test'], 200),
+            'https://graph.microsoft.com/v1.0/me*' => Http::response([
+                'id' => 'external-user',
+                'displayName' => 'Cuenta Externa',
+                'mail' => 'persona@gmail.com',
+            ], 200),
+        ]);
+
+        $this->withSession(['reserva_vehiculo_microsoft_state' => 'callback-state'])
+            ->get(route('reservas-vehiculos.microsoft.callback', [
+                'state' => 'callback-state',
+                'code' => 'authorization-code',
+            ]))
+            ->assertRedirect(route('reservas-vehiculos.inicio'))
+            ->assertSessionHas('error', 'Este portal de reservas esta disponible solo para cuentas corporativas SAEP con correo @saep.cl.');
+    }
+
     public function test_reservation_processor_sends_reminder_and_marks_expired_reservation(): void
     {
         Mail::fake();

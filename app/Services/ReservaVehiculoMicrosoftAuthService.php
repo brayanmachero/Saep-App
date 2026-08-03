@@ -71,7 +71,7 @@ class ReservaVehiculoMicrosoftAuthService
         $domain = strtolower(ltrim((string) $this->config('allowed_domain', 'saep.cl'), '@'));
 
         if (! $email || ! Str::endsWith($email, '@'.$domain)) {
-            throw new RuntimeException('Solo se permiten cuentas corporativas @'.$domain.'.');
+            throw new RuntimeException('Este portal de reservas esta disponible solo para cuentas corporativas SAEP con correo @'.$domain.'.');
         }
 
         if ($this->config('require_approved_requester', false)
