@@ -43,7 +43,7 @@ class ReservaVehiculoTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_vehicle_rejects_overlapping_reservations_but_allows_adjacent_periods(): void
+    public function test_vehicle_requires_a_one_hour_operational_margin_between_reservations(): void
     {
         $vehiculo = Vehiculo::create([
             'patente' => 'TEST-01',
@@ -62,29 +62,30 @@ class ReservaVehiculoTest extends TestCase
             'motivo' => 'Traslado a centro de trabajo',
         ], $identity);
 
-        $adjacent = $service->crearReserva([
-            'vehiculo_id' => $vehiculo->id,
-            'inicio' => '2026-08-02 10:00:00',
-            'termino' => '2026-08-02 11:00:00',
-            'motivo' => 'Segundo traslado operativo',
-        ], $identity);
-
         $this->assertSame('RV-2026-'.str_pad((string) $first->id, 6, '0', STR_PAD_LEFT), $first->codigo);
-        $this->assertSame('CONFIRMADA', $adjacent->estado);
-        $this->assertDatabaseCount('reserva_vehiculo_eventos', 2);
 
         try {
             $service->crearReserva([
                 'vehiculo_id' => $vehiculo->id,
-                'inicio' => '2026-08-02 09:30:00',
-                'termino' => '2026-08-02 10:30:00',
-                'motivo' => 'Intento que no debe cruzarse',
+                'inicio' => '2026-08-02 10:00:00',
+                'termino' => '2026-08-02 11:00:00',
+                'motivo' => 'Intento sin margen operativo',
             ], $identity);
-            $this->fail('La reserva cruzada debio ser rechazada.');
+            $this->fail('La reserva sin margen operativo debio ser rechazada.');
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('vehiculo_id', $exception->errors());
+            $this->assertStringContainsString('margen operativo de 60 minutos', $exception->errors()['vehiculo_id'][0]);
         }
 
+        $conMargen = $service->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-02 11:00:00',
+            'termino' => '2026-08-02 12:00:00',
+            'motivo' => 'Segundo traslado con margen operativo',
+        ], $identity);
+
+        $this->assertSame('CONFIRMADA', $conMargen->estado);
+        $this->assertDatabaseCount('reserva_vehiculo_eventos', 2);
         $this->assertDatabaseCount('reservas_vehiculos', 2);
     }
 
@@ -118,7 +119,9 @@ class ReservaVehiculoTest extends TestCase
         ]));
 
         $response->assertOk()
-            ->assertSee('Agenda de reservas')
+            ->assertSee('Bloqueos del rango consultado')
+            ->assertSee('Agenda semanal')
+            ->assertSee('Cada reserva bloquea el vehículo durante su rango y agrega 60 minutos de resguardo')
             ->assertSee('LIBR-01')
             ->assertSee('OCPD-01')
             ->assertSee('<option value="'.$libre->id.'"', false)
@@ -231,6 +234,37 @@ class ReservaVehiculoTest extends TestCase
         $this->assertStringContainsString($operator->email, $correoEliminacion->render());
         Http::assertSent(fn ($request) => $request->method() === 'DELETE'
             && $request->url() === 'https://graph.microsoft.com/v1.0/users/reservas.vehiculos%40saep.cl/calendar/events/graph-event-delete');
+    }
+
+    public function test_bodega_operator_cannot_delete_a_reservation_that_already_has_a_kizeo_form(): void
+    {
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operator = User::create([
+            'name' => 'Coordinador Bodega', 'email' => 'coordinador.kizeo-delete@saep.cl', 'rol_id' => $role->id,
+            'password' => bcrypt('secret'), 'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'KDEL-01', 'marca' => 'Chevrolet', 'modelo' => 'Sail', 'estado' => 'DISPONIBLE',
+            'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-04 09:00:00',
+            'termino' => '2026-08-04 11:00:00',
+            'motivo' => 'Prueba con ficha Kizeo preparada',
+        ], ['oid' => 'kizeo-delete-test', 'email' => 'prueba.kizeo-delete@saep.cl', 'name' => 'Prueba Kizeo']);
+        $reserva->update([
+            'kizeo_form_id' => '1165545',
+            'kizeo_data_id' => 'kizeo-preparada-123',
+            'kizeo_pushed_at' => now(),
+        ]);
+
+        $this->actingAs($operator)
+            ->delete(route('gestion-vehiculos.reservas.destroy', $reserva))
+            ->assertRedirect()
+            ->assertSessionHas('error', 'No se elimino '.$reserva->codigo.' porque ya tiene una ficha creada en Kizeo. Elimina primero esa ficha de prueba desde Kizeo y luego vuelve a eliminar la reserva en SAEP; asi no queda un acta huerfana.');
+
+        $this->assertDatabaseHas('reservas_vehiculos', ['id' => $reserva->id]);
     }
 
     public function test_reservation_is_preserved_when_its_outlook_event_cannot_be_deleted(): void

@@ -20,13 +20,15 @@ class ReservaVehiculoService
 
     public function vehiculosDisponibles(CarbonInterface $inicio, CarbonInterface $termino): Collection
     {
+        [$inicioBloqueo, $terminoBloqueo] = $this->periodoConMargen($inicio, $termino);
+
         return Vehiculo::query()
             ->where('estado', 'DISPONIBLE')
             ->where('reservas_habilitadas', true)
-            ->whereDoesntHave('reservas', function ($query) use ($inicio, $termino) {
+            ->whereDoesntHave('reservas', function ($query) use ($inicioBloqueo, $terminoBloqueo) {
                 $query->whereIn('estado', ReservaVehiculo::ESTADOS_BLOQUEANTES)
-                    ->where('inicio', '<', $termino)
-                    ->where('termino', '>', $inicio);
+                    ->where('inicio', '<', $terminoBloqueo)
+                    ->where('termino', '>', $inicioBloqueo);
             })
             ->orderBy('sede')
             ->orderBy('patente')
@@ -48,6 +50,11 @@ class ReservaVehiculoService
             ->get();
     }
 
+    public function margenReservaMinutos(): int
+    {
+        return max(0, min(240, (int) config('services.reservas_vehiculos.buffer_minutes', 60)));
+    }
+
     public function crearReserva(array $data, array $identidad, ?User $operador = null): ReservaVehiculo
     {
         $inicio = Carbon::parse($data['inicio']);
@@ -59,7 +66,9 @@ class ReservaVehiculoService
             ]);
         }
 
-        $reserva = DB::transaction(function () use ($data, $identidad, $operador, $inicio, $termino) {
+        [$inicioBloqueo, $terminoBloqueo] = $this->periodoConMargen($inicio, $termino);
+
+        $reserva = DB::transaction(function () use ($data, $identidad, $operador, $inicio, $termino, $inicioBloqueo, $terminoBloqueo) {
             $vehiculo = Vehiculo::query()->lockForUpdate()->findOrFail($data['vehiculo_id']);
 
             if ($vehiculo->estado !== 'DISPONIBLE' || ! $vehiculo->reservas_habilitadas) {
@@ -70,13 +79,13 @@ class ReservaVehiculoService
 
             $tieneCruce = $vehiculo->reservas()
                 ->whereIn('estado', ReservaVehiculo::ESTADOS_BLOQUEANTES)
-                ->where('inicio', '<', $termino)
-                ->where('termino', '>', $inicio)
+                ->where('inicio', '<', $terminoBloqueo)
+                ->where('termino', '>', $inicioBloqueo)
                 ->exists();
 
             if ($tieneCruce) {
                 throw ValidationException::withMessages([
-                    'vehiculo_id' => 'El vehiculo acaba de ser reservado en ese horario. Selecciona otro vehiculo o ajusta el rango.',
+                    'vehiculo_id' => 'El vehiculo no esta disponible: se requiere un margen operativo de '.$this->margenReservaMinutos().' minutos entre reservas. Selecciona otro vehiculo o ajusta el rango.',
                 ]);
             }
 
@@ -283,6 +292,17 @@ class ReservaVehiculoService
             'email' => 'sistema@saep.cl',
             'name' => 'Sistema SAEP',
         ], null, ['calendar_event_id' => $reserva->calendar_event_id]);
+    }
+
+    /** @return array{0: Carbon, 1: Carbon} */
+    private function periodoConMargen(CarbonInterface $inicio, CarbonInterface $termino): array
+    {
+        $margen = $this->margenReservaMinutos();
+
+        return [
+            Carbon::instance($inicio)->subMinutes($margen),
+            Carbon::instance($termino)->addMinutes($margen),
+        ];
     }
 
     private function registrarEvento(

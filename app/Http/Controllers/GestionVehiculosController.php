@@ -164,6 +164,11 @@ class GestionVehiculosController extends Controller
     {
         $reserva->loadMissing('vehiculo');
         $codigo = $reserva->codigo;
+
+        if ($reserva->kizeo_data_id) {
+            return back()->with('error', 'No se elimino '.$codigo.' porque ya tiene una ficha creada en Kizeo. Elimina primero esa ficha de prueba desde Kizeo y luego vuelve a eliminar la reserva en SAEP; asi no queda un acta huerfana.');
+        }
+
         $calendar = $this->calendar->eliminar($reserva);
 
         if ($calendar['estado'] === 'error') {

@@ -91,6 +91,12 @@ return [
         'require_approved_requester' => env('VEHICLE_RESERVATION_REQUIRE_APPROVED_REQUESTER', false),
     ],
 
+    // Tiempo operativo que se bloquea antes y despues de cada reserva para
+    // absorber atrasos de entrega, traslado o devolucion del vehiculo.
+    'reservas_vehiculos' => [
+        'buffer_minutes' => (int) env('VEHICLE_RESERVATION_BUFFER_MINUTES', 60),
+    ],
+
     // Calendario compartido de Bodega. Usa exclusivamente la aplicación de
     // reservas: sus credenciales no se comparten con SharePoint/documentos.
     'reservas_vehiculos_calendar' => [
