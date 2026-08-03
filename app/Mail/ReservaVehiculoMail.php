@@ -25,6 +25,8 @@ class ReservaVehiculoMail extends Mailable
             'recordatorio' => 'Recordatorio de reserva de vehiculo',
             'vencimiento' => 'Reserva de vehiculo vencida',
             'administracion' => 'Nueva reserva de vehiculo',
+            'cancelacion' => 'Reserva de vehiculo cancelada',
+            'actualizacion' => 'Reserva de vehiculo actualizada',
             default => 'Actualizacion de reserva de vehiculo',
         };
 

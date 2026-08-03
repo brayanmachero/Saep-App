@@ -26,7 +26,16 @@ class ReservaVehiculoPublicoController extends Controller
             'microsoftConfigurado' => $this->microsoft->estaConfigurado(),
             'inicio' => $periodo['inicio'],
             'termino' => $periodo['termino'],
-            'vehiculos' => $identidad ? $this->reservas->vehiculosDisponibles($periodo['inicio'], $periodo['termino']) : collect(),
+            'inicioInput' => $periodo['inicio_input'],
+            'terminoInput' => $periodo['termino_input'],
+            'consultaDisponibilidad' => $periodo['consultada'],
+            'errorPeriodo' => $periodo['error'],
+            'vehiculos' => $identidad && $periodo['consultada']
+                ? $this->reservas->vehiculosDisponibles($periodo['inicio'], $periodo['termino'])
+                : collect(),
+            'agenda' => $identidad && $periodo['consultada']
+                ? $this->reservas->agenda($periodo['inicio'], $periodo['termino'])
+                : collect(),
             'misReservas' => $identidad
                 ? ReservaVehiculo::query()->with('vehiculo')->where('solicitante_email', $identidad['email'])->latest('inicio')->take(8)->get()
                 : collect(),
@@ -106,7 +115,13 @@ class ReservaVehiculoPublicoController extends Controller
             'motivo_cancelacion' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $this->reservas->cancelarReserva($reserva, $identidad, $data['motivo_cancelacion'] ?? null);
+        $reserva = $this->reservas->cancelarReserva($reserva, $identidad, $data['motivo_cancelacion'] ?? null);
+
+        try {
+            $this->reservas->enviarActualizacion($reserva, 'cancelacion');
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
 
         return back()->with('success', 'La reserva '.$reserva->codigo.' fue cancelada.');
     }
@@ -121,17 +136,63 @@ class ReservaVehiculoPublicoController extends Controller
 
     private function periodo(Request $request): array
     {
-        $inicio = $request->filled('inicio')
-            ? Carbon::parse($request->input('inicio'))
-            : now()->addHour()->startOfHour();
-        $termino = $request->filled('termino')
-            ? Carbon::parse($request->input('termino'))
-            : $inicio->copy()->addHours(2);
+        $inicioInput = trim((string) $request->input('inicio', ''));
+        $terminoInput = trim((string) $request->input('termino', ''));
 
-        if ($termino->lessThanOrEqualTo($inicio)) {
-            $termino = $inicio->copy()->addHours(2);
+        if ($inicioInput === '' && $terminoInput === '') {
+            return [
+                'inicio' => null,
+                'termino' => null,
+                'inicio_input' => '',
+                'termino_input' => '',
+                'consultada' => false,
+                'error' => null,
+            ];
         }
 
-        return compact('inicio', 'termino');
+        if ($inicioInput === '' || $terminoInput === '') {
+            return [
+                'inicio' => null,
+                'termino' => null,
+                'inicio_input' => $inicioInput,
+                'termino_input' => $terminoInput,
+                'consultada' => false,
+                'error' => 'Selecciona las fechas y horas de inicio y termino para consultar la disponibilidad.',
+            ];
+        }
+
+        try {
+            $inicio = Carbon::parse($inicioInput);
+            $termino = Carbon::parse($terminoInput);
+        } catch (\Throwable) {
+            return [
+                'inicio' => null,
+                'termino' => null,
+                'inicio_input' => $inicioInput,
+                'termino_input' => $terminoInput,
+                'consultada' => false,
+                'error' => 'El rango indicado no tiene un formato de fecha y hora valido.',
+            ];
+        }
+
+        if ($termino->lessThanOrEqualTo($inicio)) {
+            return [
+                'inicio' => null,
+                'termino' => null,
+                'inicio_input' => $inicioInput,
+                'termino_input' => $terminoInput,
+                'consultada' => false,
+                'error' => 'La fecha y hora de termino debe ser posterior al inicio.',
+            ];
+        }
+
+        return [
+            'inicio' => $inicio,
+            'termino' => $termino,
+            'inicio_input' => $inicio->format('Y-m-d\\TH:i'),
+            'termino_input' => $termino->format('Y-m-d\\TH:i'),
+            'consultada' => true,
+            'error' => null,
+        ];
     }
 }

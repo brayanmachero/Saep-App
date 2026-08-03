@@ -85,7 +85,13 @@ class GestionVehiculosController extends Controller
             'estado' => ['required', Rule::in(array_keys(ReservaVehiculo::ESTADOS))],
         ]);
 
-        $this->reservas->actualizarEstado($reserva, $data['estado'], $request->user());
+        $reserva = $this->reservas->actualizarEstado($reserva, $data['estado'], $request->user());
+
+        try {
+            $this->reservas->enviarActualizacion($reserva, 'actualizacion');
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
 
         return back()->with('success', 'Estado de la reserva '.$reserva->codigo.' actualizado.');
     }

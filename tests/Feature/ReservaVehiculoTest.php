@@ -10,7 +10,7 @@ use App\Models\User;
 use App\Models\Vehiculo;
 use App\Services\ReservaVehiculoService;
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
@@ -18,7 +18,7 @@ use Tests\TestCase;
 
 class ReservaVehiculoTest extends TestCase
 {
-    use DatabaseTransactions;
+    use RefreshDatabase;
 
     protected function setUp(): void
     {
@@ -83,7 +83,7 @@ class ReservaVehiculoTest extends TestCase
         $this->assertDatabaseCount('reservas_vehiculos', 2);
     }
 
-    public function test_public_portal_only_shows_available_vehicles_for_the_selected_range(): void
+    public function test_public_portal_requires_an_explicit_range_and_only_offers_free_vehicles(): void
     {
         $ocupado = Vehiculo::create([
             'patente' => 'OCPD-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
@@ -100,10 +100,24 @@ class ReservaVehiculoTest extends TestCase
 
         $this->withSession(['reserva_vehiculo_microsoft_identity' => [
             'oid' => 'viewer', 'email' => 'visor@saep.cl', 'name' => 'Visor QA',
+        ]])->get(route('reservas-vehiculos.inicio'))
+            ->assertOk()
+            ->assertSee('Ningun vehiculo aparece sin un rango consultado.')
+            ->assertDontSee('LIBR-01');
+
+        $response = $this->withSession(['reserva_vehiculo_microsoft_identity' => [
+            'oid' => 'viewer', 'email' => 'visor@saep.cl', 'name' => 'Visor QA',
         ]])->get(route('reservas-vehiculos.inicio', [
             'inicio' => '2026-08-03T09:00',
             'termino' => '2026-08-03T10:00',
-        ]))->assertOk()->assertSee('LIBR-01')->assertDontSee('OCPD-01');
+        ]));
+
+        $response->assertOk()
+            ->assertSee('Agenda de reservas')
+            ->assertSee('LIBR-01')
+            ->assertSee('OCPD-01')
+            ->assertSee('<option value="'.$libre->id.'"', false)
+            ->assertDontSee('<option value="'.$ocupado->id.'"', false);
 
         $this->assertTrue($libre->exists);
     }
@@ -216,6 +230,37 @@ class ReservaVehiculoTest extends TestCase
         $this->assertStringContainsString('CGVC-41', $html);
         $this->assertStringContainsString('CD Quilicura', $html);
         $this->assertStringContainsString($reserva->codigo, $html);
+    }
+
+    public function test_reservation_updates_notify_the_requester_and_vehicle_module_recipients(): void
+    {
+        Mail::fake();
+
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operator = User::create([
+            'name' => 'Coordinador Bodega',
+            'email' => 'coordinador.bodega@saep.cl',
+            'rol_id' => $role->id,
+            'password' => bcrypt('secret'),
+            'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'AVIS-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Traslado para validar comunicacion',
+        ], ['oid' => 'mail-notification', 'email' => 'solicitante.aviso@saep.cl', 'name' => 'Solicitante Aviso']);
+
+        app(ReservaVehiculoService::class)->enviarActualizacion($reserva, 'actualizacion');
+
+        Mail::assertSent(ReservaVehiculoMail::class, function (ReservaVehiculoMail $mail) use ($operator, $reserva) {
+            return $mail->tipo === 'actualizacion'
+                && $mail->hasTo($operator->email)
+                && $mail->hasTo($reserva->solicitante_email);
+        });
     }
 
     public function test_reservation_creates_an_event_in_the_shared_microsoft_calendar_when_enabled(): void

@@ -4,6 +4,8 @@
         'recordatorio' => ['titulo' => 'Tu reserva comienza pronto', 'texto' => 'Revisa el horario y coordina la entrega del vehiculo con Bodega.', 'badge' => 'Recordatorio', 'color' => '#2563eb'],
         'vencimiento' => ['titulo' => 'Reserva fuera de horario', 'texto' => 'La hora de termino fue superada. Bodega debe confirmar la devolucion o actualizar el estado.', 'badge' => 'Por revisar', 'color' => '#c2410c'],
         'administracion' => ['titulo' => 'Nueva reserva registrada', 'texto' => 'Se creo una reserva desde el portal corporativo. Revisa el detalle operativo.', 'badge' => 'Nueva reserva', 'color' => '#5b21b6'],
+        'cancelacion' => ['titulo' => 'Reserva cancelada', 'texto' => 'La reserva fue cancelada y el vehiculo vuelve a estar disponible para ese horario.', 'badge' => 'Cancelada', 'color' => '#be123c'],
+        'actualizacion' => ['titulo' => 'Reserva actualizada', 'texto' => 'Bodega actualizo el estado de esta reserva. Revisa el detalle operativo.', 'badge' => 'Actualizada', 'color' => '#2563eb'],
         default => ['titulo' => 'Actualizacion de reserva', 'texto' => 'Existe una actualizacion en la reserva de vehiculo.', 'badge' => 'Reserva', 'color' => '#2563eb'],
     };
 @endphp

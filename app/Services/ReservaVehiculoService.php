@@ -33,6 +33,21 @@ class ReservaVehiculoService
             ->get();
     }
 
+    /**
+     * Agenda interna del rango consultado. No expone solicitante ni motivo en el portal.
+     */
+    public function agenda(CarbonInterface $inicio, CarbonInterface $termino): Collection
+    {
+        return ReservaVehiculo::query()
+            ->with('vehiculo')
+            ->whereIn('estado', ReservaVehiculo::ESTADOS_BLOQUEANTES)
+            ->where('inicio', '<', $termino)
+            ->where('termino', '>', $inicio)
+            ->orderBy('inicio')
+            ->orderBy('vehiculo_id')
+            ->get();
+    }
+
     public function crearReserva(array $data, array $identidad, ?User $operador = null): ReservaVehiculo
     {
         $inicio = Carbon::parse($data['inicio']);
@@ -98,7 +113,7 @@ class ReservaVehiculoService
         return $reserva->fresh('vehiculo');
     }
 
-    public function cancelarReserva(ReservaVehiculo $reserva, array $identidad, ?string $motivo = null, ?User $operador = null): void
+    public function cancelarReserva(ReservaVehiculo $reserva, array $identidad, ?string $motivo = null, ?User $operador = null): ReservaVehiculo
     {
         if (! in_array($reserva->estado, ['CONFIRMADA', 'EN_USO'], true)) {
             throw ValidationException::withMessages([
@@ -117,10 +132,13 @@ class ReservaVehiculoService
             'motivo' => $motivo,
         ]);
 
-        $this->sincronizarCalendario($reserva->fresh('vehiculo'), 'Cancelacion informada al calendario compartido.');
+        $reserva = $reserva->fresh('vehiculo');
+        $this->sincronizarCalendario($reserva, 'Cancelacion informada al calendario compartido.');
+
+        return $reserva;
     }
 
-    public function actualizarEstado(ReservaVehiculo $reserva, string $estado, User $operador): void
+    public function actualizarEstado(ReservaVehiculo $reserva, string $estado, User $operador): ReservaVehiculo
     {
         if (! array_key_exists($estado, ReservaVehiculo::ESTADOS)) {
             throw ValidationException::withMessages(['estado' => 'El estado indicado no es valido.']);
@@ -134,7 +152,10 @@ class ReservaVehiculoService
             'name' => $operador->nombre_completo ?: $operador->name,
         ], $operador, ['anterior' => $anterior, 'actual' => $estado]);
 
-        $this->sincronizarCalendario($reserva->fresh('vehiculo'), 'Estado actualizado en el calendario compartido.');
+        $reserva = $reserva->fresh('vehiculo');
+        $this->sincronizarCalendario($reserva, 'Estado actualizado en el calendario compartido.');
+
+        return $reserva;
     }
 
     public function enviarConfirmacion(ReservaVehiculo $reserva): void
@@ -148,6 +169,24 @@ class ReservaVehiculoService
 
         if ($admins->isNotEmpty()) {
             Mail::to($admins->pluck('email')->all())->send(new ReservaVehiculoMail($reserva, 'administracion'));
+        }
+    }
+
+    public function enviarActualizacion(ReservaVehiculo $reserva, string $tipo): void
+    {
+        $reserva->loadMissing('vehiculo');
+
+        $destinatarios = $this->destinatariosAdministracion()
+            ->pluck('email')
+            ->push($reserva->solicitante_email)
+            ->filter()
+            ->map(fn (string $email) => strtolower($email))
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($destinatarios !== []) {
+            Mail::to($destinatarios)->send(new ReservaVehiculoMail($reserva, $tipo));
         }
     }
 
@@ -207,7 +246,7 @@ class ReservaVehiculoService
                     $roles->where('codigo', 'SUPER_ADMIN')
                         ->orWhereHas('modulos', function ($modules) {
                             $modules->where('slug', 'gestion_vehiculos')
-                                ->where('rol_modulo.puede_editar', true);
+                                ->where('rol_modulo.puede_ver', true);
                         });
                 });
             })
