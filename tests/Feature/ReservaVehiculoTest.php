@@ -91,6 +91,8 @@ class ReservaVehiculoTest extends TestCase
 
     public function test_public_portal_requires_an_explicit_range_and_only_offers_free_vehicles(): void
     {
+        config(['services.reservas_vehiculos.public_calendar_url' => 'https://outlook.office365.com/owa/calendar/public/calendar.html']);
+
         $ocupado = Vehiculo::create([
             'patente' => 'OCPD-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
         ]);
@@ -120,8 +122,10 @@ class ReservaVehiculoTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Bloqueos del rango consultado')
-            ->assertSee('Agenda semanal')
-            ->assertSee('Cada reserva bloquea el vehículo durante su rango y agrega 60 minutos de resguardo')
+            ->assertSee('Calendario de reservas')
+            ->assertSee('Visualización pública de Outlook')
+            ->assertSee('https://outlook.office365.com/owa/calendar/public/calendar.html', false)
+            ->assertSee('Calendario público de reservas de vehículos SAEP')
             ->assertSee('LIBR-01')
             ->assertSee('OCPD-01')
             ->assertSee('<option value="'.$libre->id.'"', false)
