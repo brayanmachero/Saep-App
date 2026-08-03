@@ -8,12 +8,15 @@ use App\Mail\ReservaVehiculoMail;
 use App\Models\Rol;
 use App\Models\User;
 use App\Models\Vehiculo;
+use App\Services\OneDriveService;
+use App\Services\ReservaVehiculoKizeoService;
 use App\Services\ReservaVehiculoService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
+use Mockery;
 use Tests\TestCase;
 
 class ReservaVehiculoTest extends TestCase
@@ -34,6 +37,7 @@ class ReservaVehiculoTest extends TestCase
     protected function tearDown(): void
     {
         Carbon::setTestNow();
+        Mockery::close();
 
         parent::tearDown();
     }
@@ -445,5 +449,197 @@ class ReservaVehiculoTest extends TestCase
                 && $request['subject'] === $reserva->codigo.' · CALS-01';
         });
         Http::assertSent(fn ($request) => $request->url() === 'https://login.microsoftonline.com/tenant-id/oauth2/v2.0/token');
+    }
+
+    public function test_bodega_prepares_a_prefilled_kizeo_delivery_sheet_without_changing_the_reservation_status(): void
+    {
+        Http::fake([
+            'https://www.kizeoforms.com/rest/v3/forms/1165545/push' => Http::response([
+                'status' => 'ok',
+                'data' => ['id' => 'kizeo-push-123'],
+            ], 200),
+        ]);
+        config([
+            'services.kizeo.vehicle_form_id' => '1165545',
+            'services.kizeo.vehicle_recipient_user_id' => '657579',
+            'services.kizeo.vehicle_reservation_code_field' => 'codigo_de_reserva_saep',
+        ]);
+
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operator = User::create([
+            'name' => 'Bodega Kizeo',
+            'email' => 'bodega.kizeo@saep.cl',
+            'rol_id' => $role->id,
+            'password' => bcrypt('secret'),
+            'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'KIZE-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Traslado para validar ficha Kizeo',
+        ], ['oid' => 'kizeo-test', 'email' => 'kizeo.test@saep.cl', 'name' => 'Kizeo QA']);
+
+        $preparada = app(ReservaVehiculoKizeoService::class)->prepararActa($reserva, $operator);
+
+        $this->assertSame('CONFIRMADA', $preparada->estado);
+        $this->assertSame('1165545', $preparada->kizeo_form_id);
+        $this->assertSame('kizeo-push-123', $preparada->kizeo_data_id);
+        $this->assertNotNull($preparada->kizeo_pushed_at);
+        $this->assertDatabaseHas('reserva_vehiculo_eventos', [
+            'reserva_vehiculo_id' => $reserva->id,
+            'accion' => 'KIZEO_ACTA_PREPARADA',
+        ]);
+        Http::assertSent(function ($request) use ($reserva) {
+            return $request->method() === 'POST'
+                && $request->url() === 'https://www.kizeoforms.com/rest/v3/forms/1165545/push'
+                && $request['recipient_user_id'] === 657579
+                && $request['fields']['codigo_de_reserva_saep']['value'] === $reserva->codigo
+                && $request['fields']['gestion']['value'] === 'Entrega a Conductor'
+                && $request['fields']['marca_modelo']['value'] === 'Fiat - Fiorino';
+        });
+    }
+
+    public function test_kizeo_delivery_and_return_update_the_matching_reservation_idempotently(): void
+    {
+        $vehiculo = Vehiculo::create([
+            'patente' => 'BACK-01', 'marca' => 'Chevrolet', 'modelo' => 'Sail', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Traslado para validar retorno de Kizeo',
+        ], ['oid' => 'kizeo-return', 'email' => 'return.test@saep.cl', 'name' => 'Retorno QA']);
+
+        $service = app(ReservaVehiculoKizeoService::class);
+        $entrega = $service->registrarActaRecibida(
+            '1165545',
+            'kizeo-record-321',
+            $reserva->codigo,
+            'Entrega',
+            '2026-08-03 09:15',
+            'Actas Vehiculos/CGVC-41/Entrega.pdf',
+        );
+
+        $this->assertSame('estado_actualizado', $entrega['estado']);
+        $this->assertSame('EN_USO', $entrega['reserva']->estado);
+        $this->assertSame('kizeo-record-321', $entrega['reserva']->kizeo_data_id);
+        $this->assertNotNull($entrega['reserva']->entregada_at);
+
+        $reintento = $service->registrarActaRecibida(
+            '1165545',
+            'kizeo-record-321',
+            $reserva->codigo,
+            'Entrega',
+            '2026-08-03 09:15',
+            'Actas Vehiculos/CGVC-41/Entrega.pdf',
+        );
+
+        $this->assertSame('registrada', $reintento['estado']);
+        $this->assertDatabaseCount('reserva_vehiculo_eventos', 2);
+
+        $devolucion = $service->registrarActaRecibida(
+            '1165545',
+            'kizeo-record-321',
+            $reserva->codigo,
+            'Devolucion',
+            '2026-08-03 10:50',
+            'Actas Vehiculos/CGVC-41/Devolucion.pdf',
+        );
+
+        $this->assertSame('estado_actualizado', $devolucion['estado']);
+        $this->assertSame('DEVUELTA', $devolucion['reserva']->estado);
+        $this->assertNotNull($devolucion['reserva']->devuelta_at);
+        $this->assertDatabaseHas('reservas_vehiculos', [
+            'id' => $reserva->id,
+            'kizeo_devolucion_sharepoint_path' => 'Actas Vehiculos/CGVC-41/Devolucion.pdf',
+        ]);
+        $this->assertDatabaseCount('reserva_vehiculo_eventos', 3);
+    }
+
+    public function test_vehicle_management_renders_the_kizeo_preparation_action_for_a_confirmed_reservation(): void
+    {
+        config([
+            'services.kizeo.vehicle_form_id' => '1165545',
+            'services.kizeo.vehicle_recipient_user_id' => '657579',
+            'services.kizeo.vehicle_reservation_code_field' => 'codigo_de_reserva_saep',
+        ]);
+
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operator = User::create([
+            'name' => 'Bodega Visual',
+            'email' => 'bodega.visual@saep.cl',
+            'rol_id' => $role->id,
+            'password' => bcrypt('secret'),
+            'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'VIEW-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Reserva para revisar la gestion visual',
+        ], ['oid' => 'kizeo-view', 'email' => 'view.test@saep.cl', 'name' => 'Vista QA']);
+
+        $this->actingAs($operator)
+            ->get(route('gestion-vehiculos.index'))
+            ->assertOk()
+            ->assertSee($reserva->codigo)
+            ->assertSee('Pendiente de preparar')
+            ->assertSee('Preparar ficha de entrega en Kizeo para Bodega');
+    }
+
+    public function test_bodega_can_review_managed_reservations_and_open_each_archived_act(): void
+    {
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operator = User::create([
+            'name' => 'Bodega Actas',
+            'email' => 'bodega.actas@saep.cl',
+            'rol_id' => $role->id,
+            'password' => bcrypt('secret'),
+            'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'ACTA-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Revisión de actas firmadas',
+        ], ['oid' => 'acta-test', 'email' => 'acta.test@saep.cl', 'name' => 'Actas QA']);
+        $reserva->update([
+            'estado' => 'DEVUELTA',
+            'kizeo_data_id' => 'kizeo-acta-123',
+            'kizeo_entrega_sharepoint_path' => 'ACTA-01/Entrega.pdf',
+            'kizeo_devolucion_sharepoint_path' => 'ACTA-01/Devolucion.pdf',
+        ]);
+
+        $this->actingAs($operator)
+            ->get(route('gestion-vehiculos.index'))
+            ->assertOk()
+            ->assertSee('Reservas gestionadas y actas')
+            ->assertSee($reserva->codigo)
+            ->assertSee('Entrega')
+            ->assertSee('Devolución');
+
+        $oneDrive = Mockery::mock(OneDriveService::class);
+        $oneDrive->shouldReceive('downloadFile')
+            ->once()
+            ->with('ACTA-01/Entrega.pdf')
+            ->andReturn('%PDF-1.4 acta entrega');
+        $this->app->instance(OneDriveService::class, $oneDrive);
+
+        $this->actingAs($operator)
+            ->get(route('gestion-vehiculos.reservas.acta', [$reserva, 'entrega']))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertSee('%PDF-1.4 acta entrega');
     }
 }

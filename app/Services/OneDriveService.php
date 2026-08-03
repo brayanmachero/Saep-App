@@ -307,6 +307,45 @@ class OneDriveService
     }
 
     /**
+     * Descarga un archivo del sitio SharePoint configurado por defecto.
+     * La ruta es relativa a rootFolder salvo que $absolute sea true.
+     */
+    public function downloadFile(string $remotePath, bool $absolute = false): ?string
+    {
+        $this->lastError = null;
+
+        if (! $this->isConfigured()) {
+            $this->recordUploadError('SharePoint: Servicio no configurado para descargar archivo', ['path' => $remotePath]);
+
+            return null;
+        }
+
+        $token = $this->getAccessToken();
+        $siteId = $this->getSiteId();
+        if (! $token || ! $siteId) {
+            $this->recordUploadError('SharePoint: No se pudo preparar la descarga del archivo', ['path' => $remotePath]);
+
+            return null;
+        }
+
+        $fullPath = $absolute ? ltrim($remotePath, '/') : $this->rootFolder.'/'.ltrim($remotePath, '/');
+        $fullPath = $this->sanitizePath($fullPath);
+        $response = Http::withToken($token)->get($this->driveRootUrl($siteId, $fullPath, ':/content'));
+
+        if ($response->successful()) {
+            return $response->body();
+        }
+
+        $this->recordUploadError('SharePoint: Error descargando archivo', [
+            'path' => $fullPath,
+            'status' => $response->status(),
+            'body' => $response->body(),
+        ]);
+
+        return null;
+    }
+
+    /**
      * Sanitizar ruta para SharePoint (remover caracteres inválidos).
      */
     private function sanitizePath(string $path): string

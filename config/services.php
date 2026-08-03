@@ -42,6 +42,8 @@ return [
         'webhook_secret'           => env('KIZEO_WEBHOOK_SECRET'),
         'webhook_require_secret'   => env('KIZEO_WEBHOOK_REQUIRE_SECRET', false),
         'vehicle_form_id'          => env('KIZEO_VEHICLE_FORM_ID'),
+        'vehicle_recipient_user_id' => env('KIZEO_VEHICLE_RECIPIENT_USER_ID'),
+        'vehicle_reservation_code_field' => env('KIZEO_VEHICLE_RESERVATION_CODE_FIELD', 'codigo_de_reserva_saep'),
         'charla_form_id'              => env('KIZEO_CHARLA_FORM_ID'),
         'charla_sharepoint_folder'    => env('KIZEO_CHARLA_SHAREPOINT_FOLDER', 'Charlas SST'),
         'observacion_form_id'         => env('KIZEO_OBSERVACION_FORM_ID'),

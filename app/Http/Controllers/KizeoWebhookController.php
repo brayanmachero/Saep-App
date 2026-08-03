@@ -11,6 +11,7 @@ use App\Notifications\AppNotification;
 use App\Services\KizeoAutomationService;
 use App\Services\KizeoService;
 use App\Services\OneDriveService;
+use App\Services\ReservaVehiculoKizeoService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -40,11 +41,17 @@ class KizeoWebhookController extends Controller
 
     private KizeoService $kizeo;
     private KizeoAutomationService $automations;
+    private ReservaVehiculoKizeoService $vehicleReservations;
 
-    public function __construct(KizeoService $kizeo, KizeoAutomationService $automations)
+    public function __construct(
+        KizeoService $kizeo,
+        KizeoAutomationService $automations,
+        ReservaVehiculoKizeoService $vehicleReservations,
+    )
     {
         $this->kizeo = $kizeo;
         $this->automations = $automations;
+        $this->vehicleReservations = $vehicleReservations;
     }
 
     /**
@@ -244,6 +251,7 @@ class KizeoWebhookController extends Controller
             // Extraer todos los campos
             $data = [
                 'gestion'                   => $getVal('gestion'),
+                'codigo_reserva_saep'        => $getVal((string) config('services.kizeo.vehicle_reservation_code_field', 'codigo_de_reserva_saep')),
                 'fecha_hora'                => $getVal('fecha_y_hora'),
                 'marca_modelo'              => $getVal('marca_modelo'),
                 'patente'                   => $getVal('lista'),
@@ -354,6 +362,15 @@ class KizeoWebhookController extends Controller
             $remotePath = "{$data['patente']}/{$tipoActa}_{$fechaSlug}_{$conductorSlug}_Registro_{$dataId}.pdf";
             $sharepointPath = $this->uploadPdfToSharePoint($pdfContent, $remotePath, "Acta de {$tipoActa}", false);
 
+            $reservaSync = $this->vehicleReservations->registrarActaRecibida(
+                $formId,
+                $dataId,
+                $data['codigo_reserva_saep'],
+                $tipoActa,
+                $fechaRef,
+                $sharepointPath,
+            );
+
             // Enviar correo con PDF adjunto
             $emailEnviado = false;
             $destinatarios = [];
@@ -405,6 +422,8 @@ class KizeoWebhookController extends Controller
                     'patente'   => $data['patente'],
                     'conductor' => $data['conductor_nombre'],
                     'fecha'     => $fechaRef,
+                    'codigo_reserva_saep' => $data['codigo_reserva_saep'],
+                    'reserva_sync' => $reservaSync['estado'],
                 ],
                 'ip' => $ip,
             ]);

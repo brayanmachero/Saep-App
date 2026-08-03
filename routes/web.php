@@ -487,6 +487,11 @@ Route::middleware('auth')->group(function () {
           Route::patch('gestion-vehiculos/reservas/{reserva}', [GestionVehiculosController::class, 'actualizarReserva'])
               ->middleware('modulo:gestion_vehiculos,puede_editar')
               ->name('gestion-vehiculos.reservas.update');
+          Route::post('gestion-vehiculos/reservas/{reserva}/kizeo', [GestionVehiculosController::class, 'prepararActaKizeo'])
+              ->middleware('modulo:gestion_vehiculos,puede_editar')
+              ->name('gestion-vehiculos.reservas.kizeo');
+          Route::get('gestion-vehiculos/reservas/{reserva}/actas/{tipo}', [GestionVehiculosController::class, 'verActa'])
+              ->name('gestion-vehiculos.reservas.acta');
           Route::delete('gestion-vehiculos/reservas/{reserva}', [GestionVehiculosController::class, 'eliminarReserva'])
               ->middleware('modulo:gestion_vehiculos,puede_eliminar')
               ->name('gestion-vehiculos.reservas.destroy');

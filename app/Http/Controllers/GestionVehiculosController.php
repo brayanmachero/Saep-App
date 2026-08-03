@@ -6,7 +6,9 @@ use App\Models\ReservaVehiculo;
 use App\Models\SolicitanteReservaVehiculo;
 use App\Models\Vehiculo;
 use App\Services\ReservaVehiculoCalendarService;
+use App\Services\ReservaVehiculoKizeoService;
 use App\Services\ReservaVehiculoService;
+use App\Services\OneDriveService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -16,6 +18,8 @@ class GestionVehiculosController extends Controller
     public function __construct(
         private readonly ReservaVehiculoService $reservas,
         private readonly ReservaVehiculoCalendarService $calendar,
+        private readonly ReservaVehiculoKizeoService $kizeo,
+        private readonly OneDriveService $oneDrive,
     ) {}
 
     public function index(Request $request)
@@ -42,23 +46,83 @@ class GestionVehiculosController extends Controller
             ->orderBy('patente')
             ->get();
 
-        $proximasReservas = ReservaVehiculo::query()
+        $reservasEnCurso = ReservaVehiculo::query()
             ->with(['vehiculo', 'eventos' => fn ($query) => $query->take(1)])
-            ->whereIn('estado', ['CONFIRMADA', 'EN_USO', 'VENCIDA', 'CANCELADA'])
-            ->where('termino', '>=', now()->subDay())
+            ->whereIn('estado', ['CONFIRMADA', 'EN_USO', 'VENCIDA'])
             ->orderBy('inicio')
-            ->take(20)
+            ->take(30)
             ->get();
+
+        $reservasGestionadas = ReservaVehiculo::query()
+            ->with('vehiculo')
+            ->whereIn('estado', ['EN_USO', 'VENCIDA', 'DEVUELTA', 'CANCELADA'])
+            ->latest('updated_at')
+            ->take(50)
+            ->get();
+
+        // Mantiene la bandeja operativa existente mientras la trazabilidad se muestra aparte.
+        $proximasReservas = $reservasEnCurso;
 
         $solicitantes = SolicitanteReservaVehiculo::query()->orderBy('nombre')->get();
 
         return view('gestion_vehiculos.index', compact(
             'vehiculos',
             'proximasReservas',
+            'reservasEnCurso',
+            'reservasGestionadas',
             'solicitantes',
             'estado',
             'buscar',
-        ) + ['calendarConfigurado' => $this->calendar->estaConfigurado()]);
+        ) + [
+            'calendarConfigurado' => $this->calendar->estaConfigurado(),
+            'kizeoConfigurado' => $this->kizeo->estaConfigurado(),
+        ]);
+    }
+
+    public function prepararActaKizeo(Request $request, ReservaVehiculo $reserva)
+    {
+        try {
+            $this->kizeo->prepararActa($reserva, $request->user());
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->with('error', 'No fue posible preparar el acta en Kizeo: '.$exception->getMessage());
+        }
+
+        return back()
+            ->with('success', 'Ficha Kizeo preparada para Bodega. La reserva cambiara a En uso solo cuando llegue el acta de entrega firmada.')
+            ->with('kizeo_inbox_url', 'kizeoforms://--/receipts');
+    }
+
+    public function verActa(ReservaVehiculo $reserva, string $tipo)
+    {
+        abort_unless(in_array($tipo, ['entrega', 'devolucion'], true), 404);
+
+        $path = $tipo === 'entrega'
+            ? $reserva->kizeo_entrega_sharepoint_path
+            : $reserva->kizeo_devolucion_sharepoint_path;
+
+        abort_unless(filled($path), 404, 'El acta solicitada aun no esta disponible.');
+
+        try {
+            $pdf = $this->oneDrive->downloadFile($path);
+        } catch (\Throwable $exception) {
+            report($exception);
+            $pdf = null;
+        }
+
+        if (! $pdf) {
+            return response()->view('gestion_vehiculos.acta_no_disponible', [
+                'tipo' => $tipo,
+                'codigo' => $reserva->codigo,
+            ], 503, ['Cache-Control' => 'no-store, private']);
+        }
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$reserva->codigo.'-'.$tipo.'.pdf"',
+            'Cache-Control' => 'private, max-age=300',
+        ]);
     }
 
     public function store(Request $request)

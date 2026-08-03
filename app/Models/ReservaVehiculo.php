@@ -29,6 +29,10 @@ class ReservaVehiculo extends Model
         'recordatorio_enviado_at' => 'datetime',
         'vencimiento_notificado_at' => 'datetime',
         'calendar_synced_at' => 'datetime',
+        'kizeo_pushed_at' => 'datetime',
+        'kizeo_synced_at' => 'datetime',
+        'entregada_at' => 'datetime',
+        'devuelta_at' => 'datetime',
     ];
 
     public function vehiculo(): BelongsTo
