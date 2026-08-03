@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ReservaVehiculo;
 use App\Models\ReservaVehiculoEvento;
+use App\Models\TalanaTrabajador;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
@@ -35,7 +36,7 @@ class ReservaVehiculoKizeoService
             throw new RuntimeException('La preparacion Kizeo aun no esta configurada para Bodega.');
         }
 
-        $reserva->loadMissing('vehiculo');
+        $reserva->loadMissing(['vehiculo', 'user']);
 
         if ($reserva->estado !== 'CONFIRMADA') {
             throw new RuntimeException('Solo se puede preparar el acta Kizeo de una reserva confirmada.');
@@ -46,7 +47,8 @@ class ReservaVehiculoKizeoService
         }
 
         try {
-            $response = $this->kizeo->rawPost('forms/'.$this->formId().'/push', $this->pushPayload($reserva));
+            $payload = $this->pushPayload($reserva);
+            $response = $this->kizeo->rawPost('forms/'.$this->formId().'/push', $payload);
             $status = strtolower((string) ($response['status'] ?? 'ok'));
 
             if (! in_array($status, ['ok', 'success'], true)) {
@@ -66,7 +68,11 @@ class ReservaVehiculoKizeoService
                 'KIZEO_ACTA_PREPARADA',
                 'Ficha de entrega preparada en Kizeo para Bodega.',
                 $operador,
-                ['form_id' => $this->formId(), 'data_id' => $dataId],
+                [
+                    'form_id' => $this->formId(),
+                    'data_id' => $dataId,
+                    'conductor_rut' => $payload['fields']['conductor']['value'] ?? null,
+                ],
             );
 
             return $reserva->fresh('vehiculo');
@@ -187,6 +193,12 @@ class ReservaVehiculoKizeoService
             $fields['marca_modelo'] = ['value' => $marcaModelo];
         }
 
+        // La lista "Personal Vigente" usa el RUT sin puntos como clave. Solo
+        // se prellena si el solicitante puede verificarse tambien en Kizeo.
+        if ($rutConductor = $this->rutConductorKizeo($reserva)) {
+            $fields['conductor'] = ['value' => $rutConductor];
+        }
+
         return [
             'recipient_user_id' => (int) $this->recipientUserId(),
             'planningStart' => $reserva->inicio->format('Y-m-d H:i'),
@@ -206,6 +218,71 @@ class ReservaVehiculoKizeoService
             str_contains($modelo, 'sail') => 'Chevrolet SAIL',
             default => null,
         };
+    }
+
+    private function rutConductorKizeo(ReservaVehiculo $reserva): ?string
+    {
+        $email = mb_strtolower(trim((string) $reserva->solicitante_email));
+        $candidatos = [$reserva->user?->rut];
+
+        if ($email !== '') {
+            $candidatos[] = User::query()
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->value('rut');
+
+            $candidatos[] = TalanaTrabajador::query()
+                ->where('activo', true)
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->value('rut');
+        }
+
+        $ruts = collect($candidatos)
+            ->map(fn ($rut) => $this->normalizarRutKizeo($rut))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($ruts->isEmpty()) {
+            return null;
+        }
+
+        try {
+            $personalKizeo = collect($this->kizeo->getPersonalVigente())
+                ->mapWithKeys(function (array $trabajador) {
+                    $rut = $this->normalizarRutKizeo($trabajador['rut'] ?? $trabajador['id'] ?? null);
+
+                    return $rut ? [$rut => $rut] : [];
+                });
+        } catch (\Throwable $exception) {
+            Log::warning('No fue posible validar al conductor en la lista Kizeo.', [
+                'reserva_id' => $reserva->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        foreach ($ruts as $rut) {
+            if ($personalKizeo->has($rut)) {
+                return $rut;
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizarRutKizeo(mixed $rut): ?string
+    {
+        if (! is_scalar($rut)) {
+            return null;
+        }
+
+        $limpio = strtoupper((string) preg_replace('/[^0-9K]/', '', (string) $rut));
+        if (strlen($limpio) < 2) {
+            return null;
+        }
+
+        return substr($limpio, 0, -1).'-'.substr($limpio, -1);
     }
 
     private function estadoDesdeActa(ReservaVehiculo $reserva, bool $esDevolucion): string

@@ -503,6 +503,61 @@ class ReservaVehiculoTest extends TestCase
         });
     }
 
+    public function test_kizeo_prefill_resolves_the_driver_rut_from_the_requester_and_verifies_it_in_kizeo(): void
+    {
+        Http::fake([
+            'https://www.kizeoforms.com/rest/v3/lists/427266' => Http::response([
+                'status' => 'ok',
+                'list' => [
+                    'items' => [
+                        '26955483-5:26955483-5|Brayan Eduardo Machero Ortiz:Brayan Eduardo Machero Ortiz|ADMINISTRATIVO:ADMINISTRATIVO',
+                    ],
+                ],
+            ], 200),
+            'https://www.kizeoforms.com/rest/v3/forms/1165545/push' => Http::response([
+                'status' => 'ok',
+                'data' => ['id' => 'kizeo-driver-123'],
+            ], 200),
+        ]);
+        config([
+            'services.kizeo.vehicle_form_id' => '1165545',
+            'services.kizeo.vehicle_recipient_user_id' => '754332',
+            'services.kizeo.vehicle_reservation_code_field' => 'codigo_de_reserva_saep',
+            'services.kizeo.personal_vigente_list_id' => '427266',
+        ]);
+
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $solicitante = User::create([
+            'name' => 'Brayan Eduardo',
+            'email' => 'bmachero@saep.cl',
+            'rut' => '26.955.483-5',
+            'rol_id' => $role->id,
+            'password' => bcrypt('secret'),
+            'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'RUTS-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Reserva para validar conductor prellenado',
+        ], ['oid' => 'rut-driver', 'email' => $solicitante->email, 'name' => $solicitante->name], $solicitante);
+
+        app(ReservaVehiculoKizeoService::class)->prepararActa($reserva, $solicitante);
+
+        Http::assertSent(function ($request): bool {
+            return $request->method() === 'POST'
+                && $request->url() === 'https://www.kizeoforms.com/rest/v3/forms/1165545/push'
+                && $request['recipient_user_id'] === 754332
+                && $request['fields']['conductor']['value'] === '26955483-5';
+        });
+        $this->assertDatabaseHas('reserva_vehiculo_eventos', [
+            'accion' => 'KIZEO_ACTA_PREPARADA',
+        ]);
+    }
+
     public function test_kizeo_delivery_and_return_update_the_matching_reservation_idempotently(): void
     {
         $vehiculo = Vehiculo::create([
