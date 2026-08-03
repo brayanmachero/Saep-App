@@ -44,7 +44,7 @@ class GestionVehiculosController extends Controller
 
         $proximasReservas = ReservaVehiculo::query()
             ->with(['vehiculo', 'eventos' => fn ($query) => $query->take(1)])
-            ->whereIn('estado', ['CONFIRMADA', 'EN_USO', 'VENCIDA'])
+            ->whereIn('estado', ['CONFIRMADA', 'EN_USO', 'VENCIDA', 'CANCELADA'])
             ->where('termino', '>=', now()->subDay())
             ->orderBy('inicio')
             ->take(20)
@@ -94,6 +94,21 @@ class GestionVehiculosController extends Controller
         }
 
         return back()->with('success', 'Estado de la reserva '.$reserva->codigo.' actualizado.');
+    }
+
+    public function eliminarReserva(ReservaVehiculo $reserva)
+    {
+        $reserva->loadMissing('vehiculo');
+        $codigo = $reserva->codigo;
+        $calendar = $this->calendar->eliminar($reserva);
+
+        if ($calendar['estado'] === 'error') {
+            return back()->with('error', 'No se elimino '.$codigo.' porque el evento de Outlook no pudo eliminarse. Intenta nuevamente o revisa la sincronizacion.');
+        }
+
+        $reserva->delete();
+
+        return back()->with('success', 'Reserva '.$codigo.' eliminada permanentemente.');
     }
 
     public function storeSolicitante(Request $request)

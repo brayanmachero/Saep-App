@@ -487,6 +487,9 @@ Route::middleware('auth')->group(function () {
           Route::patch('gestion-vehiculos/reservas/{reserva}', [GestionVehiculosController::class, 'actualizarReserva'])
               ->middleware('modulo:gestion_vehiculos,puede_editar')
               ->name('gestion-vehiculos.reservas.update');
+          Route::delete('gestion-vehiculos/reservas/{reserva}', [GestionVehiculosController::class, 'eliminarReserva'])
+              ->middleware('modulo:gestion_vehiculos,puede_editar')
+              ->name('gestion-vehiculos.reservas.destroy');
           Route::post('gestion-vehiculos/solicitantes', [GestionVehiculosController::class, 'storeSolicitante'])
               ->middleware('modulo:gestion_vehiculos,puede_crear')
               ->name('gestion-vehiculos.solicitantes.store');

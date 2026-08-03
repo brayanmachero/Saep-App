@@ -84,6 +84,49 @@ class ReservaVehiculoCalendarService
         }
     }
 
+    /**
+     * Elimina el evento de Outlook antes de borrar una reserva de prueba.
+     * Si Graph falla, la reserva se conserva para no dejar un bloqueo huerfano.
+     *
+     * @return array{estado: 'omitido'|'eliminado'|'error', detalle?: string}
+     */
+    public function eliminar(ReservaVehiculo $reserva): array
+    {
+        if (! $reserva->calendar_event_id) {
+            return ['estado' => 'omitido'];
+        }
+
+        if (! $this->estaConfigurado()) {
+            return ['estado' => 'error', 'detalle' => 'El calendario compartido no esta configurado.'];
+        }
+
+        try {
+            $token = $this->accessToken();
+            if (! $token) {
+                throw new RuntimeException('Microsoft Graph no entrego un token de calendario.');
+            }
+
+            $response = Http::withToken($token)->delete($this->eventUrl($reserva->calendar_event_id));
+            if ($response->failed() && $response->status() !== 404) {
+                throw new RuntimeException('Microsoft Graph respondio HTTP '.$response->status().' al eliminar el evento.');
+            }
+
+            return ['estado' => 'eliminado'];
+        } catch (\Throwable $exception) {
+            Log::warning('Reserva vehiculo: no fue posible eliminar el evento de calendario.', [
+                'reserva_id' => $reserva->id,
+                'codigo' => $reserva->codigo,
+                'error' => $exception->getMessage(),
+            ]);
+
+            $reserva->forceFill([
+                'calendar_last_error' => mb_substr($exception->getMessage(), 0, 1000),
+            ])->save();
+
+            return ['estado' => 'error', 'detalle' => $exception->getMessage()];
+        }
+    }
+
     private function eventPayload(ReservaVehiculo $reserva): array
     {
         $vehiculo = $reserva->vehiculo;

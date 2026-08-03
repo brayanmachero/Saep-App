@@ -170,6 +170,93 @@ class ReservaVehiculoTest extends TestCase
         ]);
     }
 
+    public function test_bodega_operator_can_permanently_delete_a_test_reservation_and_its_calendar_event(): void
+    {
+        Http::fake([
+            'https://login.microsoftonline.com/*/oauth2/v2.0/token' => Http::response(['access_token' => 'calendar-token'], 200),
+            'https://graph.microsoft.com/v1.0/users/*/calendar/events' => Http::response(['id' => 'graph-event-delete'], 201),
+            'https://graph.microsoft.com/v1.0/users/*/calendar/events/graph-event-delete' => Http::response(null, 204),
+        ]);
+        config([
+            'services.reservas_vehiculos_calendar.tenant_id' => 'tenant-id',
+            'services.reservas_vehiculos_calendar.client_id' => 'client-id',
+            'services.reservas_vehiculos_calendar.client_secret' => 'client-secret',
+            'services.reservas_vehiculos_calendar.enabled' => true,
+            'services.reservas_vehiculos_calendar.mailbox' => 'reservas.vehiculos@saep.cl',
+        ]);
+
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operator = User::create([
+            'name' => 'Coordinador Bodega', 'email' => 'coordinador.delete@saep.cl', 'rol_id' => $role->id,
+            'password' => bcrypt('secret'), 'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'DELT-01', 'marca' => 'Chevrolet', 'modelo' => 'Sail', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-04 09:00:00',
+            'termino' => '2026-08-04 11:00:00',
+            'motivo' => 'Reserva de prueba para eliminacion',
+        ], ['oid' => 'delete-test', 'email' => 'prueba.delete@saep.cl', 'name' => 'Prueba Delete']);
+
+        $this->actingAs($operator)
+            ->get(route('gestion-vehiculos.index'))
+            ->assertOk()
+            ->assertSee('Eliminar reserva de prueba');
+
+        $this->actingAs($operator)
+            ->delete(route('gestion-vehiculos.reservas.destroy', $reserva))
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('reservas_vehiculos', ['id' => $reserva->id]);
+        $this->assertDatabaseMissing('reserva_vehiculo_eventos', ['reserva_vehiculo_id' => $reserva->id]);
+        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
+            && $request->url() === 'https://graph.microsoft.com/v1.0/users/reservas.vehiculos%40saep.cl/calendar/events/graph-event-delete');
+    }
+
+    public function test_reservation_is_preserved_when_its_outlook_event_cannot_be_deleted(): void
+    {
+        Http::fake([
+            'https://login.microsoftonline.com/*/oauth2/v2.0/token' => Http::response(['access_token' => 'calendar-token'], 200),
+            'https://graph.microsoft.com/v1.0/users/*/calendar/events' => Http::response(['id' => 'graph-event-failure'], 201),
+            'https://graph.microsoft.com/v1.0/users/*/calendar/events/graph-event-failure' => Http::response(['error' => ['message' => 'Temporary Graph error']], 503),
+        ]);
+        config([
+            'services.reservas_vehiculos_calendar.tenant_id' => 'tenant-id',
+            'services.reservas_vehiculos_calendar.client_id' => 'client-id',
+            'services.reservas_vehiculos_calendar.client_secret' => 'client-secret',
+            'services.reservas_vehiculos_calendar.enabled' => true,
+            'services.reservas_vehiculos_calendar.mailbox' => 'reservas.vehiculos@saep.cl',
+        ]);
+
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operator = User::create([
+            'name' => 'Coordinador Bodega', 'email' => 'coordinador.failure@saep.cl', 'rol_id' => $role->id,
+            'password' => bcrypt('secret'), 'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'FALL-01', 'marca' => 'Chevrolet', 'modelo' => 'Sail', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-04 12:00:00',
+            'termino' => '2026-08-04 14:00:00',
+            'motivo' => 'Reserva que no debe quedar huerfana',
+        ], ['oid' => 'failure-test', 'email' => 'prueba.failure@saep.cl', 'name' => 'Prueba Failure']);
+
+        $this->actingAs($operator)
+            ->delete(route('gestion-vehiculos.reservas.destroy', $reserva))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('reservas_vehiculos', ['id' => $reserva->id]);
+        $this->assertDatabaseHas('reservas_vehiculos', [
+            'id' => $reserva->id,
+            'calendar_last_error' => 'Microsoft Graph respondio HTTP 503 al eliminar el evento.',
+        ]);
+    }
+
     public function test_corporate_portal_redirects_booking_without_a_microsoft_session(): void
     {
         $this->post(route('reservas-vehiculos.store'), [
