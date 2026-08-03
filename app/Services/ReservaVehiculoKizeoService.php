@@ -30,7 +30,7 @@ class ReservaVehiculoKizeoService
      * Prepara una ficha sin guardar para Bodega. La reserva no se entrega
      * todavia: el cambio de estado ocurre solo al volver el acta firmada.
      */
-    public function prepararActa(ReservaVehiculo $reserva, User $operador): ReservaVehiculo
+    public function prepararActa(ReservaVehiculo $reserva, ?User $operador = null): ReservaVehiculo
     {
         if (! $this->estaConfigurado()) {
             throw new RuntimeException('La preparacion Kizeo aun no esta configurada para Bodega.');
@@ -66,7 +66,7 @@ class ReservaVehiculoKizeoService
             $this->registrarEvento(
                 $reserva,
                 'KIZEO_ACTA_PREPARADA',
-                'Ficha de entrega preparada en Kizeo para Bodega.',
+                'Ficha de entrega preparada en Kizeo.',
                 $operador,
                 [
                     'form_id' => $this->formId(),
@@ -392,14 +392,14 @@ class ReservaVehiculoKizeoService
         ReservaVehiculo $reserva,
         string $accion,
         string $resumen,
-        User $operador,
+        ?User $operador,
         ?array $cambios = null,
     ): void {
         ReservaVehiculoEvento::create([
             'reserva_vehiculo_id' => $reserva->id,
-            'user_id' => $operador->id,
-            'actor_email' => $operador->email,
-            'actor_nombre' => $operador->nombre_completo ?: $operador->name,
+            'user_id' => $operador?->id,
+            'actor_email' => $operador?->email ?? 'sistema@saep.cl',
+            'actor_nombre' => $operador ? ($operador->nombre_completo ?: $operador->name) : 'Sistema SAEP',
             'accion' => $accion,
             'resumen' => $resumen,
             'cambios' => $cambios,

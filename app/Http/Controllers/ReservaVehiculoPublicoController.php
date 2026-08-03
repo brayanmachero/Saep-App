@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\PrepararActaReservaVehiculoKizeo;
 use App\Models\ReservaVehiculo;
 use App\Services\ReservaVehiculoMicrosoftAuthService;
 use App\Services\ReservaVehiculoService;
@@ -92,6 +93,8 @@ class ReservaVehiculoPublicoController extends Controller
 
         $reserva = $this->reservas->crearReserva($data, $identidad);
 
+        PrepararActaReservaVehiculoKizeo::dispatch($reserva->id);
+
         try {
             $this->reservas->enviarConfirmacion($reserva);
         } catch (\Throwable $exception) {
@@ -101,7 +104,7 @@ class ReservaVehiculoPublicoController extends Controller
         return redirect()->route('reservas-vehiculos.inicio', [
             'inicio' => $reserva->inicio->format('Y-m-d\\TH:i'),
             'termino' => $reserva->termino->format('Y-m-d\\TH:i'),
-        ])->with('success', 'Reserva '.$reserva->codigo.' confirmada. Recibiras un correo de respaldo.');
+        ])->with('success', 'Reserva '.$reserva->codigo.' confirmada. Bodega recibira la ficha de entrega en Kizeo y recibiras un correo de respaldo.');
     }
 
     public function cancelar(Request $request, ReservaVehiculo $reserva)
