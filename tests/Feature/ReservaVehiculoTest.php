@@ -558,6 +558,56 @@ class ReservaVehiculoTest extends TestCase
         ]);
     }
 
+    public function test_kizeo_prefill_resolves_the_plate_against_the_advanced_vehicle_list(): void
+    {
+        Http::fake([
+            'https://www.kizeoforms.com/rest/public/v4/lists/486495/items*' => Http::response([
+                [
+                    'id' => 'plate-fi-001',
+                    'label' => 'CGVC -41',
+                    'properties' => ['marca_modelo' => 'Fiat - Fiorino'],
+                ],
+            ], 200),
+            'https://www.kizeoforms.com/rest/v3/forms/1165545/push' => Http::response([
+                'status' => 'ok',
+                'data' => ['id' => 'kizeo-plate-123'],
+            ], 200),
+        ]);
+        config([
+            'services.kizeo.vehicle_form_id' => '1165545',
+            'services.kizeo.vehicle_recipient_user_id' => '754332',
+            'services.kizeo.vehicle_reservation_code_field' => 'codigo_de_reserva_saep',
+            'services.kizeo.vehicle_plate_list_id' => '486495',
+            'services.kizeo.vehicle_plate_field' => 'lista',
+        ]);
+
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operador = User::create([
+            'name' => 'Bodega Patente',
+            'email' => 'bodega.patente@saep.cl',
+            'rol_id' => $role->id,
+            'password' => bcrypt('secret'),
+            'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::query()
+            ->where('patente', 'CGVC-41')
+            ->firstOrFail();
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Reserva para validar patente prellenada',
+        ], ['oid' => 'plate-driver', 'email' => $operador->email, 'name' => $operador->name], $operador);
+
+        app(ReservaVehiculoKizeoService::class)->prepararActa($reserva, $operador);
+
+        Http::assertSent(function ($request): bool {
+            return $request->method() === 'POST'
+                && $request->url() === 'https://www.kizeoforms.com/rest/v3/forms/1165545/push'
+                && $request['fields']['lista']['value'] === 'CGVC -41';
+        });
+    }
+
     public function test_kizeo_delivery_and_return_update_the_matching_reservation_idempotently(): void
     {
         $vehiculo = Vehiculo::create([

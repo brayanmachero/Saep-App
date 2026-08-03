@@ -193,6 +193,12 @@ class ReservaVehiculoKizeoService
             $fields['marca_modelo'] = ['value' => $marcaModelo];
         }
 
+        // "Patente" es una lista avanzada distinta de marca/modelo. La
+        // seleccion se valida contra su patente y modelo antes de enviarla.
+        if ($patente = $this->patenteKizeo($reserva, $marcaModelo ?? null)) {
+            $fields[$this->plateField()] = ['value' => $patente];
+        }
+
         // La lista "Personal Vigente" usa el RUT sin puntos como clave. Solo
         // se prellena si el solicitante puede verificarse tambien en Kizeo.
         if ($rutConductor = $this->rutConductorKizeo($reserva)) {
@@ -218,6 +224,38 @@ class ReservaVehiculoKizeoService
             str_contains($modelo, 'sail') => 'Chevrolet SAIL',
             default => null,
         };
+    }
+
+    private function patenteKizeo(ReservaVehiculo $reserva, ?string $marcaModelo): ?string
+    {
+        $patente = $this->normalizarValorKizeo($reserva->vehiculo?->patente);
+        if ($patente === '' || ! filled($marcaModelo) || ! filled($this->plateListId())) {
+            return null;
+        }
+
+        try {
+            foreach ($this->kizeo->getListItems($this->plateListId()) as $item) {
+                $etiqueta = trim((string) ($item['label'] ?? ''));
+                if ($this->normalizarValorKizeo($etiqueta) !== $patente) {
+                    continue;
+                }
+
+                $modelos = collect((array) ($item['properties'] ?? []))
+                    ->filter(fn ($valor) => is_scalar($valor))
+                    ->map(fn ($valor) => $this->normalizarValorKizeo((string) $valor));
+
+                if ($modelos->contains($this->normalizarValorKizeo($marcaModelo))) {
+                    return $etiqueta;
+                }
+            }
+        } catch (\Throwable $exception) {
+            Log::warning('No fue posible validar la patente en la lista Kizeo.', [
+                'reserva_id' => $reserva->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
+        return null;
     }
 
     private function rutConductorKizeo(ReservaVehiculo $reserva): ?string
@@ -283,6 +321,15 @@ class ReservaVehiculoKizeoService
         }
 
         return substr($limpio, 0, -1).'-'.substr($limpio, -1);
+    }
+
+    private function normalizarValorKizeo(mixed $valor): string
+    {
+        if (! is_scalar($valor)) {
+            return '';
+        }
+
+        return mb_strtoupper((string) preg_replace('/[^A-Z0-9]/i', '', (string) $valor));
     }
 
     private function estadoDesdeActa(ReservaVehiculo $reserva, bool $esDevolucion): string
@@ -372,5 +419,15 @@ class ReservaVehiculoKizeoService
     private function reservationCodeField(): string
     {
         return (string) config('services.kizeo.vehicle_reservation_code_field', 'codigo_de_reserva_saep');
+    }
+
+    private function plateListId(): string
+    {
+        return (string) config('services.kizeo.vehicle_plate_list_id', '486495');
+    }
+
+    private function plateField(): string
+    {
+        return (string) config('services.kizeo.vehicle_plate_field', 'lista');
     }
 }

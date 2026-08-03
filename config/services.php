@@ -44,6 +44,8 @@ return [
         'vehicle_form_id'          => env('KIZEO_VEHICLE_FORM_ID'),
         'vehicle_recipient_user_id' => env('KIZEO_VEHICLE_RECIPIENT_USER_ID'),
         'vehicle_reservation_code_field' => env('KIZEO_VEHICLE_RESERVATION_CODE_FIELD', 'codigo_de_reserva_saep'),
+        'vehicle_plate_list_id'    => env('KIZEO_VEHICLE_PLATE_LIST_ID', '486495'),
+        'vehicle_plate_field'      => env('KIZEO_VEHICLE_PLATE_FIELD', 'lista'),
         'charla_form_id'              => env('KIZEO_CHARLA_FORM_ID'),
         'charla_sharepoint_folder'    => env('KIZEO_CHARLA_SHAREPOINT_FOLDER', 'Charlas SST'),
         'observacion_form_id'         => env('KIZEO_OBSERVACION_FORM_ID'),
