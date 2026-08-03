@@ -122,6 +122,22 @@ class ReservaVehiculoTest extends TestCase
         $this->assertTrue($libre->exists);
     }
 
+    public function test_confirmation_offers_a_direct_link_to_the_safe_reservation_agenda(): void
+    {
+        $this->withSession([
+            'reserva_vehiculo_microsoft_identity' => [
+                'oid' => 'confirmed-viewer', 'email' => 'confirmado@saep.cl', 'name' => 'Confirmado QA',
+            ],
+            'success' => 'Reserva RV-2026-000001 confirmada.',
+        ])->get(route('reservas-vehiculos.inicio', [
+            'inicio' => '2026-08-03T09:00',
+            'termino' => '2026-08-03T10:00',
+        ]))
+            ->assertOk()
+            ->assertSee('Ver agenda de reservas')
+            ->assertSee('href="#agenda"', false);
+    }
+
     public function test_internal_operator_change_is_logged_with_the_user(): void
     {
         $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
