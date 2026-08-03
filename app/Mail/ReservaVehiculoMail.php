@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\ReservaVehiculo;
+use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -16,6 +17,7 @@ class ReservaVehiculoMail extends Mailable
     public function __construct(
         public ReservaVehiculo $reserva,
         public string $tipo,
+        public ?User $actor = null,
     ) {}
 
     public function envelope(): Envelope
@@ -27,6 +29,7 @@ class ReservaVehiculoMail extends Mailable
             'administracion' => 'Nueva reserva de vehiculo',
             'cancelacion' => 'Reserva de vehiculo cancelada',
             'actualizacion' => 'Reserva de vehiculo actualizada',
+            'eliminacion' => 'Reserva de vehiculo eliminada',
             default => 'Actualizacion de reserva de vehiculo',
         };
 

@@ -190,6 +190,24 @@ class ReservaVehiculoService
         }
     }
 
+    public function enviarEliminacion(ReservaVehiculo $reserva, User $operador): void
+    {
+        $reserva->loadMissing('vehiculo');
+
+        $destinatarios = $this->destinatariosAdministracion()
+            ->pluck('email')
+            ->push($reserva->solicitante_email)
+            ->filter()
+            ->map(fn (string $email) => strtolower($email))
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($destinatarios !== []) {
+            Mail::to($destinatarios)->send(new ReservaVehiculoMail($reserva, 'eliminacion', $operador));
+        }
+    }
+
     public function procesarNotificaciones(): array
     {
         $ahora = now();

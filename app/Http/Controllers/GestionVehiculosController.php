@@ -96,7 +96,7 @@ class GestionVehiculosController extends Controller
         return back()->with('success', 'Estado de la reserva '.$reserva->codigo.' actualizado.');
     }
 
-    public function eliminarReserva(ReservaVehiculo $reserva)
+    public function eliminarReserva(Request $request, ReservaVehiculo $reserva)
     {
         $reserva->loadMissing('vehiculo');
         $codigo = $reserva->codigo;
@@ -106,7 +106,19 @@ class GestionVehiculosController extends Controller
             return back()->with('error', 'No se elimino '.$codigo.' porque el evento de Outlook no pudo eliminarse. Intenta nuevamente o revisa la sincronizacion.');
         }
 
+        $notificacionPendiente = false;
+        try {
+            $this->reservas->enviarEliminacion($reserva, $request->user());
+        } catch (\Throwable $exception) {
+            report($exception);
+            $notificacionPendiente = true;
+        }
+
         $reserva->delete();
+
+        if ($notificacionPendiente) {
+            return back()->with('warning', 'Reserva '.$codigo.' eliminada permanentemente. No fue posible enviar el correo de aviso.');
+        }
 
         return back()->with('success', 'Reserva '.$codigo.' eliminada permanentemente.');
     }

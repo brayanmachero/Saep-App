@@ -172,6 +172,7 @@ class ReservaVehiculoTest extends TestCase
 
     public function test_bodega_operator_can_permanently_delete_a_test_reservation_and_its_calendar_event(): void
     {
+        Mail::fake();
         Http::fake([
             'https://login.microsoftonline.com/*/oauth2/v2.0/token' => Http::response(['access_token' => 'calendar-token'], 200),
             'https://graph.microsoft.com/v1.0/users/*/calendar/events' => Http::response(['id' => 'graph-event-delete'], 201),
@@ -211,6 +212,16 @@ class ReservaVehiculoTest extends TestCase
 
         $this->assertDatabaseMissing('reservas_vehiculos', ['id' => $reserva->id]);
         $this->assertDatabaseMissing('reserva_vehiculo_eventos', ['reserva_vehiculo_id' => $reserva->id]);
+        $correoEliminacion = null;
+        Mail::assertSent(ReservaVehiculoMail::class, function (ReservaVehiculoMail $mail) use ($operator, &$correoEliminacion): bool {
+            $correoEliminacion = $mail;
+
+            return $mail->tipo === 'eliminacion'
+                && $mail->actor?->is($operator)
+                && $mail->hasTo('prueba.delete@saep.cl');
+        });
+        $this->assertStringContainsString('Reserva eliminada', $correoEliminacion->render());
+        $this->assertStringContainsString($operator->email, $correoEliminacion->render());
         Http::assertSent(fn ($request) => $request->method() === 'DELETE'
             && $request->url() === 'https://graph.microsoft.com/v1.0/users/reservas.vehiculos%40saep.cl/calendar/events/graph-event-delete');
     }
