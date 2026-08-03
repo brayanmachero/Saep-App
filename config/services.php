@@ -87,14 +87,16 @@ return [
         'require_approved_requester' => env('VEHICLE_RESERVATION_REQUIRE_APPROVED_REQUESTER', false),
     ],
 
-    // Calendario compartido de Bodega. Usa la aplicación Graph existente con
-    // permiso de aplicación Calendars.ReadWrite; se mantiene apagado hasta que
-    // Microsoft 365 autorice dicho permiso y se defina el buzón propietario.
+    // Calendario compartido de Bodega. Usa exclusivamente la aplicación de
+    // reservas: sus credenciales no se comparten con SharePoint/documentos.
     'reservas_vehiculos_calendar' => [
         'enabled' => env('VEHICLE_RESERVATION_CALENDAR_ENABLED', false),
         'mailbox' => env('VEHICLE_RESERVATION_CALENDAR_MAILBOX'),
         'calendar_id' => env('VEHICLE_RESERVATION_CALENDAR_ID'),
         'timezone' => env('VEHICLE_RESERVATION_CALENDAR_TIMEZONE', 'Pacific SA Standard Time'),
+        'tenant_id' => env('VEHICLE_RESERVATION_CALENDAR_TENANT_ID', env('VEHICLE_RESERVATION_MICROSOFT_TENANT_ID')),
+        'client_id' => env('VEHICLE_RESERVATION_CALENDAR_CLIENT_ID', env('VEHICLE_RESERVATION_MICROSOFT_CLIENT_ID')),
+        'client_secret' => env('VEHICLE_RESERVATION_CALENDAR_CLIENT_SECRET', env('VEHICLE_RESERVATION_MICROSOFT_CLIENT_SECRET')),
     ],
 
     'openai' => [

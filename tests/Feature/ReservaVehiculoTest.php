@@ -270,9 +270,10 @@ class ReservaVehiculoTest extends TestCase
             'https://graph.microsoft.com/v1.0/users/*/calendar/events' => Http::response(['id' => 'graph-event-123'], 201),
         ]);
         config([
-            'services.microsoft_graph.tenant_id' => 'tenant-id',
-            'services.microsoft_graph.client_id' => 'client-id',
-            'services.microsoft_graph.client_secret' => 'client-secret',
+            'services.microsoft_graph.tenant_id' => 'legacy-sharepoint-tenant',
+            'services.reservas_vehiculos_calendar.tenant_id' => 'tenant-id',
+            'services.reservas_vehiculos_calendar.client_id' => 'client-id',
+            'services.reservas_vehiculos_calendar.client_secret' => 'client-secret',
             'services.reservas_vehiculos_calendar.enabled' => true,
             'services.reservas_vehiculos_calendar.mailbox' => 'reservas.vehiculos@saep.cl',
             'services.reservas_vehiculos_calendar.calendar_id' => null,
@@ -301,5 +302,6 @@ class ReservaVehiculoTest extends TestCase
                 && $request->url() === 'https://graph.microsoft.com/v1.0/users/reservas.vehiculos%40saep.cl/calendar/events'
                 && $request['subject'] === $reserva->codigo.' · CALS-01';
         });
+        Http::assertSent(fn ($request) => $request->url() === 'https://login.microsoftonline.com/tenant-id/oauth2/v2.0/token');
     }
 }

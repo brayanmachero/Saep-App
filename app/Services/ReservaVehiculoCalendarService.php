@@ -14,9 +14,9 @@ class ReservaVehiculoCalendarService
     {
         return (bool) $this->config('enabled')
             && filled($this->config('mailbox'))
-            && filled(config('services.microsoft_graph.tenant_id'))
-            && filled(config('services.microsoft_graph.client_id'))
-            && filled(config('services.microsoft_graph.client_secret'));
+            && filled($this->config('tenant_id'))
+            && filled($this->config('client_id'))
+            && filled($this->config('client_secret'));
     }
 
     /**
@@ -130,12 +130,15 @@ class ReservaVehiculoCalendarService
 
     private function accessToken(): ?string
     {
-        return Cache::remember('msgraph_reservas_vehiculos_calendar_token', 3000, function () {
+        $tenantId = (string) $this->config('tenant_id');
+        $clientId = (string) $this->config('client_id');
+
+        return Cache::remember('msgraph_reservas_vehiculos_calendar_token:'.sha1($tenantId.'|'.$clientId), 3000, function () use ($tenantId, $clientId) {
             $response = Http::asForm()->post(
-                'https://login.microsoftonline.com/'.config('services.microsoft_graph.tenant_id').'/oauth2/v2.0/token',
+                'https://login.microsoftonline.com/'.$tenantId.'/oauth2/v2.0/token',
                 [
-                    'client_id' => config('services.microsoft_graph.client_id'),
-                    'client_secret' => config('services.microsoft_graph.client_secret'),
+                    'client_id' => $clientId,
+                    'client_secret' => $this->config('client_secret'),
                     'scope' => 'https://graph.microsoft.com/.default',
                     'grant_type' => 'client_credentials',
                 ],
