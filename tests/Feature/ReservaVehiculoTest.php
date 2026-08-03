@@ -204,7 +204,9 @@ class ReservaVehiculoTest extends TestCase
         $this->actingAs($operator)
             ->get(route('gestion-vehiculos.index'))
             ->assertOk()
-            ->assertSee('Eliminar reserva de prueba');
+            ->assertSee('Eliminar reserva de prueba')
+            ->assertSee('Codigo operativo')
+            ->assertDontSee("@include('gestion_vehiculos._form'");
 
         $this->actingAs($operator)
             ->delete(route('gestion-vehiculos.reservas.destroy', $reserva))
