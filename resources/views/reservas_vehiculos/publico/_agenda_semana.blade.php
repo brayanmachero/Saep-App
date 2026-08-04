@@ -1,29 +1,66 @@
+@php
+    $agendaPorDia = $agendaSemanal->groupBy(fn ($reserva) => $reserva->inicio->toDateString());
+    $diasSemana = collect(range(0, 6))->map(fn (int $dia) => $agendaSemanalInicio->copy()->addDays($dia));
+    $enlaceSemana = function ($fecha) use ($inicioInput, $terminoInput) {
+        return route('reservas-vehiculos.inicio', array_filter([
+            'inicio' => $inicioInput ?: null,
+            'termino' => $terminoInput ?: null,
+            'semana' => $fecha->format('Y-m-d'),
+        ]));
+    };
+@endphp
+
 <style>
-    .vr-outlook-calendar{margin:0 0 18px;padding:18px}.vr-outlook-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:14px}.vr-outlook-head h2{margin:0;font-size:1rem}.vr-outlook-head p{margin:.35rem 0 0;color:var(--muted);font-size:.78rem;line-height:1.45}.vr-outlook-frame{overflow:hidden;border:1px solid var(--line);border-radius:7px;background:var(--soft);min-height:640px}.vr-outlook-frame iframe{display:block;width:100%;height:640px;border:0;background:#fff}.vr-outlook-note{display:flex;align-items:flex-start;gap:.45rem;margin:.85rem 0 0;color:#7c3e1e;font-size:.74rem;line-height:1.45}.vr-outlook-note i{margin-top:.08rem;color:var(--orange)}@media(max-width:560px){.vr-outlook-calendar{padding:15px}.vr-outlook-head{flex-direction:column;gap:.6rem}.vr-outlook-head .vr-button{width:100%}.vr-outlook-frame,.vr-outlook-frame iframe{min-height:520px;height:520px}}
+    .vr-week-calendar{margin:0 0 18px;padding:18px}.vr-week-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:14px}.vr-week-head h2{margin:0;font-size:1rem}.vr-week-head p{margin:.35rem 0 0;color:var(--muted);font-size:.78rem;line-height:1.45}.vr-week-actions{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap}.vr-week-scroll{overflow-x:auto;padding-bottom:3px}.vr-week-grid{display:grid;grid-template-columns:repeat(7,minmax(142px,1fr));min-width:994px;border:1px solid var(--line);border-radius:7px;overflow:hidden}.vr-week-day{min-height:176px;background:#fff;border-right:1px solid var(--line)}.vr-week-day:last-child{border-right:0}.vr-week-day.is-today{background:#fffaf6}.vr-week-day-head{padding:.68rem .7rem;background:var(--soft);border-bottom:1px solid var(--line)}.vr-week-day.is-today .vr-week-day-head{background:#fff2ea}.vr-week-day-name{display:block;color:var(--muted);font-size:.64rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase}.vr-week-day-date{display:block;margin-top:.15rem;font-size:.9rem;font-weight:900}.vr-week-event{margin:.55rem;padding:.55rem;border-left:3px solid var(--orange);border-radius:4px;background:#fff7ed}.vr-week-event time{display:block;color:#9a3412;font-size:.7rem;font-weight:900}.vr-week-event strong{display:block;margin-top:.24rem;color:var(--ink);font-size:.76rem}.vr-week-event small{display:block;margin-top:.18rem;color:var(--muted);font-size:.66rem;line-height:1.35}.vr-week-empty{padding:.82rem .55rem;color:#9aa4b5;font-size:.7rem;line-height:1.35;text-align:center}.vr-week-note{display:flex;align-items:flex-start;gap:.45rem;margin:.85rem 0 0;color:#7c3e1e;font-size:.74rem;line-height:1.45}.vr-week-note i{margin-top:.08rem;color:var(--orange)}.vr-outlook-details{margin-top:1rem;border-top:1px solid var(--line);padding-top:1rem}.vr-outlook-details summary{display:flex;align-items:center;justify-content:space-between;gap:.7rem;cursor:pointer;color:var(--ink);font-size:.78rem;font-weight:800;list-style:none}.vr-outlook-details summary::-webkit-details-marker{display:none}.vr-outlook-details summary small{color:var(--muted);font-size:.7rem;font-weight:500}.vr-outlook-frame{overflow:hidden;margin-top:.8rem;border:1px solid var(--line);border-radius:7px;background:var(--soft)}.vr-outlook-frame iframe{display:block;width:100%;height:600px;border:0;background:#fff}@media(max-width:640px){.vr-week-calendar{padding:15px}.vr-week-head{flex-direction:column;gap:.6rem}.vr-week-actions{width:100%}.vr-week-actions .vr-button{flex:1}.vr-week-scroll{overflow:visible}.vr-week-grid{grid-template-columns:1fr;min-width:0}.vr-week-day{min-height:0;border-right:0;border-bottom:1px solid var(--line)}.vr-week-day:last-child{border-bottom:0}.vr-week-empty{padding:.7rem;text-align:left}.vr-outlook-details summary{align-items:flex-start;flex-direction:column}.vr-outlook-frame iframe{height:520px}}
 </style>
 
-<section id="agenda" class="vr-card vr-outlook-calendar">
-    <div class="vr-outlook-head">
+<section id="agenda" class="vr-card vr-week-calendar">
+    <div class="vr-week-head">
         <div>
-            <h2><i class="bi bi-calendar-week"></i> Calendario de reservas</h2>
-            <p>Visualización pública de Outlook. Muestra únicamente los horarios ocupados de la flota; no permite crear, editar ni cancelar reservas.</p>
+            <h2><i class="bi bi-calendar-week"></i> Agenda de la flota</h2>
+            <p>Semana del {{ $agendaSemanalInicio->format('d/m') }} al {{ $agendaSemanalTermino->copy()->subDay()->format('d/m/Y') }}. Muestra vehículo, patente, horario y estado; los datos personales y motivos permanecen privados.</p>
         </div>
-        @if(filled($calendarioPublicadoUrl))
-            <a class="vr-button secondary" href="{{ $calendarioPublicadoUrl }}" target="_blank" rel="noopener noreferrer" title="Abrir el calendario de reservas en Outlook"><i class="bi bi-box-arrow-up-right"></i> Abrir Outlook</a>
-        @endif
+        <div class="vr-week-actions">
+            <a class="vr-button secondary" href="{{ $enlaceSemana($agendaSemanalInicio->copy()->subWeek()) }}" title="Ver semana anterior" aria-label="Ver semana anterior"><i class="bi bi-chevron-left"></i></a>
+            <a class="vr-button secondary" href="{{ $enlaceSemana(now()->startOfWeek(\Illuminate\Support\Carbon::MONDAY)) }}">Esta semana</a>
+            <a class="vr-button secondary" href="{{ $enlaceSemana($agendaSemanalInicio->copy()->addWeek()) }}" title="Ver semana siguiente" aria-label="Ver semana siguiente"><i class="bi bi-chevron-right"></i></a>
+            @if(filled($calendarioPublicadoUrl))
+                <a class="vr-button secondary" href="{{ $calendarioPublicadoUrl }}" target="_blank" rel="noopener noreferrer" title="Abrir el calendario publicado en Outlook"><i class="bi bi-box-arrow-up-right"></i> Outlook</a>
+            @endif
+        </div>
     </div>
 
-    @if(filled($calendarioPublicadoUrl))
-        <div class="vr-outlook-frame">
-            <iframe
-                src="{{ $calendarioPublicadoUrl }}"
-                title="Calendario público de reservas de vehículos SAEP"
-                loading="lazy"
-                referrerpolicy="no-referrer"
-            ></iframe>
+    <div class="vr-week-scroll" aria-label="Agenda semanal de reservas">
+        <div class="vr-week-grid">
+            @foreach($diasSemana as $dia)
+                @php($reservasDia = $agendaPorDia->get($dia->toDateString(), collect()))
+                <article class="vr-week-day @if($dia->isToday()) is-today @endif">
+                    <div class="vr-week-day-head">
+                        <span class="vr-week-day-name">{{ $dia->locale('es')->isoFormat('ddd') }}</span>
+                        <span class="vr-week-day-date">{{ $dia->format('d') }} {{ $dia->locale('es')->isoFormat('MMM') }}</span>
+                    </div>
+                    @forelse($reservasDia as $reserva)
+                        <div class="vr-week-event">
+                            <time>{{ $reserva->inicio->format('H:i') }} - {{ $reserva->termino->format('H:i') }}</time>
+                            <strong>{{ $reserva->vehiculo?->patente }}</strong>
+                            <small>{{ $reserva->vehiculo?->nombre_operativo }} · {{ \App\Models\ReservaVehiculo::ESTADOS[$reserva->estado] }}</small>
+                        </div>
+                    @empty
+                        <div class="vr-week-empty">Sin reservas registradas.</div>
+                    @endforelse
+                </article>
+            @endforeach
         </div>
-        <p class="vr-outlook-note"><i class="bi bi-eye"></i><span>Este calendario es de consulta. La disponibilidad final se valida al confirmar cada solicitud y considera el margen operativo de {{ $margenReservaMinutos }} minutos entre reservas.</span></p>
-    @else
-        <div class="vr-calendar-empty"><i class="bi bi-calendar-x"></i> El calendario publicado de Outlook aún no está configurado.</div>
+    </div>
+
+    <p class="vr-week-note"><i class="bi bi-clock-history"></i><span>La disponibilidad final se valida al confirmar cada solicitud y considera {{ $margenReservaMinutos }} minutos de resguardo entre reservas.</span></p>
+
+    @if(filled($calendarioPublicadoUrl))
+        <details class="vr-outlook-details">
+            <summary><span><i class="bi bi-microsoft"></i> Ver calendario de Outlook</span><small>Consulta externa: Outlook publica solamente "Ocupado".</small></summary>
+            <div class="vr-outlook-frame">
+                <iframe src="{{ $calendarioPublicadoUrl }}" title="Calendario público de reservas de vehículos SAEP" loading="lazy" referrerpolicy="no-referrer"></iframe>
+            </div>
+        </details>
     @endif
 </section>

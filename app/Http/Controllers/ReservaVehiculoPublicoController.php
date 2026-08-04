@@ -21,6 +21,8 @@ class ReservaVehiculoPublicoController extends Controller
     {
         $identidad = $this->microsoft->identidad($request);
         $periodo = $this->periodo($request);
+        $agendaSemanalInicio = $this->semana($request, $periodo['inicio']);
+        $agendaSemanalTermino = $agendaSemanalInicio->copy()->addWeek();
 
         return view('reservas_vehiculos.publico.inicio', [
             'identidad' => $identidad,
@@ -37,6 +39,11 @@ class ReservaVehiculoPublicoController extends Controller
             'agenda' => $identidad && $periodo['consultada']
                 ? $this->reservas->agenda($periodo['inicio'], $periodo['termino'])
                 : collect(),
+            'agendaSemanal' => $identidad
+                ? $this->reservas->agenda($agendaSemanalInicio, $agendaSemanalTermino)
+                : collect(),
+            'agendaSemanalInicio' => $agendaSemanalInicio,
+            'agendaSemanalTermino' => $agendaSemanalTermino,
             'margenReservaMinutos' => $this->reservas->margenReservaMinutos(),
             'calendarioPublicadoUrl' => config('services.reservas_vehiculos.public_calendar_url'),
             'misReservas' => $identidad
@@ -201,4 +208,16 @@ class ReservaVehiculoPublicoController extends Controller
         ];
     }
 
+    private function semana(Request $request, ?Carbon $referencia): Carbon
+    {
+        $valor = trim((string) $request->input('semana', ''));
+
+        try {
+            $fecha = $valor !== '' ? Carbon::parse($valor) : ($referencia ?: now());
+        } catch (\Throwable) {
+            $fecha = $referencia ?: now();
+        }
+
+        return $fecha->copy()->startOfWeek(Carbon::MONDAY);
+    }
 }

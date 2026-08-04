@@ -4,11 +4,11 @@ namespace Tests\Feature;
 
 use App\Http\Middleware\ForcePasswordChange;
 use App\Http\Middleware\VerificarConsentimientoDatos;
+use App\Jobs\PrepararActaReservaVehiculoKizeo;
 use App\Mail\ReservaVehiculoMail;
 use App\Models\Rol;
 use App\Models\User;
 use App\Models\Vehiculo;
-use App\Jobs\PrepararActaReservaVehiculoKizeo;
 use App\Services\OneDriveService;
 use App\Services\ReservaVehiculoKizeoService;
 use App\Services\ReservaVehiculoService;
@@ -122,12 +122,14 @@ class ReservaVehiculoTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Bloqueos del rango consultado')
-            ->assertSee('Calendario de reservas')
-            ->assertSee('Visualización pública de Outlook')
+            ->assertSee('Agenda de la flota')
+            ->assertSee('Ver calendario de Outlook')
             ->assertSee('https://outlook.office365.com/owa/calendar/public/calendar.html', false)
             ->assertSee('Calendario público de reservas de vehículos SAEP')
             ->assertSee('LIBR-01')
             ->assertSee('OCPD-01')
+            ->assertDontSee('Usuario Existente')
+            ->assertDontSee('Reserva existente de prueba')
             ->assertSee('<option value="'.$libre->id.'"', false)
             ->assertDontSee('<option value="'.$ocupado->id.'"', false);
 
