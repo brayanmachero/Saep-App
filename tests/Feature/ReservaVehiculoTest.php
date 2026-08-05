@@ -445,9 +445,52 @@ class ReservaVehiculoTest extends TestCase
 
         Mail::assertSent(ReservaVehiculoMail::class, function (ReservaVehiculoMail $mail) use ($operator, $reserva) {
             return $mail->tipo === 'actualizacion'
-                && $mail->hasTo($operator->email)
-                && $mail->hasTo($reserva->solicitante_email);
+                && $mail->hasTo($reserva->solicitante_email)
+                && $mail->hasCc($operator->email)
+                && ! $mail->hasTo($operator->email);
         });
+    }
+
+    public function test_reservation_notifications_copy_only_bodega_managers_not_super_admins(): void
+    {
+        Mail::fake();
+
+        $bodegaRole = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $superAdminRole = Rol::where('codigo', 'SUPER_ADMIN')->firstOrFail();
+        $gestor = User::create([
+            'name' => 'Gestor Bodega',
+            'email' => 'gestor.bodega@saep.cl',
+            'rol_id' => $bodegaRole->id,
+            'password' => bcrypt('secret'),
+            'activo' => true,
+        ]);
+        $prueba = User::create([
+            'name' => 'Brayan Prueba',
+            'email' => 'bmachero@saep.cl',
+            'rol_id' => $superAdminRole->id,
+            'password' => bcrypt('secret'),
+            'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'COPI-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Validar copia a Bodega',
+        ], ['oid' => 'copy-test', 'email' => 'solicitante.copia@saep.cl', 'name' => 'Solicitante Copia']);
+
+        app(ReservaVehiculoService::class)->enviarConfirmacion($reserva);
+
+        Mail::assertSent(ReservaVehiculoMail::class, function (ReservaVehiculoMail $mail) use ($gestor, $prueba, $reserva): bool {
+            return $mail->tipo === 'confirmacion'
+                && $mail->hasTo($reserva->solicitante_email)
+                && $mail->hasCc($gestor->email)
+                && ! $mail->hasTo($prueba->email)
+                && ! $mail->hasCc($prueba->email);
+        });
+        Mail::assertSent(ReservaVehiculoMail::class, 1);
     }
 
     public function test_reservation_creates_an_event_in_the_shared_microsoft_calendar_when_enabled(): void

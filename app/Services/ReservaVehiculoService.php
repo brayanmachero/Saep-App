@@ -169,52 +169,17 @@ class ReservaVehiculoService
 
     public function enviarConfirmacion(ReservaVehiculo $reserva): void
     {
-        $reserva->loadMissing('vehiculo');
-        Mail::to($reserva->solicitante_email)->send(new ReservaVehiculoMail($reserva, 'confirmacion'));
-
-        $admins = $this->destinatariosAdministracion()->reject(
-            fn (User $user) => strtolower($user->email) === strtolower($reserva->solicitante_email),
-        );
-
-        if ($admins->isNotEmpty()) {
-            Mail::to($admins->pluck('email')->all())->send(new ReservaVehiculoMail($reserva, 'administracion'));
-        }
+        $this->enviarAlSolicitanteConCopiaBodega($reserva, 'confirmacion');
     }
 
     public function enviarActualizacion(ReservaVehiculo $reserva, string $tipo): void
     {
-        $reserva->loadMissing('vehiculo');
-
-        $destinatarios = $this->destinatariosAdministracion()
-            ->pluck('email')
-            ->push($reserva->solicitante_email)
-            ->filter()
-            ->map(fn (string $email) => strtolower($email))
-            ->unique()
-            ->values()
-            ->all();
-
-        if ($destinatarios !== []) {
-            Mail::to($destinatarios)->send(new ReservaVehiculoMail($reserva, $tipo));
-        }
+        $this->enviarAlSolicitanteConCopiaBodega($reserva, $tipo);
     }
 
     public function enviarEliminacion(ReservaVehiculo $reserva, User $operador): void
     {
-        $reserva->loadMissing('vehiculo');
-
-        $destinatarios = $this->destinatariosAdministracion()
-            ->pluck('email')
-            ->push($reserva->solicitante_email)
-            ->filter()
-            ->map(fn (string $email) => strtolower($email))
-            ->unique()
-            ->values()
-            ->all();
-
-        if ($destinatarios !== []) {
-            Mail::to($destinatarios)->send(new ReservaVehiculoMail($reserva, 'eliminacion', $operador));
-        }
+        $this->enviarAlSolicitanteConCopiaBodega($reserva, 'eliminacion', $operador);
     }
 
     public function procesarNotificaciones(): array
@@ -228,9 +193,9 @@ class ReservaVehiculoService
             ->get();
 
         foreach ($recordatorios as $reserva) {
-            Mail::to($reserva->solicitante_email)->send(new ReservaVehiculoMail($reserva, 'recordatorio'));
+            $this->enviarAlSolicitanteConCopiaBodega($reserva, 'recordatorio');
             $reserva->update(['recordatorio_enviado_at' => now()]);
-            $this->registrarEvento($reserva, 'RECORDATORIO_ENVIADO', 'Recordatorio de inicio enviado al solicitante.', [
+            $this->registrarEvento($reserva, 'RECORDATORIO_ENVIADO', 'Recordatorio de inicio enviado al solicitante con copia a gestores de Bodega.', [
                 'email' => 'sistema@saep.cl',
                 'name' => 'Sistema SAEP',
             ]);
@@ -251,8 +216,7 @@ class ReservaVehiculoService
             $this->sincronizarCalendario($reserva->fresh('vehiculo'), 'Vencimiento actualizado en el calendario compartido.');
 
             if (! $reserva->vencimiento_notificado_at) {
-                $destinatarios = $this->destinatariosAdministracion()->pluck('email')->push($reserva->solicitante_email)->unique()->values()->all();
-                Mail::to($destinatarios)->send(new ReservaVehiculoMail($reserva, 'vencimiento'));
+                $this->enviarAlSolicitanteConCopiaBodega($reserva, 'vencimiento');
                 $reserva->update(['vencimiento_notificado_at' => now()]);
             }
         }
@@ -263,21 +227,45 @@ class ReservaVehiculoService
         ];
     }
 
-    public function destinatariosAdministracion(): Collection
+    public function destinatariosGestionBodega(): Collection
     {
         return User::query()
             ->where('activo', true)
             ->whereNotNull('email')
-            ->whereHas('rol', function ($query) {
-                $query->where(function ($roles) {
-                    $roles->where('codigo', 'SUPER_ADMIN')
-                        ->orWhereHas('modulos', function ($modules) {
-                            $modules->where('slug', 'gestion_vehiculos')
-                                ->where('rol_modulo.puede_ver', true);
-                        });
-                });
-            })
+            ->whereHas('rol', fn ($query) => $query->whereIn('codigo', [
+                'BODEGA_ENTREGAS',
+                'BODEGA_VEHICULOS',
+            ]))
             ->get();
+    }
+
+    /**
+     * El solicitante es el destinatario principal. Los gestores de Bodega reciben
+     * el mismo aviso en copia, sin incluir superadministradores por defecto.
+     */
+    private function enviarAlSolicitanteConCopiaBodega(ReservaVehiculo $reserva, string $tipo, ?User $actor = null): void
+    {
+        $reserva->loadMissing('vehiculo');
+
+        $solicitante = strtolower(trim((string) $reserva->solicitante_email));
+        if ($solicitante === '') {
+            return;
+        }
+
+        $gestores = $this->destinatariosGestionBodega()
+            ->pluck('email')
+            ->filter()
+            ->map(fn (string $email) => strtolower(trim($email)))
+            ->reject(fn (string $email) => $email === $solicitante)
+            ->unique()
+            ->values();
+
+        $correo = Mail::to($solicitante);
+        if ($gestores->isNotEmpty()) {
+            $correo->cc($gestores->all());
+        }
+
+        $correo->send(new ReservaVehiculoMail($reserva, $tipo, $actor));
     }
 
     private function sincronizarCalendario(ReservaVehiculo $reserva, string $resumen): void
