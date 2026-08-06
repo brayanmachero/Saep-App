@@ -877,4 +877,43 @@ class ReservaVehiculoTest extends TestCase
             ->assertHeader('content-type', 'application/pdf')
             ->assertSee('%PDF-1.4 acta entrega');
     }
+
+    public function test_prepared_kizeo_form_uses_the_web_portal_not_a_mobile_deep_link(): void
+    {
+        config(['services.kizeo.web_url' => 'https://forms.kizeo.com/']);
+
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operator = User::create([
+            'name' => 'Bodega Kizeo Web',
+            'email' => 'bodega.kizeo.web@saep.cl',
+            'rol_id' => $role->id,
+            'password' => bcrypt('secret'),
+            'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'KWEB-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE',
+            'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Ficha Kizeo preparada para acceso web',
+        ], ['oid' => 'kizeo-web', 'email' => 'kizeo.web@saep.cl', 'name' => 'Kizeo Web QA']);
+        $reserva->update([
+            'estado' => 'CANCELADA',
+            'kizeo_form_id' => '1165545',
+            'kizeo_data_id' => 'kizeo-preparada-web',
+            'kizeo_pushed_at' => now(),
+        ]);
+
+        $this->actingAs($operator)
+            ->get(route('gestion-vehiculos.index'))
+            ->assertOk()
+            ->assertSee('Ficha en Kizeo')
+            ->assertSee('Kizeo web')
+            ->assertSee('La ficha asignada se completa en la app movil Kizeo Forms, seccion Recepcion.')
+            ->assertSee('https://forms.kizeo.com/', false)
+            ->assertDontSee('kizeoforms://--/receipts', false);
+    }
 }
