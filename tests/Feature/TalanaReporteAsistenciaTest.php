@@ -137,6 +137,35 @@ class TalanaReporteAsistenciaTest extends TestCase
         $this->assertStringContainsString('Validar y completar', $html);
     }
 
+    public function test_center_cost_scope_is_shown_in_the_email_subject_and_body(): void
+    {
+        $mail = new TalanaAsistenciaReporteMail([
+            'centro_costo' => 'LTS FLEX QUILICURA EST',
+            'total_alertas' => 0,
+            'total_activos' => 0,
+            'total_completos' => 0,
+            'total_incompletas' => 0,
+            'total_sin_marcacion' => 0,
+            'total_sin_historial' => 0,
+            'total_descanso' => 0,
+            'total_ausencias' => 0,
+            'total_sin_evaluacion' => 0,
+            'total_revision' => 0,
+            'total_jornadas_cubiertas' => 0,
+            'incompletas' => [],
+            'sin_marcacion' => [],
+            'sin_historial' => [],
+            'descanso' => [],
+            'ausencias' => [],
+            'sin_evaluacion' => [],
+            'revision' => [],
+            'completos' => [],
+        ], '2026-07-26');
+
+        $this->assertStringContainsString('LTS FLEX QUILICURA EST', $mail->envelope()->subject);
+        $this->assertStringContainsString('Centro de costo: <strong>LTS FLEX QUILICURA EST</strong>', $mail->render());
+    }
+
     private function agrupar(array $raw): array
     {
         return $this->invoke('agruparMarcas', [$raw, Carbon::parse('2026-07-26', 'America/Santiago')]);

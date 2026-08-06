@@ -121,6 +121,9 @@ return [
         'token'       => env('TALANA_API_TOKEN'),
         'alerta_email' => env('TALANA_ALERTA_EMAIL'),
         'alerta_dias'  => (int) env('TALANA_ALERTA_DIAS', 30),
+        // Limita el reporte diario de asistencia a un centro sin afectar la
+        // sincronización corporativa de Talana. Vacío mantiene el alcance global.
+        'asistencia_centro_costo' => env('TALANA_ASISTENCIA_CENTRO_COSTO'),
         'empresas'    => [
             (int) env('TALANA_EMPRESA_SAEP_ID', 1039)    => 'SAEP',
             (int) env('TALANA_EMPRESA_SAEP_EST_ID', 1081) => 'SAEP EST',

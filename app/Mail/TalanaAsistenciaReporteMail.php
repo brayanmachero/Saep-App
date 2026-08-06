@@ -9,6 +9,7 @@ use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
@@ -36,9 +37,11 @@ class TalanaAsistenciaReporteMail extends Mailable
         $prefijo = $urgencias > 0
             ? "⚠️ [{$urgencias} alertas]"
             : '✅';
+        $centroCosto = $r['centro_costo'] ?? null;
+        $alcance = $centroCosto ? " — {$centroCosto}" : '';
 
         return new Envelope(
-            subject: "{$prefijo} Reporte Asistencia Talana — {$fecha}",
+            subject: "{$prefijo} Reporte Asistencia Talana{$alcance} — {$fecha}",
         );
     }
 
@@ -54,6 +57,7 @@ class TalanaAsistenciaReporteMail extends Mailable
                 'reporte' => $r,
                 'dia' => $dia,
                 'fecha' => $this->fecha,
+                'centroCosto' => $r['centro_costo'] ?? null,
                 'limiteDetalle' => $limiteDetalle,
                 'incompletasDestacadas' => array_slice($r['incompletas'] ?? [], 0, $limiteDetalle),
                 'sinMarcacionDestacados' => array_slice($r['sin_marcacion'] ?? [], 0, $limiteDetalle),
@@ -69,7 +73,7 @@ class TalanaAsistenciaReporteMail extends Mailable
             $xlsx = $this->buildExcel();
 
             return [
-                Attachment::fromData(fn () => $xlsx, "asistencia_{$this->fecha}.xlsx")
+                Attachment::fromData(fn () => $xlsx, $this->nombreArchivoAdjunto())
                     ->withMime('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
             ];
         } catch (\Throwable) {
@@ -91,7 +95,11 @@ class TalanaAsistenciaReporteMail extends Mailable
         $ws = $spreadsheet->getActiveSheet();
         $ws->setTitle('Resumen');
 
-        $this->setCellBold($ws, 'A1', "REPORTE ASISTENCIA — {$this->fecha}", 14);
+        $titulo = "REPORTE ASISTENCIA — {$this->fecha}";
+        if (! empty($r['centro_costo'])) {
+            $titulo .= " — {$r['centro_costo']}";
+        }
+        $this->setCellBold($ws, 'A1', $titulo, 14);
         $ws->mergeCells('A1:D1');
         $ws->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
@@ -176,6 +184,18 @@ class TalanaAsistenciaReporteMail extends Mailable
         $content = ob_get_clean();
 
         return $content;
+    }
+
+    private function nombreArchivoAdjunto(): string
+    {
+        $centroCosto = $this->reporte['centro_costo'] ?? null;
+        if (! $centroCosto) {
+            return "asistencia_{$this->fecha}.xlsx";
+        }
+
+        $centro = Str::slug($centroCosto);
+
+        return "asistencia_{$this->fecha}_{$centro}.xlsx";
     }
 
     private function escribirHojaPersonas(Worksheet $ws, array $filas, string $titulo, bool $mostrarMarcas, bool $mostrarMotivo = false): void

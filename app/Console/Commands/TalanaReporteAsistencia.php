@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 /**
  * Genera y envía el reporte diario de asistencia Talana por email.
@@ -28,6 +29,7 @@ class TalanaReporteAsistencia extends Command
     protected $signature = 'talana:reporte-asistencia
                             {--fecha=           : Fecha YYYY-MM-DD a analizar (default: ayer)}
                             {--email=           : Email destinatario (default: TALANA_ALERTA_EMAIL)}
+                            {--centro-costo=    : Centro de costo a reportar (sobrescribe TALANA_ASISTENCIA_CENTRO_COSTO)}
                             {--dias-nuevo=60    : Días de antigüedad máxima para marcar como "nuevo"}
                             {--jornada-normal=9 : Horas de jornada normal para calcular exceso (default: 9)}
                             {--horas-extras-max=7 : Horas extras sobre la jornada normal que disparan revisión (default: 7)}
@@ -47,6 +49,7 @@ class TalanaReporteAsistencia extends Command
         $isDry = $this->option('dry-run');
         $diasNuevo = (int) ($this->option('dias-nuevo') ?? 60);
         $email = $this->option('email') ?: config('services.talana.alerta_email');
+        $centroCosto = $this->resolverCentroCosto();
 
         $jornadaNormal = (float) ($this->option('jornada-normal') ?? 9);
         $horasExtrasMax = (float) ($this->option('horas-extras-max') ?? 7);
@@ -96,18 +99,34 @@ class TalanaReporteAsistencia extends Command
         $this->line('');
         $this->line('🗄️  Cargando trabajadores activos desde DB local...');
 
-        $contratosActivos = TalanaContrato::query()
+        $consultaContratos = TalanaContrato::query()
             ->where('finiquitado', false)
             ->where(function ($q) use ($fecha) {
                 $q->whereNull('hasta')
                     ->orWhere('hasta', '>=', $fecha);
             })
-            ->where('desde', '<=', $fecha)
+            ->where('desde', '<=', $fecha);
+
+        if ($centroCosto) {
+            $consultaContratos->whereRaw(
+                'LOWER(TRIM(centro_costo_nombre)) = ?',
+                [Str::lower($centroCosto)]
+            );
+        }
+
+        $contratosActivos = $consultaContratos
             ->get(['talana_id', 'persona_talana_id', 'persona_nombre', 'persona_rut',
                 'centro_costo_nombre', 'sucursal_nombre', 'tipo_contrato_nombre',
                 'cargo_nombre', 'desde', 'hasta', 'empresa_id', 'empresa_nombre']);
 
-        $this->line("   ✓ {$this->cnt($contratosActivos->toArray())} contratos activos para {$fecha}");
+        $alcance = $centroCosto ? " en {$centroCosto}" : '';
+        $this->line("   ✓ {$this->cnt($contratosActivos->toArray())} contratos activos{$alcance} para {$fecha}");
+
+        if ($centroCosto && $contratosActivos->isEmpty()) {
+            $this->error("No hay contratos activos para el centro de costo configurado: {$centroCosto}");
+
+            return self::FAILURE;
+        }
 
         // ─── 4. Obtener jornada calculada del día directamente desde la API Talana ──
         // Se consulta en tiempo real (no depende de talana:sync-turnos) para garantizar
@@ -173,6 +192,7 @@ class TalanaReporteAsistencia extends Command
             $umbralBajoH,
             $ausenciasVigentes
         );
+        $resultado['centro_costo'] = $centroCosto;
 
         // ─── 6. Mostrar resumen por consola ───────────────────────────────────
         $this->mostrarResumen($resultado, $fecha);
@@ -201,6 +221,20 @@ class TalanaReporteAsistencia extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    private function resolverCentroCosto(): ?string
+    {
+        $centroCosto = $this->option('centro-costo')
+            ?: config('services.talana.asistencia_centro_costo');
+
+        if (! is_string($centroCosto)) {
+            return null;
+        }
+
+        $centroCosto = preg_replace('/\s+/', ' ', trim($centroCosto));
+
+        return $centroCosto !== '' ? $centroCosto : null;
     }
 
     private function obtenerMarcasPorEmpresas(string $desde, string $hasta): array
