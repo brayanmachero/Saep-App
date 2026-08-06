@@ -124,6 +124,11 @@ return [
         // Limita el reporte diario de asistencia a un centro sin afectar la
         // sincronización corporativa de Talana. Vacío mantiene el alcance global.
         'asistencia_centro_costo' => env('TALANA_ASISTENCIA_CENTRO_COSTO'),
+        // Permite limitar el reporte a una razón social de Talana, por ejemplo
+        // 1081 para SAEP EST. Debe usarse junto al centro cuando corresponda.
+        'asistencia_empresa_id' => env('TALANA_ASISTENCIA_EMPRESA_ID')
+            ? (int) env('TALANA_ASISTENCIA_EMPRESA_ID')
+            : null,
         'empresas'    => [
             (int) env('TALANA_EMPRESA_SAEP_ID', 1039)    => 'SAEP',
             (int) env('TALANA_EMPRESA_SAEP_EST_ID', 1081) => 'SAEP EST',

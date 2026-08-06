@@ -30,6 +30,7 @@ class TalanaReporteAsistencia extends Command
                             {--fecha=           : Fecha YYYY-MM-DD a analizar (default: ayer)}
                             {--email=           : Email destinatario (default: TALANA_ALERTA_EMAIL)}
                             {--centro-costo=    : Centro de costo a reportar (sobrescribe TALANA_ASISTENCIA_CENTRO_COSTO)}
+                            {--empresa-id=      : Empresa Talana a reportar (sobrescribe TALANA_ASISTENCIA_EMPRESA_ID)}
                             {--dias-nuevo=60    : Días de antigüedad máxima para marcar como "nuevo"}
                             {--jornada-normal=9 : Horas de jornada normal para calcular exceso (default: 9)}
                             {--horas-extras-max=7 : Horas extras sobre la jornada normal que disparan revisión (default: 7)}
@@ -50,6 +51,8 @@ class TalanaReporteAsistencia extends Command
         $diasNuevo = (int) ($this->option('dias-nuevo') ?? 60);
         $email = $this->option('email') ?: config('services.talana.alerta_email');
         $centroCosto = $this->resolverCentroCosto();
+        $empresaId = $this->resolverEmpresaId();
+        $alcanceReporte = $this->descripcionAlcance($centroCosto, $empresaId);
 
         $jornadaNormal = (float) ($this->option('jornada-normal') ?? 9);
         $horasExtrasMax = (float) ($this->option('horas-extras-max') ?? 7);
@@ -113,17 +116,20 @@ class TalanaReporteAsistencia extends Command
                 [Str::lower($centroCosto)]
             );
         }
+        if ($empresaId) {
+            $consultaContratos->where('empresa_id', $empresaId);
+        }
 
         $contratosActivos = $consultaContratos
             ->get(['talana_id', 'persona_talana_id', 'persona_nombre', 'persona_rut',
                 'centro_costo_nombre', 'sucursal_nombre', 'tipo_contrato_nombre',
                 'cargo_nombre', 'desde', 'hasta', 'empresa_id', 'empresa_nombre']);
 
-        $alcance = $centroCosto ? " en {$centroCosto}" : '';
+        $alcance = $alcanceReporte ? " en {$alcanceReporte}" : '';
         $this->line("   ✓ {$this->cnt($contratosActivos->toArray())} contratos activos{$alcance} para {$fecha}");
 
-        if ($centroCosto && $contratosActivos->isEmpty()) {
-            $this->error("No hay contratos activos para el centro de costo configurado: {$centroCosto}");
+        if ($alcanceReporte && $contratosActivos->isEmpty()) {
+            $this->error("No hay contratos activos para el alcance configurado: {$alcanceReporte}");
 
             return self::FAILURE;
         }
@@ -193,6 +199,8 @@ class TalanaReporteAsistencia extends Command
             $ausenciasVigentes
         );
         $resultado['centro_costo'] = $centroCosto;
+        $resultado['empresa_id'] = $empresaId;
+        $resultado['alcance'] = $alcanceReporte;
 
         // ─── 6. Mostrar resumen por consola ───────────────────────────────────
         $this->mostrarResumen($resultado, $fecha);
@@ -235,6 +243,30 @@ class TalanaReporteAsistencia extends Command
         $centroCosto = preg_replace('/\s+/', ' ', trim($centroCosto));
 
         return $centroCosto !== '' ? $centroCosto : null;
+    }
+
+    private function resolverEmpresaId(): ?int
+    {
+        $empresaId = $this->option('empresa-id')
+            ?: config('services.talana.asistencia_empresa_id');
+
+        return is_numeric($empresaId) && (int) $empresaId > 0
+            ? (int) $empresaId
+            : null;
+    }
+
+    private function descripcionAlcance(?string $centroCosto, ?int $empresaId): ?string
+    {
+        $partes = [];
+        if ($centroCosto) {
+            $partes[] = $centroCosto;
+        }
+        if ($empresaId) {
+            $empresas = config('services.talana.empresas', []);
+            $partes[] = $empresas[$empresaId] ?? "Empresa Talana {$empresaId}";
+        }
+
+        return $partes ? implode(' · ', $partes) : null;
     }
 
     private function obtenerMarcasPorEmpresas(string $desde, string $hasta): array

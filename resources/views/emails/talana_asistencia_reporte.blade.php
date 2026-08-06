@@ -74,8 +74,8 @@
         <img class="logo" src="{{ asset('brand/wp/logo-saep-email.png') }}" alt="SAEP">
         <p class="eyebrow">Gestión de personas</p>
         <h1>Reporte de asistencia Talana</h1>
-        @if($centroCosto)
-            <p>Centro de costo: <strong>{{ $centroCosto }}</strong></p>
+        @if($alcanceReporte)
+            <p>Alcance: <strong>{{ $alcanceReporte }}</strong></p>
         @endif
         <p>{{ ucfirst($dia) }} · Generado {{ $generadoEn }}</p>
     </div>

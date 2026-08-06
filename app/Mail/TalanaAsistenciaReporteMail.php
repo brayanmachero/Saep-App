@@ -37,8 +37,8 @@ class TalanaAsistenciaReporteMail extends Mailable
         $prefijo = $urgencias > 0
             ? "⚠️ [{$urgencias} alertas]"
             : '✅';
-        $centroCosto = $r['centro_costo'] ?? null;
-        $alcance = $centroCosto ? " — {$centroCosto}" : '';
+        $alcanceReporte = $r['alcance'] ?? $r['centro_costo'] ?? null;
+        $alcance = $alcanceReporte ? " — {$alcanceReporte}" : '';
 
         return new Envelope(
             subject: "{$prefijo} Reporte Asistencia Talana{$alcance} — {$fecha}",
@@ -57,7 +57,7 @@ class TalanaAsistenciaReporteMail extends Mailable
                 'reporte' => $r,
                 'dia' => $dia,
                 'fecha' => $this->fecha,
-                'centroCosto' => $r['centro_costo'] ?? null,
+                'alcanceReporte' => $r['alcance'] ?? $r['centro_costo'] ?? null,
                 'limiteDetalle' => $limiteDetalle,
                 'incompletasDestacadas' => array_slice($r['incompletas'] ?? [], 0, $limiteDetalle),
                 'sinMarcacionDestacados' => array_slice($r['sin_marcacion'] ?? [], 0, $limiteDetalle),
@@ -96,8 +96,8 @@ class TalanaAsistenciaReporteMail extends Mailable
         $ws->setTitle('Resumen');
 
         $titulo = "REPORTE ASISTENCIA — {$this->fecha}";
-        if (! empty($r['centro_costo'])) {
-            $titulo .= " — {$r['centro_costo']}";
+        if (! empty($r['alcance'] ?? $r['centro_costo'] ?? null)) {
+            $titulo .= ' — '.($r['alcance'] ?? $r['centro_costo']);
         }
         $this->setCellBold($ws, 'A1', $titulo, 14);
         $ws->mergeCells('A1:D1');
@@ -188,12 +188,12 @@ class TalanaAsistenciaReporteMail extends Mailable
 
     private function nombreArchivoAdjunto(): string
     {
-        $centroCosto = $this->reporte['centro_costo'] ?? null;
-        if (! $centroCosto) {
+        $alcanceReporte = $this->reporte['alcance'] ?? $this->reporte['centro_costo'] ?? null;
+        if (! $alcanceReporte) {
             return "asistencia_{$this->fecha}.xlsx";
         }
 
-        $centro = Str::slug($centroCosto);
+        $centro = Str::slug($alcanceReporte);
 
         return "asistencia_{$this->fecha}_{$centro}.xlsx";
     }

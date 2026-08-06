@@ -141,6 +141,7 @@ class TalanaReporteAsistenciaTest extends TestCase
     {
         $mail = new TalanaAsistenciaReporteMail([
             'centro_costo' => 'LTS FLEX QUILICURA EST',
+            'alcance' => 'LTS QUILICURA · SAEP EST',
             'total_alertas' => 0,
             'total_activos' => 0,
             'total_completos' => 0,
@@ -162,8 +163,8 @@ class TalanaReporteAsistenciaTest extends TestCase
             'completos' => [],
         ], '2026-07-26');
 
-        $this->assertStringContainsString('LTS FLEX QUILICURA EST', $mail->envelope()->subject);
-        $this->assertStringContainsString('Centro de costo: <strong>LTS FLEX QUILICURA EST</strong>', $mail->render());
+        $this->assertStringContainsString('LTS QUILICURA · SAEP EST', $mail->envelope()->subject);
+        $this->assertStringContainsString('Alcance: <strong>LTS QUILICURA · SAEP EST</strong>', $mail->render());
     }
 
     private function agrupar(array $raw): array
