@@ -878,10 +878,8 @@ class ReservaVehiculoTest extends TestCase
             ->assertSee('%PDF-1.4 acta entrega');
     }
 
-    public function test_prepared_kizeo_form_uses_the_web_portal_not_a_mobile_deep_link(): void
+    public function test_prepared_kizeo_form_explains_that_completion_happens_in_the_mobile_inbox(): void
     {
-        config(['services.kizeo.web_url' => 'https://forms.kizeo.com/']);
-
         $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
         $operator = User::create([
             'name' => 'Bodega Kizeo Web',
@@ -911,9 +909,8 @@ class ReservaVehiculoTest extends TestCase
             ->get(route('gestion-vehiculos.index'))
             ->assertOk()
             ->assertSee('Ficha en Kizeo')
-            ->assertSee('Kizeo web')
-            ->assertSee('La ficha asignada se completa en la app movil Kizeo Forms, seccion Recepcion.')
-            ->assertSee('https://forms.kizeo.com/', false)
+            ->assertSee('Completar en Kizeo movil, seccion Recepcion.')
+            ->assertDontSee('Kizeo web')
             ->assertDontSee('kizeoforms://--/receipts', false);
     }
 }

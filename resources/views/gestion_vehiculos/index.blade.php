@@ -14,7 +14,7 @@
 @php($canDelete = auth()->user()->tieneAcceso('gestion_vehiculos', 'puede_eliminar'))
 <div class="page-container fleet-page">
     <div class="fleet-head"><div><h2><i class="bi bi-car-front-fill" style="color:var(--accent-color)"></i> Vehiculos</h2><p>Administra la flota, reservas y actas Kizeo. Bodega prepara la ficha y el acta firmada actualiza la reserva automaticamente.</p></div><div class="fleet-actions"><a href="{{ route('reservas-vehiculos.inicio') }}" class="btn-secondary" target="_blank" rel="noopener" title="Abrir el portal publico de reservas"><i class="bi bi-box-arrow-up-right"></i> Portal de reservas</a></div></div>
-    @if(session('success'))<div class="alert alert-success">{{ session('success') }} @if(session('kizeo_inbox_url'))<a href="{{ session('kizeo_inbox_url') }}" target="_blank" rel="noopener" style="margin-left:.5rem;font-weight:800">Abrir Kizeo web</a>@endif</div>@endif
+    @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @if(session('warning'))<div class="alert alert-warning">{{ session('warning') }}</div>@endif
     @if(session('error'))<div class="alert alert-danger">{{ session('error') }}</div>@endif
     @if($proximasReservas->whereNotNull('kizeo_data_id')->isNotEmpty())

@@ -90,8 +90,7 @@ class GestionVehiculosController extends Controller
         }
 
         return back()
-            ->with('success', 'Ficha Kizeo preparada para Bodega. La reserva cambiara a En uso solo cuando llegue el acta de entrega firmada. La ficha asignada se completa desde la aplicacion movil Kizeo Forms, en Recepcion.')
-            ->with('kizeo_inbox_url', config('services.kizeo.web_url'));
+            ->with('success', 'Ficha Kizeo preparada para Bodega. La reserva cambiara a En uso solo cuando llegue el acta de entrega firmada. La ficha asignada se completa desde la aplicacion movil Kizeo Forms, en Recepcion.');
     }
 
     public function verActa(ReservaVehiculo $reserva, string $tipo)
