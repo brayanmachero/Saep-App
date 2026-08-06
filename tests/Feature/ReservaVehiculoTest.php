@@ -152,6 +152,52 @@ class ReservaVehiculoTest extends TestCase
             ->assertSee('href="#agenda"', false);
     }
 
+    public function test_new_reservation_sends_a_team_card_with_duration_and_release_time_when_configured(): void
+    {
+        Http::fake([
+            'https://teams.example.test/webhook/*' => Http::response(null, 202),
+        ]);
+        config([
+            'services.reservas_vehiculos.teams_webhook_url' => 'https://teams.example.test/webhook/reservas',
+            'services.reservas_vehiculos.buffer_minutes' => 60,
+        ]);
+
+        $vehiculo = Vehiculo::create([
+            'patente' => 'TEAM-01', 'marca' => 'Chevrolet', 'modelo' => 'N400', 'estado' => 'DISPONIBLE',
+            'reservas_habilitadas' => true,
+        ]);
+
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-02 09:00:00',
+            'termino' => '2026-08-02 12:00:00',
+            'destino' => 'CD Renca',
+            'motivo' => 'Traslado operativo para entrega de equipos',
+            'pasajeros' => 2,
+        ], ['oid' => 'teams-test', 'email' => 'teams@saep.cl', 'name' => 'Solicitante Teams']);
+
+        Http::assertSent(function ($request): bool {
+            if ($request->url() !== 'https://teams.example.test/webhook/reservas') {
+                return false;
+            }
+
+            $data = $request->data();
+            $facts = collect($data['attachments'][0]['content']['body'][2]['facts'] ?? [])
+                ->mapWithKeys(fn (array $fact) => [$fact['title'] => $fact['value']]);
+
+            return $request->method() === 'POST'
+                && $facts->get('Hasta') === '02/08/2026 12:00'
+                && $facts->get('Duracion solicitada') === '3 horas'
+                && $facts->get('Liberacion para otra reserva') === '02/08/2026 13:00 (incluye margen de 60 min)'
+                && $facts->get('Solicitante') === 'Solicitante Teams';
+        });
+
+        $this->assertDatabaseHas('reserva_vehiculo_eventos', [
+            'reserva_vehiculo_id' => $reserva->id,
+            'accion' => 'TEAMS_NOTIFICADO',
+        ]);
+    }
+
     public function test_internal_operator_change_is_logged_with_the_user(): void
     {
         $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();

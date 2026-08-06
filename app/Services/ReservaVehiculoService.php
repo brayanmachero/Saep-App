@@ -16,7 +16,10 @@ use Illuminate\Validation\ValidationException;
 
 class ReservaVehiculoService
 {
-    public function __construct(private readonly ReservaVehiculoCalendarService $calendar) {}
+    public function __construct(
+        private readonly ReservaVehiculoCalendarService $calendar,
+        private readonly ReservaVehiculoTeamsService $teams,
+    ) {}
 
     public function vehiculosDisponibles(CarbonInterface $inicio, CarbonInterface $termino): Collection
     {
@@ -118,6 +121,13 @@ class ReservaVehiculoService
         });
 
         $this->sincronizarCalendario($reserva, 'Reserva creada o actualizada en el calendario compartido.');
+
+        if ($this->teams->notificarNuevaReserva($reserva)) {
+            $this->registrarEvento($reserva, 'TEAMS_NOTIFICADO', 'Nueva reserva notificada al canal de Bodega en Teams.', [
+                'email' => 'sistema@saep.cl',
+                'name' => 'Sistema SAEP',
+            ]);
+        }
 
         return $reserva->fresh('vehiculo');
     }
