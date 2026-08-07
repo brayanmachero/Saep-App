@@ -53,6 +53,22 @@ class ReservaVehiculoService
             ->get();
     }
 
+    /**
+     * Historial semanal de la flota. Incluye reservas devueltas para que la
+     * agenda refleje las ocupaciones ya finalizadas sin afectar disponibilidad.
+     */
+    public function agendaSemanal(CarbonInterface $inicio, CarbonInterface $termino): Collection
+    {
+        return ReservaVehiculo::query()
+            ->with('vehiculo')
+            ->whereIn('estado', ReservaVehiculo::ESTADOS_VISIBLES_EN_AGENDA)
+            ->where('inicio', '<', $termino)
+            ->where('termino', '>', $inicio)
+            ->orderBy('inicio')
+            ->orderBy('vehiculo_id')
+            ->get();
+    }
+
     public function margenReservaMinutos(): int
     {
         return max(0, min(240, (int) config('services.reservas_vehiculos.buffer_minutes', 60)));

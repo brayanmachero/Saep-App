@@ -10,6 +10,12 @@ class ReservaVehiculo extends Model
 {
     public const ESTADOS_BLOQUEANTES = ['CONFIRMADA', 'EN_USO', 'VENCIDA'];
 
+    /**
+     * Estados que representan una ocupacion real y deben mantenerse visibles
+     * en el historial semanal de la flota. Las canceladas no se muestran.
+     */
+    public const ESTADOS_VISIBLES_EN_AGENDA = ['CONFIRMADA', 'EN_USO', 'VENCIDA', 'DEVUELTA'];
+
     public const ESTADOS = [
         'CONFIRMADA' => 'Confirmada',
         'CANCELADA' => 'Cancelada',

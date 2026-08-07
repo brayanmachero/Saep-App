@@ -140,6 +140,45 @@ class ReservaVehiculoTest extends TestCase
         $this->assertTrue($libre->exists);
     }
 
+    public function test_weekly_fleet_agenda_includes_returned_reservations_but_excludes_cancelled_ones(): void
+    {
+        $devuelto = Vehiculo::create([
+            'patente' => 'HIST-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $cancelado = Vehiculo::create([
+            'patente' => 'CANC-01', 'marca' => 'Chevrolet', 'modelo' => 'N400', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $service = app(ReservaVehiculoService::class);
+
+        $reservaDevuelta = $service->crearReserva([
+            'vehiculo_id' => $devuelto->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Reserva devuelta para historial de agenda',
+        ], ['oid' => 'historial', 'email' => 'historial@saep.cl', 'name' => 'Historial QA']);
+        $reservaDevuelta->update(['estado' => 'DEVUELTA']);
+
+        $reservaCancelada = $service->crearReserva([
+            'vehiculo_id' => $cancelado->id,
+            'inicio' => '2026-08-04 09:00:00',
+            'termino' => '2026-08-04 11:00:00',
+            'motivo' => 'Reserva cancelada que no ocupa la flota',
+        ], ['oid' => 'cancelada', 'email' => 'cancelada@saep.cl', 'name' => 'Cancelada QA']);
+        $reservaCancelada->update(['estado' => 'CANCELADA']);
+
+        $agenda = $service->agendaSemanal(Carbon::parse('2026-08-03 00:00:00'), Carbon::parse('2026-08-10 00:00:00'));
+
+        $this->assertTrue($agenda->contains('id', $reservaDevuelta->id));
+        $this->assertFalse($agenda->contains('id', $reservaCancelada->id));
+
+        $this->withSession(['reserva_vehiculo_microsoft_identity' => [
+            'oid' => 'viewer', 'email' => 'visor@saep.cl', 'name' => 'Visor QA',
+        ]])->get(route('reservas-vehiculos.inicio', ['semana' => '2026-08-03']))
+            ->assertOk()
+            ->assertSee('HIST-01')
+            ->assertSee('Devuelta');
+    }
+
     public function test_service_rejects_reservations_that_start_in_the_past(): void
     {
         $vehiculo = Vehiculo::create([

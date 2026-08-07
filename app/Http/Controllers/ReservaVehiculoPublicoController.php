@@ -43,7 +43,7 @@ class ReservaVehiculoPublicoController extends Controller
                 ? $this->reservas->agenda($periodo['inicio'], $periodo['termino'])
                 : collect(),
             'agendaSemanal' => $identidad
-                ? $this->reservas->agenda($agendaSemanalInicio, $agendaSemanalTermino)
+                ? $this->reservas->agendaSemanal($agendaSemanalInicio, $agendaSemanalTermino)
                 : collect(),
             'agendaSemanalInicio' => $agendaSemanalInicio,
             'agendaSemanalTermino' => $agendaSemanalTermino,
