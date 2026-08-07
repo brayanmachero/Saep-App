@@ -589,6 +589,17 @@ class TalanaReporteAsistencia extends Command
         usort($sinEvaluacion, $sortNombre);
         usort($revision, $sortNombre);
 
+        $porFranjaTurno = $this->resumirPorFranjaTurno([
+            'completos' => $completos,
+            'incompletas' => $incompletas,
+            'sin_marcacion' => $sinMarcacion,
+            'sin_historial' => $sinHistorial,
+            'descanso' => $descanso,
+            'ausencias' => $ausencias,
+            'sin_evaluacion' => $sinEvaluacion,
+            'revision' => $revision,
+        ]);
+
         return [
             'fecha' => $fecha->toDateString(),
             'total_activos' => count($contratosActivos),
@@ -611,7 +622,67 @@ class TalanaReporteAsistencia extends Command
             'ausencias' => $ausencias,
             'sin_evaluacion' => $sinEvaluacion,
             'revision' => $revision,
+            'por_franja_turno' => $porFranjaTurno,
         ];
+    }
+
+    /**
+     * Agrupa el resultado por la primera entrada registrada. No representa el
+     * turno contractual, porque el endpoint de Talana disponible para este
+     * reporte no expone el nombre del turno asignado a cada persona.
+     */
+    private function resumirPorFranjaTurno(array $grupos): array
+    {
+        $orden = [
+            'Mañana (06:00–13:59)',
+            'Tarde (14:00–21:59)',
+            'Noche (22:00–05:59)',
+            'Sin entrada registrada',
+            'Sin marcas registradas',
+        ];
+
+        $resultado = [];
+        foreach ($orden as $franja) {
+            $resultado[$franja] = [
+                'franja' => $franja,
+                'activos' => 0,
+                'completos' => 0,
+                'incompletas' => 0,
+                'sin_marcacion' => 0,
+                'revision' => 0,
+                'alertas' => 0,
+            ];
+        }
+
+        foreach ($grupos as $categoria => $filas) {
+            foreach ($filas as $fila) {
+                $franja = $fila['franja_turno'] ?? 'Sin entrada registrada';
+                if (! isset($resultado[$franja])) {
+                    $resultado[$franja] = [
+                        'franja' => $franja,
+                        'activos' => 0,
+                        'completos' => 0,
+                        'incompletas' => 0,
+                        'sin_marcacion' => 0,
+                        'revision' => 0,
+                        'alertas' => 0,
+                    ];
+                }
+
+                $resultado[$franja]['activos']++;
+                if (array_key_exists($categoria, $resultado[$franja])) {
+                    $resultado[$franja][$categoria]++;
+                }
+                if (in_array($categoria, ['incompletas', 'sin_marcacion', 'revision'], true)) {
+                    $resultado[$franja]['alertas']++;
+                }
+            }
+        }
+
+        return array_values(array_filter(
+            $resultado,
+            fn (array $fila) => $fila['activos'] > 0
+        ));
     }
 
     /**
@@ -697,6 +768,8 @@ class TalanaReporteAsistencia extends Command
             }
         }
 
+        $franjaTurno = $this->resolverFranjaTurno($primeraEntrada, $categoria);
+
         return [
             'nombre' => $contrato->persona_nombre ?? '—',
             'rut' => $contrato->persona_rut ?? '—',
@@ -709,12 +782,38 @@ class TalanaReporteAsistencia extends Command
             'hasta' => $contrato->hasta ?? null,
             'primera_entrada' => $primeraEntrada,
             'ultima_salida' => $ultimaSalida,
+            'franja_turno' => $franjaTurno,
             'marcas' => implode(' / ', $marcasStr),
             'total_marcas' => count($marcas),
             'categoria' => $categoria,
             'horas_trabajadas' => null, // se rellena opcionalmente vía resolverHorasTrabajadas
             'motivo' => null, // se rellena opcionalmente para revisión
         ];
+    }
+
+    private function resolverFranjaTurno(?string $primeraEntrada, string $categoria): string
+    {
+        if (! $primeraEntrada) {
+            return $categoria === 'sin_marcacion'
+                ? 'Sin marcas registradas'
+                : 'Sin entrada registrada';
+        }
+
+        try {
+            $hora = (int) Carbon::createFromFormat('H:i:s', $primeraEntrada)->format('H');
+        } catch (\Throwable) {
+            return 'Sin entrada registrada';
+        }
+
+        if ($hora >= 6 && $hora < 14) {
+            return 'Mañana (06:00–13:59)';
+        }
+
+        if ($hora >= 14 && $hora < 22) {
+            return 'Tarde (14:00–21:59)';
+        }
+
+        return 'Noche (22:00–05:59)';
     }
 
     // ─── Consola ──────────────────────────────────────────────────────────────
@@ -755,6 +854,15 @@ class TalanaReporteAsistencia extends Command
                 $total = array_sum($c);
                 $this->line("  {$emp} ({$total}): ✅ {$c['completos']} | ⚠️ {$c['incompletas']} | ❌ {$c['sin_marcacion']} | ◌ {$c['sin_evaluacion']} | 🔍 {$c['revision']}");
             }
+        }
+
+        if (! empty($r['por_franja_turno'] ?? [])) {
+            $this->line('');
+            $this->line('  ─── Por franja de entrada observada ───────');
+            foreach ($r['por_franja_turno'] as $franja) {
+                $this->line("  {$franja['franja']} ({$franja['activos']}): ✅ {$franja['completos']} | ⚠️ Alertas: {$franja['alertas']}");
+            }
+            $this->comment('  Basado en la primera entrada registrada; no reemplaza el turno contractual de Talana.');
         }
 
         if (! empty($r['revision'])) {

@@ -129,6 +129,13 @@ class TalanaAsistenciaReporteMail extends Mailable
         $ws->getColumnDimension('A')->setWidth(45);
         $ws->getColumnDimension('B')->setWidth(12);
 
+        // ── Hoja: Revisión por franja de entrada ─────────────────────────────
+        if (! empty($r['por_franja_turno'] ?? [])) {
+            $ws = $spreadsheet->createSheet();
+            $ws->setTitle('Por franja');
+            $this->escribirHojaPorFranja($ws, $r['por_franja_turno']);
+        }
+
         // ── Hojas: Marcación incompleta (por empresa) ────────────────────────
         foreach ($this->porEmpresa($r['incompletas']) as $empresa => $filas) {
             $ws = $spreadsheet->createSheet();
@@ -202,7 +209,7 @@ class TalanaAsistenciaReporteMail extends Mailable
     {
         $this->setCellBold($ws, 'A1', $titulo, 12);
 
-        $headers = ['Nombre', 'RUT', 'Centro Costo / Sucursal', 'Cargo', 'Tipo Contrato', 'Desde', 'Hasta'];
+        $headers = ['Nombre', 'RUT', 'Centro Costo / Sucursal', 'Cargo', 'Tipo Contrato', 'Desde', 'Hasta', 'Franja de entrada'];
         if ($mostrarMotivo) {
             $headers[] = 'Motivo';
         }
@@ -232,6 +239,7 @@ class TalanaAsistenciaReporteMail extends Mailable
                 $f['tipo_contrato'] ?? '—',
                 $f['desde'] ?? '—',
                 $f['hasta'] ?? '—',
+                $f['franja_turno'] ?? '—',
             ];
             if ($mostrarMotivo) {
                 $cols[] = $f['motivo'] ?? '—';
@@ -255,6 +263,41 @@ class TalanaAsistenciaReporteMail extends Mailable
         // Autowidth
         foreach (range('A', chr(ord('A') + count($headers) - 1)) as $c) {
             $ws->getColumnDimension($c)->setAutoSize(true);
+        }
+    }
+
+    private function escribirHojaPorFranja(Worksheet $ws, array $filas): void
+    {
+        $this->setCellBold($ws, 'A1', 'REVISIÓN POR FRANJA DE ENTRADA', 12);
+        $ws->mergeCells('A1:F1');
+        $ws->setCellValue('A2', 'Clasificación basada en la primera entrada registrada; no reemplaza el turno contractual de Talana.');
+        $ws->mergeCells('A2:F2');
+
+        $headers = ['Franja de entrada', 'Activos', 'Completos', 'Incompletas', 'Sin marca', 'Por revisar'];
+        $col = 'A';
+        foreach ($headers as $header) {
+            $ws->setCellValue("{$col}4", $header);
+            $col++;
+        }
+        $this->styleHeader($ws, 'A4:F4');
+
+        $row = 5;
+        foreach ($filas as $fila) {
+            $ws->fromArray([
+                [
+                    $fila['franja'] ?? '—',
+                    $fila['activos'] ?? 0,
+                    $fila['completos'] ?? 0,
+                    $fila['incompletas'] ?? 0,
+                    $fila['sin_marcacion'] ?? 0,
+                    $fila['revision'] ?? 0,
+                ],
+            ], null, "A{$row}");
+            $row++;
+        }
+
+        foreach (range('A', 'F') as $col) {
+            $ws->getColumnDimension($col)->setAutoSize(true);
         }
     }
 

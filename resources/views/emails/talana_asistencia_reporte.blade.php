@@ -152,6 +152,26 @@
         </div>
     </div>
 
+    @if(!empty($reporte['por_franja_turno'] ?? []))
+        <div class="section">
+            <h2>Revisión por franja de entrada</h2>
+            <p class="lead">Agrupa por la primera entrada registrada. Sirve para priorizar la revisión operativa, pero no reemplaza el turno contractual configurado en Talana.</p>
+            <table style="margin-top:14px;">
+                <thead><tr><th>Franja</th><th>Activos</th><th>Completas</th><th>Alertas</th></tr></thead>
+                <tbody>
+                @foreach($reporte['por_franja_turno'] as $franja)
+                    <tr>
+                        <td class="name">{{ $franja['franja'] }}</td>
+                        <td>{{ $franja['activos'] }}</td>
+                        <td>{{ $franja['completos'] }}</td>
+                        <td class="instruction">{{ $franja['alertas'] }}</td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+
     <div class="section">
         <div class="excel-note">
             <strong>Detalle completo en el Excel adjunto.</strong> Este correo muestra hasta {{ $limiteDetalle }} casos por tipo para facilitar la lectura.

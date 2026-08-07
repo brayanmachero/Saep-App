@@ -37,6 +37,8 @@ class TalanaReporteAsistenciaTest extends TestCase
         $this->assertSame(1, $reporte['total_completos']);
         $this->assertSame(0, $reporte['total_incompletas']);
         $this->assertSame(0, $reporte['total_alertas']);
+        $this->assertSame('Mañana (06:00–13:59)', $reporte['completos'][0]['franja_turno']);
+        $this->assertSame(1, $reporte['por_franja_turno'][0]['activos']);
     }
 
     public function test_night_entry_is_completed_by_next_day_exit(): void
@@ -58,6 +60,7 @@ class TalanaReporteAsistenciaTest extends TestCase
 
         $this->assertSame(1, $reporte['total_completos']);
         $this->assertStringContainsString('día siguiente', $reporte['completos'][0]['marcas']);
+        $this->assertSame('Noche (22:00–05:59)', $reporte['completos'][0]['franja_turno']);
     }
 
     public function test_missing_mark_without_confirmed_workday_is_not_an_alert(): void
@@ -125,6 +128,12 @@ class TalanaReporteAsistenciaTest extends TestCase
             'sin_evaluacion' => [],
             'revision' => [],
             'completos' => [],
+            'por_franja_turno' => [[
+                'franja' => 'Mañana (06:00–13:59)',
+                'activos' => 4,
+                'completos' => 2,
+                'alertas' => 2,
+            ]],
         ], '2026-07-26');
 
         $html = $mail->render();
@@ -135,6 +144,7 @@ class TalanaReporteAsistenciaTest extends TestCase
         $this->assertStringContainsString('Detalle completo en el Excel adjunto', $html);
         $this->assertStringContainsString('María Prueba', $html);
         $this->assertStringContainsString('Validar y completar', $html);
+        $this->assertStringContainsString('Revisión por franja de entrada', $html);
     }
 
     public function test_center_cost_scope_is_shown_in_the_email_subject_and_body(): void
