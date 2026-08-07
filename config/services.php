@@ -95,6 +95,7 @@ return [
     // absorber atrasos de entrega, traslado o devolucion del vehiculo.
     'reservas_vehiculos' => [
         'buffer_minutes' => (int) env('VEHICLE_RESERVATION_BUFFER_MINUTES', 60),
+        'default_duration_minutes' => (int) env('VEHICLE_RESERVATION_DEFAULT_DURATION_MINUTES', 60),
         'public_calendar_url' => env('VEHICLE_RESERVATION_PUBLIC_CALENDAR_URL'),
         'teams_webhook_url' => env('TEAMS_BODEGA_RESERVAS_WEBHOOK_URL'),
     ],

@@ -89,7 +89,7 @@ class ReservaVehiculoTest extends TestCase
         $this->assertDatabaseCount('reservas_vehiculos', 2);
     }
 
-    public function test_public_portal_requires_an_explicit_range_and_only_offers_free_vehicles(): void
+    public function test_public_portal_loads_the_next_valid_range_and_only_offers_free_vehicles(): void
     {
         config(['services.reservas_vehiculos.public_calendar_url' => 'https://outlook.office365.com/owa/calendar/public/calendar.html']);
 
@@ -101,8 +101,8 @@ class ReservaVehiculoTest extends TestCase
         ]);
         app(ReservaVehiculoService::class)->crearReserva([
             'vehiculo_id' => $ocupado->id,
-            'inicio' => '2026-08-03 08:00:00',
-            'termino' => '2026-08-03 12:00:00',
+            'inicio' => '2026-08-01 09:00:00',
+            'termino' => '2026-08-01 12:00:00',
             'motivo' => 'Reserva existente de prueba',
         ], ['oid' => 'existing', 'email' => 'existente@saep.cl', 'name' => 'Usuario Existente']);
 
@@ -110,8 +110,12 @@ class ReservaVehiculoTest extends TestCase
             'oid' => 'viewer', 'email' => 'visor@saep.cl', 'name' => 'Visor QA',
         ]])->get(route('reservas-vehiculos.inicio'))
             ->assertOk()
-            ->assertSee('Ningun vehiculo aparece sin un rango consultado.')
-            ->assertDontSee('LIBR-01');
+            ->assertSee('Franja inicial sugerida')
+            ->assertSee('2026-08-01T09:00', false)
+            ->assertSee('2026-08-01T10:00', false)
+            ->assertSee('LIBR-01')
+            ->assertSee('<option value="'.$libre->id.'"', false)
+            ->assertDontSee('<option value="'.$ocupado->id.'"', false);
 
         $response = $this->withSession(['reserva_vehiculo_microsoft_identity' => [
             'oid' => 'viewer', 'email' => 'visor@saep.cl', 'name' => 'Visor QA',
@@ -134,6 +138,25 @@ class ReservaVehiculoTest extends TestCase
             ->assertDontSee('<option value="'.$ocupado->id.'"', false);
 
         $this->assertTrue($libre->exists);
+    }
+
+    public function test_service_rejects_reservations_that_start_in_the_past(): void
+    {
+        $vehiculo = Vehiculo::create([
+            'patente' => 'PASADO-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+
+        try {
+            app(ReservaVehiculoService::class)->crearReserva([
+                'vehiculo_id' => $vehiculo->id,
+                'inicio' => '2026-08-01 07:59:00',
+                'termino' => '2026-08-01 09:00:00',
+                'motivo' => 'Intento de reservar un horario anterior',
+            ], ['oid' => 'past', 'email' => 'pasado@saep.cl', 'name' => 'Usuario Pasado']);
+            $this->fail('Una reserva que comienza en el pasado debe rechazarse.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('inicio', $exception->errors());
+        }
     }
 
     public function test_confirmation_offers_a_direct_link_to_the_safe_reservation_agenda(): void

@@ -58,10 +58,21 @@ class ReservaVehiculoService
         return max(0, min(240, (int) config('services.reservas_vehiculos.buffer_minutes', 60)));
     }
 
+    public function duracionReservaPredeterminadaMinutos(): int
+    {
+        return max(30, min(480, (int) config('services.reservas_vehiculos.default_duration_minutes', 60)));
+    }
+
     public function crearReserva(array $data, array $identidad, ?User $operador = null): ReservaVehiculo
     {
         $inicio = Carbon::parse($data['inicio']);
         $termino = Carbon::parse($data['termino']);
+
+        if ($inicio->lessThan(now())) {
+            throw ValidationException::withMessages([
+                'inicio' => 'La reserva debe comenzar desde la hora actual en adelante.',
+            ]);
+        }
 
         if ($termino->lessThanOrEqualTo($inicio)) {
             throw ValidationException::withMessages([

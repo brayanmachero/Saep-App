@@ -31,6 +31,9 @@ class ReservaVehiculoPublicoController extends Controller
             'termino' => $periodo['termino'],
             'inicioInput' => $periodo['inicio_input'],
             'terminoInput' => $periodo['termino_input'],
+            'minimoInicioInput' => now()->format('Y-m-d\\TH:i'),
+            'duracionReservaPredeterminadaMinutos' => $this->reservas->duracionReservaPredeterminadaMinutos(),
+            'rangoPredeterminado' => $periodo['predeterminado'],
             'consultaDisponibilidad' => $periodo['consultada'],
             'errorPeriodo' => $periodo['error'],
             'vehiculos' => $identidad && $periodo['consultada']
@@ -152,12 +155,16 @@ class ReservaVehiculoPublicoController extends Controller
         $terminoInput = trim((string) $request->input('termino', ''));
 
         if ($inicioInput === '' && $terminoInput === '') {
+            $inicio = now()->copy()->startOfHour()->addHour();
+            $termino = $inicio->copy()->addMinutes($this->reservas->duracionReservaPredeterminadaMinutos());
+
             return [
-                'inicio' => null,
-                'termino' => null,
-                'inicio_input' => '',
-                'termino_input' => '',
-                'consultada' => false,
+                'inicio' => $inicio,
+                'termino' => $termino,
+                'inicio_input' => $inicio->format('Y-m-d\\TH:i'),
+                'termino_input' => $termino->format('Y-m-d\\TH:i'),
+                'consultada' => true,
+                'predeterminado' => true,
                 'error' => null,
             ];
         }
@@ -169,6 +176,7 @@ class ReservaVehiculoPublicoController extends Controller
                 'inicio_input' => $inicioInput,
                 'termino_input' => $terminoInput,
                 'consultada' => false,
+                'predeterminado' => false,
                 'error' => 'Selecciona las fechas y horas de inicio y termino para consultar la disponibilidad.',
             ];
         }
@@ -183,6 +191,7 @@ class ReservaVehiculoPublicoController extends Controller
                 'inicio_input' => $inicioInput,
                 'termino_input' => $terminoInput,
                 'consultada' => false,
+                'predeterminado' => false,
                 'error' => 'El rango indicado no tiene un formato de fecha y hora valido.',
             ];
         }
@@ -194,7 +203,20 @@ class ReservaVehiculoPublicoController extends Controller
                 'inicio_input' => $inicioInput,
                 'termino_input' => $terminoInput,
                 'consultada' => false,
+                'predeterminado' => false,
                 'error' => 'La fecha y hora de termino debe ser posterior al inicio.',
+            ];
+        }
+
+        if ($inicio->lessThan(now())) {
+            return [
+                'inicio' => null,
+                'termino' => null,
+                'inicio_input' => $inicioInput,
+                'termino_input' => $terminoInput,
+                'consultada' => false,
+                'predeterminado' => false,
+                'error' => 'El inicio debe ser igual o posterior a la hora actual.',
             ];
         }
 
@@ -204,6 +226,7 @@ class ReservaVehiculoPublicoController extends Controller
             'inicio_input' => $inicio->format('Y-m-d\\TH:i'),
             'termino_input' => $termino->format('Y-m-d\\TH:i'),
             'consultada' => true,
+            'predeterminado' => false,
             'error' => null,
         ];
     }
