@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class EntregaBodega extends Model
 {
@@ -22,5 +23,10 @@ class EntregaBodega extends Model
     public function items(): HasMany
     {
         return $this->hasMany(EntregaBodegaItem::class, 'entrega_bodega_id')->orderBy('linea');
+    }
+
+    public function inventarioAplicacion(): HasOne
+    {
+        return $this->hasOne(InventarioEntregaKizeoAplicacion::class, 'entrega_bodega_id');
     }
 }

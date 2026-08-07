@@ -68,13 +68,19 @@
             @endif
 
             {{-- BODEGA --}}
-            @if((auth()->user()->tieneAcceso('entregas_bodega_dashboard') && \Illuminate\Support\Facades\Route::has('entregas-bodega-dashboard.index')) || (auth()->user()->tieneAcceso('gestion_vehiculos') && \Illuminate\Support\Facades\Route::has('gestion-vehiculos.index')))
+            @if((auth()->user()->tieneAcceso('inventario_bodega') && \Illuminate\Support\Facades\Route::has('inventario-bodega.index')) || (auth()->user()->tieneAcceso('entregas_bodega_dashboard') && \Illuminate\Support\Facades\Route::has('entregas-bodega-dashboard.index')) || (auth()->user()->tieneAcceso('gestion_vehiculos') && \Illuminate\Support\Facades\Route::has('gestion-vehiculos.index')))
             <div class="nav-section" data-nav-section="bodega">
                 <button type="button" class="nav-section-toggle" aria-expanded="false">
                     <span>Bodega</span>
                     <i class="bi bi-chevron-down"></i>
                 </button>
                 <div class="nav-section-items">
+                    @if(auth()->user()->tieneAcceso('inventario_bodega') && \Illuminate\Support\Facades\Route::has('inventario-bodega.index'))
+                    <a href="{{ route('inventario-bodega.index') }}" class="nav-item {{ request()->routeIs('inventario-bodega.*') ? 'active' : '' }}">
+                        <i class="bi bi-boxes"></i>
+                        <span>Inventario</span>
+                    </a>
+                    @endif
                     @if(auth()->user()->tieneAcceso('entregas_bodega_dashboard') && \Illuminate\Support\Facades\Route::has('entregas-bodega-dashboard.index'))
                     <a href="{{ route('entregas-bodega-dashboard.index') }}" class="nav-item {{ request()->routeIs('entregas-bodega-dashboard.*') ? 'active' : '' }}">
                         <i class="bi bi-box-seam-fill"></i>
@@ -472,6 +478,11 @@
             <a href="{{ route('dashboard') }}" class="bottom-nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}">
                 <i class="bi bi-grid-fill"></i>
                 <span>Inicio</span>
+            </a>
+            @elseif(auth()->user()->tieneAcceso('inventario_bodega') && \Illuminate\Support\Facades\Route::has('inventario-bodega.index'))
+            <a href="{{ route('inventario-bodega.index') }}" class="bottom-nav-item {{ request()->routeIs('inventario-bodega.*') ? 'active' : '' }}">
+                <i class="bi bi-boxes"></i>
+                <span>Inventario</span>
             </a>
             @elseif(auth()->user()->tieneAcceso('entregas_bodega_dashboard') && \Illuminate\Support\Facades\Route::has('entregas-bodega-dashboard.index'))
             <a href="{{ route('entregas-bodega-dashboard.index') }}" class="bottom-nav-item {{ request()->routeIs('entregas-bodega-dashboard.*') ? 'active' : '' }}">

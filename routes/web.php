@@ -37,6 +37,7 @@ use App\Http\Controllers\StopDashboardController;
 use App\Http\Controllers\ObservacionConductaCcuDashboardController;
 use App\Http\Controllers\InspeccionPreventivaPdrDashboardController;
 use App\Http\Controllers\EntregaBodegaDashboardController;
+use App\Http\Controllers\InventarioBodegaController;
 use App\Http\Controllers\GestionVehiculosController;
 use App\Http\Controllers\ReservaVehiculoPublicoController;
 use App\Http\Controllers\CampoOpcionController;
@@ -472,6 +473,58 @@ Route::middleware('auth')->group(function () {
         Route::post('entregas-bodega/sync', [EntregaBodegaDashboardController::class, 'sync'])
             ->middleware('modulo:entregas_bodega_dashboard,puede_editar')
             ->name('entregas-bodega-dashboard.sync');
+      });
+
+      // --- BODEGA: INVENTARIO Y CONTEOS FISICOS ---
+      Route::middleware('modulo:inventario_bodega')->prefix('inventario-bodega')->name('inventario-bodega.')->group(function () {
+          Route::get('/', [InventarioBodegaController::class, 'index'])->name('index');
+          Route::get('exportar', [InventarioBodegaController::class, 'exportBalances'])->name('export');
+          Route::get('plantilla-productos', [InventarioBodegaController::class, 'productTemplate'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('productos.plantilla');
+          Route::post('productos/importar', [InventarioBodegaController::class, 'importProducts'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('productos.importar');
+          Route::post('ubicaciones', [InventarioBodegaController::class, 'storeLocation'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('ubicaciones.store');
+          Route::put('ubicaciones/{ubicacion}', [InventarioBodegaController::class, 'updateLocation'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('ubicaciones.update');
+          Route::post('proveedores', [InventarioBodegaController::class, 'storeProvider'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('proveedores.store');
+          Route::put('proveedores/{proveedor}', [InventarioBodegaController::class, 'updateProvider'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('proveedores.update');
+          Route::post('productos', [InventarioBodegaController::class, 'storeProduct'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('productos.store');
+          Route::put('productos/{producto}', [InventarioBodegaController::class, 'updateProduct'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('productos.update');
+          Route::post('ingresos', [InventarioBodegaController::class, 'storeReceipt'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('ingresos.store');
+          Route::post('movimientos', [InventarioBodegaController::class, 'storeMovement'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('movimientos.store');
+          Route::post('conteos', [InventarioBodegaController::class, 'storeStocktake'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('conteos.store');
+          Route::get('conteos/{conteo}', [InventarioBodegaController::class, 'showStocktake'])->name('conteos.show');
+          Route::put('conteos/{conteo}', [InventarioBodegaController::class, 'updateStocktake'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('conteos.update');
+          Route::post('conteos/{conteo}/aprobar', [InventarioBodegaController::class, 'approveStocktake'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('conteos.aprobar');
+          Route::post('entregas-kizeo/{entrega}/aplicar', [InventarioBodegaController::class, 'applyKizeoDelivery'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('entregas-kizeo.aplicar');
+          Route::post('entregas-kizeo/{aplicacion}/revertir', [InventarioBodegaController::class, 'reverseKizeoDelivery'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('entregas-kizeo.revertir');
       });
 
       // --- BODEGA: FLOTA Y RESERVAS DE VEHICULOS ---
