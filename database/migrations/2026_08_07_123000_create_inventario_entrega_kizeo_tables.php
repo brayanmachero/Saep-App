@@ -38,7 +38,7 @@ return new class extends Migration
             $table->foreignId('reverso_movimiento_id')->nullable()->constrained('inventario_movimientos')->nullOnDelete();
             $table->timestamps();
 
-            $table->unique(['aplicacion_id', 'linea_fuente']);
+            $table->unique(['aplicacion_id', 'linea_fuente'], 'inv_kizeo_lineas_app_fuente_uq');
             $table->index('variante_id');
         });
     }
