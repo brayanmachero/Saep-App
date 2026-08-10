@@ -279,7 +279,7 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertDatabaseHas('inventario_movimientos', ['tipo' => 'REVERSO', 'origen' => 'REVERSO_KIZEO_EPP', 'cantidad' => 2]);
     }
 
-    public function test_epp_roster_import_groups_sizes_as_variants_without_creating_stock(): void
+    public function test_epp_roster_import_starts_at_zero_and_can_be_loaded_later(): void
     {
         [$user, $origin] = $this->inventoryContext();
         $path = tempnam(sys_get_temp_dir(), 'epp-roster-') . '.xlsx';
@@ -309,7 +309,44 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertSame(0, $repeat['variantsCreated']);
         $this->assertSame(['39', '40'], $boots->variantes()->pluck('talla')->all());
         $this->assertDatabaseHas('inventario_productos', ['nombre' => 'Guante nitrilo', 'subcategoria' => 'Proteccion']);
-        $this->assertSame(0.0, app(InventarioStockService::class)->stockActual($origin->id, $boots->variantes()->firstOrFail()->id));
+        $service = app(InventarioStockService::class);
+        $variant = $boots->variantes()->firstOrFail();
+        $this->assertSame(0.0, $service->stockActual($origin->id, $variant->id));
+
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'OTRO',
+            'numero_documento' => 'CONTEO-01',
+            'fecha_documento' => '2026-08-10',
+            'fecha_recepcion' => '2026-08-10',
+            'observacion' => 'Carga posterior al catalogo.',
+        ], [[
+            'variante_id' => $variant->id,
+            'cantidad' => 12,
+            'costo_unitario' => null,
+        ]], $user);
+
+        $this->assertSame(12.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'tipo' => 'INGRESO_COMPRA',
+            'origen' => 'INGRESO_BODEGA',
+            'variante_id' => $variant->id,
+            'cantidad' => 12,
+        ]);
+    }
+
+    public function test_catalog_explains_how_to_load_stock_after_import(): void
+    {
+        [$user] = $this->inventoryContext();
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'catalogo']))
+            ->assertOk()
+            ->assertSee('El catalogo parte en cero.')
+            ->assertSee('Cargar desde compra')
+            ->assertSee('Cargar desde conteo');
     }
 
     private function inventoryContext(): array

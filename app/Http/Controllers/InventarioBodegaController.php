@@ -307,7 +307,7 @@ class InventarioBodegaController extends Controller
         $result = $this->stock->importProducts($request->file('archivo'), $request->user());
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'catalogo'])
-            ->with('success', "Importacion finalizada: {$result['created']} productos creados, {$result['updated']} actualizados, {$result['variantsCreated']} variantes creadas y {$result['skipped']} filas omitidas. No se registraron movimientos de stock.");
+            ->with('success', "Importacion finalizada: {$result['created']} productos creados, {$result['updated']} actualizados, {$result['variantsCreated']} variantes creadas y {$result['skipped']} filas omitidas. Todos quedan con stock 0 por ubicacion hasta registrar un ingreso, movimiento o conteo fisico.");
     }
 
     public function productTemplate()
