@@ -690,7 +690,7 @@ document.addEventListener('DOMContentLoaded', function () {
         function renderResults() {
             var query = normalizedSearch(search.value);
             var matches = selectableOptions(nativeSelect).filter(function (option) {
-                return !query || normalizedSearch(option.textContent).indexOf(query) !== -1);
+                return !query || normalizedSearch(option.textContent).indexOf(query) !== -1;
             }).slice(0, 60);
             results.replaceChildren();
 
