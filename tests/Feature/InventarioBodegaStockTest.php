@@ -408,6 +408,26 @@ class InventarioBodegaStockTest extends TestCase
             ->assertDontSee('<details class="inventory-delivery-card" open', false);
     }
 
+    public function test_article_selectors_and_long_inventory_lists_use_the_searchable_picker(): void
+    {
+        [$user] = $this->inventoryContext();
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'ingresos']))
+            ->assertOk()
+            ->assertSee('name="items[__INDEX__][variante_id]" class="form-select" required data-inventory-search-select', false)
+            ->assertSee('function shouldUseSearchSelect(nativeSelect)', false)
+            ->assertSee('return selectableOptions(nativeSelect).length > 5;', false)
+            ->assertSee("root.querySelectorAll('select.form-select')", false);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'movimientos']))
+            ->assertOk()
+            ->assertSee('name="variante_id" class="form-select" required data-inventory-search-select', false);
+    }
+
     private function inventoryContext(): array
     {
         $role = Rol::create(['codigo' => 'SUPER_ADMIN', 'nombre' => 'Super Admin']);

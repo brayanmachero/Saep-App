@@ -157,7 +157,7 @@
                         <label class="inventory-wide-label">Observacion <input name="observacion" class="form-control" maxlength="500" placeholder="Compra, reposicion u otra referencia"></label>
                         <div class="inventory-line-header"><h3>Articulos recibidos</h3><button type="button" class="btn btn-light inventory-btn inventory-add-line" data-target="receipt-lines"><i class="bi bi-plus-lg"></i>Agregar articulo</button></div>
                         <div id="receipt-lines" class="inventory-lines"></div>
-                        <template id="receipt-line-template"><div class="inventory-line"><label>Articulo<select name="items[__INDEX__][variante_id]" class="form-select" required><option value="">Selecciona articulo y talla</option>@foreach($variantOptions as $variant)<option value="{{ $variant->id }}">{{ $variant->producto->codigo }} - {{ $variant->producto->nombre }} · {{ $variant->talla }}</option>@endforeach</select></label><label>Cantidad<input name="items[__INDEX__][cantidad]" type="number" min="0.001" step="0.001" class="form-control" required></label><label>Costo unitario<input name="items[__INDEX__][costo_unitario]" type="number" min="0" step="0.01" class="form-control" placeholder="Opcional"></label><button type="button" class="btn btn-light inventory-icon-btn inventory-remove-line" title="Quitar articulo"><i class="bi bi-trash3"></i></button></div></template>
+                        <template id="receipt-line-template"><div class="inventory-line"><label>Articulo<select name="items[__INDEX__][variante_id]" class="form-select" required data-inventory-search-select data-search-placeholder="Buscar por codigo, articulo o talla"><option value="">Selecciona articulo y talla</option>@foreach($variantOptions as $variant)<option value="{{ $variant->id }}">{{ $variant->producto->codigo }} - {{ $variant->producto->nombre }} · {{ $variant->talla }}</option>@endforeach</select></label><label>Cantidad<input name="items[__INDEX__][cantidad]" type="number" min="0.001" step="0.001" class="form-control" required></label><label>Costo unitario<input name="items[__INDEX__][costo_unitario]" type="number" min="0" step="0.01" class="form-control" placeholder="Opcional"></label><button type="button" class="btn btn-light inventory-icon-btn inventory-remove-line" title="Quitar articulo"><i class="bi bi-trash3"></i></button></div></template>
                         <div class="inventory-form-actions"><button type="submit" class="btn btn-primary inventory-btn"><i class="bi bi-check2-circle"></i>Guardar ingreso</button></div>
                     </form>
                 @endif
@@ -182,7 +182,7 @@
                             <label>Tipo de movimiento<select name="tipo" class="form-select" id="movement-type" required><option value="ENTREGA_EPP">Entrega EPP</option><option value="DESPACHO_CENTRO">Despacho a centro</option><option value="TRASLADO">Traslado entre ubicaciones</option><option value="AJUSTE_POSITIVO">Ajuste positivo</option><option value="AJUSTE_NEGATIVO">Ajuste negativo</option><option value="STOCK_INICIAL">Carga de stock inicial</option></select></label>
                             <label>Ubicacion de origen<select name="ubicacion_id" class="form-select" required><option value="">Selecciona ubicacion</option>@foreach($activeLocations as $location)<option value="{{ $location->id }}">{{ $location->nombre }}</option>@endforeach</select></label>
                             <label data-movement-destination hidden>Ubicacion de destino<select name="ubicacion_destino_id" class="form-select"><option value="">Selecciona ubicacion</option>@foreach($activeLocations as $location)<option value="{{ $location->id }}">{{ $location->nombre }}</option>@endforeach</select></label>
-                            <label>Articulo<select name="variante_id" class="form-select" required><option value="">Selecciona articulo y talla</option>@foreach($variantOptions as $variant)<option value="{{ $variant->id }}">{{ $variant->producto->codigo }} - {{ $variant->producto->nombre }} · {{ $variant->talla }}</option>@endforeach</select></label>
+                            <label>Articulo<select name="variante_id" class="form-select" required data-inventory-search-select data-search-placeholder="Buscar por codigo, articulo o talla"><option value="">Selecciona articulo y talla</option>@foreach($variantOptions as $variant)<option value="{{ $variant->id }}">{{ $variant->producto->codigo }} - {{ $variant->producto->nombre }} · {{ $variant->talla }}</option>@endforeach</select></label>
                             <label>Cantidad<input name="cantidad" type="number" min="0.001" step="0.001" class="form-control" required></label>
                             <label>Fecha y hora<input name="ocurrido_en" type="datetime-local" value="{{ now()->format('Y-m-d\\TH:i') }}" class="form-control" required></label>
                             <label>Persona o destinatario<input name="destinatario_nombre" class="form-control" maxlength="200" placeholder="Para entrega EPP"></label>
@@ -412,7 +412,7 @@
     .inventory-form { display:grid; gap:.85rem; }.inventory-form-grid { display:grid; gap:.75rem; min-width:0; }.inventory-form-grid.two { grid-template-columns:repeat(2,minmax(0,1fr)); }.inventory-form-grid.three { grid-template-columns:repeat(3,minmax(0,1fr)); }.inventory-form label,.inventory-editor > label,.inventory-inline-editor > label { min-width:0; max-width:100%; margin:0; }.inventory-form-grid .form-control,.inventory-form-grid .form-select,.inventory-editor > label .form-control,.inventory-editor > label .form-select,.inventory-inline-editor > label .form-control,.inventory-inline-editor > label .form-select { box-sizing:border-box; max-width:100%; width:100%; }.inventory-wide-label { display:block; }.inventory-checkbox { display:flex; gap:.55rem; align-items:center; padding-top:1.65rem; text-transform:none!important; letter-spacing:0!important; font-size:.84rem!important; }.inventory-checkbox input { width:1rem; height:1rem; }.inventory-line-header { justify-content:space-between; gap:.8rem; }.inventory-line-header h3,.inventory-compact-form h3,.inventory-list-panel h3 { font-size:.9rem; font-weight:800; margin:0; }.inventory-lines { display:grid; gap:.55rem; }.inventory-line { display:grid; grid-template-columns:minmax(230px,1fr) 125px 145px 2.55rem; gap:.55rem; align-items:end; padding:.65rem; background:#f8fafc; border:1px solid #e3e8f1; border-radius:.5rem; }.inventory-form-actions { justify-content:flex-end; border-top:1px solid #e8edf4; padding-top:.8rem; }.inventory-notice { display:flex; gap:.5rem; align-items:center; background:#fff8e8; border:1px solid #f7d48b; color:#80520e; border-radius:.45rem; padding:.75rem; font-size:.84rem; }
     .inventory-catalog-grid { display:grid; gap:.75rem; min-width:0; }.inventory-details { min-width:0; border:1px solid #e1e6ef; border-radius:.55rem; }.inventory-details summary { cursor:pointer; list-style:none; padding:.82rem .9rem; display:flex; justify-content:space-between; align-items:center; color:#25324b; font-weight:800; font-size:.9rem; }.inventory-details summary::-webkit-details-marker { display:none; }.inventory-details summary span { display:flex; align-items:center; gap:.55rem; }.inventory-details[open] summary { border-bottom:1px solid #e4e9f1; }.inventory-details[open] summary > .bi-chevron-down { transform:rotate(180deg); }.inventory-details-body { min-width:0; padding:.9rem; }.inventory-split-forms { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; min-width:0; }.inventory-compact-form { display:grid; gap:.75rem; min-width:0; padding:.85rem; background:#f8fafc; border:1px solid #e3e8f1; border-radius:.5rem; }.inventory-compact-form p { margin:0; font-size:.82rem; color:#68758b; line-height:1.45; }.inventory-import-flow { display:flex; gap:.55rem; align-items:flex-start; padding:.65rem .7rem; border:1px solid #d9d4ff; background:#f6f4ff; border-radius:.45rem; color:#4a347e; }.inventory-import-flow > i { color:#5a35ba; font-size:1rem; line-height:1.25; }.inventory-import-flow strong,.inventory-import-flow span { display:block; }.inventory-import-flow strong { color:#30215f; font-size:.78rem; }.inventory-import-flow span { margin-top:.12rem; font-size:.76rem; line-height:1.35; }.inventory-import-actions { display:flex; flex-wrap:wrap; gap:.7rem; }.inventory-list-panel { min-width:0; padding:.85rem; border:1px solid #e3e8f1; border-radius:.5rem; }.inventory-list-panel h3 { margin-bottom:.55rem; }.inventory-list-row { justify-content:space-between; gap:.75rem; padding:.62rem 0; border-bottom:1px solid #edf0f4; }.inventory-list-row:last-child { border-bottom:0; }.inventory-list-row strong { display:block; font-size:.84rem; }.inventory-list-row small { display:block; color:#748198; font-size:.76rem; margin-top:.13rem; }.inventory-product-search { display:flex; gap:.55rem; min-width:0; margin:1rem 0 .65rem; }.inventory-product-search .form-control { max-width:390px; }.inventory-pagination { margin-top:.75rem; }.inventory-editor,.inventory-inline-editor { display:grid; gap:.7rem; min-width:0; margin-top:1rem; padding:.85rem; background:#f5f3ff; border:1px solid #ded5ff; border-radius:.5rem; }.inventory-editor p { margin:.2rem 0 0; color:#665b84; font-size:.8rem; }.inventory-inline-editor { margin-top:.75rem; }.inventory-editor .inventory-btn,.inventory-inline-editor .inventory-btn { justify-self:end; }
     .inventory-kizeo-intro { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.1rem; background:#f2f6ff; border:1px solid #dbe5fb; border-left:4px solid #2563eb; border-radius:.65rem; margin-bottom:1rem; }.inventory-kizeo-intro h2 { font-size:1.05rem; margin:0 0 .22rem; font-weight:800; }.inventory-kizeo-intro p:not(.inventory-kicker) { color:#61708b; font-size:.83rem; margin:0; max-width:720px; }.inventory-kizeo-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }.inventory-kizeo-notice { display:flex; align-items:flex-start; gap:.65rem; padding:.8rem 1rem; background:#fff8e8; border:1px solid #f2d392; border-radius:.6rem; color:#71501a; margin-bottom:1rem; font-size:.82rem; }.inventory-kizeo-notice i { color:#d17913; margin-top:.05rem; }.inventory-kizeo-notice strong,.inventory-kizeo-notice span { display:block; }.inventory-kizeo-notice span { margin-top:.12rem; line-height:1.45; }.inventory-kizeo-queue { display:grid; gap:.85rem; }.inventory-delivery-card { background:#fff; border:1px solid #dfe6f0; border-radius:.65rem; box-shadow:0 .35rem 1rem rgba(29,41,67,.04); overflow:hidden; }.inventory-delivery-card.needs-review { border-color:#f0bf74; }.inventory-delivery-header { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; padding:.9rem 1rem; border-bottom:1px solid #e7ecf3; }.inventory-delivery-header h3 { margin:.25rem 0 .12rem; font-size:.95rem; font-weight:800; }.inventory-delivery-header p { color:#708099; font-size:.78rem; margin:0; }.inventory-delivery-status { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:.55rem; }.inventory-kizeo-form { display:grid; gap:.75rem; padding:.9rem 1rem 1rem; }.inventory-kizeo-form-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.inventory-kizeo-form-heading label { display:grid; gap:.28rem; min-width:280px; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-kizeo-form-heading .form-select { min-height:2.42rem; font-size:.88rem; letter-spacing:0; text-transform:none; }.inventory-kizeo-form-heading p { color:#738097; font-size:.79rem; margin:0; max-width:460px; line-height:1.4; }.inventory-delivery-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; background:#e4eaf2; }.inventory-delivery-summary > div { padding:.7rem 1rem; background:#fbfcfe; }.inventory-delivery-summary span { display:block; color:#748198; font-size:.68rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-delivery-summary strong { display:block; color:#273450; font-size:.82rem; margin-top:.18rem; }.inventory-source-warning { display:flex; gap:.55rem; margin:.8rem 1rem 0; padding:.7rem .8rem; background:#fff4e5; border-left:3px solid #e88120; color:#875115; font-size:.8rem; line-height:1.4; }.inventory-reverse-details { margin:.75rem 1rem 1rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:.5rem; }.inventory-reverse-details summary { cursor:pointer; display:flex; align-items:center; gap:.48rem; padding:.65rem .75rem; color:#4f3b78; font-size:.8rem; font-weight:800; }.inventory-reverse-form { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:.65rem; padding:.1rem .75rem .75rem; }.inventory-reverse-form label { display:grid; gap:.28rem; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-reverse-form .form-control { min-height:2.42rem; font-size:.88rem; letter-spacing:0; text-transform:none; }
-    .inventory-delivery-card.has-open-search-select { position:relative; z-index:4; overflow:visible; }.inventory-search-select { position:relative; min-width:230px; }.inventory-search-select-native { position:absolute!important; width:1px!important; height:1px!important; margin:-1px!important; padding:0!important; overflow:hidden!important; clip:rect(0 0 0 0)!important; white-space:nowrap!important; border:0!important; }.inventory-search-select-trigger { width:100%; min-height:2.42rem; display:flex; align-items:flex-start; justify-content:space-between; gap:.65rem; padding:.48rem .65rem; color:#25334f; background:#fff; border:1px solid #cfd8e6; border-radius:.45rem; text-align:left; font-size:.82rem; line-height:1.35; }.inventory-search-select-trigger:hover { border-color:#9eadd0; }.inventory-search-select-trigger:focus-visible { outline:0; border-color:#7250ca; box-shadow:0 0 0 .16rem rgba(114,80,202,.12); }.inventory-search-select-trigger > span { min-width:0; overflow-wrap:anywhere; }.inventory-search-select-trigger > i { color:#5b6780; font-size:.9rem; flex:0 0 auto; margin-top:.15rem; }.inventory-search-select.is-invalid .inventory-search-select-trigger { border-color:#d63946; box-shadow:0 0 0 .16rem rgba(214,57,70,.12); }.inventory-search-select-menu { position:absolute; z-index:30; top:calc(100% + .3rem); right:0; width:max(100%, min(40rem, calc(100vw - 2rem))); padding:.55rem; background:#fff; border:1px solid #cfd8e6; border-radius:.55rem; box-shadow:0 .75rem 1.7rem rgba(28,39,63,.2); }.inventory-search-select-menu[hidden] { display:none; }.inventory-search-select-search { width:100%; min-height:2.35rem; padding:.46rem .62rem; color:#25334f; background:#fbfcfe; border:1px solid #d5deeb; border-radius:.4rem; font-size:.84rem; }.inventory-search-select-search:focus { outline:0; border-color:#7250ca; box-shadow:0 0 0 .16rem rgba(114,80,202,.12); }.inventory-search-select-results { max-height:16rem; margin-top:.45rem; overflow:auto; overscroll-behavior:contain; }.inventory-search-select-option,.inventory-search-select-empty { width:100%; padding:.5rem .6rem; border:0; border-radius:.35rem; text-align:left; font-size:.8rem; line-height:1.35; }.inventory-search-select-option { color:#25334f; background:transparent; }.inventory-search-select-option:hover,.inventory-search-select-option:focus-visible { color:#23085d; background:#f3f0ff; outline:0; }.inventory-search-select-option.is-selected { color:#321170; background:#eee8ff; font-weight:800; }.inventory-search-select-option span { display:block; overflow-wrap:anywhere; }.inventory-search-select-empty { color:#718096; font-style:italic; }.inventory-search-select-help { display:block; margin:.38rem .1rem 0; color:#6d7a91; font-size:.7rem; line-height:1.35; }
+    .inventory-delivery-card.has-open-search-select { position:relative; z-index:4; overflow:visible; }.inventory-search-select { position:relative; min-width:230px; }.inventory-search-select-native { position:absolute!important; width:1px!important; height:1px!important; margin:-1px!important; padding:0!important; overflow:hidden!important; clip:rect(0 0 0 0)!important; white-space:nowrap!important; border:0!important; }.inventory-search-select-trigger { width:100%; min-height:2.42rem; display:flex; align-items:flex-start; justify-content:space-between; gap:.65rem; padding:.48rem .65rem; color:#25334f; background:#fff; border:1px solid #cfd8e6; border-radius:.45rem; text-align:left; font-size:.82rem; line-height:1.35; }.inventory-search-select-trigger:hover { border-color:#9eadd0; }.inventory-search-select-trigger:focus-visible { outline:0; border-color:#7250ca; box-shadow:0 0 0 .16rem rgba(114,80,202,.12); }.inventory-search-select-trigger > span { min-width:0; overflow-wrap:anywhere; }.inventory-search-select-trigger > i { color:#5b6780; font-size:.9rem; flex:0 0 auto; margin-top:.15rem; }.inventory-search-select.is-invalid .inventory-search-select-trigger { border-color:#d63946; box-shadow:0 0 0 .16rem rgba(214,57,70,.12); }.inventory-search-select-menu { position:absolute; z-index:30; top:calc(100% + .3rem); right:0; width:max(100%, min(40rem, calc(100vw - 2rem))); padding:.55rem; background:#fff; border:1px solid #cfd8e6; border-radius:.55rem; box-shadow:0 .75rem 1.7rem rgba(28,39,63,.2); }.inventory-search-select-menu.is-portal { position:fixed; z-index:1055; max-height:calc(100vh - 2rem); }.inventory-search-select-menu[hidden] { display:none; }.inventory-search-select-search { width:100%; min-height:2.35rem; padding:.46rem .62rem; color:#25334f; background:#fbfcfe; border:1px solid #d5deeb; border-radius:.4rem; font-size:.84rem; }.inventory-search-select-search:focus { outline:0; border-color:#7250ca; box-shadow:0 0 0 .16rem rgba(114,80,202,.12); }.inventory-search-select-results { max-height:16rem; margin-top:.45rem; overflow:auto; overscroll-behavior:contain; }.inventory-search-select-option,.inventory-search-select-empty { width:100%; padding:.5rem .6rem; border:0; border-radius:.35rem; text-align:left; font-size:.8rem; line-height:1.35; }.inventory-search-select-option { color:#25334f; background:transparent; }.inventory-search-select-option:hover,.inventory-search-select-option:focus-visible { color:#23085d; background:#f3f0ff; outline:0; }.inventory-search-select-option.is-selected { color:#321170; background:#eee8ff; font-weight:800; }.inventory-search-select-option span { display:block; overflow-wrap:anywhere; }.inventory-search-select-empty { color:#718096; font-style:italic; }.inventory-search-select-help { display:block; margin:.38rem .1rem 0; color:#6d7a91; font-size:.7rem; line-height:1.35; }
     body.dark-mode .inventory-page { min-height:100%; background:#111827; color:#f8fafc; }.dark-mode .inventory-heading h1,.dark-mode .inventory-section-title h2,.dark-mode .inventory-kpi strong,.dark-mode .inventory-delivery-card h3,.dark-mode .inventory-delivery-summary strong,.dark-mode .inventory-details summary,.dark-mode .inventory-list-row strong,.dark-mode .inventory-import-flow strong { color:#f8fafc; }.dark-mode .inventory-heading p:not(.inventory-kicker),.dark-mode .inventory-section-title p,.dark-mode .inventory-count,.dark-mode .inventory-kpi span,.dark-mode .inventory-kpi small,.dark-mode .inventory-table th,.dark-mode .inventory-table td small,.dark-mode .inventory-empty,.dark-mode .inventory-empty-copy,.dark-mode .inventory-delivery-header p,.dark-mode .inventory-kizeo-form-heading p,.dark-mode .inventory-delivery-summary span { color:#aeb9cc; }.dark-mode .inventory-tabs { border-color:rgba(255,255,255,.14); }.dark-mode .inventory-tab { color:#aeb9cc; }.dark-mode .inventory-tab:hover,.dark-mode .inventory-tab.active,.dark-mode .inventory-link { color:#c4b5fd; }.dark-mode .inventory-section,.dark-mode .inventory-kpi,.dark-mode .inventory-delivery-card { background:#1f2937; border-color:#374151; box-shadow:0 .4rem 1.2rem rgba(0,0,0,.16); }.dark-mode .inventory-table th,.dark-mode .inventory-table td,.dark-mode .inventory-delivery-header { border-color:#374151; }.dark-mode .inventory-code { color:#c4b5fd; }.dark-mode .inventory-side-note,.dark-mode .inventory-editor,.dark-mode .inventory-inline-editor,.dark-mode .inventory-import-flow { background:rgba(135,87,236,.12); border-color:rgba(167,139,250,.25); color:#ddd6fe; }.dark-mode .inventory-side-note strong { color:#f8fafc; }.dark-mode .inventory-line,.dark-mode .inventory-compact-form,.dark-mode .inventory-reverse-details { background:rgba(255,255,255,.035); border-color:#374151; }.dark-mode .inventory-list-panel,.dark-mode .inventory-details { border-color:#374151; }.dark-mode .inventory-list-row { border-color:rgba(255,255,255,.09); }.dark-mode .inventory-kizeo-intro { background:#172554; border-color:#3b82f6; }.dark-mode .inventory-kizeo-intro h2 { color:#f8fafc; }.dark-mode .inventory-kizeo-intro p:not(.inventory-kicker) { color:#bfdbfe; }.dark-mode .inventory-delivery-summary { background:#374151; }.dark-mode .inventory-delivery-summary > div { background:rgba(255,255,255,.035); }.dark-mode .inventory-kizeo-notice,.dark-mode .inventory-notice { background:#443107; border-color:#a16207; color:#fde68a; }.dark-mode .inventory-source-warning { background:#542a0b; color:#fed7aa; }.dark-mode .inventory-status.is-empty { background:rgba(148,163,184,.16); color:#cbd5e1; }.dark-mode .inventory-status.is-review { background:rgba(139,92,246,.2); color:#ddd6fe; }.dark-mode .inventory-search-select-trigger,.dark-mode .inventory-search-select-menu,.dark-mode .inventory-search-select-search { color:#e5edf9; background:#111827; border-color:#475569; }.dark-mode .inventory-search-select-trigger > i { color:#aeb9cc; }.dark-mode .inventory-search-select-trigger:hover { border-color:#7484a0; }.dark-mode .inventory-search-select-option { color:#e5edf9; }.dark-mode .inventory-search-select-option:hover,.dark-mode .inventory-search-select-option:focus-visible { color:#fff; background:#312252; }.dark-mode .inventory-search-select-option.is-selected { color:#ede9fe; background:#3b2b62; }.dark-mode .inventory-search-select-empty,.dark-mode .inventory-search-select-help { color:#aeb9cc; }
     @container (max-width: 1050px) { .inventory-kpis,.inventory-kizeo-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }.inventory-workspace { grid-template-columns:1fr; }.inventory-side-note { display:flex; align-items:center; }.inventory-side-note strong { margin-right:.3rem; }.inventory-side-note span { flex:1; }.inventory-delivery-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
     @container (max-width: 760px) { .inventory-page { padding:1rem .85rem 5rem; }.inventory-heading { align-items:flex-start; flex-direction:column; gap:.8rem; }.inventory-header-actions { justify-content:flex-start; width:100%; }.inventory-header-actions .inventory-btn { flex:1; }.inventory-onboarding { align-items:flex-start; flex-wrap:wrap; }.inventory-onboarding .btn { margin-left:3.55rem; }.inventory-filter-grid { align-items:stretch; }.inventory-filter-grid .inventory-btn { flex:1; }.inventory-form-grid.two,.inventory-form-grid.three,.inventory-split-forms { grid-template-columns:1fr; }.inventory-line { grid-template-columns:1fr 1fr 2.55rem; }.inventory-line > label:first-child { grid-column:1/-1; }.inventory-line > label:nth-child(3) { grid-column:1/3; }.inventory-line > button { grid-column:3; grid-row:2; }.inventory-kpis,.inventory-kizeo-kpis { grid-template-columns:1fr 1fr; }.inventory-section { padding:.8rem; }.inventory-section-title { align-items:flex-start; }.inventory-side-note { align-items:flex-start; flex-wrap:wrap; }.inventory-side-note span { width:100%; }.inventory-product-search .form-control { max-width:none; }.inventory-tab { padding:.65rem .7rem; }.inventory-kizeo-intro,.inventory-delivery-header,.inventory-kizeo-form-heading { align-items:flex-start; flex-direction:column; }.inventory-kizeo-intro .btn { width:100%; }.inventory-delivery-status { justify-content:flex-start; }.inventory-kizeo-form-heading label { min-width:0; width:100%; }.inventory-reverse-form { grid-template-columns:1fr; }.inventory-reverse-form .inventory-btn { width:100%; }.inventory-delivery-summary { grid-template-columns:1fr 1fr; }.inventory-kizeo-form .inventory-table { min-width:0; }.inventory-kizeo-form .inventory-table thead { display:none; }.inventory-kizeo-form .inventory-table tbody { display:grid; gap:.65rem; }.inventory-kizeo-form .inventory-table tbody tr { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.3rem .65rem; padding:.7rem; border:1px solid #e1e6f1; border-radius:.5rem; background:#f8fafc; }.inventory-kizeo-form .inventory-table tbody td { display:block; padding:0; border:0; }.inventory-kizeo-form .inventory-table tbody td:first-child { grid-column:1/-1; }.inventory-kizeo-form .inventory-table tbody td:nth-child(2)::before { content:'Talla: '; color:#718096; font-weight:700; }.inventory-kizeo-form .inventory-table tbody td:nth-child(3)::before { content:'Cantidad: '; color:#718096; font-weight:700; }.inventory-kizeo-form .inventory-table tbody td:nth-child(4) { grid-column:1/-1; margin-top:.25rem; }.inventory-kizeo-form .inventory-table tbody td:nth-child(4)::before { content:'Relacion con inventario'; display:block; margin-bottom:.28rem; color:#53627d; font-size:.68rem; font-weight:800; letter-spacing:.035em; text-align:left; text-transform:uppercase; }.dark-mode .inventory-kizeo-form .inventory-table tbody tr { background:rgba(255,255,255,.035); border-color:#374151; }.dark-mode .inventory-kizeo-form .inventory-table tbody td:nth-child(2)::before,.dark-mode .inventory-kizeo-form .inventory-table tbody td:nth-child(3)::before,.dark-mode .inventory-kizeo-form .inventory-table tbody td:nth-child(4)::before { color:#aeb9cc; } }
@@ -520,8 +520,9 @@ document.addEventListener('DOMContentLoaded', function () {
         var fragment = template.content.cloneNode(true);
         fragment.firstElementChild.innerHTML = fragment.firstElementChild.innerHTML.replaceAll('__INDEX__', nextIndex++);
         lines.appendChild(fragment);
+        setupSearchSelects(lines.lastElementChild);
     }
-    if (addButton) { addButton.addEventListener('click', addLine); addLine(); }
+    if (addButton) { addButton.addEventListener('click', addLine); }
     document.addEventListener('click', function (event) { if (event.target.closest('.inventory-remove-line')) { event.target.closest('.inventory-line').remove(); } });
     var type = document.getElementById('movement-type');
     var destination = document.querySelector('[data-movement-destination]');
@@ -554,6 +555,28 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     var searchableSelects = [];
+    function selectableOptions(nativeSelect) {
+        return Array.prototype.slice.call(nativeSelect.options).filter(function (option) {
+            return option.value && !option.disabled;
+        });
+    }
+
+    function shouldUseSearchSelect(nativeSelect) {
+        if (nativeSelect.dataset.inventorySearchIgnore === 'true') return false;
+        return selectableOptions(nativeSelect).length > 5;
+    }
+
+    function setupSearchSelects(container) {
+        var root = container || document.querySelector('.inventory-page');
+        if (!root) return;
+
+        root.querySelectorAll('select.form-select').forEach(function (nativeSelect) {
+            if (shouldUseSearchSelect(nativeSelect)) {
+                setupSearchSelect(nativeSelect, searchableSelects.length);
+            }
+        });
+    }
+
     function closeSearchSelect(component) {
         component.menu.hidden = true;
         component.wrapper.classList.remove('is-open');
@@ -568,7 +591,33 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    function positionSearchSelectMenu(component) {
+        if (component.menu.hidden) return;
+
+        var triggerBounds = component.trigger.getBoundingClientRect();
+        var viewportPadding = 16;
+        var availableWidth = Math.max(1, window.innerWidth - (viewportPadding * 2));
+        var menuWidth = Math.min(Math.max(triggerBounds.width, 280), Math.min(640, availableWidth));
+        var menuLeft = Math.min(
+            Math.max(viewportPadding, triggerBounds.right - menuWidth),
+            window.innerWidth - menuWidth - viewportPadding
+        );
+
+        component.menu.style.width = menuWidth + 'px';
+        component.menu.style.left = menuLeft + 'px';
+        component.menu.style.right = 'auto';
+        component.menu.style.top = (triggerBounds.bottom + 5) + 'px';
+
+        var menuBounds = component.menu.getBoundingClientRect();
+        if (menuBounds.bottom > window.innerHeight - viewportPadding && triggerBounds.top - menuBounds.height - 5 >= viewportPadding) {
+            component.menu.style.top = Math.max(viewportPadding, triggerBounds.top - menuBounds.height - 5) + 'px';
+        }
+    }
+
     function setupSearchSelect(nativeSelect, index) {
+        if (nativeSelect.dataset.inventorySearchReady === 'true') return;
+        nativeSelect.dataset.inventorySearchReady = 'true';
+
         var originalRequired = nativeSelect.required;
         var wrapper = document.createElement('div');
         var trigger = document.createElement('button');
@@ -590,11 +639,13 @@ document.addEventListener('DOMContentLoaded', function () {
         trigger.className = 'inventory-search-select-trigger';
         trigger.setAttribute('aria-haspopup', 'listbox');
         trigger.setAttribute('aria-expanded', 'false');
-        trigger.setAttribute('aria-label', 'Seleccionar articulo y talla');
+        var searchPlaceholder = nativeSelect.dataset.searchPlaceholder || 'Buscar una opcion';
+        var searchLabel = nativeSelect.dataset.searchLabel || 'opcion';
+        trigger.setAttribute('aria-label', 'Buscar ' + searchLabel);
         trigger.appendChild(triggerLabel);
         var triggerIcon = document.createElement('i');
         triggerIcon.className = 'bi bi-search';
-        trigger.setAttribute('title', 'Buscar articulo y talla');
+        trigger.setAttribute('title', 'Buscar ' + searchLabel);
         trigger.appendChild(triggerIcon);
 
         menu.className = 'inventory-search-select-menu';
@@ -604,14 +655,16 @@ document.addEventListener('DOMContentLoaded', function () {
         search.type = 'search';
         search.className = 'inventory-search-select-search';
         search.autocomplete = 'off';
-        search.placeholder = nativeSelect.dataset.searchPlaceholder || 'Buscar una opcion';
+        search.placeholder = searchPlaceholder;
         search.setAttribute('aria-label', search.placeholder);
         results.className = 'inventory-search-select-results';
         results.setAttribute('role', 'listbox');
         help.className = 'inventory-search-select-help';
-        help.textContent = 'Busca por codigo, articulo o talla.';
+        help.textContent = nativeSelect.dataset.searchHelp || 'Escribe para filtrar las opciones.';
         menu.append(search, results, help);
-        wrapper.append(trigger, menu);
+        wrapper.appendChild(trigger);
+        menu.classList.add('is-portal');
+        document.body.appendChild(menu);
 
         component = { nativeSelect: nativeSelect, wrapper: wrapper, trigger: trigger, triggerLabel: triggerLabel, menu: menu, search: search, results: results, originalRequired: originalRequired };
         searchableSelects.push(component);
@@ -636,15 +689,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
         function renderResults() {
             var query = normalizedSearch(search.value);
-            var matches = Array.prototype.slice.call(nativeSelect.options).filter(function (option) {
-                return option.value && (!query || normalizedSearch(option.textContent).indexOf(query) !== -1);
+            var matches = selectableOptions(nativeSelect).filter(function (option) {
+                return !query || normalizedSearch(option.textContent).indexOf(query) !== -1);
             }).slice(0, 60);
             results.replaceChildren();
 
             if (!matches.length) {
                 var empty = document.createElement('div');
                 empty.className = 'inventory-search-select-empty';
-                empty.textContent = 'No hay articulos o tallas que coincidan.';
+                empty.textContent = 'No hay opciones que coincidan.';
                 results.appendChild(empty);
                 return;
             }
@@ -672,6 +725,7 @@ document.addEventListener('DOMContentLoaded', function () {
             trigger.setAttribute('aria-expanded', 'true');
             search.value = '';
             renderResults();
+            positionSearchSelectMenu(component);
             window.requestAnimationFrame(function () { search.focus(); });
         }
 
@@ -703,20 +757,30 @@ document.addEventListener('DOMContentLoaded', function () {
             syncSelectedOption();
             trigger.setAttribute('aria-expanded', 'false');
         });
-        nativeSelect.closest('form').addEventListener('submit', function (event) {
-            if (originalRequired && !nativeSelect.value) {
-                event.preventDefault();
-                wrapper.classList.add('is-invalid');
-                openSearchSelect();
-            }
-        });
+        var form = nativeSelect.closest('form');
+        if (form) {
+            form.addEventListener('submit', function (event) {
+                if (originalRequired && !nativeSelect.value) {
+                    event.preventDefault();
+                    wrapper.classList.add('is-invalid');
+                    openSearchSelect();
+                }
+            });
+        }
         syncSelectedOption();
     }
 
-    document.querySelectorAll('[data-inventory-search-select]').forEach(setupSearchSelect);
+    setupSearchSelects();
+    if (addButton) addLine();
+    window.addEventListener('resize', function () {
+        searchableSelects.forEach(positionSearchSelectMenu);
+    });
+    window.addEventListener('scroll', function () {
+        searchableSelects.forEach(positionSearchSelectMenu);
+    }, true);
     document.addEventListener('click', function (event) {
         searchableSelects.forEach(function (component) {
-            if (!component.wrapper.contains(event.target)) closeSearchSelect(component);
+            if (!component.wrapper.contains(event.target) && !component.menu.contains(event.target)) closeSearchSelect(component);
         });
     });
 });
