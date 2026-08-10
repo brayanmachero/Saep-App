@@ -44,12 +44,22 @@ use App\Http\Controllers\CampoOpcionController;
 use App\Http\Controllers\MisFormulariosController;
 use App\Http\Controllers\ContratacionController;
 use App\Http\Controllers\ContratacionPublicoController;
+use App\Http\Controllers\ReclutamientoWhatsappController;
+use App\Http\Controllers\ReclutamientoWhatsappWebhookController;
 use App\Http\Controllers\GrafanaController;
 use Illuminate\Support\Facades\Route;
 
 // --- WEBHOOK KIZEO (público, sin auth ni CSRF) ---
 Route::post('/api/kizeo/webhook/{secret?}', [KizeoWebhookController::class, 'handle'])
     ->name('kizeo.webhook')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
+// Webhook público de Meta WhatsApp Cloud API. La verificación usa el token
+// configurado en Ploi y los POST posteriores validan la firma HMAC de Meta.
+Route::get('/api/reclutamiento/whatsapp/webhook', [ReclutamientoWhatsappWebhookController::class, 'verify'])
+    ->name('reclutamiento-whatsapp.webhook.verify');
+Route::post('/api/reclutamiento/whatsapp/webhook', [ReclutamientoWhatsappWebhookController::class, 'handle'])
+    ->name('reclutamiento-whatsapp.webhook.handle')
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 
 // Auth (con throttle para prevenir fuerza bruta)
@@ -732,6 +742,32 @@ Route::middleware('auth')->group(function () {
         Route::get('kanban/{kanban}/actividad', [\App\Http\Controllers\KanbanController::class, 'actividad'])->name('kanban.actividad');
         // Calendario API
         Route::get('kanban/{kanban}/calendar-data', [\App\Http\Controllers\KanbanController::class, 'calendarData'])->name('kanban.calendar-data');
+    });
+
+    // --- RECLUTAMIENTO WHATSAPP (RRHH) ---
+    Route::middleware('modulo:reclutamiento_whatsapp')->prefix('reclutamiento/whatsapp')->name('reclutamiento-whatsapp.')->group(function () {
+        Route::get('/', [ReclutamientoWhatsappController::class, 'index'])->name('index');
+        Route::post('/contactos', [ReclutamientoWhatsappController::class, 'storeContacto'])
+            ->middleware('modulo:reclutamiento_whatsapp,puede_crear')->name('contactos.store');
+        Route::post('/contactos/importar', [ReclutamientoWhatsappController::class, 'importarContactos'])
+            ->middleware('modulo:reclutamiento_whatsapp,puede_crear')->name('contactos.importar');
+        Route::patch('/contactos/{contacto}/revocar', [ReclutamientoWhatsappController::class, 'revocarContacto'])
+            ->middleware('modulo:reclutamiento_whatsapp,puede_editar')->name('contactos.revocar');
+        Route::post('/campanias', [ReclutamientoWhatsappController::class, 'storeCampania'])
+            ->middleware('modulo:reclutamiento_whatsapp,puede_crear')->name('campanias.store');
+        Route::patch('/campanias/{campania}/aprobar', [ReclutamientoWhatsappController::class, 'aprobarCampania'])
+            ->middleware('modulo:reclutamiento_whatsapp,puede_editar')->name('campanias.aprobar');
+        Route::patch('/campanias/{campania}/programar', [ReclutamientoWhatsappController::class, 'programarCampania'])
+            ->middleware('modulo:reclutamiento_whatsapp,puede_editar')->name('campanias.programar');
+        Route::post('/plantillas/sincronizar', [ReclutamientoWhatsappController::class, 'sincronizarPlantillas'])
+            ->middleware('modulo:reclutamiento_whatsapp,puede_editar')->name('plantillas.sincronizar');
+        Route::get('/bandeja', [ReclutamientoWhatsappController::class, 'bandeja'])->name('bandeja');
+        Route::patch('/conversaciones/{conversacion}/asignar', [ReclutamientoWhatsappController::class, 'asignarConversacion'])
+            ->middleware('modulo:reclutamiento_whatsapp,puede_editar')->name('conversaciones.asignar');
+        Route::patch('/conversaciones/{conversacion}/estado', [ReclutamientoWhatsappController::class, 'actualizarEstadoConversacion'])
+            ->middleware('modulo:reclutamiento_whatsapp,puede_crear')->name('conversaciones.estado');
+        Route::post('/conversaciones/{conversacion}/responder', [ReclutamientoWhatsappController::class, 'responderConversacion'])
+            ->middleware('modulo:reclutamiento_whatsapp,puede_crear')->name('conversaciones.responder');
     });
 
     // --- CONTRATACIÓN RRHH (panel admin) ---
