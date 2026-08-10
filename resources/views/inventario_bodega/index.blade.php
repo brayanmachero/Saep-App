@@ -255,61 +255,67 @@
                     $application = $delivery->inventarioAplicacion;
                     $needsReview = $application && $application->estado === 'APLICADA' && $delivery->kizeo_updated_at && (! $application->fuente_actualizada_en || $delivery->kizeo_updated_at->gt($application->fuente_actualizada_en));
                     $deliverySuggestions = $kizeoSuggestions[$delivery->id] ?? [];
+                    $deliveryItems = $delivery->items->where('cantidad', '>', 0);
                 @endphp
-                <article class="inventory-delivery-card {{ $needsReview ? 'needs-review' : '' }}">
-                    <header class="inventory-delivery-header">
-                        <div>
+                <details class="inventory-delivery-card{{ $needsReview ? ' needs-review' : '' }}">
+                    <summary class="inventory-delivery-header" title="Abrir o cerrar el detalle de esta entrega">
+                        <div class="inventory-delivery-identification">
                             <span class="inventory-code">KZ-{{ $delivery->kizeo_record_number ?: $delivery->kizeo_data_id }}</span>
                             <h3>{{ $delivery->nombre ?: 'Sin trabajador identificado' }}</h3>
                             <p>{{ $delivery->rut ?: 'Sin RUT' }} · {{ $delivery->centro ?: 'Sin centro informado' }} · {{ optional($delivery->fecha_pedido)->format('d/m/Y') ?: 'Sin fecha' }}</p>
                         </div>
                         <div class="inventory-delivery-status">
+                            <span class="inventory-delivery-items"><i class="bi bi-list-check"></i>{{ $deliveryItems->count() }} {{ $deliveryItems->count() === 1 ? 'item' : 'items' }}</span>
                             @if(! $application)
-                                <span class="inventory-status is-review">Pendiente de aplicar</span>
+                                <span class="inventory-status is-review" title="Esta entrega aun no genera una salida de stock.">No descontada</span>
                             @elseif($application->estado === 'REVERSADA')
-                                <span class="inventory-status is-empty">Reversada</span>
-                            @elseif($needsReview)
-                                <span class="inventory-status is-critical">Kizeo cambio</span>
+                                <span class="inventory-status is-empty" title="La salida fue reversada y el stock ya fue repuesto.">Stock repuesto</span>
                             @else
-                                <span class="inventory-status is-ok">Aplicada a stock</span>
+                                <span class="inventory-status is-ok" title="Esta entrega ya descontó stock y no puede aplicarse nuevamente.">Salida descontada</span>
+                                @if($needsReview)
+                                    <span class="inventory-status is-critical" title="Kizeo fue modificado despues de descontar el stock.">Kizeo actualizado</span>
+                                @endif
                             @endif
-                            <a href="{{ route('entregas-bodega-dashboard.document', $delivery) }}" class="inventory-link" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i>Comprobante</a>
+                            <i class="bi bi-chevron-down inventory-delivery-toggle" aria-hidden="true"></i>
                         </div>
-                    </header>
+                    </summary>
 
-                    @if(! $application)
-                        @if($activeLocations->isEmpty() || $variantOptions->isEmpty())
-                            <div class="inventory-notice"><i class="bi bi-info-circle"></i>Debes tener ubicaciones y articulos activos antes de aplicar entregas Kizeo.</div>
+                    <div class="inventory-delivery-body">
+                        <div class="inventory-delivery-body-actions"><a href="{{ route('entregas-bodega-dashboard.document', $delivery) }}" class="inventory-link" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i>Ver comprobante de Kizeo</a></div>
+                        @if(! $application)
+                            @if($activeLocations->isEmpty() || $variantOptions->isEmpty())
+                                <div class="inventory-notice"><i class="bi bi-info-circle"></i>Debes tener ubicaciones y articulos activos antes de aplicar entregas Kizeo.</div>
+                            @else
+                                <form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.aplicar', $delivery) }}" class="inventory-kizeo-form">
+                                    @csrf
+                                    <div class="inventory-kizeo-form-heading">
+                                        <label>Ubicacion de salida<select name="ubicacion_id" class="form-select" required><option value="">Selecciona la bodega que entrego</option>@foreach($activeLocations as $location)<option value="{{ $location->id }}">{{ $location->nombre }}</option>@endforeach</select></label>
+                                        <p>Las cantidades vienen de Kizeo. Solo se elige la variante real del inventario cuando el nombre no coincide.</p>
+                                    </div>
+                                    <div class="inventory-table-wrap"><table class="inventory-table inventory-table-compact"><thead><tr><th>Articulo informado</th><th>Talla</th><th class="text-end">Cantidad</th><th>Relacion con inventario</th></tr></thead><tbody>
+                                        @foreach($deliveryItems as $item)
+                                            <tr><td><strong>{{ $item->articulo ?: 'Sin articulo' }}</strong></td><td>{{ $item->talla ?: 'Estandar' }}</td><td class="text-end">{{ rtrim(rtrim(number_format((float) $item->cantidad, 3, ',', '.'), '0'), ',') }}</td><td><select name="lineas[{{ $item->id }}][variante_id]" class="form-select form-select-sm" required data-inventory-search-select data-search-placeholder="Buscar por codigo, articulo o talla"><option value="">Selecciona articulo y talla</option>@foreach($variantOptions as $variant)<option value="{{ $variant->id }}" @selected(($deliverySuggestions[$item->id] ?? null) === $variant->id)>{{ $variant->producto->codigo }} - {{ $variant->producto->nombre }} · {{ $variant->talla }}</option>@endforeach</select></td></tr>
+                                        @endforeach
+                                    </tbody></table></div>
+                                    <div class="inventory-form-actions"><button class="btn btn-primary inventory-btn" type="submit"><i class="bi bi-box-arrow-up-right"></i>Aplicar salida de stock</button></div>
+                                </form>
+                            @endif
                         @else
-                            <form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.aplicar', $delivery) }}" class="inventory-kizeo-form">
-                                @csrf
-                                <div class="inventory-kizeo-form-heading">
-                                    <label>Ubicacion de salida<select name="ubicacion_id" class="form-select" required><option value="">Selecciona la bodega que entrego</option>@foreach($activeLocations as $location)<option value="{{ $location->id }}">{{ $location->nombre }}</option>@endforeach</select></label>
-                                    <p>Las cantidades vienen de Kizeo. Solo se elige la variante real del inventario cuando el nombre no coincide.</p>
-                                </div>
-                                <div class="inventory-table-wrap"><table class="inventory-table inventory-table-compact"><thead><tr><th>Articulo informado</th><th>Talla</th><th class="text-end">Cantidad</th><th>Relacion con inventario</th></tr></thead><tbody>
-                                    @foreach($delivery->items->where('cantidad', '>', 0) as $item)
-                                        <tr><td><strong>{{ $item->articulo ?: 'Sin articulo' }}</strong></td><td>{{ $item->talla ?: 'Estandar' }}</td><td class="text-end">{{ rtrim(rtrim(number_format((float) $item->cantidad, 3, ',', '.'), '0'), ',') }}</td><td><select name="lineas[{{ $item->id }}][variante_id]" class="form-select form-select-sm" required><option value="">Selecciona articulo y talla</option>@foreach($variantOptions as $variant)<option value="{{ $variant->id }}" @selected(($deliverySuggestions[$item->id] ?? null) === $variant->id)>{{ $variant->producto->codigo }} - {{ $variant->producto->nombre }} · {{ $variant->talla }}</option>@endforeach</select></td></tr>
-                                    @endforeach
-                                </tbody></table></div>
-                                <div class="inventory-form-actions"><button class="btn btn-primary inventory-btn" type="submit"><i class="bi bi-box-arrow-up-right"></i>Aplicar salida de stock</button></div>
-                            </form>
+                            <div class="inventory-delivery-summary">
+                                <div><span>Ubicacion de salida</span><strong>{{ $application->ubicacion->nombre ?? '-' }}</strong></div>
+                                <div><span>Aplicada</span><strong>{{ optional($application->aplicada_en)->format('d/m/Y H:i') ?: '-' }}</strong></div>
+                                <div><span>Lineas descontadas</span><strong>{{ $application->lineas->count() }}</strong></div>
+                                @if($application->estado === 'REVERSADA')<div><span>Reversada</span><strong>{{ optional($application->revertida_en)->format('d/m/Y H:i') ?: '-' }}</strong></div>@endif
+                            </div>
+                            @if($needsReview)
+                                <div class="inventory-source-warning"><i class="bi bi-exclamation-triangle-fill"></i><span>Esta entrega fue modificada en Kizeo despues de aplicar el stock. Revisa el comprobante y reversa la salida si ya no corresponde.</span></div>
+                            @endif
+                            @if($application->estado === 'APLICADA' && $canEdit)
+                                <details class="inventory-reverse-details"><summary><i class="bi bi-arrow-counterclockwise"></i>Corregir esta aplicacion</summary><form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.revertir', $application) }}" class="inventory-reverse-form">@csrf<label>Motivo del reverso<input name="motivo_reversion" class="form-control" minlength="5" maxlength="500" required placeholder="Ej. entrega anulada o cantidades corregidas en Kizeo"></label><button type="submit" class="btn btn-light inventory-btn" onclick="return confirm('Se repondra el stock con movimientos nuevos. ¿Continuar?')"><i class="bi bi-arrow-counterclockwise"></i>Reversar salida</button></form></details>
+                            @endif
                         @endif
-                    @else
-                        <div class="inventory-delivery-summary">
-                            <div><span>Ubicacion de salida</span><strong>{{ $application->ubicacion->nombre ?? '-' }}</strong></div>
-                            <div><span>Aplicada</span><strong>{{ optional($application->aplicada_en)->format('d/m/Y H:i') ?: '-' }}</strong></div>
-                            <div><span>Lineas descontadas</span><strong>{{ $application->lineas->count() }}</strong></div>
-                            @if($application->estado === 'REVERSADA')<div><span>Reversada</span><strong>{{ optional($application->revertida_en)->format('d/m/Y H:i') ?: '-' }}</strong></div>@endif
-                        </div>
-                        @if($needsReview)
-                            <div class="inventory-source-warning"><i class="bi bi-exclamation-triangle-fill"></i><span>Esta entrega fue modificada en Kizeo despues de aplicar el stock. Revisa el comprobante y reversa la salida si ya no corresponde.</span></div>
-                        @endif
-                        @if($application->estado === 'APLICADA' && $canEdit)
-                            <details class="inventory-reverse-details"><summary><i class="bi bi-arrow-counterclockwise"></i>Corregir esta aplicacion</summary><form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.revertir', $application) }}" class="inventory-reverse-form">@csrf<label>Motivo del reverso<input name="motivo_reversion" class="form-control" minlength="5" maxlength="500" required placeholder="Ej. entrega anulada o cantidades corregidas en Kizeo"></label><button type="submit" class="btn btn-light inventory-btn" onclick="return confirm('Se repondra el stock con movimientos nuevos. ¿Continuar?')"><i class="bi bi-arrow-counterclockwise"></i>Reversar salida</button></form></details>
-                        @endif
-                    @endif
-                </article>
+                    </div>
+                </details>
             @empty
                 <section class="inventory-section"><div class="inventory-empty">Aun no hay entregas sincronizadas desde Kizeo. Usa el boton “Sincronizar Kizeo” en Entregas EPP y vuelve aqui para conciliarlas.</div></section>
             @endforelse
@@ -406,10 +412,26 @@
     .inventory-form { display:grid; gap:.85rem; }.inventory-form-grid { display:grid; gap:.75rem; min-width:0; }.inventory-form-grid.two { grid-template-columns:repeat(2,minmax(0,1fr)); }.inventory-form-grid.three { grid-template-columns:repeat(3,minmax(0,1fr)); }.inventory-form label,.inventory-editor > label,.inventory-inline-editor > label { min-width:0; max-width:100%; margin:0; }.inventory-form-grid .form-control,.inventory-form-grid .form-select,.inventory-editor > label .form-control,.inventory-editor > label .form-select,.inventory-inline-editor > label .form-control,.inventory-inline-editor > label .form-select { box-sizing:border-box; max-width:100%; width:100%; }.inventory-wide-label { display:block; }.inventory-checkbox { display:flex; gap:.55rem; align-items:center; padding-top:1.65rem; text-transform:none!important; letter-spacing:0!important; font-size:.84rem!important; }.inventory-checkbox input { width:1rem; height:1rem; }.inventory-line-header { justify-content:space-between; gap:.8rem; }.inventory-line-header h3,.inventory-compact-form h3,.inventory-list-panel h3 { font-size:.9rem; font-weight:800; margin:0; }.inventory-lines { display:grid; gap:.55rem; }.inventory-line { display:grid; grid-template-columns:minmax(230px,1fr) 125px 145px 2.55rem; gap:.55rem; align-items:end; padding:.65rem; background:#f8fafc; border:1px solid #e3e8f1; border-radius:.5rem; }.inventory-form-actions { justify-content:flex-end; border-top:1px solid #e8edf4; padding-top:.8rem; }.inventory-notice { display:flex; gap:.5rem; align-items:center; background:#fff8e8; border:1px solid #f7d48b; color:#80520e; border-radius:.45rem; padding:.75rem; font-size:.84rem; }
     .inventory-catalog-grid { display:grid; gap:.75rem; min-width:0; }.inventory-details { min-width:0; border:1px solid #e1e6ef; border-radius:.55rem; }.inventory-details summary { cursor:pointer; list-style:none; padding:.82rem .9rem; display:flex; justify-content:space-between; align-items:center; color:#25324b; font-weight:800; font-size:.9rem; }.inventory-details summary::-webkit-details-marker { display:none; }.inventory-details summary span { display:flex; align-items:center; gap:.55rem; }.inventory-details[open] summary { border-bottom:1px solid #e4e9f1; }.inventory-details[open] summary > .bi-chevron-down { transform:rotate(180deg); }.inventory-details-body { min-width:0; padding:.9rem; }.inventory-split-forms { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; min-width:0; }.inventory-compact-form { display:grid; gap:.75rem; min-width:0; padding:.85rem; background:#f8fafc; border:1px solid #e3e8f1; border-radius:.5rem; }.inventory-compact-form p { margin:0; font-size:.82rem; color:#68758b; line-height:1.45; }.inventory-import-flow { display:flex; gap:.55rem; align-items:flex-start; padding:.65rem .7rem; border:1px solid #d9d4ff; background:#f6f4ff; border-radius:.45rem; color:#4a347e; }.inventory-import-flow > i { color:#5a35ba; font-size:1rem; line-height:1.25; }.inventory-import-flow strong,.inventory-import-flow span { display:block; }.inventory-import-flow strong { color:#30215f; font-size:.78rem; }.inventory-import-flow span { margin-top:.12rem; font-size:.76rem; line-height:1.35; }.inventory-import-actions { display:flex; flex-wrap:wrap; gap:.7rem; }.inventory-list-panel { min-width:0; padding:.85rem; border:1px solid #e3e8f1; border-radius:.5rem; }.inventory-list-panel h3 { margin-bottom:.55rem; }.inventory-list-row { justify-content:space-between; gap:.75rem; padding:.62rem 0; border-bottom:1px solid #edf0f4; }.inventory-list-row:last-child { border-bottom:0; }.inventory-list-row strong { display:block; font-size:.84rem; }.inventory-list-row small { display:block; color:#748198; font-size:.76rem; margin-top:.13rem; }.inventory-product-search { display:flex; gap:.55rem; min-width:0; margin:1rem 0 .65rem; }.inventory-product-search .form-control { max-width:390px; }.inventory-pagination { margin-top:.75rem; }.inventory-editor,.inventory-inline-editor { display:grid; gap:.7rem; min-width:0; margin-top:1rem; padding:.85rem; background:#f5f3ff; border:1px solid #ded5ff; border-radius:.5rem; }.inventory-editor p { margin:.2rem 0 0; color:#665b84; font-size:.8rem; }.inventory-inline-editor { margin-top:.75rem; }.inventory-editor .inventory-btn,.inventory-inline-editor .inventory-btn { justify-self:end; }
     .inventory-kizeo-intro { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.1rem; background:#f2f6ff; border:1px solid #dbe5fb; border-left:4px solid #2563eb; border-radius:.65rem; margin-bottom:1rem; }.inventory-kizeo-intro h2 { font-size:1.05rem; margin:0 0 .22rem; font-weight:800; }.inventory-kizeo-intro p:not(.inventory-kicker) { color:#61708b; font-size:.83rem; margin:0; max-width:720px; }.inventory-kizeo-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }.inventory-kizeo-notice { display:flex; align-items:flex-start; gap:.65rem; padding:.8rem 1rem; background:#fff8e8; border:1px solid #f2d392; border-radius:.6rem; color:#71501a; margin-bottom:1rem; font-size:.82rem; }.inventory-kizeo-notice i { color:#d17913; margin-top:.05rem; }.inventory-kizeo-notice strong,.inventory-kizeo-notice span { display:block; }.inventory-kizeo-notice span { margin-top:.12rem; line-height:1.45; }.inventory-kizeo-queue { display:grid; gap:.85rem; }.inventory-delivery-card { background:#fff; border:1px solid #dfe6f0; border-radius:.65rem; box-shadow:0 .35rem 1rem rgba(29,41,67,.04); overflow:hidden; }.inventory-delivery-card.needs-review { border-color:#f0bf74; }.inventory-delivery-header { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; padding:.9rem 1rem; border-bottom:1px solid #e7ecf3; }.inventory-delivery-header h3 { margin:.25rem 0 .12rem; font-size:.95rem; font-weight:800; }.inventory-delivery-header p { color:#708099; font-size:.78rem; margin:0; }.inventory-delivery-status { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:.55rem; }.inventory-kizeo-form { display:grid; gap:.75rem; padding:.9rem 1rem 1rem; }.inventory-kizeo-form-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }.inventory-kizeo-form-heading label { display:grid; gap:.28rem; min-width:280px; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-kizeo-form-heading .form-select { min-height:2.42rem; font-size:.88rem; letter-spacing:0; text-transform:none; }.inventory-kizeo-form-heading p { color:#738097; font-size:.79rem; margin:0; max-width:460px; line-height:1.4; }.inventory-delivery-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; background:#e4eaf2; }.inventory-delivery-summary > div { padding:.7rem 1rem; background:#fbfcfe; }.inventory-delivery-summary span { display:block; color:#748198; font-size:.68rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-delivery-summary strong { display:block; color:#273450; font-size:.82rem; margin-top:.18rem; }.inventory-source-warning { display:flex; gap:.55rem; margin:.8rem 1rem 0; padding:.7rem .8rem; background:#fff4e5; border-left:3px solid #e88120; color:#875115; font-size:.8rem; line-height:1.4; }.inventory-reverse-details { margin:.75rem 1rem 1rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:.5rem; }.inventory-reverse-details summary { cursor:pointer; display:flex; align-items:center; gap:.48rem; padding:.65rem .75rem; color:#4f3b78; font-size:.8rem; font-weight:800; }.inventory-reverse-form { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:.65rem; padding:.1rem .75rem .75rem; }.inventory-reverse-form label { display:grid; gap:.28rem; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-reverse-form .form-control { min-height:2.42rem; font-size:.88rem; letter-spacing:0; text-transform:none; }
-    body.dark-mode .inventory-page { min-height:100%; background:#111827; color:#f8fafc; }.dark-mode .inventory-heading h1,.dark-mode .inventory-section-title h2,.dark-mode .inventory-kpi strong,.dark-mode .inventory-delivery-card h3,.dark-mode .inventory-delivery-summary strong,.dark-mode .inventory-details summary,.dark-mode .inventory-list-row strong,.dark-mode .inventory-import-flow strong { color:#f8fafc; }.dark-mode .inventory-heading p:not(.inventory-kicker),.dark-mode .inventory-section-title p,.dark-mode .inventory-count,.dark-mode .inventory-kpi span,.dark-mode .inventory-kpi small,.dark-mode .inventory-table th,.dark-mode .inventory-table td small,.dark-mode .inventory-empty,.dark-mode .inventory-empty-copy,.dark-mode .inventory-delivery-header p,.dark-mode .inventory-kizeo-form-heading p,.dark-mode .inventory-delivery-summary span { color:#aeb9cc; }.dark-mode .inventory-tabs { border-color:rgba(255,255,255,.14); }.dark-mode .inventory-tab { color:#aeb9cc; }.dark-mode .inventory-tab:hover,.dark-mode .inventory-tab.active,.dark-mode .inventory-link { color:#c4b5fd; }.dark-mode .inventory-section,.dark-mode .inventory-kpi,.dark-mode .inventory-delivery-card { background:#1f2937; border-color:#374151; box-shadow:0 .4rem 1.2rem rgba(0,0,0,.16); }.dark-mode .inventory-table th,.dark-mode .inventory-table td,.dark-mode .inventory-delivery-header { border-color:#374151; }.dark-mode .inventory-code { color:#c4b5fd; }.dark-mode .inventory-side-note,.dark-mode .inventory-editor,.dark-mode .inventory-inline-editor,.dark-mode .inventory-import-flow { background:rgba(135,87,236,.12); border-color:rgba(167,139,250,.25); color:#ddd6fe; }.dark-mode .inventory-side-note strong { color:#f8fafc; }.dark-mode .inventory-line,.dark-mode .inventory-compact-form,.dark-mode .inventory-reverse-details { background:rgba(255,255,255,.035); border-color:#374151; }.dark-mode .inventory-list-panel,.dark-mode .inventory-details { border-color:#374151; }.dark-mode .inventory-list-row { border-color:rgba(255,255,255,.09); }.dark-mode .inventory-kizeo-intro { background:#172554; border-color:#3b82f6; }.dark-mode .inventory-kizeo-intro h2 { color:#f8fafc; }.dark-mode .inventory-kizeo-intro p:not(.inventory-kicker) { color:#bfdbfe; }.dark-mode .inventory-delivery-summary { background:#374151; }.dark-mode .inventory-delivery-summary > div { background:rgba(255,255,255,.035); }.dark-mode .inventory-kizeo-notice,.dark-mode .inventory-notice { background:#443107; border-color:#a16207; color:#fde68a; }.dark-mode .inventory-source-warning { background:#542a0b; color:#fed7aa; }.dark-mode .inventory-status.is-empty { background:rgba(148,163,184,.16); color:#cbd5e1; }.dark-mode .inventory-status.is-review { background:rgba(139,92,246,.2); color:#ddd6fe; }
+    .inventory-delivery-card.has-open-search-select { position:relative; z-index:4; overflow:visible; }.inventory-search-select { position:relative; min-width:230px; }.inventory-search-select-native { position:absolute!important; width:1px!important; height:1px!important; margin:-1px!important; padding:0!important; overflow:hidden!important; clip:rect(0 0 0 0)!important; white-space:nowrap!important; border:0!important; }.inventory-search-select-trigger { width:100%; min-height:2.42rem; display:flex; align-items:flex-start; justify-content:space-between; gap:.65rem; padding:.48rem .65rem; color:#25334f; background:#fff; border:1px solid #cfd8e6; border-radius:.45rem; text-align:left; font-size:.82rem; line-height:1.35; }.inventory-search-select-trigger:hover { border-color:#9eadd0; }.inventory-search-select-trigger:focus-visible { outline:0; border-color:#7250ca; box-shadow:0 0 0 .16rem rgba(114,80,202,.12); }.inventory-search-select-trigger > span { min-width:0; overflow-wrap:anywhere; }.inventory-search-select-trigger > i { color:#5b6780; font-size:.9rem; flex:0 0 auto; margin-top:.15rem; }.inventory-search-select.is-invalid .inventory-search-select-trigger { border-color:#d63946; box-shadow:0 0 0 .16rem rgba(214,57,70,.12); }.inventory-search-select-menu { position:absolute; z-index:30; top:calc(100% + .3rem); right:0; width:max(100%, min(40rem, calc(100vw - 2rem))); padding:.55rem; background:#fff; border:1px solid #cfd8e6; border-radius:.55rem; box-shadow:0 .75rem 1.7rem rgba(28,39,63,.2); }.inventory-search-select-menu[hidden] { display:none; }.inventory-search-select-search { width:100%; min-height:2.35rem; padding:.46rem .62rem; color:#25334f; background:#fbfcfe; border:1px solid #d5deeb; border-radius:.4rem; font-size:.84rem; }.inventory-search-select-search:focus { outline:0; border-color:#7250ca; box-shadow:0 0 0 .16rem rgba(114,80,202,.12); }.inventory-search-select-results { max-height:16rem; margin-top:.45rem; overflow:auto; overscroll-behavior:contain; }.inventory-search-select-option,.inventory-search-select-empty { width:100%; padding:.5rem .6rem; border:0; border-radius:.35rem; text-align:left; font-size:.8rem; line-height:1.35; }.inventory-search-select-option { color:#25334f; background:transparent; }.inventory-search-select-option:hover,.inventory-search-select-option:focus-visible { color:#23085d; background:#f3f0ff; outline:0; }.inventory-search-select-option.is-selected { color:#321170; background:#eee8ff; font-weight:800; }.inventory-search-select-option span { display:block; overflow-wrap:anywhere; }.inventory-search-select-empty { color:#718096; font-style:italic; }.inventory-search-select-help { display:block; margin:.38rem .1rem 0; color:#6d7a91; font-size:.7rem; line-height:1.35; }
+    body.dark-mode .inventory-page { min-height:100%; background:#111827; color:#f8fafc; }.dark-mode .inventory-heading h1,.dark-mode .inventory-section-title h2,.dark-mode .inventory-kpi strong,.dark-mode .inventory-delivery-card h3,.dark-mode .inventory-delivery-summary strong,.dark-mode .inventory-details summary,.dark-mode .inventory-list-row strong,.dark-mode .inventory-import-flow strong { color:#f8fafc; }.dark-mode .inventory-heading p:not(.inventory-kicker),.dark-mode .inventory-section-title p,.dark-mode .inventory-count,.dark-mode .inventory-kpi span,.dark-mode .inventory-kpi small,.dark-mode .inventory-table th,.dark-mode .inventory-table td small,.dark-mode .inventory-empty,.dark-mode .inventory-empty-copy,.dark-mode .inventory-delivery-header p,.dark-mode .inventory-kizeo-form-heading p,.dark-mode .inventory-delivery-summary span { color:#aeb9cc; }.dark-mode .inventory-tabs { border-color:rgba(255,255,255,.14); }.dark-mode .inventory-tab { color:#aeb9cc; }.dark-mode .inventory-tab:hover,.dark-mode .inventory-tab.active,.dark-mode .inventory-link { color:#c4b5fd; }.dark-mode .inventory-section,.dark-mode .inventory-kpi,.dark-mode .inventory-delivery-card { background:#1f2937; border-color:#374151; box-shadow:0 .4rem 1.2rem rgba(0,0,0,.16); }.dark-mode .inventory-table th,.dark-mode .inventory-table td,.dark-mode .inventory-delivery-header { border-color:#374151; }.dark-mode .inventory-code { color:#c4b5fd; }.dark-mode .inventory-side-note,.dark-mode .inventory-editor,.dark-mode .inventory-inline-editor,.dark-mode .inventory-import-flow { background:rgba(135,87,236,.12); border-color:rgba(167,139,250,.25); color:#ddd6fe; }.dark-mode .inventory-side-note strong { color:#f8fafc; }.dark-mode .inventory-line,.dark-mode .inventory-compact-form,.dark-mode .inventory-reverse-details { background:rgba(255,255,255,.035); border-color:#374151; }.dark-mode .inventory-list-panel,.dark-mode .inventory-details { border-color:#374151; }.dark-mode .inventory-list-row { border-color:rgba(255,255,255,.09); }.dark-mode .inventory-kizeo-intro { background:#172554; border-color:#3b82f6; }.dark-mode .inventory-kizeo-intro h2 { color:#f8fafc; }.dark-mode .inventory-kizeo-intro p:not(.inventory-kicker) { color:#bfdbfe; }.dark-mode .inventory-delivery-summary { background:#374151; }.dark-mode .inventory-delivery-summary > div { background:rgba(255,255,255,.035); }.dark-mode .inventory-kizeo-notice,.dark-mode .inventory-notice { background:#443107; border-color:#a16207; color:#fde68a; }.dark-mode .inventory-source-warning { background:#542a0b; color:#fed7aa; }.dark-mode .inventory-status.is-empty { background:rgba(148,163,184,.16); color:#cbd5e1; }.dark-mode .inventory-status.is-review { background:rgba(139,92,246,.2); color:#ddd6fe; }.dark-mode .inventory-search-select-trigger,.dark-mode .inventory-search-select-menu,.dark-mode .inventory-search-select-search { color:#e5edf9; background:#111827; border-color:#475569; }.dark-mode .inventory-search-select-trigger > i { color:#aeb9cc; }.dark-mode .inventory-search-select-trigger:hover { border-color:#7484a0; }.dark-mode .inventory-search-select-option { color:#e5edf9; }.dark-mode .inventory-search-select-option:hover,.dark-mode .inventory-search-select-option:focus-visible { color:#fff; background:#312252; }.dark-mode .inventory-search-select-option.is-selected { color:#ede9fe; background:#3b2b62; }.dark-mode .inventory-search-select-empty,.dark-mode .inventory-search-select-help { color:#aeb9cc; }
     @container (max-width: 1050px) { .inventory-kpis,.inventory-kizeo-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }.inventory-workspace { grid-template-columns:1fr; }.inventory-side-note { display:flex; align-items:center; }.inventory-side-note strong { margin-right:.3rem; }.inventory-side-note span { flex:1; }.inventory-delivery-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
     @container (max-width: 760px) { .inventory-page { padding:1rem .85rem 5rem; }.inventory-heading { align-items:flex-start; flex-direction:column; gap:.8rem; }.inventory-header-actions { justify-content:flex-start; width:100%; }.inventory-header-actions .inventory-btn { flex:1; }.inventory-onboarding { align-items:flex-start; flex-wrap:wrap; }.inventory-onboarding .btn { margin-left:3.55rem; }.inventory-filter-grid { align-items:stretch; }.inventory-filter-grid .inventory-btn { flex:1; }.inventory-form-grid.two,.inventory-form-grid.three,.inventory-split-forms { grid-template-columns:1fr; }.inventory-line { grid-template-columns:1fr 1fr 2.55rem; }.inventory-line > label:first-child { grid-column:1/-1; }.inventory-line > label:nth-child(3) { grid-column:1/3; }.inventory-line > button { grid-column:3; grid-row:2; }.inventory-kpis,.inventory-kizeo-kpis { grid-template-columns:1fr 1fr; }.inventory-section { padding:.8rem; }.inventory-section-title { align-items:flex-start; }.inventory-side-note { align-items:flex-start; flex-wrap:wrap; }.inventory-side-note span { width:100%; }.inventory-product-search .form-control { max-width:none; }.inventory-tab { padding:.65rem .7rem; }.inventory-kizeo-intro,.inventory-delivery-header,.inventory-kizeo-form-heading { align-items:flex-start; flex-direction:column; }.inventory-kizeo-intro .btn { width:100%; }.inventory-delivery-status { justify-content:flex-start; }.inventory-kizeo-form-heading label { min-width:0; width:100%; }.inventory-reverse-form { grid-template-columns:1fr; }.inventory-reverse-form .inventory-btn { width:100%; }.inventory-delivery-summary { grid-template-columns:1fr 1fr; }.inventory-kizeo-form .inventory-table { min-width:0; }.inventory-kizeo-form .inventory-table thead { display:none; }.inventory-kizeo-form .inventory-table tbody { display:grid; gap:.65rem; }.inventory-kizeo-form .inventory-table tbody tr { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.3rem .65rem; padding:.7rem; border:1px solid #e1e6f1; border-radius:.5rem; background:#f8fafc; }.inventory-kizeo-form .inventory-table tbody td { display:block; padding:0; border:0; }.inventory-kizeo-form .inventory-table tbody td:first-child { grid-column:1/-1; }.inventory-kizeo-form .inventory-table tbody td:nth-child(2)::before { content:'Talla: '; color:#718096; font-weight:700; }.inventory-kizeo-form .inventory-table tbody td:nth-child(3)::before { content:'Cantidad: '; color:#718096; font-weight:700; }.inventory-kizeo-form .inventory-table tbody td:nth-child(4) { grid-column:1/-1; margin-top:.25rem; }.inventory-kizeo-form .inventory-table tbody td:nth-child(4)::before { content:'Relacion con inventario'; display:block; margin-bottom:.28rem; color:#53627d; font-size:.68rem; font-weight:800; letter-spacing:.035em; text-align:left; text-transform:uppercase; }.dark-mode .inventory-kizeo-form .inventory-table tbody tr { background:rgba(255,255,255,.035); border-color:#374151; }.dark-mode .inventory-kizeo-form .inventory-table tbody td:nth-child(2)::before,.dark-mode .inventory-kizeo-form .inventory-table tbody td:nth-child(3)::before,.dark-mode .inventory-kizeo-form .inventory-table tbody td:nth-child(4)::before { color:#aeb9cc; } }
     @container (max-width: 440px) { .inventory-kpis,.inventory-kizeo-kpis { grid-template-columns:1fr; }.inventory-header-actions { display:grid; grid-template-columns:1fr; }.inventory-onboarding .btn { margin-left:0; width:100%; }.inventory-filter-grid { display:grid; grid-template-columns:1fr 2.55rem; }.inventory-filter-grid label { grid-column:1/-1; }.inventory-filter-grid .inventory-btn { grid-column:1; }.inventory-filter-grid .inventory-icon-btn { grid-column:2; }.inventory-line { grid-template-columns:1fr 2.55rem; }.inventory-line > label:nth-child(2),.inventory-line > label:nth-child(3) { grid-column:1; }.inventory-line > button { grid-column:2; grid-row:3; }.inventory-form-actions .inventory-btn { width:100%; }.inventory-delivery-summary { grid-template-columns:1fr; } }
+
+    .inventory-delivery-card > .inventory-delivery-header { cursor:pointer; list-style:none; border-bottom:0; }
+    .inventory-delivery-card > .inventory-delivery-header::-webkit-details-marker { display:none; }
+    .inventory-delivery-card[open] > .inventory-delivery-header { border-bottom:1px solid #e7ecf3; background:#fbfcfe; }
+    .inventory-delivery-card > .inventory-delivery-header:focus-visible { outline:3px solid rgba(114,80,202,.3); outline-offset:-3px; }
+    .inventory-delivery-identification { min-width:0; }
+    .inventory-delivery-items { display:inline-flex; align-items:center; gap:.32rem; color:#64748b; font-size:.75rem; font-weight:750; white-space:nowrap; }
+    .inventory-delivery-items i { color:#6677a1; }
+    .inventory-delivery-toggle { display:inline-grid; place-items:center; width:1.8rem; height:1.8rem; color:#5d37b5; border:1px solid #d9e0ea; border-radius:.45rem; background:#fff; transition:transform .16s ease; flex:0 0 auto; }
+    .inventory-delivery-card[open] .inventory-delivery-toggle { transform:rotate(180deg); }
+    .inventory-delivery-body { min-width:0; }
+    .inventory-delivery-body-actions { display:flex; justify-content:flex-end; padding:.48rem 1rem; border-bottom:1px solid #edf1f6; background:#fbfcfe; }
+    .inventory-delivery-body-actions .inventory-link { font-size:.78rem; }
+    .dark-mode .inventory-delivery-card[open] > .inventory-delivery-header,.dark-mode .inventory-delivery-body-actions { background:rgba(255,255,255,.025); border-color:#374151; }
+    .dark-mode .inventory-delivery-items { color:#aeb9cc; }.dark-mode .inventory-delivery-toggle { color:#c4b5fd; background:#1f2937; border-color:#475569; }
 
     /* Compact, resilient inventory controls for desktop zoom and smaller work areas. */
     .inventory-page { box-sizing:border-box; width:100%; max-width:1680px; margin:0 auto; padding:.65rem clamp(.85rem,1.35vw,1.5rem) 2.25rem; }
@@ -477,6 +499,8 @@
         .inventory-filter-grid .inventory-icon-btn { grid-column:2; }
         .inventory-product-search { grid-template-columns:minmax(0,1fr) auto; }
         .inventory-section, .inventory-details-body, .inventory-compact-form, .inventory-list-panel { padding:.85rem; }
+        .inventory-search-select { min-width:0; }
+        .inventory-search-select-menu { left:0; right:auto; width:min(40rem, calc(100vw - 2rem)); }
     }
     @container (max-width: 440px) {
         .inventory-header-actions { grid-template-columns:1fr; }
@@ -524,6 +548,177 @@ document.addEventListener('DOMContentLoaded', function () {
     setupEditor('product-editor', 'product-editor-select', ['nombre', 'tipo', 'categoria', 'subcategoria', 'unidad_medida', 'stock_minimo', 'tallas']);
     setupEditor('location-editor', 'location-editor-select', ['codigo', 'nombre', 'tipo', 'descripcion']);
     setupEditor('provider-editor', 'provider-editor-select', ['nombre', 'rut', 'contacto', 'email', 'telefono', 'observacion']);
+
+    function normalizedSearch(value) {
+        return (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    }
+
+    var searchableSelects = [];
+    function closeSearchSelect(component) {
+        component.menu.hidden = true;
+        component.wrapper.classList.remove('is-open');
+        component.trigger.setAttribute('aria-expanded', 'false');
+        var card = component.wrapper.closest('.inventory-delivery-card');
+        if (card) card.classList.remove('has-open-search-select');
+    }
+
+    function closeAllSearchSelects(except) {
+        searchableSelects.forEach(function (component) {
+            if (component !== except) closeSearchSelect(component);
+        });
+    }
+
+    function setupSearchSelect(nativeSelect, index) {
+        var originalRequired = nativeSelect.required;
+        var wrapper = document.createElement('div');
+        var trigger = document.createElement('button');
+        var triggerLabel = document.createElement('span');
+        var menu = document.createElement('div');
+        var search = document.createElement('input');
+        var results = document.createElement('div');
+        var help = document.createElement('small');
+        var component;
+
+        wrapper.className = 'inventory-search-select';
+        nativeSelect.parentNode.insertBefore(wrapper, nativeSelect);
+        wrapper.appendChild(nativeSelect);
+        nativeSelect.classList.add('inventory-search-select-native');
+        nativeSelect.required = false;
+        nativeSelect.tabIndex = -1;
+
+        trigger.type = 'button';
+        trigger.className = 'inventory-search-select-trigger';
+        trigger.setAttribute('aria-haspopup', 'listbox');
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.setAttribute('aria-label', 'Seleccionar articulo y talla');
+        trigger.appendChild(triggerLabel);
+        var triggerIcon = document.createElement('i');
+        triggerIcon.className = 'bi bi-search';
+        trigger.setAttribute('title', 'Buscar articulo y talla');
+        trigger.appendChild(triggerIcon);
+
+        menu.className = 'inventory-search-select-menu';
+        menu.hidden = true;
+        menu.id = 'inventory-search-select-' + index;
+        trigger.setAttribute('aria-controls', menu.id);
+        search.type = 'search';
+        search.className = 'inventory-search-select-search';
+        search.autocomplete = 'off';
+        search.placeholder = nativeSelect.dataset.searchPlaceholder || 'Buscar una opcion';
+        search.setAttribute('aria-label', search.placeholder);
+        results.className = 'inventory-search-select-results';
+        results.setAttribute('role', 'listbox');
+        help.className = 'inventory-search-select-help';
+        help.textContent = 'Busca por codigo, articulo o talla.';
+        menu.append(search, results, help);
+        wrapper.append(trigger, menu);
+
+        component = { nativeSelect: nativeSelect, wrapper: wrapper, trigger: trigger, triggerLabel: triggerLabel, menu: menu, search: search, results: results, originalRequired: originalRequired };
+        searchableSelects.push(component);
+
+        function selectedOption() {
+            return nativeSelect.options[nativeSelect.selectedIndex] || nativeSelect.options[0];
+        }
+
+        function syncSelectedOption() {
+            var option = selectedOption();
+            triggerLabel.textContent = option ? option.textContent.trim() : 'Selecciona una opcion';
+            triggerLabel.title = triggerLabel.textContent;
+            wrapper.classList.toggle('is-invalid', originalRequired && !nativeSelect.value);
+        }
+
+        function selectOption(option) {
+            nativeSelect.value = option.value;
+            nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            closeSearchSelect(component);
+            trigger.focus();
+        }
+
+        function renderResults() {
+            var query = normalizedSearch(search.value);
+            var matches = Array.prototype.slice.call(nativeSelect.options).filter(function (option) {
+                return option.value && (!query || normalizedSearch(option.textContent).indexOf(query) !== -1);
+            }).slice(0, 60);
+            results.replaceChildren();
+
+            if (!matches.length) {
+                var empty = document.createElement('div');
+                empty.className = 'inventory-search-select-empty';
+                empty.textContent = 'No hay articulos o tallas que coincidan.';
+                results.appendChild(empty);
+                return;
+            }
+
+            matches.forEach(function (option) {
+                var result = document.createElement('button');
+                var text = document.createElement('span');
+                result.type = 'button';
+                result.className = 'inventory-search-select-option' + (option.selected ? ' is-selected' : '');
+                result.setAttribute('role', 'option');
+                result.setAttribute('aria-selected', option.selected ? 'true' : 'false');
+                text.textContent = option.textContent.trim();
+                result.appendChild(text);
+                result.addEventListener('click', function () { selectOption(option); });
+                results.appendChild(result);
+            });
+        }
+
+        function openSearchSelect() {
+            closeAllSearchSelects(component);
+            wrapper.classList.add('is-open');
+            var card = wrapper.closest('.inventory-delivery-card');
+            if (card) card.classList.add('has-open-search-select');
+            menu.hidden = false;
+            trigger.setAttribute('aria-expanded', 'true');
+            search.value = '';
+            renderResults();
+            window.requestAnimationFrame(function () { search.focus(); });
+        }
+
+        trigger.addEventListener('click', function () {
+            if (menu.hidden) openSearchSelect(); else closeSearchSelect(component);
+        });
+        trigger.addEventListener('keydown', function (event) {
+            if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openSearchSelect();
+            }
+        });
+        search.addEventListener('input', renderResults);
+        search.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeSearchSelect(component);
+                trigger.focus();
+            }
+            if (event.key === 'Enter') {
+                var firstResult = results.querySelector('.inventory-search-select-option');
+                if (firstResult) {
+                    event.preventDefault();
+                    firstResult.click();
+                }
+            }
+        });
+        nativeSelect.addEventListener('change', function () {
+            syncSelectedOption();
+            trigger.setAttribute('aria-expanded', 'false');
+        });
+        nativeSelect.closest('form').addEventListener('submit', function (event) {
+            if (originalRequired && !nativeSelect.value) {
+                event.preventDefault();
+                wrapper.classList.add('is-invalid');
+                openSearchSelect();
+            }
+        });
+        syncSelectedOption();
+    }
+
+    document.querySelectorAll('[data-inventory-search-select]').forEach(setupSearchSelect);
+    document.addEventListener('click', function (event) {
+        searchableSelects.forEach(function (component) {
+            if (!component.wrapper.contains(event.target)) closeSearchSelect(component);
+        });
+    });
 });
 </script>
 @endsection

@@ -349,6 +349,65 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('Cargar desde conteo');
     }
 
+    public function test_kizeo_queue_is_collapsed_and_displays_whether_stock_was_discounted(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'GUIA_DESPACHO',
+            'numero_documento' => 'GD-COLA-1',
+            'fecha_documento' => null,
+            'fecha_recepcion' => '2026-08-10',
+            'observacion' => null,
+        ], [['variante_id' => $variant->id, 'cantidad' => 4, 'costo_unitario' => null]], $user);
+
+        $pending = EntregaBodega::create([
+            'kizeo_data_id' => 'kizeo-pending-ui',
+            'kizeo_record_number' => 701,
+            'nombre' => 'Pendiente de stock',
+            'fecha_pedido' => '2026-08-10',
+        ]);
+        $pending->items()->create(['linea' => 1, 'articulo' => 'Casco de seguridad', 'talla' => 'M', 'cantidad' => 1]);
+
+        $applied = EntregaBodega::create([
+            'kizeo_data_id' => 'kizeo-applied-ui',
+            'kizeo_record_number' => 702,
+            'nombre' => 'Salida ya aplicada',
+            'fecha_pedido' => '2026-08-10',
+        ]);
+        $item = $applied->items()->create(['linea' => 1, 'articulo' => 'Casco de seguridad', 'talla' => 'M', 'cantidad' => 1]);
+        $service->applyKizeoDelivery($applied->load('items'), $origin->id, [
+            $item->id => ['variante_id' => $variant->id],
+        ], $user);
+
+        $reversed = EntregaBodega::create([
+            'kizeo_data_id' => 'kizeo-reversed-ui',
+            'kizeo_record_number' => 703,
+            'nombre' => 'Salida con stock repuesto',
+            'fecha_pedido' => '2026-08-10',
+        ]);
+        $reversedItem = $reversed->items()->create(['linea' => 1, 'articulo' => 'Casco de seguridad', 'talla' => 'M', 'cantidad' => 1]);
+        $reversedApplication = $service->applyKizeoDelivery($reversed->load('items'), $origin->id, [
+            $reversedItem->id => ['variante_id' => $variant->id],
+        ], $user);
+        $service->reverseKizeoDelivery($reversedApplication, 'Prueba de salida revertida.', $user);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->assertOk()
+            ->assertSee('No descontada')
+            ->assertSee('Salida descontada')
+            ->assertSee('Stock repuesto')
+            ->assertSee('1 item')
+            ->assertSee('data-inventory-search-select', false)
+            ->assertSee('Buscar por codigo, articulo o talla', false)
+            ->assertSee('<details class="inventory-delivery-card">', false)
+            ->assertDontSee('<details class="inventory-delivery-card" open', false);
+    }
+
     private function inventoryContext(): array
     {
         $role = Rol::create(['codigo' => 'SUPER_ADMIN', 'nombre' => 'Super Admin']);
