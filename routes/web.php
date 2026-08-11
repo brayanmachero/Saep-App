@@ -76,6 +76,8 @@ Route::post('/password/reset', [PasswordResetController::class, 'reset'])->name(
 // Política de Privacidad (pública, accesible sin auth)
 Route::get('/politica-privacidad', [ProteccionDatosController::class, 'politicaPrivacidad'])
     ->name('proteccion-datos.politica-privacidad');
+Route::view('/condiciones-servicio', 'proteccion-datos.condiciones-servicio')
+    ->name('proteccion-datos.condiciones-servicio');
 Route::get('/solicitud-arco', [ProteccionDatosController::class, 'crearSolicitudPublica'])
     ->name('proteccion-datos.publico.crear');
 Route::post('/solicitud-arco', [ProteccionDatosController::class, 'guardarSolicitudPublica'])
