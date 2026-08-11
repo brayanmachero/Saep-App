@@ -8,7 +8,7 @@
         'actualizacion' => ['titulo' => 'Reserva actualizada', 'texto' => 'Bodega actualizo el estado de esta reserva. Revisa el detalle operativo.', 'badge' => 'Actualizada', 'color' => '#2563eb'],
         'reprogramacion' => ['titulo' => 'Reserva reprogramada', 'texto' => 'Bodega actualizo el vehiculo, la fecha u horario de esta reserva. Revisa el nuevo detalle operativo.', 'badge' => 'Reprogramada', 'color' => '#2563eb'],
         'ampliacion' => ['titulo' => 'Horario ampliado', 'texto' => 'La reserva en curso fue ampliada luego de validar la disponibilidad del vehiculo.', 'badge' => 'Ampliada', 'color' => '#2563eb'],
-        'eventualidad' => ['titulo' => 'Eventualidad reportada', 'texto' => 'El solicitante registro una eventualidad durante el uso del vehiculo. Bodega recibe este aviso para coordinar el apoyo necesario.', 'badge' => 'Requiere revision', 'color' => '#c2410c'],
+        'eventualidad' => ['titulo' => 'Eventualidad reportada', 'texto' => 'Registraste una eventualidad durante el uso del vehiculo. Conserva este correo como respaldo de tu aviso.', 'badge' => 'Requiere revision', 'color' => '#c2410c'],
         'eliminacion' => ['titulo' => 'Reserva eliminada', 'texto' => 'Bodega elimino permanentemente esta reserva y libero el vehiculo y su evento del calendario compartido.', 'badge' => 'Eliminada', 'color' => '#be123c'],
         default => ['titulo' => 'Actualizacion de reserva', 'texto' => 'Existe una actualizacion en la reserva de vehiculo.', 'badge' => 'Reserva', 'color' => '#2563eb'],
     };

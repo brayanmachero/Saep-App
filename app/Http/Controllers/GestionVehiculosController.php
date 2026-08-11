@@ -234,7 +234,7 @@ class GestionVehiculosController extends Controller
             report($exception);
         }
 
-        return back()->with('success', 'Reserva '.$reserva->codigo.' actualizada. Se notifico al solicitante y a Bodega.');
+        return back()->with('success', 'Reserva '.$reserva->codigo.' actualizada. Se notificó al solicitante.');
     }
 
     public function eliminarReserva(Request $request, ReservaVehiculo $reserva)

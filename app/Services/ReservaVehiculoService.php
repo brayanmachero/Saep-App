@@ -192,9 +192,9 @@ class ReservaVehiculoService
 
     public function cancelarReserva(ReservaVehiculo $reserva, array $identidad, ?string $motivo = null, ?User $operador = null): ReservaVehiculo
     {
-        if (! in_array($reserva->estado, ['CONFIRMADA', 'EN_USO'], true)) {
+        if ($reserva->estado !== 'CONFIRMADA' || ! $reserva->inicio->isFuture()) {
             throw ValidationException::withMessages([
-                'reserva' => 'Solo se pueden cancelar reservas confirmadas o que estan en uso.',
+                'reserva' => 'Solo puedes cancelar una reserva confirmada antes de su hora de inicio.',
             ]);
         }
 
@@ -467,17 +467,17 @@ class ReservaVehiculoService
 
     public function enviarActualizacion(ReservaVehiculo $reserva, string $tipo, ?array $contexto = null): void
     {
-        $this->enviarAlSolicitanteConCopiaBodega($reserva, $tipo, null, $contexto);
+        $this->enviarAlSolicitante($reserva, $tipo, null, $contexto);
     }
 
     public function enviarReprogramacion(ReservaVehiculo $reserva, User $operador): void
     {
-        $this->enviarAlSolicitanteConCopiaBodega($reserva, 'reprogramacion', $operador);
+        $this->enviarAlSolicitante($reserva, 'reprogramacion', $operador);
     }
 
     public function enviarEliminacion(ReservaVehiculo $reserva, User $operador): void
     {
-        $this->enviarAlSolicitanteConCopiaBodega($reserva, 'eliminacion', $operador);
+        $this->enviarAlSolicitante($reserva, 'eliminacion', $operador);
     }
 
     public function procesarNotificaciones(): array
@@ -491,9 +491,9 @@ class ReservaVehiculoService
             ->get();
 
         foreach ($recordatorios as $reserva) {
-            $this->enviarAlSolicitanteConCopiaBodega($reserva, 'recordatorio');
+            $this->enviarAlSolicitante($reserva, 'recordatorio');
             $reserva->update(['recordatorio_enviado_at' => now()]);
-            $this->registrarEvento($reserva, 'RECORDATORIO_ENVIADO', 'Recordatorio de inicio enviado al solicitante con copia a gestores de Bodega.', [
+            $this->registrarEvento($reserva, 'RECORDATORIO_ENVIADO', 'Recordatorio de inicio enviado al solicitante.', [
                 'email' => 'sistema@saep.cl',
                 'name' => 'Sistema SAEP',
             ]);
@@ -514,7 +514,7 @@ class ReservaVehiculoService
             $this->sincronizarCalendario($reserva->fresh('vehiculo'), 'Vencimiento actualizado en el calendario compartido.');
 
             if (! $reserva->vencimiento_notificado_at) {
-                $this->enviarAlSolicitanteConCopiaBodega($reserva, 'vencimiento');
+                $this->enviarAlSolicitante($reserva, 'vencimiento');
                 $reserva->update(['vencimiento_notificado_at' => now()]);
             }
         }
@@ -537,10 +537,7 @@ class ReservaVehiculoService
             ->get();
     }
 
-    /**
-     * El solicitante es el destinatario principal. Los gestores de Bodega reciben
-     * el mismo aviso en copia, sin incluir superadministradores por defecto.
-     */
+    /** Solo las nuevas reservas se copian a los gestores de Bodega. */
     private function enviarAlSolicitanteConCopiaBodega(ReservaVehiculo $reserva, string $tipo, ?User $actor = null, ?array $contexto = null): void
     {
         $reserva->loadMissing('vehiculo');
@@ -564,6 +561,19 @@ class ReservaVehiculoService
         }
 
         $correo->send(new ReservaVehiculoMail($reserva, $tipo, $actor, $contexto));
+    }
+
+    /** Las actualizaciones se informan solo al solicitante de la reserva. */
+    private function enviarAlSolicitante(ReservaVehiculo $reserva, string $tipo, ?User $actor = null, ?array $contexto = null): void
+    {
+        $reserva->loadMissing('vehiculo');
+
+        $solicitante = strtolower(trim((string) $reserva->solicitante_email));
+        if ($solicitante === '') {
+            return;
+        }
+
+        Mail::to($solicitante)->send(new ReservaVehiculoMail($reserva, $tipo, $actor, $contexto));
     }
 
     private function sincronizarCalendario(ReservaVehiculo $reserva, string $resumen): void

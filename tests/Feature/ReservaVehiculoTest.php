@@ -532,7 +532,7 @@ class ReservaVehiculoTest extends TestCase
         $this->assertStringContainsString($reserva->codigo, $html);
     }
 
-    public function test_reservation_updates_notify_the_requester_and_vehicle_module_recipients(): void
+    public function test_reservation_updates_notify_only_the_requester(): void
     {
         Mail::fake();
 
@@ -559,9 +559,97 @@ class ReservaVehiculoTest extends TestCase
         Mail::assertSent(ReservaVehiculoMail::class, function (ReservaVehiculoMail $mail) use ($operator, $reserva) {
             return $mail->tipo === 'actualizacion'
                 && $mail->hasTo($reserva->solicitante_email)
-                && $mail->hasCc($operator->email)
+                && ! $mail->hasCc($operator->email)
                 && ! $mail->hasTo($operator->email);
         });
+    }
+
+    public function test_requester_can_cancel_a_future_reservation_and_release_its_vehicle_slot(): void
+    {
+        Mail::fake();
+        Http::fake([
+            'https://login.microsoftonline.com/*/oauth2/v2.0/token' => Http::response(['access_token' => 'calendar-token'], 200),
+            'https://graph.microsoft.com/v1.0/users/*/calendar/events' => Http::response(['id' => 'graph-event-cancel'], 201),
+            'https://graph.microsoft.com/v1.0/users/*/calendar/events/graph-event-cancel' => Http::response([], 200),
+        ]);
+        config([
+            'services.reservas_vehiculos_calendar.enabled' => true,
+            'services.reservas_vehiculos_calendar.tenant_id' => 'tenant-cancel',
+            'services.reservas_vehiculos_calendar.client_id' => 'client-cancel',
+            'services.reservas_vehiculos_calendar.client_secret' => 'secret-cancel',
+            'services.reservas_vehiculos_calendar.mailbox' => 'reservas.vehiculos@saep.cl',
+            'services.reservas_vehiculos_calendar.calendar_id' => null,
+        ]);
+
+        $bodegaRole = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $gestor = User::create([
+            'name' => 'Gestor Cancelacion', 'email' => 'gestor.cancelacion@saep.cl', 'rol_id' => $bodegaRole->id,
+            'password' => bcrypt('secret'), 'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'CANC-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $identidad = ['oid' => 'cancelar-portal', 'email' => 'cancelar.portal@saep.cl', 'name' => 'Cancelar Portal'];
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Reserva que se cancelará desde el portal',
+        ], $identidad);
+
+        $this->withSession(['reserva_vehiculo_microsoft_identity' => $identidad])
+            ->post(route('reservas-vehiculos.cancelar', $reserva), ['motivo_cancelacion' => 'Cambio de agenda'])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('reservas_vehiculos', [
+            'id' => $reserva->id,
+            'estado' => 'CANCELADA',
+            'motivo_cancelacion' => 'Cambio de agenda',
+        ]);
+        Mail::assertSent(ReservaVehiculoMail::class, fn (ReservaVehiculoMail $mail) => $mail->tipo === 'cancelacion'
+            && $mail->hasTo($identidad['email'])
+            && ! $mail->hasCc($gestor->email));
+
+        $nuevaReserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Reserva que ocupa el cupo liberado',
+        ], ['oid' => 'cupo-liberado', 'email' => 'cupo.liberado@saep.cl', 'name' => 'Cupo Liberado']);
+
+        $this->assertSame($vehiculo->id, $nuevaReserva->vehiculo_id);
+        Http::assertSent(fn ($request) => $request->method() === 'PATCH'
+            && $request->url() === 'https://graph.microsoft.com/v1.0/users/reservas.vehiculos%40saep.cl/calendar/events/graph-event-cancel'
+            && $request['showAs'] === 'free');
+    }
+
+    public function test_requester_cannot_cancel_a_reservation_after_its_start_time_even_via_a_direct_request(): void
+    {
+        $vehiculo = Vehiculo::create([
+            'patente' => 'CNOW-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $identidad = ['oid' => 'cancelar-tarde', 'email' => 'cancelar.tarde@saep.cl', 'name' => 'Cancelar Tarde'];
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-02 09:00:00',
+            'termino' => '2026-08-02 11:00:00',
+            'motivo' => 'Reserva para validar el límite de cancelación',
+        ], $identidad);
+        $reserva->update([
+            'inicio' => now()->subMinute(),
+            'termino' => now()->addHour(),
+        ]);
+
+        $this->withSession(['reserva_vehiculo_microsoft_identity' => $identidad])
+            ->post(route('reservas-vehiculos.cancelar', $reserva))
+            ->assertRedirect()
+            ->assertSessionHasErrors('reserva');
+
+        $this->assertDatabaseHas('reservas_vehiculos', [
+            'id' => $reserva->id,
+            'estado' => 'CONFIRMADA',
+        ]);
     }
 
     public function test_reservation_notifications_copy_only_bodega_managers_not_super_admins(): void
@@ -569,7 +657,10 @@ class ReservaVehiculoTest extends TestCase
         Mail::fake();
 
         $bodegaRole = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
-        $superAdminRole = Rol::where('codigo', 'SUPER_ADMIN')->firstOrFail();
+        $superAdminRole = Rol::firstOrCreate(
+            ['codigo' => 'SUPER_ADMIN'],
+            ['nombre' => 'Super administrador'],
+        );
         $gestor = User::create([
             'name' => 'Gestor Bodega',
             'email' => 'gestor.bodega@saep.cl',
