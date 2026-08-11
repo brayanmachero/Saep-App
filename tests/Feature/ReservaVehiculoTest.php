@@ -6,7 +6,10 @@ use App\Http\Middleware\ForcePasswordChange;
 use App\Http\Middleware\VerificarConsentimientoDatos;
 use App\Jobs\PrepararActaReservaVehiculoKizeo;
 use App\Mail\ReservaVehiculoMail;
+use App\Models\CentroCosto;
 use App\Models\Rol;
+use App\Models\ReservaVehiculoMotivo;
+use App\Models\SolicitanteReservaVehiculo;
 use App\Models\User;
 use App\Models\Vehiculo;
 use App\Services\OneDriveService;
@@ -16,6 +19,7 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
 use Mockery;
 use Tests\TestCase;
@@ -33,6 +37,7 @@ class ReservaVehiculoTest extends TestCase
             VerificarConsentimientoDatos::class,
             ForcePasswordChange::class,
         ]);
+
     }
 
     protected function tearDown(): void
@@ -1020,5 +1025,236 @@ class ReservaVehiculoTest extends TestCase
             ->assertSee('Completar en Kizeo movil, seccion Recepcion.')
             ->assertDontSee('Kizeo web')
             ->assertDontSee('kizeoforms://--/receipts', false);
+    }
+
+    public function test_requester_can_report_an_eventuality_and_extend_an_active_reservation_from_the_mobile_portal(): void
+    {
+        Mail::fake();
+        $vehiculo = Vehiculo::create([
+            'patente' => 'MOVL-01', 'marca' => 'Chevrolet', 'modelo' => 'N400', 'estado' => 'DISPONIBLE',
+            'reservas_habilitadas' => true,
+        ]);
+        $identidad = ['oid' => 'mobile-user', 'email' => 'movil@saep.cl', 'name' => 'Usuario Movil'];
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-01 08:00:00',
+            'termino' => '2026-08-01 10:00:00',
+            'destino' => 'Centro de distribucion',
+            'motivo' => 'Traslado operativo para visita en terreno',
+        ], $identidad);
+        $reserva->update(['estado' => 'EN_USO']);
+
+        $this->withSession(['reserva_vehiculo_microsoft_identity' => $identidad])
+            ->get(route('reservas-vehiculos.inicio'))
+            ->assertOk()
+            ->assertSee('Reserva en curso')
+            ->assertSee('Reportar eventualidad')
+            ->assertSee('Ampliar horario')
+            ->assertSee($reserva->codigo);
+
+        $this->withSession(['reserva_vehiculo_microsoft_identity' => $identidad])
+            ->post(route('reservas-vehiculos.eventualidades.store', $reserva), [
+                'tipo' => 'RETRASO_DEVOLUCION',
+                'descripcion' => 'La actividad se extendio por una demora en la carga.',
+                'fecha_estimada_devolucion' => '2026-08-01 11:30:00',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Eventualidad informada a Bodega. El aviso quedo registrado en tu reserva.');
+
+        $this->assertDatabaseHas('reserva_vehiculo_eventos', [
+            'reserva_vehiculo_id' => $reserva->id,
+            'accion' => 'EVENTUALIDAD_REPORTADA',
+            'actor_email' => 'movil@saep.cl',
+        ]);
+        Mail::assertSent(ReservaVehiculoMail::class, fn (ReservaVehiculoMail $mail): bool => $mail->tipo === 'eventualidad');
+
+        $this->withSession(['reserva_vehiculo_microsoft_identity' => $identidad])
+            ->post(route('reservas-vehiculos.ampliar', $reserva), [
+                'termino' => '2026-08-01 12:00:00',
+                'motivo' => 'La carga aun no finaliza y se requiere completar el traslado.',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Horario ampliado hasta el 01/08/2026 12:00. Bodega fue notificada.');
+
+        $this->assertDatabaseHas('reservas_vehiculos', [
+            'id' => $reserva->id,
+            'estado' => 'EN_USO',
+            'termino' => '2026-08-01 12:00:00',
+        ]);
+        $this->assertDatabaseHas('reserva_vehiculo_eventos', [
+            'reserva_vehiculo_id' => $reserva->id,
+            'accion' => 'RESERVA_AMPLIADA',
+        ]);
+        Mail::assertSent(ReservaVehiculoMail::class, fn (ReservaVehiculoMail $mail): bool => $mail->tipo === 'ampliacion');
+    }
+
+    public function test_active_reservation_cannot_be_extended_into_another_booking_or_its_operational_margin(): void
+    {
+        $vehiculo = Vehiculo::create([
+            'patente' => 'MARG-01', 'marca' => 'Chevrolet', 'modelo' => 'Sail', 'estado' => 'DISPONIBLE',
+            'reservas_habilitadas' => true,
+        ]);
+        $service = app(ReservaVehiculoService::class);
+        $identidad = ['oid' => 'margin-user', 'email' => 'margen@saep.cl', 'name' => 'Usuario Margen'];
+        $enCurso = $service->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-01 08:00:00',
+            'termino' => '2026-08-01 10:00:00',
+            'motivo' => 'Traslado temprano de prueba',
+        ], $identidad);
+        $enCurso->update(['estado' => 'EN_USO']);
+        $service->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-01 12:00:00',
+            'termino' => '2026-08-01 14:00:00',
+            'motivo' => 'Reserva posterior que debe mantenerse protegida',
+        ], ['oid' => 'later-user', 'email' => 'posterior@saep.cl', 'name' => 'Usuario Posterior']);
+
+        try {
+            $service->ampliarReserva($enCurso, [
+                'termino' => '2026-08-01 11:30:00',
+                'motivo' => 'Necesito mas tiempo por una demora de carga.',
+            ], $identidad);
+            $this->fail('La ampliacion que invade el margen operativo debio rechazarse.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('termino', $exception->errors());
+            $this->assertStringContainsString('margen operativo de 60 minutos', $exception->errors()['termino'][0]);
+        }
+
+        $this->assertDatabaseHas('reservas_vehiculos', [
+            'id' => $enCurso->id,
+            'termino' => '2026-08-01 10:00:00',
+        ]);
+    }
+
+    public function test_public_portal_blocks_same_day_bookings_after_the_operational_cutoff(): void
+    {
+        Queue::fake();
+        Mail::fake();
+        Carbon::setTestNow(Carbon::parse('2026-08-01 16:15:00'));
+
+        $vehiculo = Vehiculo::create([
+            'patente' => 'CUT-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE',
+            'reservas_habilitadas' => true,
+        ]);
+        $centro = CentroCosto::create(['codigo' => 'CD_QA', 'nombre' => 'Centro QA', 'razon_social' => 'NORMAL', 'activo' => true]);
+        $motivo = ReservaVehiculoMotivo::query()->where('activo', true)->firstOrFail();
+        $identidad = ['oid' => 'cutoff-user', 'email' => 'corte@saep.cl', 'name' => 'Usuario Corte'];
+
+        $this->withSession(['reserva_vehiculo_microsoft_identity' => $identidad])
+            ->post(route('reservas-vehiculos.store'), [
+                'vehiculo_id' => $vehiculo->id,
+                'inicio' => '2026-08-01 17:00:00',
+                'termino' => '2026-08-01 18:00:00',
+                'destinos' => [$centro->id],
+                'motivo_id' => $motivo->id,
+            ])
+            ->assertSessionHasErrors('inicio');
+
+        $this->assertDatabaseCount('reservas_vehiculos', 0);
+
+        $this->withSession(['reserva_vehiculo_microsoft_identity' => $identidad])
+            ->post(route('reservas-vehiculos.store'), [
+                'vehiculo_id' => $vehiculo->id,
+                'inicio' => '2026-08-02 08:00:00',
+                'termino' => '2026-08-02 09:00:00',
+                'destinos' => [$centro->id],
+                'motivo_id' => $motivo->id,
+                'motivo_detalle' => 'Entrega de materiales',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('reservas_vehiculos', [
+            'vehiculo_id' => $vehiculo->id,
+            'destino' => 'Centro QA',
+            'motivo' => $motivo->nombre.' — Entrega de materiales',
+        ]);
+        Queue::assertPushed(PrepararActaReservaVehiculoKizeo::class);
+    }
+
+    public function test_bodega_can_create_and_reprogram_a_reservation_for_another_person_with_calendar_visibility(): void
+    {
+        Queue::fake();
+        Mail::fake();
+
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operator = User::create([
+            'name' => 'Coordinador Reservas', 'email' => 'coordinador.reservas@saep.cl', 'rol_id' => $role->id,
+            'password' => bcrypt('secret'), 'activo' => true,
+        ]);
+        $vehiculoOriginal = Vehiculo::create([
+            'patente' => 'EDIT-01', 'marca' => 'Chevrolet', 'modelo' => 'Sail', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $vehiculoNuevo = Vehiculo::create([
+            'patente' => 'EDIT-02', 'marca' => 'Chevrolet', 'modelo' => 'N400', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $vehiculoTercero = Vehiculo::create([
+            'patente' => 'EDIT-03', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $centro = CentroCosto::create(['codigo' => 'BOD_QA', 'nombre' => 'Bodega QA', 'razon_social' => 'NORMAL', 'activo' => true]);
+        $motivo = ReservaVehiculoMotivo::query()->where('activo', true)->firstOrFail();
+        $solicitante = SolicitanteReservaVehiculo::create([
+            'nombre' => 'Persona Programada', 'email' => 'persona.programada@saep.cl', 'activo' => true,
+        ]);
+
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculoOriginal->id,
+            'inicio' => '2026-08-02 09:00:00',
+            'termino' => '2026-08-02 10:00:00',
+            'motivo' => 'Reserva original que sera reprogramada',
+        ], ['oid' => 'original-requester', 'email' => 'original@saep.cl', 'name' => 'Persona Original']);
+
+        $this->actingAs($operator)
+            ->post(route('gestion-vehiculos.reservas.store'), [
+                'vehiculo_id' => $vehiculoTercero->id,
+                'inicio' => '2026-08-03 09:00:00',
+                'termino' => '2026-08-03 10:00:00',
+                'solicitante_id' => $solicitante->id,
+                'solicitante_nombre' => $solicitante->nombre,
+                'solicitante_email' => $solicitante->email,
+                'destinos' => [$centro->id],
+                'motivo_id' => $motivo->id,
+            ])
+            ->assertRedirect(route('gestion-vehiculos.index'));
+
+        $this->assertDatabaseHas('reservas_vehiculos', [
+            'vehiculo_id' => $vehiculoTercero->id,
+            'solicitante_nombre' => 'Persona Programada',
+            'user_id' => $operator->id,
+        ]);
+
+        $this->actingAs($operator)
+            ->put(route('gestion-vehiculos.reservas.programacion.update', $reserva), [
+                'vehiculo_id' => $vehiculoNuevo->id,
+                'inicio' => '2026-08-03 11:00:00',
+                'termino' => '2026-08-03 12:00:00',
+                'solicitante_nombre' => 'Persona Reprogramada',
+                'solicitante_email' => 'persona.reprogramada@saep.cl',
+                'destinos' => [$centro->id],
+                'motivo_id' => $motivo->id,
+                'motivo_detalle' => 'Cambio coordinado por Bodega',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('reservas_vehiculos', [
+            'id' => $reserva->id,
+            'vehiculo_id' => $vehiculoNuevo->id,
+            'solicitante_nombre' => 'Persona Reprogramada',
+            'inicio' => '2026-08-03 11:00:00',
+        ]);
+        $this->assertDatabaseHas('reserva_vehiculo_eventos', [
+            'reserva_vehiculo_id' => $reserva->id,
+            'accion' => 'RESERVA_REPROGRAMADA_BODEGA',
+            'user_id' => $operator->id,
+        ]);
+        Mail::assertSent(ReservaVehiculoMail::class, fn (ReservaVehiculoMail $mail): bool => $mail->tipo === 'reprogramacion');
+
+        $this->actingAs($operator)
+            ->get(route('gestion-vehiculos.index', ['semana' => '2026-08-03']))
+            ->assertOk()
+            ->assertSee('Calendario de reservas')
+            ->assertSee('Persona Reprogramada')
+            ->assertSee('EDIT-02');
     }
 }

@@ -79,6 +79,37 @@ class ReservaVehiculoService
         return max(30, min(480, (int) config('services.reservas_vehiculos.default_duration_minutes', 60)));
     }
 
+    /**
+     * El portal respeta el corte operativo diario sin limitar las reservas que
+     * Bodega debe registrar o corregir desde la administracion interna.
+     */
+    public function minimoInicioPortal(?CarbonInterface $referencia = null): Carbon
+    {
+        $ahora = $referencia ? Carbon::instance($referencia) : now();
+        $horaCorte = max(0, min(23, (int) config('services.reservas_vehiculos.same_day_cutoff_hour', 16)));
+
+        return $ahora->hour >= $horaCorte
+            ? $ahora->copy()->addDay()->startOfDay()
+            : $ahora->copy();
+    }
+
+    public function validarInicioPortal(CarbonInterface|string $inicio): void
+    {
+        $fecha = $inicio instanceof CarbonInterface ? Carbon::instance($inicio) : Carbon::parse($inicio);
+        $minimo = $this->minimoInicioPortal();
+
+        if ($fecha->lessThan($minimo)) {
+            throw ValidationException::withMessages([
+                'inicio' => $this->mensajeCortePortal(),
+            ]);
+        }
+    }
+
+    public function mensajeCortePortal(): string
+    {
+        return 'Despues de las '.str_pad((string) max(0, min(23, (int) config('services.reservas_vehiculos.same_day_cutoff_hour', 16))), 2, '0', STR_PAD_LEFT).':00, las reservas deben comenzar desde el dia siguiente.';
+    }
+
     public function crearReserva(array $data, array $identidad, ?User $operador = null): ReservaVehiculo
     {
         $inicio = Carbon::parse($data['inicio']);
@@ -184,6 +215,119 @@ class ReservaVehiculoService
         return $reserva;
     }
 
+    /**
+     * Registra un aviso del solicitante mientras mantiene la custodia del movil.
+     * La reserva no se modifica: el aviso queda disponible para Bodega y se
+     * notifica por correo de inmediato.
+     */
+    public function reportarEventualidad(ReservaVehiculo $reserva, array $data, array $identidad): ReservaVehiculo
+    {
+        if (! in_array($reserva->estado, ['EN_USO', 'VENCIDA'], true)) {
+            throw ValidationException::withMessages([
+                'reserva' => 'Solo puedes reportar eventualidades de una reserva que esta en uso o vencida.',
+            ]);
+        }
+
+        $tipo = (string) $data['tipo'];
+        if (! array_key_exists($tipo, ReservaVehiculo::TIPOS_EVENTUALIDAD)) {
+            throw ValidationException::withMessages(['tipo' => 'Selecciona un tipo de eventualidad valido.']);
+        }
+
+        $devolucionEstimada = filled($data['fecha_estimada_devolucion'] ?? null)
+            ? Carbon::parse($data['fecha_estimada_devolucion'])
+            : null;
+
+        $this->registrarEvento(
+            $reserva,
+            'EVENTUALIDAD_REPORTADA',
+            'El solicitante reporto: '.ReservaVehiculo::TIPOS_EVENTUALIDAD[$tipo].'.',
+            $identidad,
+            null,
+            [
+                'tipo' => $tipo,
+                'tipo_label' => ReservaVehiculo::TIPOS_EVENTUALIDAD[$tipo],
+                'descripcion' => trim((string) $data['descripcion']),
+                'fecha_estimada_devolucion' => $devolucionEstimada?->toDateTimeString(),
+            ],
+        );
+
+        return $reserva->fresh('vehiculo');
+    }
+
+    /**
+     * Amplia una reserva en curso solo cuando el nuevo tramo, incluido el
+     * margen operativo, no afecta otra reserva de la misma unidad.
+     */
+    public function ampliarReserva(ReservaVehiculo $reserva, array $data, array $identidad): ReservaVehiculo
+    {
+        $nuevoTermino = Carbon::parse($data['termino']);
+
+        $reserva = DB::transaction(function () use ($reserva, $nuevoTermino, $data, $identidad) {
+            $bloqueada = ReservaVehiculo::query()
+                ->with('vehiculo')
+                ->lockForUpdate()
+                ->findOrFail($reserva->id);
+
+            if (! in_array($bloqueada->estado, ['EN_USO', 'VENCIDA'], true)) {
+                throw ValidationException::withMessages([
+                    'reserva' => 'Solo puedes ampliar una reserva que esta en uso o vencida.',
+                ]);
+            }
+
+            $terminoAnterior = $bloqueada->termino->copy();
+            if ($nuevoTermino->lessThanOrEqualTo($terminoAnterior)) {
+                throw ValidationException::withMessages([
+                    'termino' => 'La nueva hora de termino debe ser posterior al horario reservado actualmente.',
+                ]);
+            }
+
+            $vehiculo = Vehiculo::query()->lockForUpdate()->findOrFail($bloqueada->vehiculo_id);
+            [, $terminoBloqueo] = $this->periodoConMargen($bloqueada->inicio, $nuevoTermino);
+            $inicioBloqueo = $bloqueada->inicio->copy()->subMinutes($this->margenReservaMinutos());
+
+            $tieneCruce = $vehiculo->reservas()
+                ->whereKeyNot($bloqueada->id)
+                ->whereIn('estado', ReservaVehiculo::ESTADOS_BLOQUEANTES)
+                ->where('inicio', '<', $terminoBloqueo)
+                ->where('termino', '>', $inicioBloqueo)
+                ->exists();
+
+            if ($tieneCruce) {
+                throw ValidationException::withMessages([
+                    'termino' => 'No es posible ampliar este horario porque afectaria otra reserva o su margen operativo de '.$this->margenReservaMinutos().' minutos. Reporta la eventualidad para que Bodega pueda coordinar contigo.',
+                ]);
+            }
+
+            $estadoAnterior = $bloqueada->estado;
+            $bloqueada->update([
+                'termino' => $nuevoTermino,
+                // Una extension vigente regulariza una reserva que el proceso
+                // automatico pudo marcar como vencida antes del aviso.
+                'estado' => $estadoAnterior === 'VENCIDA' ? 'EN_USO' : $estadoAnterior,
+            ]);
+
+            $this->registrarEvento(
+                $bloqueada,
+                'RESERVA_AMPLIADA',
+                'Reserva ampliada por el solicitante desde el portal.',
+                $identidad,
+                null,
+                [
+                    'termino_anterior' => $terminoAnterior->toDateTimeString(),
+                    'termino_nuevo' => $nuevoTermino->toDateTimeString(),
+                    'motivo' => trim((string) $data['motivo']),
+                    'estado_anterior' => $estadoAnterior,
+                ],
+            );
+
+            return $bloqueada->fresh('vehiculo');
+        });
+
+        $this->sincronizarCalendario($reserva, 'Ampliacion registrada desde el portal de reservas.');
+
+        return $reserva;
+    }
+
     public function actualizarEstado(ReservaVehiculo $reserva, string $estado, User $operador): ReservaVehiculo
     {
         if (! array_key_exists($estado, ReservaVehiculo::ESTADOS)) {
@@ -204,14 +348,131 @@ class ReservaVehiculoService
         return $reserva;
     }
 
+    /**
+     * Bodega puede reprogramar una reserva confirmada antes de que exista una
+     * ficha o acta Kizeo. La validacion bloquea ambas unidades cuando se cambia
+     * de vehiculo para conservar el margen operativo.
+     */
+    public function reprogramarReserva(ReservaVehiculo $reserva, array $data, array $identidad, User $operador): ReservaVehiculo
+    {
+        $inicio = Carbon::parse($data['inicio']);
+        $termino = Carbon::parse($data['termino']);
+
+        if ($inicio->lessThan(now())) {
+            throw ValidationException::withMessages([
+                'inicio' => 'La nueva hora de inicio debe ser igual o posterior a la hora actual.',
+            ]);
+        }
+
+        if ($termino->lessThanOrEqualTo($inicio)) {
+            throw ValidationException::withMessages([
+                'termino' => 'El termino debe ser posterior al inicio de la reserva.',
+            ]);
+        }
+
+        $reserva = DB::transaction(function () use ($reserva, $data, $identidad, $operador, $inicio, $termino) {
+            $bloqueada = ReservaVehiculo::query()->lockForUpdate()->findOrFail($reserva->id);
+
+            if ($bloqueada->estado !== 'CONFIRMADA') {
+                throw ValidationException::withMessages([
+                    'reserva' => 'Solo se puede reprogramar una reserva confirmada. Las reservas en uso o cerradas se mantienen como trazabilidad operativa.',
+                ]);
+            }
+
+            if ($bloqueada->kizeo_form_id || $bloqueada->kizeo_data_id || $bloqueada->kizeo_pushed_at || $bloqueada->kizeo_entrega_sharepoint_path || $bloqueada->kizeo_devolucion_sharepoint_path) {
+                throw ValidationException::withMessages([
+                    'reserva' => 'Esta reserva ya tiene una ficha o acta Kizeo asociada. No se puede cambiar vehiculo, fecha u horario para evitar inconsistencias en la entrega.',
+                ]);
+            }
+
+            $vehiculoIds = collect([$bloqueada->vehiculo_id, (int) $data['vehiculo_id']])->unique()->sort()->values();
+            $vehiculos = Vehiculo::query()->whereIn('id', $vehiculoIds)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $vehiculo = $vehiculos->get((int) $data['vehiculo_id']);
+
+            if (! $vehiculo || $vehiculo->estado !== 'DISPONIBLE' || ! $vehiculo->reservas_habilitadas) {
+                throw ValidationException::withMessages([
+                    'vehiculo_id' => 'El vehiculo seleccionado no se encuentra habilitado para reservas.',
+                ]);
+            }
+
+            [$inicioBloqueo, $terminoBloqueo] = $this->periodoConMargen($inicio, $termino);
+            $tieneCruce = $vehiculo->reservas()
+                ->whereKeyNot($bloqueada->id)
+                ->whereIn('estado', ReservaVehiculo::ESTADOS_BLOQUEANTES)
+                ->where('inicio', '<', $terminoBloqueo)
+                ->where('termino', '>', $inicioBloqueo)
+                ->exists();
+
+            if ($tieneCruce) {
+                throw ValidationException::withMessages([
+                    'vehiculo_id' => 'El vehiculo no esta disponible en este rango: se requiere un margen operativo de '.$this->margenReservaMinutos().' minutos entre reservas.',
+                ]);
+            }
+
+            $anterior = [
+                'vehiculo_id' => $bloqueada->vehiculo_id,
+                'inicio' => $bloqueada->inicio->toDateTimeString(),
+                'termino' => $bloqueada->termino->toDateTimeString(),
+                'solicitante_nombre' => $bloqueada->solicitante_nombre,
+                'solicitante_email' => $bloqueada->solicitante_email,
+                'destino' => $bloqueada->destino,
+                'motivo' => $bloqueada->motivo,
+            ];
+
+            $bloqueada->update([
+                'vehiculo_id' => $vehiculo->id,
+                'solicitante_oid' => $identidad['oid'] ?? null,
+                'solicitante_email' => strtolower((string) $identidad['email']),
+                'solicitante_nombre' => $identidad['name'],
+                'solicitante_telefono' => $data['solicitante_telefono'] ?? null,
+                'inicio' => $inicio,
+                'termino' => $termino,
+                'destino' => $data['destino'] ?? null,
+                'motivo' => $data['motivo'],
+                'pasajeros' => $data['pasajeros'] ?? null,
+            ]);
+
+            $this->registrarEvento(
+                $bloqueada,
+                'RESERVA_REPROGRAMADA_BODEGA',
+                'Reserva reprogramada por Bodega.',
+                $identidad,
+                $operador,
+                [
+                    'anterior' => $anterior,
+                    'actual' => [
+                        'vehiculo_id' => $vehiculo->id,
+                        'inicio' => $inicio->toDateTimeString(),
+                        'termino' => $termino->toDateTimeString(),
+                        'solicitante_nombre' => $identidad['name'],
+                        'solicitante_email' => strtolower((string) $identidad['email']),
+                        'destino' => $data['destino'] ?? null,
+                        'motivo' => $data['motivo'],
+                    ],
+                ],
+            );
+
+            return $bloqueada->fresh('vehiculo');
+        });
+
+        $this->sincronizarCalendario($reserva, 'Reserva reprogramada por Bodega en el calendario compartido.');
+
+        return $reserva;
+    }
+
     public function enviarConfirmacion(ReservaVehiculo $reserva): void
     {
         $this->enviarAlSolicitanteConCopiaBodega($reserva, 'confirmacion');
     }
 
-    public function enviarActualizacion(ReservaVehiculo $reserva, string $tipo): void
+    public function enviarActualizacion(ReservaVehiculo $reserva, string $tipo, ?array $contexto = null): void
     {
-        $this->enviarAlSolicitanteConCopiaBodega($reserva, $tipo);
+        $this->enviarAlSolicitanteConCopiaBodega($reserva, $tipo, null, $contexto);
+    }
+
+    public function enviarReprogramacion(ReservaVehiculo $reserva, User $operador): void
+    {
+        $this->enviarAlSolicitanteConCopiaBodega($reserva, 'reprogramacion', $operador);
     }
 
     public function enviarEliminacion(ReservaVehiculo $reserva, User $operador): void
@@ -280,7 +541,7 @@ class ReservaVehiculoService
      * El solicitante es el destinatario principal. Los gestores de Bodega reciben
      * el mismo aviso en copia, sin incluir superadministradores por defecto.
      */
-    private function enviarAlSolicitanteConCopiaBodega(ReservaVehiculo $reserva, string $tipo, ?User $actor = null): void
+    private function enviarAlSolicitanteConCopiaBodega(ReservaVehiculo $reserva, string $tipo, ?User $actor = null, ?array $contexto = null): void
     {
         $reserva->loadMissing('vehiculo');
 
@@ -302,7 +563,7 @@ class ReservaVehiculoService
             $correo->cc($gestores->all());
         }
 
-        $correo->send(new ReservaVehiculoMail($reserva, $tipo, $actor));
+        $correo->send(new ReservaVehiculoMail($reserva, $tipo, $actor, $contexto));
     }
 
     private function sincronizarCalendario(ReservaVehiculo $reserva, string $resumen): void

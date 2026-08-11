@@ -2,13 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\PrepararActaReservaVehiculoKizeo;
+use App\Models\CentroCosto;
 use App\Models\ReservaVehiculo;
+use App\Models\ReservaVehiculoMotivo;
 use App\Models\SolicitanteReservaVehiculo;
 use App\Models\Vehiculo;
 use App\Services\ReservaVehiculoCalendarService;
 use App\Services\ReservaVehiculoKizeoService;
 use App\Services\ReservaVehiculoService;
 use App\Services\OneDriveService;
+use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -64,6 +68,31 @@ class GestionVehiculosController extends Controller
         $proximasReservas = $reservasEnCurso;
 
         $solicitantes = SolicitanteReservaVehiculo::query()->orderBy('nombre')->get();
+        $semanaCalendario = $this->semanaCalendario($request);
+        $agendaCalendario = $this->reservas->agendaSemanal(
+            $semanaCalendario,
+            $semanaCalendario->copy()->addWeek(),
+        );
+        $vehiculosReservables = Vehiculo::query()
+            ->where('estado', 'DISPONIBLE')
+            ->where('reservas_habilitadas', true)
+            ->orderBy('sede')
+            ->orderBy('patente')
+            ->get();
+        $centrosDestino = CentroCosto::query()
+            ->where('activo', true)
+            ->orderBy('nombre')
+            ->get(['id', 'codigo', 'nombre']);
+        $motivosReserva = ReservaVehiculoMotivo::query()
+            ->where('activo', true)
+            ->orderBy('orden')
+            ->orderBy('nombre')
+            ->get();
+        $motivosGestion = ReservaVehiculoMotivo::query()
+            ->orderBy('activo', 'desc')
+            ->orderBy('orden')
+            ->orderBy('nombre')
+            ->get();
 
         return view('gestion_vehiculos.index', compact(
             'vehiculos',
@@ -71,6 +100,12 @@ class GestionVehiculosController extends Controller
             'reservasEnCurso',
             'reservasGestionadas',
             'solicitantes',
+            'semanaCalendario',
+            'agendaCalendario',
+            'vehiculosReservables',
+            'centrosDestino',
+            'motivosReserva',
+            'motivosGestion',
             'estado',
             'buscar',
         ) + [
@@ -159,6 +194,49 @@ class GestionVehiculosController extends Controller
         return back()->with('success', 'Estado de la reserva '.$reserva->codigo.' actualizado.');
     }
 
+    public function storeReservaBodega(Request $request)
+    {
+        $data = $this->validarReservaBodega($request);
+        $identidad = $this->identidadSolicitante($data);
+        $reserva = $this->reservas->crearReserva($data, $identidad, $request->user());
+
+        if ($this->kizeo->estaConfigurado()) {
+            try {
+                PrepararActaReservaVehiculoKizeo::dispatch($reserva->id);
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+
+        try {
+            $this->reservas->enviarConfirmacion($reserva);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
+        return redirect()->route('gestion-vehiculos.index')
+            ->with('success', 'Reserva '.$reserva->codigo.' creada a nombre de '.$reserva->solicitante_nombre.'.');
+    }
+
+    public function reprogramarReserva(Request $request, ReservaVehiculo $reserva)
+    {
+        $data = $this->validarReservaBodega($request);
+        $reserva = $this->reservas->reprogramarReserva(
+            $reserva,
+            $data,
+            $this->identidadSolicitante($data),
+            $request->user(),
+        );
+
+        try {
+            $this->reservas->enviarReprogramacion($reserva, $request->user());
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
+        return back()->with('success', 'Reserva '.$reserva->codigo.' actualizada. Se notifico al solicitante y a Bodega.');
+    }
+
     public function eliminarReserva(Request $request, ReservaVehiculo $reserva)
     {
         $reserva->loadMissing('vehiculo');
@@ -207,6 +285,20 @@ class GestionVehiculosController extends Controller
         return back()->with('success', 'Solicitante actualizado.');
     }
 
+    public function storeMotivo(Request $request)
+    {
+        ReservaVehiculoMotivo::create($this->validarMotivo($request));
+
+        return back()->with('success', 'Motivo de reserva incorporado al formulario.');
+    }
+
+    public function updateMotivo(Request $request, ReservaVehiculoMotivo $motivo)
+    {
+        $motivo->update($this->validarMotivo($request, $motivo));
+
+        return back()->with('success', 'Motivo de reserva actualizado.');
+    }
+
     private function validarVehiculo(Request $request, ?Vehiculo $vehiculo = null): array
     {
         return $request->validate([
@@ -253,5 +345,80 @@ class GestionVehiculosController extends Controller
             ],
             'activo' => ['nullable', 'boolean'],
         ]) + ['activo' => $request->boolean('activo')];
+    }
+
+    private function validarReservaBodega(Request $request): array
+    {
+        $data = $request->validate([
+            'vehiculo_id' => ['required', 'integer', Rule::exists('vehiculos', 'id')],
+            'inicio' => ['required', 'date', 'after_or_equal:now'],
+            'termino' => ['required', 'date', 'after:inicio'],
+            'solicitante_id' => ['nullable', 'integer', Rule::exists('solicitantes_reserva_vehiculo', 'id')],
+            'solicitante_nombre' => ['required', 'string', 'max:200'],
+            'solicitante_email' => ['required', 'email', 'max:200'],
+            'solicitante_telefono' => ['nullable', 'string', 'max:50'],
+            'destinos' => ['nullable', 'array', 'max:12'],
+            'destinos.*' => ['integer', Rule::exists('centros_costo', 'id')->where('activo', true)],
+            'destino_otro' => ['nullable', 'string', 'max:300'],
+            'motivo_id' => ['required', 'integer', Rule::exists('reserva_vehiculo_motivos', 'id')->where('activo', true)],
+            'motivo_detalle' => ['nullable', 'string', 'max:1000'],
+            'pasajeros' => ['nullable', 'integer', 'min:1', 'max:99'],
+        ]);
+
+        $centros = CentroCosto::query()
+            ->where('activo', true)
+            ->whereIn('id', $data['destinos'] ?? [])
+            ->orderBy('nombre')
+            ->pluck('nombre');
+        $destino = $centros
+            ->push(trim((string) ($data['destino_otro'] ?? '')))
+            ->filter()
+            ->unique()
+            ->implode(' · ');
+        $motivo = ReservaVehiculoMotivo::query()->where('activo', true)->findOrFail($data['motivo_id']);
+        $detalle = trim((string) ($data['motivo_detalle'] ?? ''));
+
+        $data['destino'] = $destino !== '' ? $destino : null;
+        $data['motivo'] = $motivo->nombre.($detalle !== '' ? ' — '.$detalle : '');
+
+        return $data;
+    }
+
+    private function identidadSolicitante(array $data): array
+    {
+        return [
+            'email' => strtolower(trim((string) $data['solicitante_email'])),
+            'name' => trim((string) $data['solicitante_nombre']),
+        ];
+    }
+
+    private function validarMotivo(Request $request, ?ReservaVehiculoMotivo $motivo = null): array
+    {
+        $data = $request->validate([
+            'nombre' => [
+                'required', 'string', 'max:200',
+                Rule::unique('reserva_vehiculo_motivos', 'nombre')->ignore($motivo?->id),
+            ],
+            'orden' => ['nullable', 'integer', 'min:0', 'max:9999'],
+            'activo' => ['nullable', 'boolean'],
+        ]);
+
+        $data['orden'] = (int) $request->input('orden', 100);
+        $data['activo'] = $request->boolean('activo');
+
+        return $data;
+    }
+
+    private function semanaCalendario(Request $request): Carbon
+    {
+        try {
+            $fecha = filled($request->input('semana'))
+                ? Carbon::parse($request->input('semana'))
+                : now();
+        } catch (\Throwable) {
+            $fecha = now();
+        }
+
+        return $fecha->copy()->startOfWeek(Carbon::MONDAY);
     }
 }

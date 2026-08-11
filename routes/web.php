@@ -118,6 +118,8 @@ Route::prefix('reservas-vehiculos')->middleware('throttle:90,1')->group(function
     Route::get('/auth/microsoft/callback', [ReservaVehiculoPublicoController::class, 'callbackMicrosoft'])->name('reservas-vehiculos.microsoft.callback');
     Route::post('/', [ReservaVehiculoPublicoController::class, 'guardar'])->middleware('throttle:12,1')->name('reservas-vehiculos.store');
     Route::post('/{reserva}/cancelar', [ReservaVehiculoPublicoController::class, 'cancelar'])->middleware('throttle:12,1')->name('reservas-vehiculos.cancelar');
+    Route::post('/{reserva}/eventualidades', [ReservaVehiculoPublicoController::class, 'reportarEventualidad'])->middleware('throttle:12,1')->name('reservas-vehiculos.eventualidades.store');
+    Route::post('/{reserva}/ampliar', [ReservaVehiculoPublicoController::class, 'ampliar'])->middleware('throttle:12,1')->name('reservas-vehiculos.ampliar');
     Route::post('/logout', [ReservaVehiculoPublicoController::class, 'logout'])->name('reservas-vehiculos.logout');
 });
 
@@ -550,6 +552,12 @@ Route::middleware('auth')->group(function () {
           Route::patch('gestion-vehiculos/reservas/{reserva}', [GestionVehiculosController::class, 'actualizarReserva'])
               ->middleware('modulo:gestion_vehiculos,puede_editar')
               ->name('gestion-vehiculos.reservas.update');
+          Route::post('gestion-vehiculos/reservas', [GestionVehiculosController::class, 'storeReservaBodega'])
+              ->middleware('modulo:gestion_vehiculos,puede_crear')
+              ->name('gestion-vehiculos.reservas.store');
+          Route::put('gestion-vehiculos/reservas/{reserva}/programacion', [GestionVehiculosController::class, 'reprogramarReserva'])
+              ->middleware('modulo:gestion_vehiculos,puede_editar')
+              ->name('gestion-vehiculos.reservas.programacion.update');
           Route::post('gestion-vehiculos/reservas/{reserva}/kizeo', [GestionVehiculosController::class, 'prepararActaKizeo'])
               ->middleware('modulo:gestion_vehiculos,puede_editar')
               ->name('gestion-vehiculos.reservas.kizeo');
@@ -564,6 +572,12 @@ Route::middleware('auth')->group(function () {
           Route::patch('gestion-vehiculos/solicitantes/{solicitante}', [GestionVehiculosController::class, 'updateSolicitante'])
               ->middleware('modulo:gestion_vehiculos,puede_editar')
               ->name('gestion-vehiculos.solicitantes.update');
+          Route::post('gestion-vehiculos/motivos', [GestionVehiculosController::class, 'storeMotivo'])
+              ->middleware('modulo:gestion_vehiculos,puede_crear')
+              ->name('gestion-vehiculos.motivos.store');
+          Route::patch('gestion-vehiculos/motivos/{motivo}', [GestionVehiculosController::class, 'updateMotivo'])
+              ->middleware('modulo:gestion_vehiculos,puede_editar')
+              ->name('gestion-vehiculos.motivos.update');
       });
 
     // --- SST: INSPECCIONES ---

@@ -18,6 +18,7 @@ class ReservaVehiculoMail extends Mailable
         public ReservaVehiculo $reserva,
         public string $tipo,
         public ?User $actor = null,
+        public ?array $contexto = null,
     ) {}
 
     public function envelope(): Envelope
@@ -29,6 +30,9 @@ class ReservaVehiculoMail extends Mailable
             'administracion' => 'Nueva reserva de vehiculo',
             'cancelacion' => 'Reserva de vehiculo cancelada',
             'actualizacion' => 'Reserva de vehiculo actualizada',
+            'reprogramacion' => 'Reserva de vehiculo reprogramada por Bodega',
+            'ampliacion' => 'Horario de reserva ampliado',
+            'eventualidad' => 'Eventualidad reportada en reserva de vehiculo',
             'eliminacion' => 'Reserva de vehiculo eliminada',
             default => 'Actualizacion de reserva de vehiculo',
         };

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\PrepararActaReservaVehiculoKizeo;
+use App\Models\CentroCosto;
 use App\Models\ReservaVehiculo;
+use App\Models\ReservaVehiculoMotivo;
 use App\Services\ReservaVehiculoMicrosoftAuthService;
 use App\Services\ReservaVehiculoService;
 use Carbon\Carbon;
@@ -31,7 +33,8 @@ class ReservaVehiculoPublicoController extends Controller
             'termino' => $periodo['termino'],
             'inicioInput' => $periodo['inicio_input'],
             'terminoInput' => $periodo['termino_input'],
-            'minimoInicioInput' => now()->format('Y-m-d\\TH:i'),
+            'minimoInicioInput' => $this->reservas->minimoInicioPortal()->format('Y-m-d\\TH:i'),
+            'mensajeCortePortal' => $this->reservas->mensajeCortePortal(),
             'duracionReservaPredeterminadaMinutos' => $this->reservas->duracionReservaPredeterminadaMinutos(),
             'rangoPredeterminado' => $periodo['predeterminado'],
             'consultaDisponibilidad' => $periodo['consultada'],
@@ -49,8 +52,26 @@ class ReservaVehiculoPublicoController extends Controller
             'agendaSemanalTermino' => $agendaSemanalTermino,
             'margenReservaMinutos' => $this->reservas->margenReservaMinutos(),
             'calendarioPublicadoUrl' => config('services.reservas_vehiculos.public_calendar_url'),
+            'centrosDestino' => CentroCosto::query()
+                ->where('activo', true)
+                ->orderBy('nombre')
+                ->get(['id', 'codigo', 'nombre']),
+            'motivosReserva' => ReservaVehiculoMotivo::query()
+                ->where('activo', true)
+                ->orderBy('orden')
+                ->orderBy('nombre')
+                ->get(),
             'misReservas' => $identidad
                 ? ReservaVehiculo::query()->with('vehiculo')->where('solicitante_email', $identidad['email'])->latest('inicio')->take(8)->get()
+                : collect(),
+            'reservasEnCurso' => $identidad
+                ? ReservaVehiculo::query()
+                    ->with(['vehiculo', 'eventos' => fn ($query) => $query->latest()->take(4)])
+                    ->whereRaw('LOWER(solicitante_email) = ?', [strtolower($identidad['email'])])
+                    ->whereIn('estado', ['EN_USO', 'VENCIDA'])
+                    ->orderByRaw("CASE WHEN estado = 'VENCIDA' THEN 0 ELSE 1 END")
+                    ->orderBy('termino')
+                    ->get()
                 : collect(),
         ]);
     }
@@ -95,13 +116,18 @@ class ReservaVehiculoPublicoController extends Controller
             'inicio' => ['required', 'date', 'after_or_equal:now'],
             'termino' => ['required', 'date', 'after:inicio'],
             'solicitante_telefono' => ['nullable', 'string', 'max:50'],
-            'destino' => ['nullable', 'string', 'max:300'],
-            'motivo' => ['required', 'string', 'min:8', 'max:2000'],
+            'destinos' => ['nullable', 'array', 'max:12'],
+            'destinos.*' => ['integer', Rule::exists('centros_costo', 'id')->where('activo', true)],
+            'destino_otro' => ['nullable', 'string', 'max:300'],
+            'motivo_id' => ['required', 'integer', Rule::exists('reserva_vehiculo_motivos', 'id')->where('activo', true)],
+            'motivo_detalle' => ['nullable', 'string', 'max:1000'],
             'pasajeros' => ['nullable', 'integer', 'min:1', 'max:99'],
         ], [
             'inicio.after_or_equal' => 'La reserva debe comenzar desde la hora actual en adelante.',
-            'motivo.min' => 'Indica un motivo de al menos 8 caracteres.',
         ]);
+
+        $this->reservas->validarInicioPortal($data['inicio']);
+        $data = $this->prepararDatosReserva($data);
 
         $reserva = $this->reservas->crearReserva($data, $identidad);
 
@@ -141,6 +167,64 @@ class ReservaVehiculoPublicoController extends Controller
         return back()->with('success', 'La reserva '.$reserva->codigo.' fue cancelada.');
     }
 
+    public function reportarEventualidad(Request $request, ReservaVehiculo $reserva)
+    {
+        $identidad = $this->validarSolicitante($request, $reserva);
+
+        $data = $request->validate([
+            'tipo' => ['required', Rule::in(array_keys(ReservaVehiculo::TIPOS_EVENTUALIDAD))],
+            'descripcion' => ['required', 'string', 'min:8', 'max:2000'],
+            'fecha_estimada_devolucion' => ['nullable', 'date', 'after:now'],
+        ], [
+            'descripcion.min' => 'Describe la eventualidad en al menos 8 caracteres.',
+            'fecha_estimada_devolucion.after' => 'La hora estimada de devolucion debe ser posterior a la hora actual.',
+        ]);
+
+        if ($data['tipo'] === 'RETRASO_DEVOLUCION' && empty($data['fecha_estimada_devolucion'])) {
+            return back()->withErrors([
+                'fecha_estimada_devolucion' => 'Indica la hora estimada de devolucion para informar el retraso.',
+            ])->withInput();
+        }
+
+        $reserva = $this->reservas->reportarEventualidad($reserva, $data, $identidad);
+
+        try {
+            $this->reservas->enviarActualizacion($reserva, 'eventualidad', [
+                'tipo_label' => ReservaVehiculo::TIPOS_EVENTUALIDAD[$data['tipo']],
+                'descripcion' => $data['descripcion'],
+                'fecha_estimada_devolucion' => $data['fecha_estimada_devolucion'] ?? null,
+            ]);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
+        return back()->with('success', 'Eventualidad informada a Bodega. El aviso quedo registrado en tu reserva.');
+    }
+
+    public function ampliar(Request $request, ReservaVehiculo $reserva)
+    {
+        $identidad = $this->validarSolicitante($request, $reserva);
+
+        $data = $request->validate([
+            'termino' => ['required', 'date'],
+            'motivo' => ['required', 'string', 'min:8', 'max:1000'],
+        ], [
+            'motivo.min' => 'Indica el motivo de la ampliacion en al menos 8 caracteres.',
+        ]);
+
+        $reserva = $this->reservas->ampliarReserva($reserva, $data, $identidad);
+
+        try {
+            $this->reservas->enviarActualizacion($reserva, 'ampliacion', [
+                'motivo' => $data['motivo'],
+            ]);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
+        return back()->with('success', 'Horario ampliado hasta el '.$reserva->termino->format('d/m/Y H:i').'. Bodega fue notificada.');
+    }
+
     public function logout(Request $request)
     {
         $this->microsoft->cerrarSesion($request);
@@ -153,9 +237,12 @@ class ReservaVehiculoPublicoController extends Controller
     {
         $inicioInput = trim((string) $request->input('inicio', ''));
         $terminoInput = trim((string) $request->input('termino', ''));
+        $minimoInicio = $this->reservas->minimoInicioPortal();
 
         if ($inicioInput === '' && $terminoInput === '') {
-            $inicio = now()->copy()->startOfHour()->addHour();
+            $inicio = $minimoInicio->copy()->isSameDay(now())
+                ? $minimoInicio->copy()->startOfHour()->addHour()
+                : $minimoInicio->copy();
             $termino = $inicio->copy()->addMinutes($this->reservas->duracionReservaPredeterminadaMinutos());
 
             return [
@@ -208,7 +295,7 @@ class ReservaVehiculoPublicoController extends Controller
             ];
         }
 
-        if ($inicio->lessThan(now())) {
+        if ($inicio->lessThan($minimoInicio)) {
             return [
                 'inicio' => null,
                 'termino' => null,
@@ -216,7 +303,7 @@ class ReservaVehiculoPublicoController extends Controller
                 'termino_input' => $terminoInput,
                 'consultada' => false,
                 'predeterminado' => false,
-                'error' => 'El inicio debe ser igual o posterior a la hora actual.',
+                'error' => $this->reservas->mensajeCortePortal(),
             ];
         }
 
@@ -242,5 +329,36 @@ class ReservaVehiculoPublicoController extends Controller
         }
 
         return $fecha->copy()->startOfWeek(Carbon::MONDAY);
+    }
+
+    private function validarSolicitante(Request $request, ReservaVehiculo $reserva): array
+    {
+        $identidad = $this->microsoft->identidad($request);
+        if (! $identidad || strtolower($reserva->solicitante_email) !== strtolower($identidad['email'])) {
+            abort(403, 'No puedes gestionar una reserva de otra persona.');
+        }
+
+        return $identidad;
+    }
+
+    private function prepararDatosReserva(array $data): array
+    {
+        $centros = CentroCosto::query()
+            ->where('activo', true)
+            ->whereIn('id', $data['destinos'] ?? [])
+            ->orderBy('nombre')
+            ->pluck('nombre');
+        $destino = $centros
+            ->push(trim((string) ($data['destino_otro'] ?? '')))
+            ->filter()
+            ->unique()
+            ->implode(' · ');
+        $motivo = ReservaVehiculoMotivo::query()->where('activo', true)->findOrFail($data['motivo_id']);
+        $detalle = trim((string) ($data['motivo_detalle'] ?? ''));
+
+        $data['destino'] = $destino !== '' ? $destino : null;
+        $data['motivo'] = $motivo->nombre.($detalle !== '' ? ' — '.$detalle : '');
+
+        return $data;
     }
 }

@@ -24,6 +24,12 @@ class ReservaVehiculo extends Model
         'VENCIDA' => 'Vencida',
     ];
 
+    public const TIPOS_EVENTUALIDAD = [
+        'RETRASO_DEVOLUCION' => 'Retraso en la devolucion',
+        'INCIDENTE_VEHICULO' => 'Incidente con el vehiculo',
+        'OTRA_EVENTUALIDAD' => 'Otra eventualidad',
+    ];
+
     protected $guarded = ['id'];
 
     protected $table = 'reservas_vehiculos';
