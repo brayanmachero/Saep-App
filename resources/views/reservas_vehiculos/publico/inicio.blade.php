@@ -30,7 +30,7 @@
         @media(max-width:560px){.vr-active-reservations{margin-top:22px}.vr-active-head{padding:15px 15px 0;align-items:flex-start}.vr-active-head h2{font-size:1rem}.vr-active-head p{font-size:.75rem}.vr-active-badge{font-size:.62rem}.vr-active-body{padding:13px 15px 15px}.vr-active-facts{grid-template-columns:1fr 1fr;gap:8px}.vr-active-facts div{padding:.68rem}.vr-active-facts dd{font-size:.77rem}.vr-active-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.vr-active-actions .vr-button{width:100%;padding:.55rem .45rem;font-size:.75rem}.vr-action-panel{grid-template-columns:1fr;padding:13px}.vr-action-panel h3,.vr-action-panel p,.vr-action-panel .wide{grid-column:auto}.vr-action-panel-actions{display:grid;grid-template-columns:1fr 1fr}.vr-action-panel-actions .vr-button{width:100%}.vr-active-timeline{margin-top:12px;padding-top:12px}}
     </style>
     <style>
-        .vr-multi-select{position:relative}.vr-multi-select summary{display:flex;align-items:center;justify-content:space-between;min-height:42px;box-sizing:border-box;border:1px solid var(--line);border-radius:6px;padding:.63rem .7rem;background:#fff;color:var(--ink);font-size:.84rem;cursor:pointer;list-style:none}.vr-multi-select summary::-webkit-details-marker{display:none}.vr-multi-select summary::after{content:'⌄';color:var(--muted);font-size:1.1rem}.vr-multi-select[open] summary{border-color:var(--orange);border-bottom-left-radius:0;border-bottom-right-radius:0}.vr-multi-options{position:absolute;z-index:5;top:100%;left:0;right:0;padding:.65rem;border:1px solid var(--orange);border-top:0;border-radius:0 0 6px 6px;background:#fff;box-shadow:0 12px 25px rgba(30,41,59,.16)}.vr-multi-options input[type="search"]{width:100%;box-sizing:border-box;margin-bottom:.55rem;border:1px solid var(--line);border-radius:5px;padding:.55rem .62rem;font:inherit;font-size:.8rem}.vr-multi-list{display:grid;max-height:184px;overflow:auto}.vr-multi-option{display:flex;align-items:flex-start;gap:.55rem;padding:.5rem;border-radius:5px;color:var(--ink);font-size:.8rem;line-height:1.35;cursor:pointer}.vr-multi-option:hover{background:var(--soft)}.vr-multi-option input{margin:.12rem 0 0}.vr-multi-option small{display:block;color:var(--muted);font-size:.68rem}.vr-field-help{display:block;margin-top:.32rem;color:var(--muted);font-size:.7rem;line-height:1.4}@media(max-width:560px){.vr-multi-select summary{min-height:44px;font-size:16px}.vr-multi-options{position:relative}.vr-multi-options input[type="search"]{font-size:16px}.vr-multi-list{max-height:210px}}
+        .vr-multi-select{position:relative}.vr-multi-select summary{display:flex;align-items:center;justify-content:space-between;min-height:42px;box-sizing:border-box;border:1px solid var(--line);border-radius:6px;padding:.63rem .7rem;background:#fff;color:var(--ink);font-size:.84rem;cursor:pointer;list-style:none}.vr-multi-select summary::-webkit-details-marker{display:none}.vr-multi-select summary::after{content:'⌄';color:var(--muted);font-size:1.1rem}.vr-multi-select[open] summary{border-color:var(--orange);border-bottom-left-radius:0;border-bottom-right-radius:0}.vr-multi-options{position:absolute;z-index:5;top:100%;left:0;right:0;padding:.65rem;border:1px solid var(--orange);border-top:0;border-radius:0 0 6px 6px;background:#fff;box-shadow:0 12px 25px rgba(30,41,59,.16)}.vr-multi-options input[type="search"]{width:100%;box-sizing:border-box;margin-bottom:.55rem;border:1px solid var(--line);border-radius:5px;padding:.55rem .62rem;font:inherit;font-size:.8rem}.vr-multi-list{display:grid;max-height:184px;overflow:auto}.vr-multi-option{display:flex;align-items:flex-start;gap:.55rem;padding:.5rem;border-radius:5px;color:var(--ink);font-size:.8rem;line-height:1.35;cursor:pointer}.vr-multi-option.is-filtered-out,.vr-field-help[hidden]{display:none!important}.vr-multi-option:hover{background:var(--soft)}.vr-multi-option input{margin:.12rem 0 0}.vr-multi-option small{display:block;color:var(--muted);font-size:.68rem}.vr-field-help{display:block;margin-top:.32rem;color:var(--muted);font-size:.7rem;line-height:1.4}@media(max-width:560px){.vr-multi-select summary{min-height:44px;font-size:16px}.vr-multi-options{position:relative}.vr-multi-options input[type="search"]{font-size:16px}.vr-multi-list{max-height:210px}}
     </style>
 </head>
 <body class="vr-body">
@@ -75,7 +75,7 @@
                                             <input type="search" placeholder="Buscar centro..." aria-label="Buscar centro de destino" data-destination-search>
                                             <div class="vr-multi-list">
                                                 @forelse($centrosDestino as $centro)
-                                                    <label class="vr-multi-option" data-destination-option>
+                                                    <label class="vr-multi-option" data-destination-option data-destination-search-text="{{ $centro->nombre }} {{ $centro->codigo }}">
                                                         <input type="checkbox" name="destinos[]" value="{{ $centro->id }}" @checked(in_array($centro->id, old('destinos', []))) data-destination-check>
                                                         <span>{{ $centro->nombre }}@if($centro->codigo)<small>{{ $centro->codigo }}</small>@endif</span>
                                                     </label>
@@ -83,6 +83,7 @@
                                                     <span class="vr-field-help">No hay centros activos cargados todavia. Puedes informar la referencia manual abajo.</span>
                                                 @endforelse
                                             </div>
+                                            <span class="vr-field-help" data-destination-empty hidden>No se encontraron centros con esa búsqueda.</span>
                                         </div>
                                     </details>
                                     <small class="vr-field-help">Puedes seleccionar mas de un centro y buscar por nombre o codigo.</small>
@@ -153,10 +154,25 @@
             if (label) label.textContent = selected.length ? `${selected.length} centro(s) seleccionado(s)` : 'Selecciona uno o mas centros';
         };
         checks.forEach((check) => check.addEventListener('change', syncLabel));
-        search?.addEventListener('input', () => {
-            const query = search.value.trim().toLocaleLowerCase('es');
-            options.forEach((option) => { option.hidden = query !== '' && !option.innerText.toLocaleLowerCase('es').includes(query); });
-        });
+        const normaliseSearch = (value) => value
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLocaleLowerCase('es');
+        const emptyState = select.querySelector('[data-destination-empty]');
+        const filterOptions = () => {
+            const query = normaliseSearch(search?.value.trim() || '');
+            let visible = 0;
+            options.forEach((option) => {
+                const searchable = normaliseSearch(option.dataset.destinationSearchText || option.textContent || '');
+                const matches = query === '' || searchable.includes(query);
+                option.classList.toggle('is-filtered-out', !matches);
+                option.setAttribute('aria-hidden', matches ? 'false' : 'true');
+                if (matches) visible += 1;
+            });
+            if (emptyState) emptyState.hidden = visible !== 0;
+        };
+        search?.addEventListener('input', filterOptions);
+        filterOptions();
         syncLabel();
     });
 
