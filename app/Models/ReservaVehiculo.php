@@ -66,4 +66,26 @@ class ReservaVehiculo extends Model
     {
         return in_array($this->estado, self::ESTADOS_BLOQUEANTES, true);
     }
+
+    /**
+     * Una ficha enviada por Push a Kizeo queda pendiente en la bandeja móvil;
+     * no equivale a un acta firmada. Solo el retorno del acta marca la entrega
+     * o devolución como trazable e inmodificable.
+     */
+    public function tieneActaKizeoCompletada(): bool
+    {
+        return $this->entregada_at !== null
+            || $this->devuelta_at !== null
+            || filled($this->kizeo_synced_at)
+            || filled($this->kizeo_entrega_sharepoint_path)
+            || filled($this->kizeo_devolucion_sharepoint_path);
+    }
+
+    public function tieneFichaKizeoPendiente(): bool
+    {
+        return ! $this->tieneActaKizeoCompletada()
+            && (filled($this->kizeo_form_id)
+                || filled($this->kizeo_data_id)
+                || $this->kizeo_pushed_at !== null);
+    }
 }

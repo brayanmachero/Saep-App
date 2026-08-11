@@ -349,9 +349,9 @@ class ReservaVehiculoService
     }
 
     /**
-     * Bodega puede reprogramar una reserva confirmada antes de que exista una
-     * ficha o acta Kizeo. La validacion bloquea ambas unidades cuando se cambia
-     * de vehiculo para conservar el margen operativo.
+     * Bodega puede reprogramar una reserva confirmada mientras la ficha Kizeo
+     * siga pendiente. El bloqueo aplica solo cuando Kizeo devolvio un acta
+     * firmada de entrega o devolución, para mantener la trazabilidad real.
      */
     public function reprogramarReserva(ReservaVehiculo $reserva, array $data, array $identidad, User $operador): ReservaVehiculo
     {
@@ -379,9 +379,9 @@ class ReservaVehiculoService
                 ]);
             }
 
-            if ($bloqueada->kizeo_form_id || $bloqueada->kizeo_data_id || $bloqueada->kizeo_pushed_at || $bloqueada->kizeo_entrega_sharepoint_path || $bloqueada->kizeo_devolucion_sharepoint_path) {
+            if ($bloqueada->tieneActaKizeoCompletada()) {
                 throw ValidationException::withMessages([
-                    'reserva' => 'Esta reserva ya tiene una ficha o acta Kizeo asociada. No se puede cambiar vehiculo, fecha u horario para evitar inconsistencias en la entrega.',
+                    'reserva' => 'Esta reserva ya tiene un acta Kizeo de entrega o devolución registrada. No se puede cambiar vehículo, fecha u horario para mantener la trazabilidad de la entrega.',
                 ]);
             }
 

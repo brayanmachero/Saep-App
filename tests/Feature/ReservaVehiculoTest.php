@@ -700,6 +700,91 @@ class ReservaVehiculoTest extends TestCase
         });
     }
 
+    public function test_bodega_can_reprogram_a_reservation_while_its_kizeo_sheet_is_only_pending(): void
+    {
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operator = User::create([
+            'name' => 'Bodega Reprogramacion',
+            'email' => 'bodega.reprogramacion@saep.cl',
+            'rol_id' => $role->id,
+            'password' => bcrypt('secret'),
+            'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'KPEN-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Traslado pendiente de completar en Kizeo',
+        ], ['oid' => 'kizeo-pending', 'email' => 'pendiente@saep.cl', 'name' => 'Ficha Pendiente'], $operator);
+        $reserva->update([
+            'kizeo_form_id' => '1165545',
+            'kizeo_data_id' => 'kizeo-push-pending',
+            'kizeo_pushed_at' => now(),
+        ]);
+
+        $actualizada = app(ReservaVehiculoService::class)->reprogramarReserva(
+            $reserva,
+            [
+                'vehiculo_id' => $vehiculo->id,
+                'inicio' => '2026-08-03 10:00:00',
+                'termino' => '2026-08-03 12:00:00',
+                'motivo' => 'Traslado reprogramado',
+            ],
+            ['oid' => 'kizeo-pending', 'email' => 'pendiente@saep.cl', 'name' => 'Ficha Pendiente'],
+            $operator,
+        );
+
+        $this->assertSame('2026-08-03 10:00:00', $actualizada->inicio->toDateTimeString());
+        $this->assertSame('kizeo-push-pending', $actualizada->kizeo_data_id);
+        $this->assertTrue($actualizada->tieneFichaKizeoPendiente());
+        $this->assertFalse($actualizada->tieneActaKizeoCompletada());
+    }
+
+    public function test_bodega_cannot_reprogram_after_a_signed_kizeo_delivery(): void
+    {
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operator = User::create([
+            'name' => 'Bodega Acta Firmada',
+            'email' => 'bodega.acta.firmada@saep.cl',
+            'rol_id' => $role->id,
+            'password' => bcrypt('secret'),
+            'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'KSIG-01', 'marca' => 'Fiat', 'modelo' => 'Fiorino', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 11:00:00',
+            'motivo' => 'Traslado con acta de entrega',
+        ], ['oid' => 'kizeo-signed', 'email' => 'firmada@saep.cl', 'name' => 'Acta Firmada'], $operator);
+        $reserva->update([
+            'kizeo_data_id' => 'kizeo-entrega-firmada',
+            'entregada_at' => now(),
+        ]);
+
+        try {
+            app(ReservaVehiculoService::class)->reprogramarReserva(
+                $reserva,
+                [
+                    'vehiculo_id' => $vehiculo->id,
+                    'inicio' => '2026-08-03 10:00:00',
+                    'termino' => '2026-08-03 12:00:00',
+                    'motivo' => 'Intento de cambiar una entrega firmada',
+                ],
+                ['oid' => 'kizeo-signed', 'email' => 'firmada@saep.cl', 'name' => 'Acta Firmada'],
+                $operator,
+            );
+            $this->fail('La reserva con entrega firmada debió mantenerse bloqueada.');
+        } catch (ValidationException $exception) {
+            $this->assertStringContainsString('acta Kizeo de entrega o devolución registrada', $exception->errors()['reserva'][0]);
+        }
+    }
+
     public function test_kizeo_prefill_resolves_the_driver_rut_from_the_requester_and_verifies_it_in_kizeo(): void
     {
         Http::fake([
@@ -991,7 +1076,7 @@ class ReservaVehiculoTest extends TestCase
             ->assertSee('%PDF-1.4 acta entrega');
     }
 
-    public function test_prepared_kizeo_form_explains_that_completion_happens_in_the_mobile_inbox(): void
+    public function test_prepared_kizeo_form_is_marked_pending_and_allows_editing_in_bodega(): void
     {
         $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
         $operator = User::create([
@@ -1012,7 +1097,7 @@ class ReservaVehiculoTest extends TestCase
             'motivo' => 'Ficha Kizeo preparada para acceso web',
         ], ['oid' => 'kizeo-web', 'email' => 'kizeo.web@saep.cl', 'name' => 'Kizeo Web QA']);
         $reserva->update([
-            'estado' => 'CANCELADA',
+            'estado' => 'CONFIRMADA',
             'kizeo_form_id' => '1165545',
             'kizeo_data_id' => 'kizeo-preparada-web',
             'kizeo_pushed_at' => now(),
@@ -1021,10 +1106,10 @@ class ReservaVehiculoTest extends TestCase
         $this->actingAs($operator)
             ->get(route('gestion-vehiculos.index'))
             ->assertOk()
-            ->assertSee('Ficha en Kizeo')
-            ->assertSee('Completar en Kizeo movil, seccion Recepcion.')
-            ->assertDontSee('Kizeo web')
-            ->assertDontSee('kizeoforms://--/receipts', false);
+            ->assertSee('Ficha pendiente')
+            ->assertSee('Sin acta firmada · aún editable')
+            ->assertSee('Editar programacion')
+            ->assertSee('Kizeo: ficha pendiente de completar');
     }
 
     public function test_requester_can_report_an_eventuality_and_extend_an_active_reservation_from_the_mobile_portal(): void
