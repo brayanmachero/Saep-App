@@ -19,6 +19,14 @@ class InventarioMovimiento extends Model
         'REVERSO' => 'Reverso de movimiento',
     ];
 
+    public const TIPOS_DOCUMENTO = [
+        'ACTA' => 'Acta',
+        'FACTURA' => 'Factura',
+        'GUIA_DESPACHO' => 'Guia de despacho',
+        'AJUSTE' => 'Ajuste interno',
+        'OTRO' => 'Otro respaldo',
+    ];
+
     protected $table = 'inventario_movimientos';
 
     protected $fillable = [

@@ -31,6 +31,9 @@
                 <a class="btn btn-primary inventory-btn" href="{{ route('inventario-bodega.index', ['vista' => 'ingresos']) }}#registrar-ingreso">
                     <i class="bi bi-plus-lg"></i><span>Registrar ingreso</span>
                 </a>
+                <a class="btn btn-light inventory-btn" href="{{ route('inventario-bodega.index', ['vista' => 'ingresos']) }}#importar-ingresos">
+                    <i class="bi bi-upload"></i><span>Importar ingresos</span>
+                </a>
             @endif
         </div>
     </div>
@@ -175,15 +178,24 @@
             </div>
             <aside class="inventory-side-note"><i class="bi bi-shield-check"></i><strong>El historial no se borra.</strong><span>Si un ingreso se registró por error, anúlalo con un motivo. Se crean movimientos inversos y queda registrado quién realizó la acción.</span></aside>
         </section>
-        <section class="inventory-section">
-            <div class="inventory-section-title"><div><h2>Ingresos recientes</h2><p>Compras y recepciones registradas desde Bodega.</p></div></div>
-            <div class="inventory-table-wrap"><table class="inventory-table"><thead><tr><th>Codigo</th><th>Recepcion</th><th>Ubicacion</th><th>Documento</th><th>Proveedor</th><th>Estado</th><th class="text-end">Lineas</th><th>Acciones</th></tr></thead><tbody>@forelse($ingresos as $ingreso)<tr><td><span class="inventory-code">{{ $ingreso->codigo }}</span></td><td>{{ optional($ingreso->fecha_recepcion)->format('d/m/Y') }}</td><td>{{ $ingreso->ubicacion->nombre ?? '-' }}</td><td>{{ $ingreso->tipo_documento }} {{ $ingreso->numero_documento ?: '-' }}</td><td>{{ $ingreso->proveedor->nombre ?? 'Sin proveedor' }}</td><td>@if($ingreso->reversado_en)<span class="inventory-status is-empty">Anulado</span><small>Anulado {{ $ingreso->reversado_en->format('d/m/Y H:i') }}{{ $ingreso->reversadoPor ? ' por ' . $ingreso->reversadoPor->name : '' }}<br>{{ $ingreso->motivo_reversion }}</small>@else<span class="inventory-status is-ok">Vigente</span>@endif</td><td class="text-end">{{ $ingreso->items->count() }}</td><td>@if($canEdit && ! $ingreso->reversado_en)<details class="inventory-receipt-reverse"><summary class="btn btn-light inventory-icon-btn" title="Anular ingreso"><i class="bi bi-arrow-counterclockwise"></i></summary><form method="POST" action="{{ route('inventario-bodega.ingresos.revertir', $ingreso) }}" class="inventory-reverse-form">@csrf<label>Motivo de anulación<input name="motivo_reversion" class="form-control" minlength="5" maxlength="500" required placeholder="Ej.: ingreso de prueba"></label><label class="inventory-checkbox inventory-confirm-reverse"><input type="checkbox" required><span>Confirmo que se descontará el stock de estas líneas.</span></label><button type="submit" class="btn btn-light inventory-btn text-danger"><i class="bi bi-arrow-counterclockwise"></i>Confirmar anulación</button></form></details>@else<span class="inventory-muted">-</span>@endif</td></tr>@empty<tr><td colspan="8" class="inventory-empty">Aun no hay ingresos registrados.</td></tr>@endforelse</tbody></table></div>
+        <section class="inventory-section" id="ingresos-recientes">
+            <div class="inventory-section-title"><div><h2>Ingresos recientes</h2><p>Compras y recepciones registradas desde Bodega. Para corregir uno de prueba, usa “Anular ingreso”; el historial y el reverso quedan registrados.</p></div></div>
+            <div class="inventory-table-wrap"><table class="inventory-table"><thead><tr><th>Codigo</th><th>Recepcion</th><th>Ubicacion</th><th>Documento</th><th>Proveedor</th><th>Estado</th><th class="text-end">Lineas</th><th>Acciones</th></tr></thead><tbody>@forelse($ingresos as $ingreso)<tr><td><span class="inventory-code">{{ $ingreso->codigo }}</span></td><td>{{ optional($ingreso->fecha_recepcion)->format('d/m/Y') }}</td><td>{{ $ingreso->ubicacion->nombre ?? '-' }}</td><td>{{ $ingreso->tipo_documento }} {{ $ingreso->numero_documento ?: '-' }}</td><td>{{ $ingreso->proveedor->nombre ?? 'Sin proveedor' }}</td><td>@if($ingreso->reversado_en)<span class="inventory-status is-empty">Anulado</span><small>Anulado {{ $ingreso->reversado_en->format('d/m/Y H:i') }}{{ $ingreso->reversadoPor ? ' por ' . $ingreso->reversadoPor->name : '' }}<br>{{ $ingreso->motivo_reversion }}</small>@else<span class="inventory-status is-ok">Vigente</span>@endif</td><td class="text-end">{{ $ingreso->items->count() }}</td><td>@if($canEdit && ! $ingreso->reversado_en)<details class="inventory-receipt-reverse"><summary class="btn btn-light inventory-btn inventory-receipt-reverse-trigger" title="Anular ingreso"><i class="bi bi-arrow-counterclockwise"></i>Anular ingreso</summary><form method="POST" action="{{ route('inventario-bodega.ingresos.revertir', $ingreso) }}" class="inventory-reverse-form">@csrf<label>Motivo de anulación<input name="motivo_reversion" class="form-control" minlength="5" maxlength="500" required placeholder="Ej.: ingreso de prueba"></label><label class="inventory-checkbox inventory-confirm-reverse"><input type="checkbox" required><span>Confirmo que se descontará el stock de estas líneas.</span></label><button type="submit" class="btn btn-light inventory-btn text-danger"><i class="bi bi-arrow-counterclockwise"></i>Confirmar anulación</button></form></details>@else<span class="inventory-muted">-</span>@endif</td></tr>@empty<tr><td colspan="8" class="inventory-empty">Aun no hay ingresos registrados.</td></tr>@endforelse</tbody></table></div>
         </section>
 
     @elseif($vista === 'movimientos')
         <section class="inventory-workspace">
             <div class="inventory-section">
                 <div class="inventory-section-title"><div><h2>Registrar movimiento</h2><p>Usa entregas, despachos, traslados o ajustes. El sistema valida que nunca salga mas stock del disponible.</p></div></div>
+                @if($canCreate)
+                    <div class="inventory-inline-editor inventory-movement-receipt-actions">
+                        <div><h3>¿Es una compra o una carga masiva?</h3><p>Los ingresos se registran en su propia pestaña para conservar el documento, proveedor y detalle. Ahí también puedes anular un ingreso de prueba con motivo y reverso trazable.</p></div>
+                        <div class="inventory-import-actions">
+                            <a href="{{ route('inventario-bodega.index', ['vista' => 'ingresos']) }}#importar-ingresos" class="btn btn-light inventory-btn"><i class="bi bi-upload"></i>Importar ingresos</a>
+                            <a href="{{ route('inventario-bodega.index', ['vista' => 'ingresos']) }}#ingresos-recientes" class="btn btn-light inventory-btn"><i class="bi bi-arrow-counterclockwise"></i>Ver o anular ingresos</a>
+                        </div>
+                    </div>
+                @endif
                 @if($activeLocations->isEmpty() || $variantOptions->isEmpty())
                     <div class="inventory-notice"><i class="bi bi-info-circle"></i>Necesitas ubicaciones y articulos activos para registrar movimientos.</div>
                 @else
@@ -198,8 +210,8 @@
                             <label>Fecha y hora<input name="ocurrido_en" type="datetime-local" value="{{ now()->format('Y-m-d\\TH:i') }}" class="form-control" required></label>
                             <label>Persona o destinatario<input name="destinatario_nombre" class="form-control" maxlength="200" placeholder="Para entrega EPP"></label>
                             <label>RUT destinatario<input name="destinatario_rut" class="form-control" maxlength="30" placeholder="Sin puntos, con guion"></label>
-                            <label>Centro de costo<input name="centro_costo" class="form-control" maxlength="180" placeholder="Para despacho"></label>
-                            <label>Tipo documento<input name="documento_tipo" class="form-control" maxlength="40" placeholder="Acta, guia, ajuste"></label>
+                            <label>Centro de costo<select name="centro_costo" class="form-select" data-inventory-search-select data-search-placeholder="Buscar centro de costo"><option value="">Sin centro de costo</option>@foreach($costCenters as $costCenter)<option value="{{ $costCenter->codigo }}">{{ $costCenter->codigo }} · {{ $costCenter->nombre }}</option>@endforeach</select></label>
+                            <label>Tipo documento<select name="documento_tipo" class="form-select"><option value="">Sin documento</option>@foreach(\App\Models\InventarioMovimiento::TIPOS_DOCUMENTO as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select></label>
                             <label>Nro. documento<input name="documento_numero" class="form-control" maxlength="100" placeholder="Referencia externa"></label>
                             <label>Costo unitario<input name="costo_unitario" type="number" min="0" step="0.01" class="form-control" placeholder="Opcional"></label>
                         </div>
@@ -342,7 +354,16 @@
                         <div class="inventory-split-forms">
                             <form method="POST" action="{{ route('inventario-bodega.productos.store') }}" class="inventory-compact-form">@csrf
                                 <h3>Agregar producto</h3>
-                                <div class="inventory-form-grid two"><label>Codigo<input name="codigo" class="form-control" maxlength="80" placeholder="Automatico si se deja vacio"></label><label>Producto<input name="nombre" class="form-control" maxlength="220" required></label><label>Tipo<input name="tipo" class="form-control" maxlength="80" placeholder="EPP, uniforme, herramienta"></label><label>Categoria<input name="categoria" class="form-control" maxlength="120"></label><label>Subcategoria<input name="subcategoria" class="form-control" maxlength="120"></label><label>Unidad<input name="unidad_medida" class="form-control" maxlength="30" value="Unidad"></label><label>Stock minimo<input name="stock_minimo" type="number" min="0" step="0.001" class="form-control" value="0"></label><label>Tallas o variantes<input name="tallas" class="form-control" maxlength="500" placeholder="S, M, L o ESTANDAR"></label></div><input type="hidden" name="activo" value="1"><button class="btn btn-primary inventory-btn" type="submit"><i class="bi bi-plus-lg"></i>Agregar producto</button>
+                                <div class="inventory-form-grid two">
+                                    <label>Codigo<input name="codigo" class="form-control" maxlength="80" placeholder="Automatico si se deja vacio" value="{{ old('codigo') }}"></label>
+                                    <label>Producto<input name="nombre" class="form-control" maxlength="220" required value="{{ old('nombre') }}"></label>
+                                    <label>Tipo<select name="tipo" class="form-select"><option value="">Selecciona un tipo</option>@foreach($productTypes as $type)<option value="{{ $type }}" @selected(old('tipo') === $type)>{{ $type }}</option>@endforeach</select></label>
+                                    <label>Categoria<select name="categoria" class="form-select" data-product-category-select><option value="">Selecciona una categoria</option>@foreach($productCategories as $category)<option value="{{ $category }}" @selected(old('categoria') === $category)>{{ $category }}</option>@endforeach</select></label>
+                                    <label>Subcategoria<select name="subcategoria" class="form-select" data-product-subcategory-select><option value="">Selecciona una subcategoria</option>@foreach($productSubcategories as $subcategory)<option value="{{ $subcategory['nombre'] }}" data-category="{{ $subcategory['categoria'] }}" @selected(old('subcategoria') === $subcategory['nombre'])>{{ $subcategory['nombre'] }}</option>@endforeach</select></label>
+                                    <label>Unidad<select name="unidad_medida" class="form-select">@foreach($productUnits as $unit)<option value="{{ $unit }}" @selected(old('unidad_medida', 'Unidad') === $unit)>{{ $unit }}</option>@endforeach</select></label>
+                                    <label>Stock minimo<input name="stock_minimo" type="number" min="0" step="0.001" class="form-control" value="{{ old('stock_minimo', 0) }}"></label>
+                                    <label>Tallas o variantes<input name="tallas" class="form-control" maxlength="500" placeholder="S, M, L o ESTANDAR" value="{{ old('tallas') }}"></label>
+                                </div><input type="hidden" name="activo" value="1"><button class="btn btn-primary inventory-btn" type="submit"><i class="bi bi-plus-lg"></i>Agregar producto</button>
                             </form>
                             <form method="POST" action="{{ route('inventario-bodega.productos.importar') }}" enctype="multipart/form-data" class="inventory-compact-form">@csrf
                                 <h3>Importar catalogo</h3><p>Admite la plantilla SAEP y la lista EPP con columnas Tipo, Categoria, Sub Categoria, Item y Formato. Los sufijos T-39, T-M y T-NA se convierten en tallas o variantes.</p><div class="inventory-import-flow"><i class="bi bi-box-seam"></i><div><strong>El catalogo parte en cero.</strong><span>La importacion crea productos y tallas, sin saldo. Despues registra una compra o un conteo inicial por ubicacion para cargar existencias sin perder trazabilidad.</span></div></div><div class="inventory-import-actions"><a href="{{ route('inventario-bodega.index', ['vista' => 'ingresos']) }}" class="inventory-link"><i class="bi bi-box-arrow-in-down"></i>Cargar desde compra</a><a href="{{ route('inventario-bodega.index', ['vista' => 'conteos']) }}" class="inventory-link"><i class="bi bi-clipboard-check"></i>Cargar desde conteo</a></div><a href="{{ route('inventario-bodega.productos.plantilla') }}" class="inventory-link"><i class="bi bi-download"></i>Descargar plantilla</a><label>Archivo Excel o CSV<input name="archivo" type="file" accept=".xlsx,.xls,.csv" class="form-control" required></label><button class="btn btn-light inventory-btn" type="submit"><i class="bi bi-upload"></i>Importar productos</button>
@@ -351,21 +372,24 @@
                         <form method="GET" action="{{ route('inventario-bodega.index') }}" class="inventory-product-search"><input type="hidden" name="vista" value="catalogo"><input class="form-control" name="producto_buscar" value="{{ $productSearch }}" placeholder="Buscar por codigo, nombre o categoria"><button class="btn btn-light inventory-btn" type="submit"><i class="bi bi-search"></i>Buscar</button></form>
                         <div class="inventory-table-wrap"><table class="inventory-table"><thead><tr><th>Codigo</th><th>Producto</th><th>Tipo</th><th>Tallas</th><th>Minimo</th><th>Estado</th></tr></thead><tbody>@forelse($products as $product)<tr><td><span class="inventory-code">{{ $product->codigo }}</span></td><td><strong>{{ $product->nombre }}</strong><small>{{ $product->categoria ?: 'Sin categoria' }}</small></td><td>{{ $product->tipo ?: '-' }}</td><td>{{ $product->variantes->pluck('talla')->join(', ') }}</td><td>{{ rtrim(rtrim(number_format((float) $product->stock_minimo, 3, ',', '.'), '0'), ',') }}</td><td><span class="inventory-status {{ $product->activo ? 'is-ok' : 'is-empty' }}">{{ $product->activo ? 'Activo' : 'Inactivo' }}</span></td></tr>@empty<tr><td colspan="6" class="inventory-empty">No hay productos registrados.</td></tr>@endforelse</tbody></table></div>
                         <div class="inventory-pagination">{{ $products->links() }}</div>
-                        @if($canEdit && $activeLocations->isNotEmpty() && $variantOptions->isNotEmpty())
-                            <form method="POST" action="{{ route('inventario-bodega.stock-talla.store') }}" class="inventory-inline-editor inventory-variant-stock-editor">@csrf
-                                <div><h3>Ajustar saldo de una talla</h3><p>Selecciona solo el articulo y talla que necesitas corregir. El sistema calcula la diferencia y deja un movimiento trazable; no modifica las demás tallas.</p></div>
-                                <div class="inventory-form-grid three"><label>Ubicacion<select name="ubicacion_id" class="form-select" required><option value="">Selecciona una ubicacion</option>@foreach($activeLocations as $location)<option value="{{ $location->id }}">{{ $location->nombre }}</option>@endforeach</select></label><label>Articulo y talla<select name="variante_id" class="form-select" required data-inventory-search-select data-search-placeholder="Buscar por codigo, articulo o talla"><option value="">Selecciona articulo y talla</option>@foreach($variantOptions as $variant)<option value="{{ $variant->id }}">{{ $variant->producto->codigo }} - {{ $variant->producto->nombre }} · {{ $variant->talla }}</option>@endforeach</select></label><label>Stock final<input name="stock_final" type="number" min="0" step="0.001" class="form-control" required placeholder="Cantidad que debe quedar"></label></div>
-                                <label class="inventory-wide-label">Motivo del ajuste<input name="observacion" class="form-control" minlength="5" maxlength="500" required placeholder="Ej.: conteo de talla 40 en bodega central"></label>
-                                <button class="btn btn-primary inventory-btn" type="submit"><i class="bi bi-check2-circle"></i>Guardar saldo de esta talla</button>
-                            </form>
-                        @endif
                         @if($canEdit && $products->isNotEmpty())
-                            <form method="POST" id="product-editor" data-action-base="{{ url('inventario-bodega/productos') }}" class="inventory-editor">@csrf @method('PUT')
-                                <div><h3>Editar producto existente</h3><p>El codigo se mantiene estable para no romper importaciones ni movimientos historicos. Aquí se administran los datos del producto y sus tallas; el stock de una talla se ajusta en el bloque anterior.</p></div>
-                                <label>Producto<select id="product-editor-select" class="form-select"><option value="">Selecciona un producto</option>@foreach($products as $product)<option value="{{ $product->id }}" data-nombre="{{ $product->nombre }}" data-tipo="{{ $product->tipo }}" data-categoria="{{ $product->categoria }}" data-subcategoria="{{ $product->subcategoria }}" data-unidad_medida="{{ $product->unidad_medida }}" data-stock_minimo="{{ $product->stock_minimo }}" data-tallas="{{ $product->variantes->pluck('talla')->join(', ') }}" data-active="{{ $product->activo ? '1' : '0' }}">{{ $product->codigo }} - {{ $product->nombre }}</option>@endforeach</select></label>
-                                <div class="inventory-form-grid two"><label>Nombre<input name="nombre" class="form-control" maxlength="220" required></label><label>Tipo<input name="tipo" class="form-control" maxlength="80"></label><label>Categoria<input name="categoria" class="form-control" maxlength="120"></label><label>Subcategoria<input name="subcategoria" class="form-control" maxlength="120"></label><label>Unidad<input name="unidad_medida" class="form-control" maxlength="30"></label><label>Stock minimo<input name="stock_minimo" type="number" min="0" step="0.001" class="form-control"></label><label>Tallas o variantes<input name="tallas" class="form-control" maxlength="500"></label><label class="inventory-checkbox"><input type="hidden" name="activo" value="0"><input name="activo" type="checkbox" value="1" checked><span>Producto activo</span></label></div>
+                            <section class="inventory-product-management">
+                            <form method="POST" id="product-editor" data-action-base="{{ url('inventario-bodega/productos') }}" class="inventory-editor inventory-product-general">@csrf @method('PUT')
+                                <div><h3>Gestionar producto y tallas</h3><p>Selecciona el producto una sola vez. Aquí actualizas sus datos generales y, abajo, el saldo de cada talla por separado.</p></div>
+                                <label>Producto<select id="product-editor-select" class="form-select"><option value="">Selecciona un producto</option>@foreach($products as $product)@php($editorVariants = $product->variantes->sortBy('talla')->map(fn ($variant) => ['id' => $variant->id, 'talla' => $variant->talla ?: 'ESTANDAR', 'codigo' => $variant->codigo, 'stock_minimo' => (float) ($variant->stock_minimo ?? $product->stock_minimo), 'activo' => (bool) $variant->activo])->values())<option value="{{ $product->id }}" data-nombre="{{ $product->nombre }}" data-tipo="{{ $product->tipo }}" data-categoria="{{ $product->categoria }}" data-subcategoria="{{ $product->subcategoria }}" data-unidad_medida="{{ $product->unidad_medida }}" data-stock_minimo="{{ $product->stock_minimo }}" data-tallas="{{ $product->variantes->pluck('talla')->join(', ') }}" data-variants="{{ $editorVariants->toJson() }}" data-active="{{ $product->activo ? '1' : '0' }}" @selected($editingProductId === $product->id)>{{ $product->codigo }} - {{ $product->nombre }}</option>@endforeach</select></label>
+                                <div class="inventory-form-grid two"><label>Nombre<input name="nombre" class="form-control" maxlength="220" required></label><label>Tipo<select name="tipo" class="form-select"><option value="">Selecciona un tipo</option>@foreach($productTypes as $type)<option value="{{ $type }}">{{ $type }}</option>@endforeach</select></label><label>Categoria<select name="categoria" class="form-select" data-product-category-select><option value="">Selecciona una categoria</option>@foreach($productCategories as $category)<option value="{{ $category }}">{{ $category }}</option>@endforeach</select></label><label>Subcategoria<select name="subcategoria" class="form-select" data-product-subcategory-select><option value="">Selecciona una subcategoria</option>@foreach($productSubcategories as $subcategory)<option value="{{ $subcategory['nombre'] }}" data-category="{{ $subcategory['categoria'] }}">{{ $subcategory['nombre'] }}</option>@endforeach</select></label><label>Unidad<select name="unidad_medida" class="form-select">@foreach($productUnits as $unit)<option value="{{ $unit }}">{{ $unit }}</option>@endforeach</select></label><label>Stock minimo<input name="stock_minimo" type="number" min="0" step="0.001" class="form-control"></label><label>Tallas o variantes<input name="tallas" class="form-control" maxlength="500"></label><label class="inventory-checkbox"><input type="hidden" name="activo" value="0"><input name="activo" type="checkbox" value="1" checked><span>Producto activo</span></label></div>
                                 <button class="btn btn-light inventory-btn" type="submit" disabled data-editor-submit><i class="bi bi-save2"></i>Guardar cambios</button>
                             </form>
+                            @if($activeLocations->isNotEmpty())
+                                <section id="product-variant-editor" class="inventory-variant-editor" data-action="{{ route('inventario-bodega.stock-talla.store') }}" data-csrf="{{ csrf_token() }}" data-stocks="{{ $variantStocksByLocation->toJson() }}" data-product-page="{{ $products->currentPage() }}" data-product-search="{{ $productSearch }}" hidden>
+                                    <div class="inventory-variant-editor-heading">
+                                        <div><h3>Desglose por talla</h3><p id="product-variant-editor-copy">Selecciona un producto y una ubicación para editar solo la talla que corresponda.</p></div>
+                                        <label>Ubicación para los saldos<select id="product-variant-location" class="form-select"><option value="">Selecciona una ubicación</option>@foreach($activeLocations as $location)<option value="{{ $location->id }}" @selected($selectedLocation === $location->id)>{{ $location->nombre }}</option>@endforeach</select></label>
+                                    </div>
+                                    <div id="product-variant-editor-rows" class="inventory-variant-editor-rows"></div>
+                                </section>
+                            @endif
+                            </section>
                         @endif
                     </div>
                 </details>
@@ -528,6 +552,10 @@
     }
     .inventory-receipt-import { margin:.85rem 0 1rem; background:#f6f4ff; }.inventory-receipt-import h3,.inventory-variant-stock-editor h3 { margin:0; font-size:.92rem; font-weight:800; }.inventory-receipt-import p,.inventory-variant-stock-editor p { margin:.2rem 0 0; color:#665b84; font-size:.8rem; line-height:1.45; }.inventory-import-receipt-form { display:grid; grid-template-columns:auto minmax(220px,1fr) auto; gap:.65rem; align-items:end; }.inventory-import-receipt-form label { display:grid; gap:.28rem; min-width:0; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-import-receipt-form .form-control { min-height:2.42rem; font-size:.88rem; letter-spacing:0; text-transform:none; }.inventory-import-hint { color:#68758b; font-size:.75rem; line-height:1.4; }.inventory-receipt-reverse { position:relative; min-width:2.45rem; }.inventory-receipt-reverse > summary { list-style:none; cursor:pointer; }.inventory-receipt-reverse > summary::-webkit-details-marker { display:none; }.inventory-receipt-reverse[open] { min-width:22rem; }.inventory-receipt-reverse[open] > summary { margin-bottom:.45rem; }.inventory-receipt-reverse .inventory-reverse-form { padding:.7rem; background:#fff8f8; border:1px solid #f2c8cc; border-radius:.5rem; grid-template-columns:1fr; }.inventory-receipt-reverse .inventory-confirm-reverse { align-items:flex-start; padding-top:0; color:#7d3440; font-size:.76rem!important; line-height:1.35; }.inventory-muted { color:#94a3b8; }.dark-mode .inventory-receipt-import,.dark-mode .inventory-receipt-reverse .inventory-reverse-form { background:rgba(255,255,255,.035); border-color:#374151; }.dark-mode .inventory-import-hint { color:#aeb9cc; }.dark-mode .inventory-receipt-import p,.dark-mode .inventory-variant-stock-editor p { color:#d8cff7; }
     @container (max-width: 760px) { .inventory-import-receipt-form { grid-template-columns:1fr; }.inventory-import-receipt-form .inventory-btn { width:100%; }.inventory-receipt-reverse[open] { min-width:min(22rem, calc(100vw - 3rem)); } }
+    .inventory-product-management { display:grid; gap:.85rem; margin-top:1rem; padding:1rem; background:#f5f3ff; border:1px solid #ded5ff; border-radius:.6rem; }.inventory-product-management .inventory-product-general { margin:0; padding:0; background:transparent; border:0; }.inventory-product-management .inventory-variant-editor { margin:0; padding:1rem 0 0; background:transparent; border:0; border-top:1px solid #ded5ff; border-radius:0; }.inventory-variant-editor { display:grid; gap:.85rem; }.inventory-variant-editor-heading { display:grid; grid-template-columns:minmax(0,1fr) minmax(230px,340px); gap:1rem; align-items:end; }.inventory-variant-editor h3 { margin:0; color:#2e1a68; font-size:1rem; font-weight:800; }.inventory-variant-editor p { margin:.22rem 0 0; color:#665b84; font-size:.81rem; line-height:1.45; }.inventory-variant-editor-heading > label { display:grid; gap:.28rem; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-variant-editor-rows { display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:.7rem; }.inventory-variant-card { display:grid; gap:.72rem; padding:.85rem; background:#fff; border:1px solid #ded5ff; border-radius:.55rem; box-shadow:0 .18rem .65rem rgba(53,36,112,.06); }.inventory-variant-card.is-inactive { opacity:.72; }.inventory-variant-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:.65rem; }.inventory-variant-card-header strong { display:block; color:#21114f; font-size:.95rem; }.inventory-variant-card-header small { display:block; max-width:24ch; margin-top:.12rem; color:#718096; font-size:.7rem; overflow-wrap:anywhere; }.inventory-variant-card-stock { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.5rem; padding:.65rem; background:#f8fafc; border-radius:.45rem; }.inventory-variant-card-stock span { display:block; color:#748198; font-size:.68rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-variant-card-stock strong { display:block; margin-top:.12rem; color:#17213a; font-size:1.05rem; }.inventory-variant-card label { display:grid; gap:.28rem; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-variant-card .inventory-btn { width:100%; }.dark-mode .inventory-product-management { background:rgba(135,87,236,.12); border-color:rgba(167,139,250,.25); }.dark-mode .inventory-product-management .inventory-variant-editor { border-color:#4c3e77; }.dark-mode .inventory-variant-card { background:#141b2b; border-color:#4c3e77; box-shadow:none; }.dark-mode .inventory-variant-card-header strong,.dark-mode .inventory-variant-card-stock strong { color:#f3f5fb; }.dark-mode .inventory-variant-card-stock { background:#111827; }.dark-mode .inventory-variant-editor h3 { color:#e7ddff; }.dark-mode .inventory-variant-editor p { color:#d8cff7; }
+    @container (max-width: 700px) { .inventory-variant-editor-heading { grid-template-columns:1fr; }.inventory-variant-editor-rows { grid-template-columns:1fr; } }
+    .inventory-movement-receipt-actions { grid-template-columns:minmax(0,1fr) auto; align-items:end; background:#f6f4ff; }.inventory-movement-receipt-actions h3 { margin:0; font-size:.92rem; font-weight:800; }.inventory-movement-receipt-actions p { margin:.22rem 0 0; color:#665b84; font-size:.8rem; line-height:1.45; }.inventory-movement-receipt-actions .inventory-import-actions { justify-content:flex-end; }.inventory-receipt-reverse-trigger { white-space:nowrap; }.dark-mode .inventory-movement-receipt-actions { background:rgba(135,87,236,.12); }.dark-mode .inventory-movement-receipt-actions p { color:#d8cff7; }
+    @container (max-width: 760px) { .inventory-movement-receipt-actions { grid-template-columns:1fr; }.inventory-movement-receipt-actions .inventory-import-actions { justify-content:stretch; }.inventory-movement-receipt-actions .inventory-import-actions .inventory-btn { flex:1; } }
 </style>
 
 <script>
@@ -553,7 +581,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var form = document.getElementById(formId);
         var select = document.getElementById(selectId);
         if (!form || !select) return;
-        select.addEventListener('change', function () {
+        function syncEditor() {
             var option = select.options[select.selectedIndex];
             var submit = form.querySelector('[data-editor-submit]');
             if (!option.value) { form.action = ''; if (submit) submit.disabled = true; return; }
@@ -565,11 +593,156 @@ document.addEventListener('DOMContentLoaded', function () {
             var active = form.querySelector('input[name="activo"][type="checkbox"]');
             if (active) active.checked = option.dataset.active === '1';
             if (submit) submit.disabled = false;
-        });
+        }
+        select.addEventListener('change', syncEditor);
+        return syncEditor;
     }
-    setupEditor('product-editor', 'product-editor-select', ['nombre', 'tipo', 'categoria', 'subcategoria', 'unidad_medida', 'stock_minimo', 'tallas']);
+    var refreshProductEditor = setupEditor('product-editor', 'product-editor-select', ['nombre', 'tipo', 'categoria', 'subcategoria', 'unidad_medida', 'stock_minimo', 'tallas']);
     setupEditor('location-editor', 'location-editor-select', ['codigo', 'nombre', 'tipo', 'descripcion']);
     setupEditor('provider-editor', 'provider-editor-select', ['nombre', 'rut', 'contacto', 'email', 'telefono', 'observacion']);
+
+    var productSelect = document.getElementById('product-editor-select');
+    var productVariantPanel = document.getElementById('product-variant-editor');
+    var productVariantRows = document.getElementById('product-variant-editor-rows');
+    var productVariantLocation = document.getElementById('product-variant-location');
+    var productVariantCopy = document.getElementById('product-variant-editor-copy');
+
+    function inventoryElement(tag, className, text) {
+        var element = document.createElement(tag);
+        if (className) element.className = className;
+        if (text !== undefined) element.textContent = text;
+        return element;
+    }
+
+    function inventoryHiddenInput(name, value) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        return input;
+    }
+
+    function inventoryLabel(text, input) {
+        var label = inventoryElement('label', null, text);
+        label.appendChild(input);
+        return label;
+    }
+
+    function formatInventoryStock(value) {
+        return new Intl.NumberFormat('es-CL', { maximumFractionDigits: 3 }).format(Number(value || 0));
+    }
+
+    function selectedProductVariants() {
+        if (!productSelect || !productSelect.value) return [];
+        try { return JSON.parse(productSelect.options[productSelect.selectedIndex].dataset.variants || '[]'); }
+        catch (error) { return []; }
+    }
+
+    function renderProductVariantCards() {
+        if (!productSelect || !productVariantPanel || !productVariantRows) return;
+        var option = productSelect.options[productSelect.selectedIndex];
+        var variants = selectedProductVariants();
+        if (!option || !option.value || !variants.length) {
+            productVariantPanel.hidden = true;
+            productVariantRows.replaceChildren();
+            return;
+        }
+
+        var stocks = {};
+        try { stocks = JSON.parse(productVariantPanel.dataset.stocks || '{}'); }
+        catch (error) { stocks = {}; }
+        var locationId = productVariantLocation ? productVariantLocation.value : '';
+        var locationStocks = locationId ? (stocks[locationId] || {}) : {};
+        productVariantPanel.hidden = false;
+        productVariantCopy.textContent = locationId
+            ? 'Cada tarjeta corresponde a una talla. El cambio queda registrado como ajuste en la ubicación seleccionada.'
+            : 'Selecciona una ubicación para ver el saldo actual y habilitar el ajuste de cada talla.';
+        productVariantRows.replaceChildren();
+
+        variants.forEach(function (variant) {
+            var stock = Number(locationStocks[String(variant.id)] || 0);
+            var card = inventoryElement('form', 'inventory-variant-card' + (variant.activo ? '' : ' is-inactive'));
+            var header = inventoryElement('div', 'inventory-variant-card-header');
+            var title = inventoryElement('div');
+            var titleText = variant.talla === 'ESTANDAR' ? 'Talla estándar' : 'Talla ' + variant.talla;
+            title.append(inventoryElement('strong', null, titleText), inventoryElement('small', null, variant.codigo || 'Sin código de variante'));
+            header.appendChild(title);
+            header.appendChild(inventoryElement('span', 'inventory-status ' + (variant.activo ? 'is-ok' : 'is-empty'), variant.activo ? 'Activa' : 'Inactiva'));
+
+            var stockSummary = inventoryElement('div', 'inventory-variant-card-stock');
+            var current = inventoryElement('div');
+            current.append(inventoryElement('span', null, 'Saldo actual'), inventoryElement('strong', null, locationId ? formatInventoryStock(stock) : '—'));
+            var minimum = inventoryElement('div');
+            minimum.append(inventoryElement('span', null, 'Stock mínimo'), inventoryElement('strong', null, formatInventoryStock(variant.stock_minimo)));
+            stockSummary.append(current, minimum);
+
+            var finalStock = document.createElement('input');
+            finalStock.type = 'number';
+            finalStock.name = 'stock_final';
+            finalStock.className = 'form-control';
+            finalStock.min = '0';
+            finalStock.step = '0.001';
+            finalStock.inputMode = 'decimal';
+            finalStock.required = true;
+            finalStock.placeholder = 'Saldo que debe quedar';
+            finalStock.value = locationId ? String(stock) : '';
+            finalStock.disabled = !locationId || !variant.activo;
+
+            var reason = document.createElement('input');
+            reason.type = 'text';
+            reason.name = 'observacion';
+            reason.className = 'form-control';
+            reason.minLength = 5;
+            reason.maxLength = 500;
+            reason.required = true;
+            reason.placeholder = 'Ej.: conteo físico';
+            reason.disabled = !locationId || !variant.activo;
+
+            var button = inventoryElement('button', 'btn btn-primary inventory-btn');
+            button.type = 'submit';
+            button.disabled = !locationId || !variant.activo;
+            button.append(inventoryElement('i', 'bi bi-save2'), document.createTextNode('Guardar ' + titleText));
+
+            card.method = 'POST';
+            card.action = productVariantPanel.dataset.action;
+            card.append(
+                inventoryHiddenInput('_token', productVariantPanel.dataset.csrf),
+                inventoryHiddenInput('ubicacion_id', locationId),
+                inventoryHiddenInput('variante_id', variant.id),
+                inventoryHiddenInput('productos_pagina', productVariantPanel.dataset.productPage || '1'),
+                inventoryHiddenInput('producto_buscar', productVariantPanel.dataset.productSearch || ''),
+                header,
+                stockSummary,
+                inventoryLabel('Nuevo saldo', finalStock),
+                inventoryLabel('Motivo del ajuste', reason),
+                button
+            );
+            productVariantRows.appendChild(card);
+        });
+    }
+
+    if (productSelect) productSelect.addEventListener('change', renderProductVariantCards);
+    if (productVariantLocation) productVariantLocation.addEventListener('change', renderProductVariantCards);
+    function syncProductSubcategoryOptions(scope) {
+        var category = scope.querySelector('[data-product-category-select]');
+        var subcategory = scope.querySelector('[data-product-subcategory-select]');
+        if (!category || !subcategory) return;
+        Array.prototype.slice.call(subcategory.options, 1).forEach(function (option) {
+            var isAvailable = !category.value || option.dataset.category === category.value;
+            option.hidden = !isAvailable;
+            option.disabled = !isAvailable;
+        });
+        if (subcategory.selectedOptions[0] && subcategory.selectedOptions[0].disabled) subcategory.value = '';
+    }
+    document.querySelectorAll('[data-product-category-select]').forEach(function (category) {
+        var scope = category.closest('form');
+        category.addEventListener('change', function () { syncProductSubcategoryOptions(scope); });
+        syncProductSubcategoryOptions(scope);
+    });
+    if (productSelect) productSelect.addEventListener('change', function () { syncProductSubcategoryOptions(productSelect.closest('form')); });
+    if (refreshProductEditor) refreshProductEditor();
+    if (productSelect) syncProductSubcategoryOptions(productSelect.closest('form'));
+    renderProductVariantCards();
 
     function normalizedSearch(value) {
         return (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();

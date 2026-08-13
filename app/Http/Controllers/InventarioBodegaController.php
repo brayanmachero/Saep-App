@@ -11,10 +11,12 @@ use App\Models\InventarioProducto;
 use App\Models\InventarioProveedor;
 use App\Models\InventarioUbicacion;
 use App\Models\InventarioVariante;
+use App\Modules\Comercial\Models\CentroCosto;
 use App\Services\InventarioStockService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -54,6 +56,7 @@ class InventarioBodegaController extends Controller
             ->get();
 
         $productSearch = trim((string) $request->input('producto_buscar'));
+        $editingProductId = $request->integer('producto_editar') ?: null;
         $products = InventarioProducto::query()
             ->with('variantes')
             ->when($productSearch !== '', fn ($query) => $query->where(function ($products) use ($productSearch) {
@@ -65,12 +68,38 @@ class InventarioBodegaController extends Controller
             ->paginate(30, ['*'], 'productos_pagina')
             ->withQueryString();
 
+        $locations = InventarioUbicacion::query()->orderByDesc('activo')->orderBy('nombre')->get();
+        $activeLocations = $locations->where('activo', true)->values();
         $variantOptions = InventarioVariante::query()
             ->with('producto')
             ->where('activo', true)
             ->whereHas('producto', fn ($query) => $query->where('activo', true))
             ->orderBy('talla')
             ->get();
+        $variantStocksByLocation = InventarioMovimiento::query()
+            ->selectRaw('ubicacion_id, variante_id, SUM(cantidad) as stock_actual')
+            ->whereIn('ubicacion_id', $activeLocations->pluck('id'))
+            ->groupBy('ubicacion_id', 'variante_id')
+            ->get()
+            ->groupBy('ubicacion_id')
+            ->map(fn ($rows) => $rows->mapWithKeys(fn ($row) => [(string) $row->variante_id => (float) $row->stock_actual]));
+        $catalogValues = InventarioProducto::query()
+            ->get(['tipo', 'categoria', 'subcategoria', 'unidad_medida']);
+        $productTypes = $catalogValues->pluck('tipo')->filter()->unique()->sort()->values();
+        $productCategories = $catalogValues->pluck('categoria')->filter()->unique()->sort()->values();
+        $productSubcategories = $catalogValues
+            ->filter(fn (InventarioProducto $product) => filled($product->subcategoria))
+            ->map(fn (InventarioProducto $product) => [
+                'categoria' => (string) $product->categoria,
+                'nombre' => (string) $product->subcategoria,
+            ])
+            ->unique(fn (array $subcategory) => Str::lower($subcategory['categoria'] . '|' . $subcategory['nombre']))
+            ->sortBy(fn (array $subcategory) => Str::lower($subcategory['categoria'] . '|' . $subcategory['nombre']))
+            ->values();
+        $productUnits = $catalogValues->pluck('unidad_medida')->filter()->prepend('Unidad')->unique()->sort()->values();
+        $costCenters = Schema::hasTable('comercial_centros_costo')
+            ? CentroCosto::query()->activos()->whereNotNull('codigo')->where('codigo', '!=', '')->orderBy('nombre')->get(['id', 'codigo', 'nombre'])
+            : collect();
 
         $kizeoDeliveries = $view === 'kizeo'
             ? EntregaBodega::query()
@@ -104,10 +133,17 @@ class InventarioBodegaController extends Controller
             'selectedLocation' => $selectedLocation,
             'search' => $search,
             'productSearch' => $productSearch,
-            'locations' => InventarioUbicacion::query()->orderByDesc('activo')->orderBy('nombre')->get(),
-            'activeLocations' => InventarioUbicacion::query()->where('activo', true)->orderBy('nombre')->get(),
+            'editingProductId' => $editingProductId,
+            'locations' => $locations,
+            'activeLocations' => $activeLocations,
             'providers' => InventarioProveedor::query()->orderByDesc('activo')->orderBy('nombre')->get(),
             'variantOptions' => $variantOptions,
+            'variantStocksByLocation' => $variantStocksByLocation,
+            'productTypes' => $productTypes,
+            'productCategories' => $productCategories,
+            'productSubcategories' => $productSubcategories,
+            'productUnits' => $productUnits,
+            'costCenters' => $costCenters,
             'balances' => $balances,
             'critical' => $critical,
             'movements' => $movements,
@@ -225,14 +261,32 @@ class InventarioBodegaController extends Controller
             'stock_final' => ['required', 'numeric', 'gte:0'],
             'observacion' => ['required', 'string', 'min:5', 'max:500'],
         ]);
+        $variant = InventarioVariante::query()->findOrFail($data['variante_id']);
         $stock = $this->stock->setVariantStock($data, $request->user());
 
-        return redirect()->route('inventario-bodega.index', ['vista' => 'catalogo'])
+        $catalogQuery = [
+            'vista' => 'catalogo',
+            'ubicacion_id' => $data['ubicacion_id'],
+            'producto_editar' => $variant->producto_id,
+        ];
+
+        if ($request->filled('productos_pagina')) {
+            $catalogQuery['productos_pagina'] = max(1, $request->integer('productos_pagina'));
+        }
+
+        if ($request->filled('producto_buscar')) {
+            $catalogQuery['producto_buscar'] = trim((string) $request->input('producto_buscar'));
+        }
+
+        return redirect()->route('inventario-bodega.index', $catalogQuery)
             ->with('success', 'Saldo de la talla actualizado a ' . rtrim(rtrim(number_format($stock, 3, ',', '.'), '0'), ',') . '. El ajuste quedo registrado en el kardex.');
     }
 
     public function storeMovement(Request $request): RedirectResponse
     {
+        $costCenterCodes = Schema::hasTable('comercial_centros_costo')
+            ? CentroCosto::query()->activos()->whereNotNull('codigo')->where('codigo', '!=', '')->pluck('codigo')->all()
+            : [];
         $data = $request->validate([
             'tipo' => ['required', Rule::in(['ENTREGA_EPP', 'DESPACHO_CENTRO', 'TRASLADO', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'STOCK_INICIAL'])],
             'ubicacion_id' => ['required', 'exists:inventario_ubicaciones,id'],
@@ -242,8 +296,8 @@ class InventarioBodegaController extends Controller
             'ocurrido_en' => ['required', 'date'],
             'destinatario_nombre' => ['nullable', 'string', 'max:200'],
             'destinatario_rut' => ['nullable', 'string', 'max:30'],
-            'centro_costo' => ['nullable', 'string', 'max:180'],
-            'documento_tipo' => ['nullable', 'string', 'max:40'],
+            'centro_costo' => ['nullable', 'string', 'max:180', Rule::in($costCenterCodes)],
+            'documento_tipo' => ['nullable', Rule::in(array_keys(InventarioMovimiento::TIPOS_DOCUMENTO))],
             'documento_numero' => ['nullable', 'string', 'max:100'],
             'costo_unitario' => ['nullable', 'numeric', 'gte:0'],
             'observacion' => ['nullable', 'string', 'max:500'],

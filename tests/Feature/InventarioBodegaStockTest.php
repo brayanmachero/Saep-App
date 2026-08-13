@@ -406,6 +406,54 @@ class InventarioBodegaStockTest extends TestCase
         ]);
     }
 
+    public function test_stock_adjustment_returns_to_the_same_product_and_catalog_context(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+
+        $response = $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->post(route('inventario-bodega.stock-talla.store'), [
+                'ubicacion_id' => $origin->id,
+                'variante_id' => $variant->id,
+                'stock_final' => 6,
+                'observacion' => 'Conteo de talla M en la bodega.',
+                'productos_pagina' => 2,
+                'producto_buscar' => 'casco',
+            ]);
+
+        $location = (string) $response->headers->get('Location');
+        $this->assertStringContainsString('vista=catalogo', $location);
+        $this->assertStringContainsString('ubicacion_id=' . $origin->id, $location);
+        $this->assertStringContainsString('producto_editar=' . $variant->producto_id, $location);
+        $this->assertStringContainsString('productos_pagina=2', $location);
+        $this->assertStringContainsString('producto_buscar=casco', $location);
+    }
+
+    public function test_manual_movement_accepts_a_document_type_from_the_catalog(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->post(route('inventario-bodega.movimientos.store'), [
+                'tipo' => 'AJUSTE_POSITIVO',
+                'ubicacion_id' => $origin->id,
+                'variante_id' => $variant->id,
+                'cantidad' => 2,
+                'ocurrido_en' => '2026-08-13 10:30:00',
+                'documento_tipo' => 'ACTA',
+                'documento_numero' => 'ACTA-QA-01',
+            ])
+            ->assertRedirect(route('inventario-bodega.index', ['vista' => 'movimientos']));
+
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'variante_id' => $variant->id,
+            'documento_tipo' => 'ACTA',
+            'documento_numero' => 'ACTA-QA-01',
+            'cantidad' => 2,
+        ]);
+    }
+
     public function test_receipt_import_groups_lines_and_updates_stock(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContext();
@@ -488,8 +536,15 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertStringContainsString('El catalogo parte en cero.', $view);
         $this->assertStringContainsString('Cargar desde compra', $view);
         $this->assertStringContainsString('Cargar desde conteo', $view);
-        $this->assertStringContainsString('Ajustar saldo de una talla', $view);
-        $this->assertStringContainsString('no modifica las demás tallas.', $view);
+        $this->assertStringContainsString('Desglose por talla', $view);
+        $this->assertStringContainsString('product-variant-editor', $view);
+        $this->assertStringContainsString('data-variants=', $view);
+        $this->assertStringContainsString('inventory-variant-card', $view);
+        $this->assertStringContainsString('data-product-category-select', $view);
+        $this->assertStringContainsString('data-product-subcategory-select', $view);
+        $this->assertStringContainsString('¿Es una compra o una carga masiva?', $view);
+        $this->assertStringContainsString('Ver o anular ingresos', $view);
+        $this->assertStringContainsString('InventarioMovimiento::TIPOS_DOCUMENTO', $view);
     }
 
     public function test_kizeo_queue_is_collapsed_and_displays_whether_stock_was_discounted(): void
