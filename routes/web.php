@@ -505,6 +505,9 @@ Route::middleware('auth')->group(function () {
           Route::post('ingresos/importar', [InventarioBodegaController::class, 'importReceipts'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('ingresos.importar');
+          Route::post('maestros-operativos/importar', [InventarioBodegaController::class, 'importOperationalMasters'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('maestros.importar');
           Route::post('ubicaciones', [InventarioBodegaController::class, 'storeLocation'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('ubicaciones.store');

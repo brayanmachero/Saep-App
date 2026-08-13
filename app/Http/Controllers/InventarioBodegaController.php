@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\EntregaBodega;
+use App\Models\InventarioCentroCosto;
 use App\Models\InventarioConteo;
+use App\Models\InventarioCoordinador;
 use App\Models\InventarioEntregaKizeoAplicacion;
 use App\Models\InventarioIngreso;
 use App\Models\InventarioMovimiento;
@@ -12,6 +14,7 @@ use App\Models\InventarioProveedor;
 use App\Models\InventarioUbicacion;
 use App\Models\InventarioVariante;
 use App\Modules\Comercial\Models\CentroCosto;
+use App\Services\InventarioOperationalMasterService;
 use App\Services\InventarioStockService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,8 +31,13 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class InventarioBodegaController extends Controller
 {
-    public function __construct(private readonly InventarioStockService $stock)
-    {
+    private readonly InventarioOperationalMasterService $operationalMasters;
+
+    public function __construct(
+        private readonly InventarioStockService $stock,
+        ?InventarioOperationalMasterService $operationalMasters = null,
+    ) {
+        $this->operationalMasters = $operationalMasters ?? app(InventarioOperationalMasterService::class);
     }
 
     public function index(Request $request)
@@ -49,7 +57,7 @@ class InventarioBodegaController extends Controller
         })->values();
 
         $movements = InventarioMovimiento::query()
-            ->with(['producto', 'variante', 'ubicacion'])
+            ->with(['producto', 'variante', 'ubicacion', 'centroCosto', 'coordinador'])
             ->withCount('reversos')
             ->when($selectedLocation, fn ($query) => $query->where('ubicacion_id', $selectedLocation))
             ->when($view === 'resumen' && $summaryFilters['applied'], fn ($query) => $query->whereIn('variante_id', $balances->pluck('id')))
@@ -99,7 +107,13 @@ class InventarioBodegaController extends Controller
             ->sortBy(fn (array $subcategory) => Str::lower($subcategory['categoria'] . '|' . $subcategory['nombre']))
             ->values();
         $productUnits = $catalogValues->pluck('unidad_medida')->filter()->prepend('Unidad')->unique()->sort()->values();
-        $costCenters = Schema::hasTable('comercial_centros_costo')
+        $inventoryCostCenters = Schema::hasTable('inventario_centros_costo')
+            ? InventarioCentroCosto::query()->with('coordinador')->where('activo', true)->orderBy('nombre')->get()
+            : collect();
+        $coordinators = Schema::hasTable('inventario_coordinadores')
+            ? InventarioCoordinador::query()->where('activo', true)->orderBy('nombre')->get()
+            : collect();
+        $legacyCostCenters = $inventoryCostCenters->isEmpty() && Schema::hasTable('comercial_centros_costo')
             ? CentroCosto::query()->activos()->whereNotNull('codigo')->where('codigo', '!=', '')->orderBy('nombre')->get(['id', 'codigo', 'nombre'])
             : collect();
 
@@ -150,7 +164,9 @@ class InventarioBodegaController extends Controller
             'productCategories' => $productCategories,
             'productSubcategories' => $productSubcategories,
             'productUnits' => $productUnits,
-            'costCenters' => $costCenters,
+            'inventoryCostCenters' => $inventoryCostCenters,
+            'coordinators' => $coordinators,
+            'legacyCostCenters' => $legacyCostCenters,
             'balances' => $balances,
             'critical' => $critical,
             'movements' => $movements,
@@ -308,12 +324,32 @@ class InventarioBodegaController extends Controller
             'ocurrido_en' => ['required', 'date'],
             'destinatario_nombre' => ['nullable', 'string', 'max:200'],
             'destinatario_rut' => ['nullable', 'string', 'max:30'],
+            'centro_costo_id' => ['nullable', Rule::exists('inventario_centros_costo', 'id')->where('activo', true)],
+            'coordinador_id' => ['nullable', Rule::exists('inventario_coordinadores', 'id')->where('activo', true)],
             'centro_costo' => ['nullable', 'string', 'max:180', Rule::in($costCenterCodes)],
             'documento_tipo' => ['nullable', Rule::in(array_keys(InventarioMovimiento::TIPOS_DOCUMENTO))],
             'documento_numero' => ['nullable', 'string', 'max:100'],
             'costo_unitario' => ['nullable', 'numeric', 'gte:0'],
             'observacion' => ['nullable', 'string', 'max:500'],
         ]);
+
+        $costCenter = isset($data['centro_costo_id'])
+            ? InventarioCentroCosto::query()->with('coordinador')->find($data['centro_costo_id'])
+            : null;
+        if ($costCenter) {
+            $data['centro_costo'] = $costCenter->nombre;
+            if ($costCenter->coordinador_id) {
+                $data['coordinador_id'] = $costCenter->coordinador_id;
+            }
+        }
+
+        $coordinator = isset($data['coordinador_id'])
+            ? InventarioCoordinador::query()->find($data['coordinador_id'])
+            : null;
+        if ($coordinator) {
+            $data['destinatario_nombre'] = $data['destinatario_nombre'] ?? $coordinator->nombre;
+            $data['destinatario_rut'] = $data['destinatario_rut'] ?? $coordinator->rut;
+        }
 
         $this->stock->registerManualMovement($data, $request->user());
 
@@ -427,6 +463,20 @@ class InventarioBodegaController extends Controller
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'ingresos'])
             ->with('success', "Importacion de ingresos finalizada: {$result['receipts']} comprobantes y {$result['lines']} lineas registradas. El stock ya fue actualizado.");
+    }
+
+    public function importOperationalMasters(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'archivo' => ['required', 'file', 'extensions:xlsx,xls', 'max:10240'],
+        ]);
+        $result = $this->operationalMasters->import($request->file('archivo'));
+        $pending = $result['coordinadoresSinRelacion'] === []
+            ? ''
+            : ' Se conservaron sin vínculo automático: ' . implode(', ', $result['coordinadoresSinRelacion']) . '.';
+
+        return redirect()->route('inventario-bodega.index', ['vista' => 'catalogo'])
+            ->with('success', "Maestros actualizados: {$result['centrosCreados']} centros creados, {$result['centrosActualizados']} actualizados, {$result['coordinadoresCreados']} coordinadores creados y {$result['coordinadoresActualizados']} actualizados." . $pending);
     }
 
     public function productTemplate()

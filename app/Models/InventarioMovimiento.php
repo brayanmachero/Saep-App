@@ -33,7 +33,7 @@ class InventarioMovimiento extends Model
     protected $fillable = [
         'codigo', 'tipo', 'origen', 'ubicacion_id', 'producto_id', 'variante_id', 'cantidad',
         'costo_unitario', 'grupo_traslado', 'referencia_tipo', 'referencia_id', 'documento_tipo',
-        'documento_numero', 'destinatario_nombre', 'destinatario_rut', 'centro_costo',
+        'documento_numero', 'destinatario_nombre', 'destinatario_rut', 'centro_costo', 'centro_costo_id', 'coordinador_id',
         'observacion', 'ocurrido_en', 'registrado_por', 'registrado_por_nombre', 'reverso_de_id',
     ];
 
@@ -56,6 +56,16 @@ class InventarioMovimiento extends Model
     public function variante(): BelongsTo
     {
         return $this->belongsTo(InventarioVariante::class, 'variante_id');
+    }
+
+    public function centroCosto(): BelongsTo
+    {
+        return $this->belongsTo(InventarioCentroCosto::class, 'centro_costo_id');
+    }
+
+    public function coordinador(): BelongsTo
+    {
+        return $this->belongsTo(InventarioCoordinador::class, 'coordinador_id');
     }
 
     public function registradoPor(): BelongsTo

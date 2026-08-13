@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\EntregaBodega;
 use App\Http\Controllers\InventarioBodegaController;
 use App\Models\InventarioConteo;
+use App\Models\InventarioCentroCosto;
+use App\Models\InventarioCoordinador;
 use App\Models\InventarioEntregaKizeoAplicacion;
 use App\Models\InventarioMovimiento;
 use App\Models\InventarioUbicacion;
@@ -12,6 +14,7 @@ use App\Models\InventarioVariante;
 use App\Models\Rol;
 use App\Models\User;
 use App\Services\InventarioStockService;
+use App\Services\InventarioOperationalMasterService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
@@ -84,6 +87,8 @@ class InventarioBodegaStockTest extends TestCase
         $migration->up();
         $receiptReversalMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_13_150000_add_reversal_fields_to_inventario_ingresos.php';
         $receiptReversalMigration->up();
+        $operationalMastersMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_13_190000_add_operational_masters_to_inventario.php';
+        $operationalMastersMigration->up();
 
         Schema::create('entregas_bodega', function (Blueprint $table) {
             $table->id();
@@ -541,6 +546,70 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertStringContainsString('producto_editar=' . $variant->producto_id, $location);
         $this->assertStringContainsString('productos_pagina=2', $location);
         $this->assertStringContainsString('producto_buscar=casco', $location);
+    }
+
+    public function test_operational_masters_import_and_fill_a_manual_movement_from_center_and_coordinator(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+        $path = tempnam(sys_get_temp_dir(), 'inventory-masters-') . '.xlsx';
+        $spreadsheet = new Spreadsheet();
+        $coordinators = $spreadsheet->getActiveSheet();
+        $coordinators->setTitle('Maestro_Coordinador');
+        $coordinators->fromArray([
+            ['N°', 'RUT', 'Nombre Completo', 'Cargo', 'Correo', 'Tlf', 'Jefe de operaciones'],
+            [1, '11111111-1', 'Andrea Torres', 'Coordinadora de Operaciones', 'andrea@saep.cl', '912345678', 'Jefa Uno'],
+            [2, '22222222-2', 'Bruno Pérez', 'Supervisor', 'bruno@saep.cl', '923456789', 'Jefa Dos'],
+        ]);
+        $centers = $spreadsheet->createSheet();
+        $centers->setTitle('Maestro_CC');
+        $centers->fromArray([
+            ['N', 'CENTRO DE COSTOS', 'TIPO', 'COMUNA', 'DIRECCION', 'JEFE DE OPERACIONES', 'COORDINADOR', 'CARGO', 'CORREO', 'TLF'],
+            [1, 'Centro Norte', 'EST', 'Recoleta', 'Av. Norte 123', 'Jefa Uno', 'Andrea Torres', 'Coordinadora de Operaciones', 'andrea@saep.cl', '912345678'],
+            [2, 'Centro Sin Maestro', 'SUB', 'Maipú', 'Av. Sur 456', 'Jefa Dos', 'Nombre no incluido', '#N/A', '#N/A', '#N/A'],
+        ]);
+        (new Xlsx($spreadsheet))->save($path);
+
+        try {
+            $result = app(InventarioOperationalMasterService::class)->import($path);
+            $repeat = app(InventarioOperationalMasterService::class)->import($path);
+        } finally {
+            @unlink($path);
+        }
+
+        $andrea = InventarioCoordinador::query()->where('nombre', 'Andrea Torres')->firstOrFail();
+        $center = InventarioCentroCosto::query()->where('nombre', 'Centro Norte')->firstOrFail();
+        $unlinked = InventarioCentroCosto::query()->where('nombre', 'Centro Sin Maestro')->firstOrFail();
+        $this->assertSame(2, $result['coordinadoresCreados']);
+        $this->assertSame(2, $result['centrosCreados']);
+        $this->assertSame(0, $repeat['coordinadoresCreados']);
+        $this->assertSame(2, $repeat['coordinadoresActualizados']);
+        $this->assertSame(0, $repeat['centrosCreados']);
+        $this->assertSame(2, $repeat['centrosActualizados']);
+        $this->assertSame($andrea->id, $center->coordinador_id);
+        $this->assertNull($unlinked->coordinador_id);
+        $this->assertSame('Nombre no incluido', $unlinked->coordinador_nombre_origen);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->post(route('inventario-bodega.movimientos.store'), [
+                'tipo' => 'AJUSTE_POSITIVO',
+                'ubicacion_id' => $origin->id,
+                'variante_id' => $variant->id,
+                'cantidad' => 2,
+                'ocurrido_en' => '2026-08-13 15:30:00',
+                'centro_costo_id' => $center->id,
+                'documento_tipo' => 'ACTA',
+            ])
+            ->assertRedirect(route('inventario-bodega.index', ['vista' => 'movimientos']));
+
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'variante_id' => $variant->id,
+            'centro_costo_id' => $center->id,
+            'coordinador_id' => $andrea->id,
+            'centro_costo' => 'Centro Norte',
+            'destinatario_nombre' => 'Andrea Torres',
+            'destinatario_rut' => '11111111-1',
+        ]);
     }
 
     public function test_manual_movement_accepts_a_document_type_from_the_catalog(): void

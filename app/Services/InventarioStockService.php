@@ -258,6 +258,8 @@ class InventarioStockService
                     'destinatario_nombre' => $original->destinatario_nombre,
                     'destinatario_rut' => $original->destinatario_rut,
                     'centro_costo' => $original->centro_costo,
+                    'centro_costo_id' => $original->centro_costo_id,
+                    'coordinador_id' => $original->coordinador_id,
                     'observacion' => 'Anulación de movimiento ' . $original->codigo . ': ' . trim($reason),
                     'ocurrido_en' => now(),
                     'reverso_de_id' => $original->id,
@@ -911,6 +913,8 @@ class InventarioStockService
             'destinatario_nombre' => $data['destinatario_nombre'] ?? null,
             'destinatario_rut' => $data['destinatario_rut'] ?? null,
             'centro_costo' => $data['centro_costo'] ?? null,
+            'centro_costo_id' => $data['centro_costo_id'] ?? null,
+            'coordinador_id' => $data['coordinador_id'] ?? null,
             'observacion' => $data['observacion'] ?? null,
             'ocurrido_en' => Carbon::parse($data['ocurrido_en']),
         ];
