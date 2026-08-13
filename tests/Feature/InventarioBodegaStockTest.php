@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\EntregaBodega;
+use App\Http\Controllers\InventarioBodegaController;
 use App\Models\InventarioConteo;
 use App\Models\InventarioEntregaKizeoAplicacion;
 use App\Models\InventarioUbicacion;
@@ -12,6 +13,9 @@ use App\Models\User;
 use App\Services\InventarioStockService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -77,6 +81,8 @@ class InventarioBodegaStockTest extends TestCase
 
         $migration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_07_120000_create_inventario_bodega_tables.php';
         $migration->up();
+        $receiptReversalMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_13_150000_add_reversal_fields_to_inventario_ingresos.php';
+        $receiptReversalMigration->up();
 
         Schema::create('entregas_bodega', function (Blueprint $table) {
             $table->id();
@@ -336,17 +342,154 @@ class InventarioBodegaStockTest extends TestCase
         ]);
     }
 
+    public function test_a_receipt_is_annulled_with_inverse_movements_and_audit_data(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+        $receipt = $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'FACTURA',
+            'numero_documento' => 'F-ANULAR-1',
+            'fecha_documento' => '2026-08-11',
+            'fecha_recepcion' => '2026-08-11',
+            'observacion' => 'Ingreso de prueba que no debía existir.',
+        ], [[
+            'variante_id' => $variant->id,
+            'cantidad' => 6,
+            'costo_unitario' => 1200,
+        ]], $user);
+
+        $service->reverseReceipt($receipt, 'Ingreso de prueba registrado por error.', $user);
+
+        $this->assertSame(0.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseHas('inventario_ingresos', [
+            'id' => $receipt->id,
+            'reversado_por' => $user->id,
+            'motivo_reversion' => 'Ingreso de prueba registrado por error.',
+        ]);
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'tipo' => 'REVERSO',
+            'origen' => 'REVERSO_INGRESO_BODEGA',
+            'referencia_id' => $receipt->id,
+            'cantidad' => -6,
+        ]);
+
+        $this->expectException(ValidationException::class);
+        $service->reverseReceipt($receipt->fresh(), 'No se puede anular dos veces.', $user);
+    }
+
+    public function test_stock_can_be_set_for_one_size_without_touching_other_sizes(): void
+    {
+        [$user, $origin, , $medium] = $this->inventoryContext();
+        $large = InventarioVariante::create([
+            'producto_id' => $medium->producto_id,
+            'codigo' => 'CASCO-SEGURIDAD-L',
+            'talla' => 'L',
+            'activo' => true,
+        ]);
+        $service = app(InventarioStockService::class);
+
+        $service->setVariantStock([
+            'ubicacion_id' => $origin->id,
+            'variante_id' => $medium->id,
+            'stock_final' => 7,
+            'observacion' => 'Conteo físico de talla M.',
+        ], $user);
+
+        $this->assertSame(7.0, $service->stockActual($origin->id, $medium->id));
+        $this->assertSame(0.0, $service->stockActual($origin->id, $large->id));
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'origen' => 'AJUSTE_STOCK_TALLA',
+            'variante_id' => $medium->id,
+            'cantidad' => 7,
+        ]);
+    }
+
+    public function test_receipt_import_groups_lines_and_updates_stock(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+        $variant->load('producto');
+        $path = tempnam(sys_get_temp_dir(), 'receipt-import-') . '.xlsx';
+        $spreadsheet = new Spreadsheet();
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['Referencia_Ingreso', 'Ubicacion_Codigo', 'Proveedor', 'Proveedor_Rut', 'Tipo_Documento', 'Numero_Documento', 'Fecha_Documento', 'Fecha_Recepcion', 'Codigo_Producto', 'Talla', 'Cantidad', 'Costo_Unitario', 'Observacion'],
+            ['COMPRA-AGOSTO-01', $origin->codigo, 'Proveedor importado', '76543210-1', 'FACTURA', 'F-IMPORT-1', '10/08/2026', '11/08/2026', $variant->producto->codigo, 'M', '4', '1500', 'Carga desde planilla'],
+        ]);
+        (new Xlsx($spreadsheet))->save($path);
+
+        try {
+            $file = new \Illuminate\Http\UploadedFile($path, 'ingresos.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+            $result = app(InventarioStockService::class)->importReceipts($file, $user);
+        } finally {
+            @unlink($path);
+        }
+
+        $this->assertSame(1, $result['receipts']);
+        $this->assertSame(1, $result['lines']);
+        $this->assertSame(4.0, app(InventarioStockService::class)->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseHas('inventario_proveedores', ['rut' => '76543210-1', 'nombre' => 'Proveedor importado']);
+        $this->assertDatabaseHas('inventario_ingresos', ['numero_documento' => 'F-IMPORT-1']);
+    }
+
+    public function test_csv_upload_validation_accepts_a_browser_plain_text_csv(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'receipt-import-') . '.csv';
+        file_put_contents($path, "Referencia_Ingreso,Ubicacion_Codigo\nQA-1,BOD-1\n");
+
+        try {
+            $file = new UploadedFile($path, 'ingresos.csv', 'text/plain', null, true);
+            $validator = Validator::make(['archivo' => $file], [
+                'archivo' => ['required', 'file', 'extensions:xlsx,xls,csv', 'max:10240'],
+            ]);
+            $fails = $validator->fails();
+            $errors = $validator->errors()->toJson();
+        } finally {
+            @unlink($path);
+        }
+
+        $this->assertFalse($fails, $errors);
+    }
+
+    public function test_stock_export_uses_the_catalog_fields_and_current_balance(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'FACTURA',
+            'numero_documento' => 'F-EXPORT-1',
+            'fecha_documento' => '2026-08-12',
+            'fecha_recepcion' => '2026-08-12',
+            'observacion' => null,
+        ], [['variante_id' => $variant->id, 'cantidad' => 3, 'costo_unitario' => null]], $user);
+
+        $response = (new InventarioBodegaController($service))->exportBalances(Request::create('/inventario-bodega/exportar', 'GET', [
+            'ubicacion_id' => $origin->id,
+        ]));
+        $path = $response->getFile()->getPathname();
+
+        try {
+            $rows = \PhpOffice\PhpSpreadsheet\IOFactory::load($path)->getActiveSheet()->rangeToArray('A1:K2', null, true, true, false);
+        } finally {
+            @unlink($path);
+        }
+
+        $this->assertSame(['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Stock_Critico', 'Stock_Actual', 'Ubicacion', 'Estado'], $rows[0]);
+        $this->assertSame(3.0, (float) $rows[1][8]);
+        $this->assertSame($origin->nombre, $rows[1][9]);
+    }
+
     public function test_catalog_explains_how_to_load_stock_after_import(): void
     {
-        [$user] = $this->inventoryContext();
+        $view = file_get_contents(dirname(__DIR__, 2) . '/resources/views/inventario_bodega/index.blade.php');
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
-            ->actingAs($user)
-            ->get(route('inventario-bodega.index', ['vista' => 'catalogo']))
-            ->assertOk()
-            ->assertSee('El catalogo parte en cero.')
-            ->assertSee('Cargar desde compra')
-            ->assertSee('Cargar desde conteo');
+        $this->assertStringContainsString('El catalogo parte en cero.', $view);
+        $this->assertStringContainsString('Cargar desde compra', $view);
+        $this->assertStringContainsString('Cargar desde conteo', $view);
+        $this->assertStringContainsString('Ajustar saldo de una talla', $view);
+        $this->assertStringContainsString('no modifica las demás tallas.', $view);
     }
 
     public function test_kizeo_queue_is_collapsed_and_displays_whether_stock_was_discounted(): void

@@ -171,6 +171,20 @@
     const fleetDrawerBackdrop = document.querySelector('[data-fleet-drawer-backdrop]');
     let fleetDrawerActive = null;
     let fleetDrawerTrigger = null;
+    const openFleetDrawer = (drawer, trigger = null) => {
+        if (!drawer) return;
+        if (fleetDrawerActive && fleetDrawerActive !== drawer) {
+            fleetDrawerActive.classList.remove('is-open');
+            fleetDrawerActive.setAttribute('aria-hidden', 'true');
+        }
+        fleetDrawerActive = drawer;
+        fleetDrawerTrigger = trigger;
+        drawer.setAttribute('aria-hidden', 'false');
+        drawer.classList.add('is-open');
+        fleetDrawerBackdrop?.classList.add('is-open');
+        document.body.classList.add('fleet-drawer-open');
+        window.setTimeout(() => drawer.querySelector('[data-fleet-drawer-close]')?.focus(), 120);
+    };
     const closeFleetDrawer = () => {
         if (!fleetDrawerActive) return;
         fleetDrawerActive.classList.remove('is-open');
@@ -184,18 +198,7 @@
     document.querySelectorAll('[data-fleet-drawer-open]').forEach((trigger) => {
         trigger.addEventListener('click', () => {
             const drawer = document.getElementById('fleet-drawer-' + trigger.dataset.fleetDrawerOpen);
-            if (!drawer) return;
-            if (fleetDrawerActive && fleetDrawerActive !== drawer) {
-                fleetDrawerActive.classList.remove('is-open');
-                fleetDrawerActive.setAttribute('aria-hidden', 'true');
-            }
-            fleetDrawerActive = drawer;
-            fleetDrawerTrigger = trigger;
-            drawer.setAttribute('aria-hidden', 'false');
-            drawer.classList.add('is-open');
-            fleetDrawerBackdrop?.classList.add('is-open');
-            document.body.classList.add('fleet-drawer-open');
-            window.setTimeout(() => drawer.querySelector('[data-fleet-drawer-close]')?.focus(), 120);
+            openFleetDrawer(drawer, trigger);
         });
     });
     document.querySelectorAll('[data-fleet-drawer-close]').forEach((button) => button.addEventListener('click', closeFleetDrawer));
@@ -208,5 +211,9 @@
         reveal?.addEventListener('click', () => { reveal.hidden = true; confirmation.hidden = false; confirmation.querySelector('button[type="submit"]')?.focus(); });
         cancel?.addEventListener('click', () => { confirmation.hidden = true; reveal.hidden = false; reveal.focus(); });
     });
+    const fleetDrawerToRestore = @json(session('fleet_drawer'));
+    if (fleetDrawerToRestore) {
+        openFleetDrawer(document.getElementById('fleet-drawer-' + fleetDrawerToRestore));
+    }
 </script>
 @endpush

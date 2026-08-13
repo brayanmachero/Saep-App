@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\EntregaBodega;
 use App\Models\InventarioConteo;
 use App\Models\InventarioEntregaKizeoAplicacion;
+use App\Models\InventarioIngreso;
 use App\Models\InventarioMovimiento;
 use App\Models\InventarioProducto;
 use App\Models\InventarioProveedor;
@@ -111,7 +112,7 @@ class InventarioBodegaController extends Controller
             'critical' => $critical,
             'movements' => $movements,
             'products' => $products,
-            'ingresos' => \App\Models\InventarioIngreso::query()->with(['ubicacion', 'proveedor', 'items'])->latest('fecha_recepcion')->latest('id')->limit(15)->get(),
+            'ingresos' => InventarioIngreso::query()->with(['ubicacion', 'proveedor', 'items', 'reversadoPor'])->latest('fecha_recepcion')->latest('id')->limit(15)->get(),
             'conteos' => InventarioConteo::query()->with('ubicacion')->withCount('lineas')->latest('fecha_corte')->latest('id')->limit(15)->get(),
             'kizeoDeliveries' => $kizeoDeliveries,
             'kizeoSuggestions' => $kizeoSuggestions,
@@ -203,6 +204,31 @@ class InventarioBodegaController extends Controller
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'ingresos'])
             ->with('success', "Ingreso {$ingreso->codigo} registrado. El stock se actualizo en la ubicacion seleccionada.");
+    }
+
+    public function reverseReceipt(Request $request, InventarioIngreso $ingreso): RedirectResponse
+    {
+        $data = $request->validate([
+            'motivo_reversion' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+        $this->stock->reverseReceipt($ingreso, $data['motivo_reversion'], $request->user());
+
+        return redirect()->route('inventario-bodega.index', ['vista' => 'ingresos'])
+            ->with('success', "Ingreso {$ingreso->codigo} anulado. El sistema creo movimientos inversos y conservo el historial.");
+    }
+
+    public function setVariantStock(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'ubicacion_id' => ['required', 'exists:inventario_ubicaciones,id'],
+            'variante_id' => ['required', 'exists:inventario_variantes,id'],
+            'stock_final' => ['required', 'numeric', 'gte:0'],
+            'observacion' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+        $stock = $this->stock->setVariantStock($data, $request->user());
+
+        return redirect()->route('inventario-bodega.index', ['vista' => 'catalogo'])
+            ->with('success', 'Saldo de la talla actualizado a ' . rtrim(rtrim(number_format($stock, 3, ',', '.'), '0'), ',') . '. El ajuste quedo registrado en el kardex.');
     }
 
     public function storeMovement(Request $request): RedirectResponse
@@ -302,12 +328,23 @@ class InventarioBodegaController extends Controller
     public function importProducts(Request $request): RedirectResponse
     {
         $request->validate([
-            'archivo' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'archivo' => ['required', 'file', 'extensions:xlsx,xls,csv', 'max:10240'],
         ]);
         $result = $this->stock->importProducts($request->file('archivo'), $request->user());
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'catalogo'])
             ->with('success', "Importacion finalizada: {$result['created']} productos creados, {$result['updated']} actualizados, {$result['variantsCreated']} variantes creadas y {$result['skipped']} filas omitidas. Todos quedan con stock 0 por ubicacion hasta registrar un ingreso, movimiento o conteo fisico.");
+    }
+
+    public function importReceipts(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'archivo' => ['required', 'file', 'extensions:xlsx,xls,csv', 'max:10240'],
+        ]);
+        $result = $this->stock->importReceipts($request->file('archivo'), $request->user());
+
+        return redirect()->route('inventario-bodega.index', ['vista' => 'ingresos'])
+            ->with('success', "Importacion de ingresos finalizada: {$result['receipts']} comprobantes y {$result['lines']} lineas registradas. El stock ya fue actualizado.");
     }
 
     public function productTemplate()
@@ -334,16 +371,61 @@ class InventarioBodegaController extends Controller
         return response()->download($path, 'plantilla_catalogo_inventario.xlsx')->deleteFileAfterSend(true);
     }
 
+    public function receiptTemplate()
+    {
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Ingresos');
+        $headers = [
+            'Referencia_Ingreso', 'Ubicacion_Codigo', 'Proveedor', 'Proveedor_Rut', 'Tipo_Documento',
+            'Numero_Documento', 'Fecha_Documento', 'Fecha_Recepcion', 'Codigo_Producto', 'Talla',
+            'Cantidad', 'Costo_Unitario', 'Observacion',
+        ];
+        $sheet->fromArray($headers, null, 'A1');
+        $sheet->getStyle('A1:M1')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF2D0B64']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        ]);
+        $sheet->freezePane('A2');
+        $sheet->setAutoFilter('A1:M1');
+        foreach (range('A', 'M') as $column) {
+            $sheet->getColumnDimension($column)->setWidth(in_array($column, ['A', 'C', 'F', 'I', 'M'], true) ? 28 : 18);
+        }
+
+        $instructions = $spreadsheet->createSheet();
+        $instructions->setTitle('Instrucciones');
+        $instructions->fromArray([
+            ['Plantilla de importacion de ingresos'],
+            ['Cada fila es un articulo y una talla. Agrupa las lineas de un mismo comprobante con la misma Referencia_Ingreso.'],
+            ['Ubicacion_Codigo, Codigo_Producto y Talla deben existir y estar activos en el catalogo.'],
+            ['Tipo_Documento: FACTURA, GUIA_DESPACHO u OTRO. Fechas: AAAA-MM-DD o DD/MM/AAAA.'],
+            ['Proveedor y Proveedor_Rut son opcionales. Si el proveedor no existe, se crea al importar.'],
+            ['La importacion rechaza documentos ya vigentes para evitar duplicar stock.'],
+        ], null, 'A1');
+        $instructions->getColumnDimension('A')->setWidth(115);
+        $instructions->getStyle('A1')->getFont()->setBold(true);
+        $instructions->getStyle('A1:A6')->getAlignment()->setWrapText(true);
+
+        $path = storage_path('app/plantilla_ingresos_inventario_' . now()->format('YmdHis') . '.xlsx');
+        (new Xlsx($spreadsheet))->save($path);
+
+        return response()->download($path, 'plantilla_ingresos_inventario.xlsx')->deleteFileAfterSend(true);
+    }
+
     public function exportBalances(Request $request)
     {
         $locationId = $request->integer('ubicacion_id') ?: null;
         $balances = $this->stock->balances($locationId);
+        $locationName = $locationId
+            ? InventarioUbicacion::query()->find($locationId)?->nombre
+            : 'Todas las ubicaciones';
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Stock actual');
-        $headers = ['Codigo producto', 'Producto', 'Talla o variante', 'Tipo', 'Categoria', 'Stock minimo', 'Stock actual'];
+        $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Stock_Critico', 'Stock_Actual', 'Ubicacion', 'Estado'];
         $sheet->fromArray($headers, null, 'A1');
-        $sheet->getStyle('A1:G1')->applyFromArray([
+        $sheet->getStyle('A1:K1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF2D0B64']],
         ]);
@@ -352,18 +434,22 @@ class InventarioBodegaController extends Controller
             $sheet->fromArray([
                 $variant->producto->codigo,
                 $variant->producto->nombre,
-                $variant->talla,
                 $variant->producto->tipo,
                 $variant->producto->categoria,
+                $variant->producto->subcategoria,
+                $variant->producto->unidad_medida,
+                $variant->talla,
                 $variant->stock_minimo ?? $variant->producto->stock_minimo,
                 $variant->stock_actual,
+                $locationName,
+                $variant->producto->activo && $variant->activo ? 'Activo' : 'Inactivo',
             ], null, "A{$row}");
             $row++;
         }
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:G1');
-        foreach (range('A', 'G') as $column) {
-            $sheet->getColumnDimension($column)->setWidth(in_array($column, ['B', 'E'], true) ? 30 : 18);
+        $sheet->setAutoFilter('A1:K1');
+        foreach (range('A', 'K') as $column) {
+            $sheet->getColumnDimension($column)->setWidth(in_array($column, ['B', 'D', 'E', 'J'], true) ? 30 : 18);
         }
 
         $path = storage_path('app/stock_inventario_' . now()->format('Ymd_His') . '.xlsx');

@@ -496,9 +496,15 @@ Route::middleware('auth')->group(function () {
           Route::get('plantilla-productos', [InventarioBodegaController::class, 'productTemplate'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('productos.plantilla');
+          Route::get('plantilla-ingresos', [InventarioBodegaController::class, 'receiptTemplate'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('ingresos.plantilla');
           Route::post('productos/importar', [InventarioBodegaController::class, 'importProducts'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('productos.importar');
+          Route::post('ingresos/importar', [InventarioBodegaController::class, 'importReceipts'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('ingresos.importar');
           Route::post('ubicaciones', [InventarioBodegaController::class, 'storeLocation'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('ubicaciones.store');
@@ -517,9 +523,15 @@ Route::middleware('auth')->group(function () {
           Route::put('productos/{producto}', [InventarioBodegaController::class, 'updateProduct'])
               ->middleware('modulo:inventario_bodega,puede_editar')
               ->name('productos.update');
+          Route::post('stock-talla', [InventarioBodegaController::class, 'setVariantStock'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('stock-talla.store');
           Route::post('ingresos', [InventarioBodegaController::class, 'storeReceipt'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('ingresos.store');
+          Route::post('ingresos/{ingreso}/revertir', [InventarioBodegaController::class, 'reverseReceipt'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('ingresos.revertir');
           Route::post('movimientos', [InventarioBodegaController::class, 'storeMovement'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('movimientos.store');

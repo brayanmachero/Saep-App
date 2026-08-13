@@ -19,9 +19,14 @@ class InventarioIngreso extends Model
     protected $fillable = [
         'codigo', 'ubicacion_id', 'proveedor_id', 'tipo_documento', 'numero_documento',
         'fecha_documento', 'fecha_recepcion', 'observacion', 'registrado_por',
+        'reversado_por', 'reversado_en', 'motivo_reversion',
     ];
 
-    protected $casts = ['fecha_documento' => 'date', 'fecha_recepcion' => 'date'];
+    protected $casts = [
+        'fecha_documento' => 'date',
+        'fecha_recepcion' => 'date',
+        'reversado_en' => 'datetime',
+    ];
 
     public function ubicacion(): BelongsTo
     {
@@ -36,5 +41,10 @@ class InventarioIngreso extends Model
     public function items(): HasMany
     {
         return $this->hasMany(InventarioIngresoItem::class, 'ingreso_id');
+    }
+
+    public function reversadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reversado_por');
     }
 }

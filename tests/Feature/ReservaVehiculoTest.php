@@ -1433,4 +1433,54 @@ class ReservaVehiculoTest extends TestCase
             ->assertSee('Persona Reprogramada')
             ->assertSee('EDIT-02');
     }
+
+    public function test_reprogramming_conflict_returns_an_error_toast_and_reopens_the_reservation_drawer(): void
+    {
+        Mail::fake();
+
+        $role = Rol::where('codigo', 'BODEGA_VEHICULOS')->firstOrFail();
+        $operator = User::create([
+            'name' => 'Coordinador de Prueba', 'email' => 'coordinador.prueba@saep.cl', 'rol_id' => $role->id,
+            'password' => bcrypt('secret'), 'activo' => true,
+        ]);
+        $vehiculo = Vehiculo::create([
+            'patente' => 'CRUCE-01', 'marca' => 'Chevrolet', 'modelo' => 'N400', 'estado' => 'DISPONIBLE', 'reservas_habilitadas' => true,
+        ]);
+        $centro = CentroCosto::create(['codigo' => 'CRUCE_QA', 'nombre' => 'Centro de prueba', 'razon_social' => 'NORMAL', 'activo' => true]);
+        $motivo = ReservaVehiculoMotivo::query()->where('activo', true)->firstOrFail();
+        $reserva = app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 10:00:00',
+            'motivo' => 'Reserva que se intentara reprogramar',
+        ], ['oid' => 'reserva-conflicto', 'email' => 'reserva.conflicto@saep.cl', 'name' => 'Reserva Conflicto']);
+        app(ReservaVehiculoService::class)->crearReserva([
+            'vehiculo_id' => $vehiculo->id,
+            'inicio' => '2026-08-03 12:00:00',
+            'termino' => '2026-08-03 13:00:00',
+            'motivo' => 'Reserva que bloquea el rango solicitado',
+        ], ['oid' => 'bloqueo-conflicto', 'email' => 'bloqueo.conflicto@saep.cl', 'name' => 'Bloqueo Conflicto']);
+
+        $this->actingAs($operator)
+            ->put(route('gestion-vehiculos.reservas.programacion.update', $reserva), [
+                'vehiculo_id' => $vehiculo->id,
+                'inicio' => '2026-08-03 11:00:00',
+                'termino' => '2026-08-03 12:00:00',
+                'solicitante_nombre' => $reserva->solicitante_nombre,
+                'solicitante_email' => $reserva->solicitante_email,
+                'destinos' => [$centro->id],
+                'motivo_id' => $motivo->id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('fleet_drawer', 'reserva-'.$reserva->id)
+            ->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'no fue modificada'))
+            ->assertSessionHasErrors('vehiculo_id');
+
+        $this->assertDatabaseHas('reservas_vehiculos', [
+            'id' => $reserva->id,
+            'inicio' => '2026-08-03 09:00:00',
+            'termino' => '2026-08-03 10:00:00',
+        ]);
+        Mail::assertNothingSent();
+    }
 }

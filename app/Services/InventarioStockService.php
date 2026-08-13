@@ -11,6 +11,7 @@ use App\Models\InventarioIngreso;
 use App\Models\InventarioIngresoItem;
 use App\Models\InventarioMovimiento;
 use App\Models\InventarioProducto;
+use App\Models\InventarioProveedor;
 use App\Models\InventarioUbicacion;
 use App\Models\InventarioVariante;
 use App\Models\User;
@@ -134,6 +135,111 @@ class InventarioStockService
             }
 
             return $ingreso;
+        });
+    }
+
+    public function reverseReceipt(InventarioIngreso $receipt, string $reason, User $user): void
+    {
+        DB::transaction(function () use ($receipt, $reason, $user) {
+            $receipt = InventarioIngreso::query()
+                ->with('items')
+                ->lockForUpdate()
+                ->findOrFail($receipt->id);
+
+            if ($receipt->reversado_en) {
+                throw ValidationException::withMessages([
+                    'ingreso' => 'Este ingreso ya fue anulado y no puede reversarse nuevamente.',
+                ]);
+            }
+
+            $quantitiesByVariant = $receipt->items
+                ->groupBy('variante_id')
+                ->map(fn (Collection $items) => (float) $items->sum('cantidad'));
+            foreach ($quantitiesByVariant as $variantId => $quantity) {
+                $this->ensureAvailability($receipt->ubicacion_id, (int) $variantId, $quantity);
+            }
+
+            $originalMovements = InventarioMovimiento::query()
+                ->where('referencia_tipo', InventarioIngreso::class)
+                ->where('referencia_id', $receipt->id)
+                ->where('tipo', 'INGRESO_COMPRA')
+                ->orderBy('id')
+                ->get()
+                ->groupBy('variante_id');
+
+            foreach ($receipt->items as $item) {
+                /** @var InventarioMovimiento|null $original */
+                $original = ($originalMovements[$item->variante_id] ?? collect())->shift();
+                if (! $original) {
+                    throw ValidationException::withMessages([
+                        'ingreso' => 'No se encontro el movimiento original de este ingreso. Contacta a soporte antes de anularlo.',
+                    ]);
+                }
+
+                $this->createMovement([
+                    'tipo' => 'REVERSO',
+                    'origen' => 'REVERSO_INGRESO_BODEGA',
+                    'ubicacion_id' => $receipt->ubicacion_id,
+                    'producto_id' => $item->producto_id,
+                    'variante_id' => $item->variante_id,
+                    'cantidad' => -abs((float) $item->cantidad),
+                    'costo_unitario' => $item->costo_unitario,
+                    'referencia_tipo' => InventarioIngreso::class,
+                    'referencia_id' => $receipt->id,
+                    'documento_tipo' => $receipt->tipo_documento,
+                    'documento_numero' => $receipt->numero_documento,
+                    'observacion' => 'Anulacion de ingreso ' . $receipt->codigo . ': ' . $reason,
+                    'ocurrido_en' => now(),
+                    'reverso_de_id' => $original->id,
+                ], $user);
+            }
+
+            $receipt->update([
+                'reversado_por' => $user->id,
+                'reversado_en' => now(),
+                'motivo_reversion' => $reason,
+            ]);
+        });
+    }
+
+    public function setVariantStock(array $data, User $user): float
+    {
+        return DB::transaction(function () use ($data, $user) {
+            $location = InventarioUbicacion::query()->where('activo', true)->find($data['ubicacion_id']);
+            if (! $location) {
+                throw ValidationException::withMessages(['ubicacion_id' => 'Selecciona una ubicacion activa.']);
+            }
+
+            $variant = InventarioVariante::query()
+                ->with('producto')
+                ->where('activo', true)
+                ->whereHas('producto', fn ($query) => $query->where('activo', true))
+                ->find($data['variante_id']);
+            if (! $variant) {
+                throw ValidationException::withMessages(['variante_id' => 'Selecciona un articulo y talla activos.']);
+            }
+
+            $currentStock = $this->stockActual($location->id, $variant->id);
+            $targetStock = $this->decimal($data['stock_final']);
+            $difference = $targetStock - $currentStock;
+            if (abs($difference) < 0.0001) {
+                return $targetStock;
+            }
+
+            $this->createMovement([
+                'tipo' => $difference > 0 ? 'AJUSTE_POSITIVO' : 'AJUSTE_NEGATIVO',
+                'origen' => 'AJUSTE_STOCK_TALLA',
+                'ubicacion_id' => $location->id,
+                'producto_id' => $variant->producto_id,
+                'variante_id' => $variant->id,
+                'cantidad' => $difference,
+                'documento_tipo' => 'AJUSTE_STOCK_TALLA',
+                'documento_numero' => $variant->codigo,
+                'observacion' => 'Saldo fijado desde Catalogo para talla ' . $variant->talla . ': ' . trim($data['observacion']),
+                'ocurrido_en' => now(),
+            ], $user);
+
+            return $targetStock;
         });
     }
 
@@ -516,6 +622,158 @@ class InventarioStockService
         return compact('created', 'updated', 'variantsCreated', 'skipped');
     }
 
+    public function importReceipts(UploadedFile $file, User $user): array
+    {
+        $spreadsheet = IOFactory::load($file->getPathname());
+        $sheet = $spreadsheet->getActiveSheet();
+        $rows = $sheet->toArray(null, true, true, false);
+        $headers = array_map(fn ($value) => $this->normalizeHeader($value), array_shift($rows) ?? []);
+        $requiredHeaders = ['referencia_ingreso', 'ubicacion_codigo', 'codigo_producto', 'cantidad'];
+        $missingHeaders = array_diff($requiredHeaders, $headers);
+        if ($missingHeaders) {
+            throw ValidationException::withMessages([
+                'archivo' => 'La plantilla debe incluir las columnas: Referencia_Ingreso, Ubicacion_Codigo, Codigo_Producto y Cantidad.',
+            ]);
+        }
+
+        $groups = [];
+        $errors = [];
+        foreach ($rows as $index => $row) {
+            $line = $index + 2;
+            $values = array_combine($headers, array_pad($row, count($headers), null));
+            if (collect($values)->filter(fn ($value) => $this->importText($value) !== '')->isEmpty()) {
+                continue;
+            }
+
+            $reference = $this->importText($values['referencia_ingreso'] ?? null);
+            $locationCode = $this->importText($values['ubicacion_codigo'] ?? null);
+            $productCode = $this->importText($values['codigo_producto'] ?? $values['codigo'] ?? null);
+            $size = Str::upper($this->importText($values['talla'] ?? $values['variante'] ?? 'ESTANDAR') ?: 'ESTANDAR');
+            $quantity = $this->importDecimal($values['cantidad'] ?? null);
+            $cost = $this->importText($values['costo_unitario'] ?? null) === '' ? null : $this->importDecimal($values['costo_unitario']);
+            $documentType = Str::upper($this->importText($values['tipo_documento'] ?? null) ?: 'FACTURA');
+            $documentNumber = $this->importText($values['numero_documento'] ?? null);
+            $receiptDate = $this->importReceiptDate($values['fecha_recepcion'] ?? null);
+            $documentDate = $this->importText($values['fecha_documento'] ?? null) === '' ? null : $this->importReceiptDate($values['fecha_documento'] ?? null);
+            $providerName = $this->importText($values['proveedor'] ?? null);
+            $providerRut = $this->importText($values['proveedor_rut'] ?? null);
+
+            if ($reference === '') {
+                $errors[] = "Fila {$line}: Referencia_Ingreso es obligatoria para agrupar las lineas del comprobante.";
+            }
+            $location = $locationCode === '' ? null : InventarioUbicacion::query()->where('codigo', $locationCode)->where('activo', true)->first();
+            if (! $location) {
+                $errors[] = "Fila {$line}: no existe una ubicacion activa con codigo '{$locationCode}'.";
+            }
+            $product = $productCode === '' ? null : InventarioProducto::query()->where('codigo', $productCode)->where('activo', true)->first();
+            $variant = $product?->variantes()->where('talla', $size)->where('activo', true)->first();
+            if (! $variant) {
+                $errors[] = "Fila {$line}: no existe el articulo activo '{$productCode}' con talla '{$size}'.";
+            }
+            if (! in_array($documentType, array_keys(InventarioIngreso::TIPOS_DOCUMENTO), true)) {
+                $errors[] = "Fila {$line}: Tipo_Documento debe ser FACTURA, GUIA_DESPACHO u OTRO.";
+            }
+            if (! $receiptDate) {
+                $errors[] = "Fila {$line}: Fecha_Recepcion debe usar formato AAAA-MM-DD o DD/MM/AAAA.";
+            }
+            if ($this->importText($values['fecha_documento'] ?? null) !== '' && ! $documentDate) {
+                $errors[] = "Fila {$line}: Fecha_Documento debe usar formato AAAA-MM-DD o DD/MM/AAAA.";
+            }
+            if ($quantity === null || $quantity <= 0) {
+                $errors[] = "Fila {$line}: Cantidad debe ser mayor que cero.";
+            }
+            if ($cost !== null && $cost < 0) {
+                $errors[] = "Fila {$line}: Costo_Unitario no puede ser negativo.";
+            }
+            if ($providerRut !== '' && $providerName === '') {
+                $errors[] = "Fila {$line}: informa Proveedor junto con Proveedor_Rut, o deja ambos vacios.";
+            }
+            if (count($errors) > 15) {
+                break;
+            }
+
+            if (! $reference || ! $location || ! $variant || ! $receiptDate || ($quantity === null || $quantity <= 0)) {
+                continue;
+            }
+
+            $header = [
+                'ubicacion_id' => $location->id,
+                'proveedor' => $providerName,
+                'proveedor_rut' => $providerRut,
+                'tipo_documento' => $documentType,
+                'numero_documento' => $documentNumber,
+                'fecha_documento' => $documentDate,
+                'fecha_recepcion' => $receiptDate,
+                'observacion' => $this->nullable($values['observacion'] ?? null),
+            ];
+            if (isset($groups[$reference]) && $groups[$reference]['header'] !== $header) {
+                $errors[] = "Fila {$line}: las lineas con Referencia_Ingreso '{$reference}' deben tener los mismos datos de cabecera.";
+                continue;
+            }
+            $groups[$reference] ??= ['header' => $header, 'items' => []];
+            $groups[$reference]['items'][] = [
+                'variante_id' => $variant->id,
+                'cantidad' => $quantity,
+                'costo_unitario' => $cost,
+            ];
+        }
+
+        if ($errors) {
+            throw ValidationException::withMessages(['archivo' => implode(' ', array_slice($errors, 0, 15))]);
+        }
+        if (! $groups) {
+            throw ValidationException::withMessages(['archivo' => 'El archivo no contiene lineas de ingresos validas.']);
+        }
+
+        $importedDocumentKeys = [];
+        foreach ($groups as $reference => $group) {
+            $header = $group['header'];
+            if ($header['numero_documento'] === '') {
+                continue;
+            }
+            $documentKey = implode('|', [$header['ubicacion_id'], $header['tipo_documento'], Str::lower($header['numero_documento'])]);
+            if (isset($importedDocumentKeys[$documentKey])) {
+                throw ValidationException::withMessages([
+                    'archivo' => "Las referencias '{$importedDocumentKeys[$documentKey]}' y '{$reference}' repiten el mismo documento dentro de la planilla.",
+                ]);
+            }
+            $importedDocumentKeys[$documentKey] = $reference;
+            $existing = InventarioIngreso::query()
+                ->where('ubicacion_id', $header['ubicacion_id'])
+                ->where('tipo_documento', $header['tipo_documento'])
+                ->where('numero_documento', $header['numero_documento'])
+                ->whereNull('reversado_en')
+                ->first();
+            if ($existing) {
+                throw ValidationException::withMessages([
+                    'archivo' => "La referencia '{$reference}' repite el documento ya vigente {$existing->codigo}. Anulalo primero si fue registrado por error.",
+                ]);
+            }
+        }
+
+        return DB::transaction(function () use ($groups, $user) {
+            $receipts = 0;
+            $lines = 0;
+            foreach ($groups as $group) {
+                $header = $group['header'];
+                $provider = $this->resolveImportedProvider($header);
+                $this->registerReceipt([
+                    'ubicacion_id' => $header['ubicacion_id'],
+                    'proveedor_id' => $provider?->id,
+                    'tipo_documento' => $header['tipo_documento'],
+                    'numero_documento' => $header['numero_documento'],
+                    'fecha_documento' => $header['fecha_documento'],
+                    'fecha_recepcion' => $header['fecha_recepcion'],
+                    'observacion' => $header['observacion'],
+                ], $group['items'], $user);
+                $receipts++;
+                $lines += count($group['items']);
+            }
+
+            return compact('receipts', 'lines');
+        });
+    }
+
     private function movementPayload(array $data, InventarioVariante $variante, float $cantidad): array
     {
         return [
@@ -615,6 +873,59 @@ class InventarioStockService
     private function importText(mixed $value): string
     {
         return trim((string) preg_replace('/\s+/u', ' ', (string) $value));
+    }
+
+    private function importDecimal(mixed $value): ?float
+    {
+        $value = $this->importText($value);
+        if ($value === '') {
+            return null;
+        }
+
+        if (str_contains($value, ',')) {
+            $value = str_replace('.', '', $value);
+            $value = str_replace(',', '.', $value);
+        }
+
+        return is_numeric($value) ? (float) $value : null;
+    }
+
+    private function importReceiptDate(mixed $value): ?string
+    {
+        $value = $this->importText($value);
+        if ($value === '') {
+            return null;
+        }
+
+        foreach (['Y-m-d', 'd/m/Y', 'd-m-Y', 'Y/m/d'] as $format) {
+            try {
+                $date = Carbon::createFromFormat($format, $value);
+            } catch (\Throwable) {
+                continue;
+            }
+            if ($date && $date->format($format) === $value) {
+                return $date->toDateString();
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveImportedProvider(array $header): ?InventarioProveedor
+    {
+        if ($header['proveedor'] === '' && $header['proveedor_rut'] === '') {
+            return null;
+        }
+
+        $provider = $header['proveedor_rut'] !== ''
+            ? InventarioProveedor::query()->where('rut', $header['proveedor_rut'])->first()
+            : InventarioProveedor::query()->whereRaw('LOWER(nombre) = ?', [Str::lower($header['proveedor'])])->first();
+
+        return $provider ?: InventarioProveedor::create([
+            'nombre' => $header['proveedor'],
+            'rut' => $header['proveedor_rut'] ?: null,
+            'activo' => true,
+        ]);
     }
 
     private function eppItemAndVariant(string $item): array

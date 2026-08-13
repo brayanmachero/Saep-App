@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class GestionVehiculosController extends Controller
 {
@@ -220,18 +221,37 @@ class GestionVehiculosController extends Controller
 
     public function reprogramarReserva(Request $request, ReservaVehiculo $reserva)
     {
-        $data = $this->validarReservaBodega($request);
-        $reserva = $this->reservas->reprogramarReserva(
-            $reserva,
-            $data,
-            $this->identidadSolicitante($data),
-            $request->user(),
-        );
+        try {
+            $data = $this->validarReservaBodega($request);
+            $reserva = $this->reservas->reprogramarReserva(
+                $reserva,
+                $data,
+                $this->identidadSolicitante($data),
+                $request->user(),
+            );
+        } catch (ValidationException $exception) {
+            $motivo = collect($exception->errors())->flatten()->first() ?: 'Revisa los datos ingresados e inténtalo nuevamente.';
+
+            return back()
+                ->withInput()
+                ->withErrors($exception->errors())
+                ->with('fleet_drawer', 'reserva-'.$reserva->id)
+                ->with('error', 'La reserva '.$reserva->codigo.' no fue modificada. '.$motivo);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()
+                ->withInput()
+                ->with('fleet_drawer', 'reserva-'.$reserva->id)
+                ->with('error', 'La reserva '.$reserva->codigo.' no fue modificada por un problema inesperado. Inténtalo nuevamente o contacta a Soporte.');
+        }
 
         try {
             $this->reservas->enviarReprogramacion($reserva, $request->user());
         } catch (\Throwable $exception) {
             report($exception);
+
+            return back()->with('warning', 'Reserva '.$reserva->codigo.' actualizada, pero no fue posible enviar el correo al solicitante.');
         }
 
         return back()->with('success', 'Reserva '.$reserva->codigo.' actualizada. Se notificó al solicitante.');
