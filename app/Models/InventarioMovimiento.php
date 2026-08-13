@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InventarioMovimiento extends Model
 {
@@ -60,5 +61,15 @@ class InventarioMovimiento extends Model
     public function registradoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'registrado_por');
+    }
+
+    public function reversoDe(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reverso_de_id');
+    }
+
+    public function reversos(): HasMany
+    {
+        return $this->hasMany(self::class, 'reverso_de_id');
     }
 }

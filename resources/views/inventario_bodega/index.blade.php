@@ -141,9 +141,9 @@
         </section>
 
     @elseif($vista === 'ingresos')
-        <section class="inventory-workspace">
-            <div class="inventory-section" id="registrar-ingreso">
-                <div class="inventory-section-title"><div><h2>Registrar ingreso</h2><p>Compra respaldada por factura o guia de despacho. Al guardar, el saldo aumenta en la ubicacion indicada.</p></div></div>
+        <section class="inventory-section inventory-receipt-section" id="registrar-ingreso">
+            <div class="inventory-section-title"><div><h2>Registrar ingreso</h2><p>Compra respaldada por factura o guia de despacho. Al guardar, el saldo aumenta en la ubicacion indicada.</p></div></div>
+            <aside class="inventory-side-note inventory-receipt-note"><i class="bi bi-shield-check"></i><strong>El historial no se borra.</strong><span>Si un ingreso se registró por error, anúlalo con un motivo. Se crean movimientos inversos y queda registrado quién realizó la acción.</span></aside>
                 @if($canCreate)
                     <div class="inventory-inline-editor inventory-receipt-import" id="importar-ingresos">
                         <div><h3>Importar ingresos</h3><p>Carga varios comprobantes de una vez. Cada fila representa un articulo y una talla; las lineas con la misma referencia forman un solo ingreso.</p></div>
@@ -175,12 +175,22 @@
                         <div class="inventory-form-actions"><button type="submit" class="btn btn-primary inventory-btn"><i class="bi bi-check2-circle"></i>Guardar ingreso</button></div>
                     </form>
                 @endif
-            </div>
-            <aside class="inventory-side-note"><i class="bi bi-shield-check"></i><strong>El historial no se borra.</strong><span>Si un ingreso se registró por error, anúlalo con un motivo. Se crean movimientos inversos y queda registrado quién realizó la acción.</span></aside>
         </section>
         <section class="inventory-section" id="ingresos-recientes">
             <div class="inventory-section-title"><div><h2>Ingresos recientes</h2><p>Compras y recepciones registradas desde Bodega. Para corregir uno de prueba, usa “Anular ingreso”; el historial y el reverso quedan registrados.</p></div></div>
-            <div class="inventory-table-wrap"><table class="inventory-table"><thead><tr><th>Codigo</th><th>Recepcion</th><th>Ubicacion</th><th>Documento</th><th>Proveedor</th><th>Estado</th><th class="text-end">Lineas</th><th>Acciones</th></tr></thead><tbody>@forelse($ingresos as $ingreso)<tr><td><span class="inventory-code">{{ $ingreso->codigo }}</span></td><td>{{ optional($ingreso->fecha_recepcion)->format('d/m/Y') }}</td><td>{{ $ingreso->ubicacion->nombre ?? '-' }}</td><td>{{ $ingreso->tipo_documento }} {{ $ingreso->numero_documento ?: '-' }}</td><td>{{ $ingreso->proveedor->nombre ?? 'Sin proveedor' }}</td><td>@if($ingreso->reversado_en)<span class="inventory-status is-empty">Anulado</span><small>Anulado {{ $ingreso->reversado_en->format('d/m/Y H:i') }}{{ $ingreso->reversadoPor ? ' por ' . $ingreso->reversadoPor->name : '' }}<br>{{ $ingreso->motivo_reversion }}</small>@else<span class="inventory-status is-ok">Vigente</span>@endif</td><td class="text-end">{{ $ingreso->items->count() }}</td><td>@if($canEdit && ! $ingreso->reversado_en)<details class="inventory-receipt-reverse"><summary class="btn btn-light inventory-btn inventory-receipt-reverse-trigger" title="Anular ingreso"><i class="bi bi-arrow-counterclockwise"></i>Anular ingreso</summary><form method="POST" action="{{ route('inventario-bodega.ingresos.revertir', $ingreso) }}" class="inventory-reverse-form">@csrf<label>Motivo de anulación<input name="motivo_reversion" class="form-control" minlength="5" maxlength="500" required placeholder="Ej.: ingreso de prueba"></label><label class="inventory-checkbox inventory-confirm-reverse"><input type="checkbox" required><span>Confirmo que se descontará el stock de estas líneas.</span></label><button type="submit" class="btn btn-light inventory-btn text-danger"><i class="bi bi-arrow-counterclockwise"></i>Confirmar anulación</button></form></details>@else<span class="inventory-muted">-</span>@endif</td></tr>@empty<tr><td colspan="8" class="inventory-empty">Aun no hay ingresos registrados.</td></tr>@endforelse</tbody></table></div>
+            <div class="inventory-table-wrap"><table class="inventory-table"><thead><tr><th>Codigo</th><th>Recepcion</th><th>Ubicacion</th><th>Documento</th><th>Proveedor</th><th>Estado</th><th class="text-end">Lineas</th><th>Acciones</th></tr></thead><tbody>@forelse($ingresos as $ingreso)<tr><td><span class="inventory-code">{{ $ingreso->codigo }}</span></td><td>{{ optional($ingreso->fecha_recepcion)->format('d/m/Y') }}</td><td>{{ $ingreso->ubicacion->nombre ?? '-' }}</td><td>{{ $ingreso->tipo_documento }} {{ $ingreso->numero_documento ?: '-' }}</td><td>{{ $ingreso->proveedor->nombre ?? 'Sin proveedor' }}</td><td>@if($ingreso->reversado_en)<span class="inventory-status is-empty">Anulado</span><small>Anulado {{ $ingreso->reversado_en->format('d/m/Y H:i') }}{{ $ingreso->reversadoPor ? ' por ' . $ingreso->reversadoPor->name : '' }}<br>{{ $ingreso->motivo_reversion }}</small>@else<span class="inventory-status is-ok">Vigente</span>@endif</td><td class="text-end">{{ $ingreso->items->count() }}</td><td><div class="inventory-table-actions"><button type="button" class="btn btn-light inventory-btn" data-inventory-detail-trigger="inventory-detail-receipt-{{ $ingreso->id }}"><i class="bi bi-eye"></i>Ver detalle</button>@if($canEdit && ! $ingreso->reversado_en)<details class="inventory-receipt-reverse"><summary class="btn btn-light inventory-btn inventory-receipt-reverse-trigger" title="Anular ingreso"><i class="bi bi-arrow-counterclockwise"></i>Anular ingreso</summary><form method="POST" action="{{ route('inventario-bodega.ingresos.revertir', $ingreso) }}" class="inventory-reverse-form">@csrf<label>Motivo de anulación<input name="motivo_reversion" class="form-control" minlength="5" maxlength="500" required placeholder="Ej.: ingreso de prueba"></label><label class="inventory-checkbox inventory-confirm-reverse"><input type="checkbox" required><span>Confirmo que se descontará el stock de estas líneas.</span></label><button type="submit" class="btn btn-light inventory-btn text-danger"><i class="bi bi-arrow-counterclockwise"></i>Confirmar anulación</button></form></details>@endif</div></td></tr>@empty<tr><td colspan="8" class="inventory-empty">Aun no hay ingresos registrados.</td></tr>@endforelse</tbody></table></div>
+            @foreach($ingresos as $ingreso)
+                @php
+                    $receiptTotal = $ingreso->items->sum(fn ($item) => $item->costo_unitario === null ? 0 : (float) $item->cantidad * (float) $item->costo_unitario);
+                @endphp
+                <div id="inventory-detail-receipt-{{ $ingreso->id }}" hidden data-inventory-detail-template>
+                    <div class="inventory-detail-heading"><div><span class="inventory-detail-kicker">Ingreso de bodega</span><h2>{{ $ingreso->codigo }}</h2><p>Recepción {{ optional($ingreso->fecha_recepcion)->format('d/m/Y') }}</p></div><span class="inventory-status {{ $ingreso->reversado_en ? 'is-empty' : 'is-ok' }}">{{ $ingreso->reversado_en ? 'Anulado' : 'Vigente' }}</span></div>
+                    <div class="inventory-detail-grid"><div><span>Ubicación</span><strong>{{ $ingreso->ubicacion->nombre ?? '-' }}</strong></div><div><span>Proveedor</span><strong>{{ $ingreso->proveedor->nombre ?? 'Sin proveedor' }}</strong></div><div><span>Documento</span><strong>{{ $ingreso->tipo_documento }} {{ $ingreso->numero_documento ?: 'sin número' }}</strong></div><div><span>Fecha documento</span><strong>{{ optional($ingreso->fecha_documento)->format('d/m/Y') ?: 'No informada' }}</strong></div><div><span>Registrado por</span><strong>{{ $ingreso->registradoPor->nombre_completo ?? $ingreso->registradoPor->name ?? 'No disponible' }}</strong></div><div><span>Líneas</span><strong>{{ $ingreso->items->count() }} artículo(s)</strong></div></div>
+                    @if($ingreso->observacion)<div class="inventory-detail-note"><span>Observación</span><p>{{ $ingreso->observacion }}</p></div>@endif
+                    @if($ingreso->reversado_en)<div class="inventory-detail-warning"><i class="bi bi-arrow-counterclockwise"></i><div><strong>Ingreso anulado</strong><span>{{ $ingreso->reversado_en->format('d/m/Y H:i') }}{{ $ingreso->reversadoPor ? ' por ' . $ingreso->reversadoPor->nombre_completo : '' }}. {{ $ingreso->motivo_reversion }}</span></div></div>@endif
+                    <section class="inventory-detail-lines"><div class="inventory-detail-section-title"><h3>Artículos registrados</h3><strong>{{ $receiptTotal > 0 ? '$ ' . number_format($receiptTotal, 0, ',', '.') : 'Sin costo informado' }}</strong></div><table class="inventory-detail-table"><thead><tr><th>Artículo</th><th>Talla</th><th class="text-end">Cantidad</th><th class="text-end">Costo unit.</th><th class="text-end">Total</th></tr></thead><tbody>@foreach($ingreso->items as $item)@php $lineTotal = $item->costo_unitario === null ? null : (float) $item->cantidad * (float) $item->costo_unitario; @endphp<tr><td>{{ $item->producto->nombre ?? '-' }}<small>{{ $item->producto->codigo ?? '' }}</small></td><td>{{ $item->variante->talla ?? 'ESTANDAR' }}</td><td class="text-end">{{ rtrim(rtrim(number_format((float) $item->cantidad, 3, ',', '.'), '0'), ',') }}</td><td class="text-end">{{ $item->costo_unitario === null ? '—' : '$ ' . number_format((float) $item->costo_unitario, 0, ',', '.') }}</td><td class="text-end">{{ $lineTotal === null ? '—' : '$ ' . number_format($lineTotal, 0, ',', '.') }}</td></tr>@endforeach</tbody></table></section>
+                </div>
+            @endforeach
         </section>
 
     @elseif($vista === 'movimientos')
@@ -224,7 +234,16 @@
         </section>
         <section class="inventory-section">
             <div class="inventory-section-title"><div><h2>Kardex reciente</h2><p>Cada fila identifica que cambio, donde y quien lo registro.</p></div></div>
-            <div class="inventory-table-wrap"><table class="inventory-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Articulo</th><th>Ubicacion</th><th>Destino / CC</th><th>Registrado por</th><th class="text-end">Cantidad</th></tr></thead><tbody>@forelse($movements as $movement)<tr><td>{{ optional($movement->ocurrido_en)->format('d/m/Y H:i') }}</td><td>{{ str_replace('_', ' ', $movement->tipo) }}</td><td>{{ $movement->producto->nombre ?? '-' }}<small>{{ $movement->variante->talla ?? '' }}</small></td><td>{{ $movement->ubicacion->nombre ?? '-' }}</td><td>{{ $movement->destinatario_nombre ?: ($movement->centro_costo ?: '-') }}</td><td>{{ $movement->registrado_por_nombre ?: '-' }}</td><td class="text-end {{ $movement->cantidad < 0 ? 'text-danger' : 'text-success' }}">{{ $movement->cantidad > 0 ? '+' : '' }}{{ rtrim(rtrim(number_format((float) $movement->cantidad, 3, ',', '.'), '0'), ',') }}</td></tr>@empty<tr><td colspan="7" class="inventory-empty">Aun no hay movimientos registrados.</td></tr>@endforelse</tbody></table></div>
+            <div class="inventory-table-wrap"><table class="inventory-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Articulo</th><th>Ubicacion</th><th>Destino / CC</th><th>Registrado por</th><th class="text-end">Cantidad</th><th>Acciones</th></tr></thead><tbody>@forelse($movements as $movement)@php $canReverseMovement = $canEdit && $movement->origen === 'MANUAL' && $movement->tipo !== 'REVERSO' && $movement->reversos_count === 0 && ! ($movement->grupo_traslado && $movement->tipo === 'TRASLADO_ENTRADA'); @endphp<tr><td>{{ optional($movement->ocurrido_en)->format('d/m/Y H:i') }}</td><td>@if($movement->reversos_count)<span class="inventory-status is-empty">Anulado</span><small>{{ str_replace('_', ' ', $movement->tipo) }}</small>@else{{ str_replace('_', ' ', $movement->tipo) }}@endif</td><td>{{ $movement->producto->nombre ?? '-' }}<small>{{ $movement->variante->talla ?? '' }}</small></td><td>{{ $movement->ubicacion->nombre ?? '-' }}</td><td>{{ $movement->destinatario_nombre ?: ($movement->centro_costo ?: '-') }}</td><td>{{ $movement->registrado_por_nombre ?: '-' }}</td><td class="text-end {{ $movement->cantidad < 0 ? 'text-danger' : 'text-success' }}">{{ $movement->cantidad > 0 ? '+' : '' }}{{ rtrim(rtrim(number_format((float) $movement->cantidad, 3, ',', '.'), '0'), ',') }}</td><td><div class="inventory-table-actions"><button type="button" class="btn btn-light inventory-btn" data-inventory-detail-trigger="inventory-detail-movement-{{ $movement->id }}"><i class="bi bi-eye"></i>Ver detalle</button>@if($canReverseMovement)<details class="inventory-receipt-reverse"><summary class="btn btn-light inventory-btn inventory-receipt-reverse-trigger" title="{{ $movement->grupo_traslado ? 'Anular traslado' : 'Anular movimiento' }}"><i class="bi bi-arrow-counterclockwise"></i>{{ $movement->grupo_traslado ? 'Anular traslado' : 'Anular' }}</summary><form method="POST" action="{{ route('inventario-bodega.movimientos.revertir', $movement) }}" class="inventory-reverse-form">@csrf<label>Motivo de anulación<input name="motivo_reversion" class="form-control" minlength="5" maxlength="500" required placeholder="Ej.: movimiento de prueba"></label><label class="inventory-checkbox inventory-confirm-reverse"><input type="checkbox" required><span>Confirmo que se creará el reverso trazable.</span></label><button type="submit" class="btn btn-light inventory-btn text-danger"><i class="bi bi-arrow-counterclockwise"></i>Confirmar anulación</button></form></details>@endif</div></td></tr>@empty<tr><td colspan="8" class="inventory-empty">Aun no hay movimientos registrados.</td></tr>@endforelse</tbody></table></div>
+            @foreach($movements as $movement)
+                <div id="inventory-detail-movement-{{ $movement->id }}" hidden data-inventory-detail-template>
+                    <div class="inventory-detail-heading"><div><span class="inventory-detail-kicker">Movimiento de inventario</span><h2>{{ $movement->codigo }}</h2><p>{{ optional($movement->ocurrido_en)->format('d/m/Y H:i') }}</p></div><span class="inventory-status {{ $movement->reversos_count ? 'is-empty' : ($movement->tipo === 'REVERSO' ? 'is-review' : 'is-ok') }}">{{ $movement->reversos_count ? 'Anulado' : (\App\Models\InventarioMovimiento::TIPOS[$movement->tipo] ?? str_replace('_', ' ', $movement->tipo)) }}</span></div>
+                    <div class="inventory-detail-grid"><div><span>Artículo</span><strong>{{ $movement->producto->nombre ?? '-' }}</strong></div><div><span>Talla o variante</span><strong>{{ $movement->variante->talla ?? 'ESTANDAR' }}</strong></div><div><span>Ubicación</span><strong>{{ $movement->ubicacion->nombre ?? '-' }}</strong></div><div><span>Cantidad</span><strong class="{{ $movement->cantidad < 0 ? 'text-danger' : 'text-success' }}">{{ $movement->cantidad > 0 ? '+' : '' }}{{ rtrim(rtrim(number_format((float) $movement->cantidad, 3, ',', '.'), '0'), ',') }}</strong></div><div><span>Registrado por</span><strong>{{ $movement->registrado_por_nombre ?: 'No disponible' }}</strong></div><div><span>Origen</span><strong>{{ $movement->origen === 'MANUAL' ? 'Registro manual' : str_replace('_', ' ', $movement->origen) }}</strong></div><div><span>Documento</span><strong>{{ $movement->documento_tipo ? $movement->documento_tipo . ' ' . ($movement->documento_numero ?: 'sin número') : ($movement->documento_numero ?: 'Sin documento') }}</strong></div><div><span>Costo unitario</span><strong>{{ $movement->costo_unitario === null ? 'No informado' : '$ ' . number_format((float) $movement->costo_unitario, 0, ',', '.') }}</strong></div></div>
+                    @if($movement->destinatario_nombre || $movement->destinatario_rut || $movement->centro_costo)<div class="inventory-detail-note"><span>Destino</span><p>{{ $movement->destinatario_nombre ?: 'Sin destinatario' }}{{ $movement->destinatario_rut ? ' · ' . $movement->destinatario_rut : '' }}{{ $movement->centro_costo ? ' · Centro de costo: ' . $movement->centro_costo : '' }}</p></div>@endif
+                    @if($movement->observacion)<div class="inventory-detail-note"><span>Observación</span><p>{{ $movement->observacion }}</p></div>@endif
+                    @if($movement->grupo_traslado)<div class="inventory-detail-note"><span>Traslado vinculado</span><p>Este registro forma parte de un traslado entre ubicaciones. Al anularlo desde la salida, el sistema crea el reverso de ambos lados.</p></div>@endif
+                </div>
+            @endforeach
         </section>
 
     @elseif($vista === 'conteos')
@@ -424,6 +443,12 @@
             </div>
         </section>
     @endif
+
+    <div class="inventory-detail-backdrop" data-inventory-detail-close hidden></div>
+    <aside class="inventory-detail-drawer" aria-hidden="true" aria-label="Detalle de inventario" data-inventory-detail-drawer>
+        <div class="inventory-detail-drawer-bar"><span>Detalle</span><button type="button" class="btn btn-light inventory-icon-btn" data-inventory-detail-close aria-label="Cerrar detalle"><i class="bi bi-x-lg"></i></button></div>
+        <div class="inventory-detail-drawer-content" data-inventory-detail-content></div>
+    </aside>
 </div>
 
 <style>
@@ -556,6 +581,11 @@
     @container (max-width: 700px) { .inventory-variant-editor-heading { grid-template-columns:1fr; }.inventory-variant-editor-rows { grid-template-columns:1fr; } }
     .inventory-movement-receipt-actions { grid-template-columns:minmax(0,1fr) auto; align-items:end; background:#f6f4ff; }.inventory-movement-receipt-actions h3 { margin:0; font-size:.92rem; font-weight:800; }.inventory-movement-receipt-actions p { margin:.22rem 0 0; color:#665b84; font-size:.8rem; line-height:1.45; }.inventory-movement-receipt-actions .inventory-import-actions { justify-content:flex-end; }.inventory-receipt-reverse-trigger { white-space:nowrap; }.dark-mode .inventory-movement-receipt-actions { background:rgba(135,87,236,.12); }.dark-mode .inventory-movement-receipt-actions p { color:#d8cff7; }
     @container (max-width: 760px) { .inventory-movement-receipt-actions { grid-template-columns:1fr; }.inventory-movement-receipt-actions .inventory-import-actions { justify-content:stretch; }.inventory-movement-receipt-actions .inventory-import-actions .inventory-btn { flex:1; } }
+    .inventory-receipt-section { display:grid; gap:.9rem; margin-bottom:1.25rem; }.inventory-receipt-note { display:grid; grid-template-columns:auto minmax(0,1fr); column-gap:.7rem; row-gap:.14rem; align-items:start; max-width:none; padding:.85rem 1rem; }.inventory-receipt-note i { grid-row:1 / span 2; }.inventory-receipt-note strong { margin:0; }.inventory-receipt-note span { width:auto; max-width:none; }
+    @container (max-width: 760px) { .inventory-receipt-note { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; flex-wrap:nowrap; }.inventory-receipt-note span { width:auto; } }
+    .inventory-table-actions { display:flex; align-items:flex-start; flex-wrap:wrap; gap:.45rem; min-width:max-content; }.inventory-table-actions .inventory-btn { min-height:2.25rem; font-size:.76rem; }.inventory-table-actions .inventory-receipt-reverse[open] { min-width:20rem; }.inventory-detail-backdrop { position:fixed; z-index:1050; inset:0; background:rgba(15,23,42,.48); backdrop-filter:blur(1px); }.inventory-detail-drawer { position:fixed; z-index:1051; top:0; right:0; bottom:0; width:min(100%,35rem); display:grid; grid-template-rows:auto minmax(0,1fr); color:#17213a; background:#fff; box-shadow:-.8rem 0 2rem rgba(15,23,42,.2); transform:translateX(101%); transition:transform .2s ease; pointer-events:none; }.inventory-detail-drawer[aria-hidden="false"] { transform:translateX(0); pointer-events:auto; }.inventory-detail-drawer-bar { position:sticky; top:0; z-index:1; display:flex; align-items:center; justify-content:space-between; padding:.8rem 1rem; color:#28105f; background:#faf9ff; border-bottom:1px solid #e1dcf8; font-size:.76rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }.inventory-detail-drawer-content { min-width:0; overflow:auto; padding:1.1rem; }.inventory-detail-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; padding-bottom:1rem; border-bottom:1px solid #e6eaf1; }.inventory-detail-kicker { display:block; margin-bottom:.22rem; color:#7a52ce; font-size:.69rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }.inventory-detail-heading h2 { margin:0; color:#1d143d; font-size:1.25rem; font-weight:800; }.inventory-detail-heading p { margin:.2rem 0 0; color:#718096; font-size:.82rem; }.inventory-detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.7rem; margin:1rem 0; }.inventory-detail-grid > div { min-width:0; padding:.7rem; background:#f8fafc; border:1px solid #e6eaf1; border-radius:.48rem; }.inventory-detail-grid span,.inventory-detail-note > span { display:block; color:#738097; font-size:.67rem; font-weight:800; letter-spacing:.045em; text-transform:uppercase; }.inventory-detail-grid strong { display:block; margin-top:.2rem; color:#26334d; font-size:.82rem; overflow-wrap:anywhere; }.inventory-detail-note { margin:0 0 .75rem; padding:.75rem .8rem; background:#f7f5ff; border-left:3px solid #8757ec; color:#4a3b76; }.inventory-detail-note p { margin:.22rem 0 0; font-size:.82rem; line-height:1.45; white-space:pre-wrap; }.inventory-detail-warning { display:flex; gap:.6rem; align-items:flex-start; margin:0 0 .75rem; padding:.75rem .8rem; background:#fff5e8; border-left:3px solid #e88120; color:#80520e; font-size:.82rem; line-height:1.45; }.inventory-detail-warning i { margin-top:.08rem; }.inventory-detail-warning strong,.inventory-detail-warning span { display:block; }.inventory-detail-warning span { margin-top:.12rem; }.inventory-detail-lines { margin-top:1rem; }.inventory-detail-section-title { display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:.55rem; }.inventory-detail-section-title h3 { margin:0; color:#273450; font-size:.9rem; font-weight:800; }.inventory-detail-section-title > strong { color:#4a347e; font-size:.78rem; }.inventory-detail-table { width:100%; border-collapse:collapse; font-size:.78rem; }.inventory-detail-table th { padding:.48rem .38rem; color:#667085; border-bottom:1px solid #dfe5ef; font-size:.65rem; font-weight:800; letter-spacing:.04em; text-align:left; text-transform:uppercase; }.inventory-detail-table td { padding:.58rem .38rem; border-bottom:1px solid #edf0f5; vertical-align:top; }.inventory-detail-table td small { display:block; margin-top:.12rem; color:#748198; font-size:.68rem; }.inventory-search-select.is-disabled .inventory-search-select-trigger { color:#94a3b8; background:#f1f5f9; border-color:#d9e1ec; cursor:not-allowed; }
+    .dark-mode .inventory-detail-drawer { color:#eef2ff; background:#141b2b; }.dark-mode .inventory-detail-drawer-bar { color:#e7ddff; background:#1d1931; border-color:#4c3e77; }.dark-mode .inventory-detail-heading { border-color:#374151; }.dark-mode .inventory-detail-heading h2,.dark-mode .inventory-detail-grid strong,.dark-mode .inventory-detail-section-title h3 { color:#f3f5fb; }.dark-mode .inventory-detail-heading p,.dark-mode .inventory-detail-grid span,.dark-mode .inventory-detail-note > span { color:#aeb9cc; }.dark-mode .inventory-detail-grid > div { background:#111827; border-color:#374151; }.dark-mode .inventory-detail-note { background:rgba(135,87,236,.12); color:#ddd6fe; }.dark-mode .inventory-detail-table th,.dark-mode .inventory-detail-table td { border-color:#374151; }.dark-mode .inventory-detail-table td small { color:#aeb9cc; }.dark-mode .inventory-detail-section-title > strong { color:#ddd6fe; }.dark-mode .inventory-search-select.is-disabled .inventory-search-select-trigger { color:#8794aa; background:#1a2333; border-color:#334155; }
+    @container (max-width: 560px) { .inventory-detail-drawer { width:100%; }.inventory-detail-drawer-content { padding:1rem .85rem; }.inventory-detail-grid { grid-template-columns:1fr; }.inventory-detail-table { font-size:.72rem; }.inventory-detail-table th,.inventory-detail-table td { padding:.46rem .24rem; }.inventory-table-actions { min-width:0; }.inventory-table-actions .inventory-btn { flex:1; } }
 </style>
 
 <script>
@@ -727,12 +757,21 @@ document.addEventListener('DOMContentLoaded', function () {
         var category = scope.querySelector('[data-product-category-select]');
         var subcategory = scope.querySelector('[data-product-subcategory-select]');
         if (!category || !subcategory) return;
+        var hasCategory = Boolean(category.value);
+        var placeholder = subcategory.options[0];
+        if (placeholder) placeholder.textContent = hasCategory ? 'Selecciona una subcategoria' : 'Selecciona primero una categoria';
+        subcategory.disabled = !hasCategory;
         Array.prototype.slice.call(subcategory.options, 1).forEach(function (option) {
-            var isAvailable = !category.value || option.dataset.category === category.value;
+            var isAvailable = hasCategory && option.dataset.category === category.value;
             option.hidden = !isAvailable;
             option.disabled = !isAvailable;
         });
-        if (subcategory.selectedOptions[0] && subcategory.selectedOptions[0].disabled) subcategory.value = '';
+        if (subcategory.selectedOptions[0] && subcategory.selectedOptions[0].disabled) {
+            subcategory.value = '';
+            subcategory.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        subcategory.dispatchEvent(new Event('inventory:options-updated'));
+        if (Array.isArray(searchableSelects)) setupSearchSelects(scope);
     }
     document.querySelectorAll('[data-product-category-select]').forEach(function (category) {
         var scope = category.closest('form');
@@ -872,6 +911,9 @@ document.addEventListener('DOMContentLoaded', function () {
             triggerLabel.textContent = option ? option.textContent.trim() : 'Selecciona una opcion';
             triggerLabel.title = triggerLabel.textContent;
             wrapper.classList.toggle('is-invalid', originalRequired && !nativeSelect.value);
+            wrapper.classList.toggle('is-disabled', nativeSelect.disabled);
+            trigger.disabled = nativeSelect.disabled;
+            trigger.setAttribute('aria-disabled', nativeSelect.disabled ? 'true' : 'false');
         }
 
         function selectOption(option) {
@@ -911,6 +953,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         function openSearchSelect() {
+            if (nativeSelect.disabled) return;
             closeAllSearchSelects(component);
             wrapper.classList.add('is-open');
             var card = wrapper.closest('.inventory-delivery-card');
@@ -951,10 +994,14 @@ document.addEventListener('DOMContentLoaded', function () {
             syncSelectedOption();
             trigger.setAttribute('aria-expanded', 'false');
         });
+        nativeSelect.addEventListener('inventory:options-updated', function () {
+            syncSelectedOption();
+            renderResults();
+        });
         var form = nativeSelect.closest('form');
         if (form) {
             form.addEventListener('submit', function (event) {
-                if (originalRequired && !nativeSelect.value) {
+                if (originalRequired && !nativeSelect.disabled && !nativeSelect.value) {
                     event.preventDefault();
                     wrapper.classList.add('is-invalid');
                     openSearchSelect();
@@ -965,6 +1012,43 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     setupSearchSelects();
+
+    var detailDrawer = document.querySelector('[data-inventory-detail-drawer]');
+    var detailBackdrop = document.querySelector('.inventory-detail-backdrop');
+    var detailContent = document.querySelector('[data-inventory-detail-content]');
+    var detailLastTrigger = null;
+    function closeInventoryDetail() {
+        if (!detailDrawer || detailDrawer.getAttribute('aria-hidden') === 'true') return;
+        detailDrawer.setAttribute('aria-hidden', 'true');
+        if (detailBackdrop) detailBackdrop.hidden = true;
+        document.body.classList.remove('inventory-detail-open');
+        if (detailLastTrigger) detailLastTrigger.focus();
+    }
+    function openInventoryDetail(trigger) {
+        if (!detailDrawer || !detailContent) return;
+        var template = document.getElementById(trigger.dataset.inventoryDetailTrigger);
+        if (!template) return;
+        var detail = template.cloneNode(true);
+        detail.hidden = false;
+        detail.removeAttribute('id');
+        detail.removeAttribute('data-inventory-detail-template');
+        detailContent.replaceChildren(detail);
+        detailLastTrigger = trigger;
+        detailDrawer.setAttribute('aria-hidden', 'false');
+        if (detailBackdrop) detailBackdrop.hidden = false;
+        document.body.classList.add('inventory-detail-open');
+        var closeButton = detailDrawer.querySelector('[data-inventory-detail-close]');
+        if (closeButton) closeButton.focus();
+    }
+    document.querySelectorAll('[data-inventory-detail-trigger]').forEach(function (trigger) {
+        trigger.addEventListener('click', function () { openInventoryDetail(trigger); });
+    });
+    document.querySelectorAll('[data-inventory-detail-close]').forEach(function (trigger) {
+        trigger.addEventListener('click', closeInventoryDetail);
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeInventoryDetail();
+    });
     if (addButton) addLine();
     window.addEventListener('resize', function () {
         searchableSelects.forEach(positionSearchSelectMenu);

@@ -202,6 +202,70 @@ class InventarioStockService
         });
     }
 
+    public function reverseManualMovement(InventarioMovimiento $movement, string $reason, User $user): void
+    {
+        DB::transaction(function () use ($movement, $reason, $user) {
+            $movement = InventarioMovimiento::query()->lockForUpdate()->findOrFail($movement->id);
+
+            if ($movement->origen !== 'MANUAL' || $movement->tipo === 'REVERSO') {
+                throw ValidationException::withMessages([
+                    'movimiento' => 'Este movimiento se generó desde otro proceso. Debe anularse desde su ingreso, entrega Kizeo o proceso de origen.',
+                ]);
+            }
+
+            $originals = $movement->grupo_traslado
+                ? InventarioMovimiento::query()
+                    ->where('grupo_traslado', $movement->grupo_traslado)
+                    ->where('origen', 'MANUAL')
+                    ->lockForUpdate()
+                    ->orderBy('id')
+                    ->get()
+                : collect([$movement]);
+
+            if ($originals->isEmpty() || ($movement->grupo_traslado && $originals->count() !== 2)) {
+                throw ValidationException::withMessages([
+                    'movimiento' => 'No fue posible recuperar todos los movimientos del traslado para anularlos de forma segura.',
+                ]);
+            }
+
+            if (InventarioMovimiento::query()->whereIn('reverso_de_id', $originals->pluck('id'))->exists()) {
+                throw ValidationException::withMessages([
+                    'movimiento' => 'Este movimiento ya fue anulado y no puede reversarse nuevamente.',
+                ]);
+            }
+
+            foreach ($originals as $original) {
+                if ((float) $original->cantidad > 0) {
+                    $this->ensureAvailability($original->ubicacion_id, $original->variante_id, (float) $original->cantidad);
+                }
+            }
+
+            $reverseGroup = $movement->grupo_traslado ? (string) Str::uuid() : null;
+            foreach ($originals as $original) {
+                $this->createMovement([
+                    'tipo' => 'REVERSO',
+                    'origen' => 'REVERSO_MOVIMIENTO_MANUAL',
+                    'ubicacion_id' => $original->ubicacion_id,
+                    'producto_id' => $original->producto_id,
+                    'variante_id' => $original->variante_id,
+                    'cantidad' => -1 * (float) $original->cantidad,
+                    'costo_unitario' => $original->costo_unitario,
+                    'grupo_traslado' => $reverseGroup,
+                    'referencia_tipo' => InventarioMovimiento::class,
+                    'referencia_id' => $original->id,
+                    'documento_tipo' => $original->documento_tipo,
+                    'documento_numero' => $original->documento_numero,
+                    'destinatario_nombre' => $original->destinatario_nombre,
+                    'destinatario_rut' => $original->destinatario_rut,
+                    'centro_costo' => $original->centro_costo,
+                    'observacion' => 'Anulación de movimiento ' . $original->codigo . ': ' . trim($reason),
+                    'ocurrido_en' => now(),
+                    'reverso_de_id' => $original->id,
+                ], $user);
+            }
+        });
+    }
+
     public function setVariantStock(array $data, User $user): float
     {
         return DB::transaction(function () use ($data, $user) {

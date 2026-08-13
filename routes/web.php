@@ -535,6 +535,9 @@ Route::middleware('auth')->group(function () {
           Route::post('movimientos', [InventarioBodegaController::class, 'storeMovement'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('movimientos.store');
+          Route::post('movimientos/{movimiento}/revertir', [InventarioBodegaController::class, 'reverseMovement'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('movimientos.revertir');
           Route::post('conteos', [InventarioBodegaController::class, 'storeStocktake'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('conteos.store');

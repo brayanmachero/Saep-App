@@ -47,4 +47,9 @@ class InventarioIngreso extends Model
     {
         return $this->belongsTo(User::class, 'reversado_por');
     }
+
+    public function registradoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'registrado_por');
+    }
 }

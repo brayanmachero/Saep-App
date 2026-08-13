@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
@@ -50,6 +51,7 @@ class InventarioBodegaController extends Controller
 
         $movements = InventarioMovimiento::query()
             ->with(['producto', 'variante', 'ubicacion'])
+            ->withCount('reversos')
             ->when($selectedLocation, fn ($query) => $query->where('ubicacion_id', $selectedLocation))
             ->latest('ocurrido_en')
             ->limit(20)
@@ -148,7 +150,12 @@ class InventarioBodegaController extends Controller
             'critical' => $critical,
             'movements' => $movements,
             'products' => $products,
-            'ingresos' => InventarioIngreso::query()->with(['ubicacion', 'proveedor', 'items', 'reversadoPor'])->latest('fecha_recepcion')->latest('id')->limit(15)->get(),
+            'ingresos' => InventarioIngreso::query()
+                ->with(['ubicacion', 'proveedor', 'items.producto', 'items.variante', 'reversadoPor', 'registradoPor'])
+                ->latest('fecha_recepcion')
+                ->latest('id')
+                ->limit(15)
+                ->get(),
             'conteos' => InventarioConteo::query()->with('ubicacion')->withCount('lineas')->latest('fecha_corte')->latest('id')->limit(15)->get(),
             'kizeoDeliveries' => $kizeoDeliveries,
             'kizeoSuggestions' => $kizeoSuggestions,
@@ -307,6 +314,18 @@ class InventarioBodegaController extends Controller
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'movimientos'])
             ->with('success', 'Movimiento registrado. El saldo fue actualizado sin editar movimientos anteriores.');
+    }
+
+    public function reverseMovement(Request $request, InventarioMovimiento $movimiento): RedirectResponse
+    {
+        $data = $request->validate([
+            'motivo_reversion' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        $this->stock->reverseManualMovement($movimiento, $data['motivo_reversion'], $request->user());
+
+        return redirect()->route('inventario-bodega.index', ['vista' => 'movimientos'])
+            ->with('success', "Movimiento {$movimiento->codigo} anulado. El sistema creó el reverso y conservó el historial.");
     }
 
     public function storeStocktake(Request $request): RedirectResponse
@@ -544,6 +563,24 @@ class InventarioBodegaController extends Controller
             $rules['codigo'] = ['nullable', 'string', 'max:80'];
         }
         $data = $request->validate($rules);
+        $data['categoria'] = trim((string) ($data['categoria'] ?? '')) ?: null;
+        $data['subcategoria'] = trim((string) ($data['subcategoria'] ?? '')) ?: null;
+
+        if ($data['subcategoria'] && ! $data['categoria']) {
+            throw ValidationException::withMessages([
+                'subcategoria' => 'Selecciona primero una categoría.',
+            ]);
+        }
+
+        if ($data['subcategoria'] && ! InventarioProducto::query()
+            ->where('categoria', $data['categoria'])
+            ->where('subcategoria', $data['subcategoria'])
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'subcategoria' => 'La subcategoría seleccionada no pertenece a la categoría indicada.',
+            ]);
+        }
+
         $data['activo'] = $request->boolean('activo');
 
         return $data;

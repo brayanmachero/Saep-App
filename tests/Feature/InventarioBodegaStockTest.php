@@ -6,6 +6,7 @@ use App\Models\EntregaBodega;
 use App\Http\Controllers\InventarioBodegaController;
 use App\Models\InventarioConteo;
 use App\Models\InventarioEntregaKizeoAplicacion;
+use App\Models\InventarioMovimiento;
 use App\Models\InventarioUbicacion;
 use App\Models\InventarioVariante;
 use App\Models\Rol;
@@ -624,6 +625,82 @@ class InventarioBodegaStockTest extends TestCase
             ->get(route('inventario-bodega.index', ['vista' => 'movimientos']))
             ->assertOk()
             ->assertSee('name="variante_id" class="form-select" required data-inventory-search-select', false);
+    }
+
+    public function test_manual_movement_and_transfer_are_reversed_without_deleting_history(): void
+    {
+        [$user, $origin, $destination, $variant] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'FACTURA',
+            'numero_documento' => 'F-REV-1',
+            'fecha_documento' => '2026-08-01',
+            'fecha_recepcion' => '2026-08-01',
+            'observacion' => null,
+        ], [['variante_id' => $variant->id, 'cantidad' => 10, 'costo_unitario' => null]], $user);
+
+        $service->registerManualMovement([
+            'tipo' => 'ENTREGA_EPP',
+            'ubicacion_id' => $origin->id,
+            'ubicacion_destino_id' => null,
+            'variante_id' => $variant->id,
+            'cantidad' => 3,
+            'ocurrido_en' => '2026-08-02 09:00:00',
+            'destinatario_nombre' => 'Persona de prueba',
+            'destinatario_rut' => null,
+            'centro_costo' => null,
+            'documento_tipo' => 'ACTA',
+            'documento_numero' => 'A-1',
+            'costo_unitario' => null,
+            'observacion' => 'Entrega de prueba',
+        ], $user);
+
+        $manual = InventarioMovimiento::query()->where('tipo', 'ENTREGA_EPP')->firstOrFail();
+        $service->reverseManualMovement($manual, 'La entrega fue registrada por error.', $user);
+
+        $this->assertSame(10.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'tipo' => 'REVERSO',
+            'reverso_de_id' => $manual->id,
+            'cantidad' => 3,
+        ]);
+
+        $service->registerManualMovement([
+            'tipo' => 'TRASLADO',
+            'ubicacion_id' => $origin->id,
+            'ubicacion_destino_id' => $destination->id,
+            'variante_id' => $variant->id,
+            'cantidad' => 4,
+            'ocurrido_en' => '2026-08-03 09:00:00',
+            'destinatario_nombre' => null,
+            'destinatario_rut' => null,
+            'centro_costo' => null,
+            'documento_tipo' => 'GUIA_DESPACHO',
+            'documento_numero' => 'G-REV-1',
+            'costo_unitario' => null,
+            'observacion' => 'Traslado de prueba',
+        ], $user);
+
+        $transferOut = InventarioMovimiento::query()->where('tipo', 'TRASLADO_SALIDA')->latest('id')->firstOrFail();
+        $service->reverseManualMovement($transferOut, 'El traslado fue registrado por error.', $user);
+
+        $this->assertSame(10.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertSame(0.0, $service->stockActual($destination->id, $variant->id));
+        $this->assertSame(2, InventarioMovimiento::query()
+            ->where('tipo', 'REVERSO')
+            ->where('origen', 'REVERSO_MOVIMIENTO_MANUAL')
+            ->whereNotNull('grupo_traslado')
+            ->count());
+
+        try {
+            $service->reverseManualMovement($transferOut, 'Intento de anulación repetido.', $user);
+            $this->fail('La segunda anulación debía ser rechazada.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('movimiento', $exception->errors());
+        }
     }
 
     private function inventoryContext(): array
