@@ -405,8 +405,12 @@ class InventarioBodegaController extends Controller
         ]);
         $result = $this->stock->importProducts($request->file('archivo'), $request->user());
 
+        $stockMessage = $result['stocksSet'] > 0
+            ? " {$result['stocksSet']} saldo(s) por ubicacion fueron cargados o ajustados con movimientos trazables."
+            : ' Las filas sin Ubicacion_Codigo y Stock_Inicial quedan con stock 0.';
+
         return redirect()->route('inventario-bodega.index', ['vista' => 'catalogo'])
-            ->with('success', "Importacion finalizada: {$result['created']} productos creados, {$result['updated']} actualizados, {$result['variantsCreated']} variantes creadas y {$result['skipped']} filas omitidas. Todos quedan con stock 0 por ubicacion hasta registrar un ingreso, movimiento o conteo fisico.");
+            ->with('success', "Importacion finalizada: {$result['created']} productos creados, {$result['updated']} actualizados, {$result['variantsCreated']} variantes creadas y {$result['skipped']} filas omitidas." . $stockMessage);
     }
 
     public function importReceipts(Request $request): RedirectResponse
@@ -425,18 +429,32 @@ class InventarioBodegaController extends Controller
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Productos');
-        $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Stock_Critico'];
+        $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Stock_Critico', 'Ubicacion_Codigo', 'Stock_Inicial'];
         $sheet->fromArray($headers, null, 'A1');
-        $sheet->getStyle('A1:H1')->applyFromArray([
+        $sheet->getStyle('A1:J1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF2D0B64']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ]);
         $sheet->freezePane('A2');
         $sheet->setAutoFilter('A1:H1');
-        foreach (range('A', 'H') as $column) {
+        foreach (range('A', 'J') as $column) {
             $sheet->getColumnDimension($column)->setWidth($column === 'B' ? 34 : 20);
         }
+
+        $instructions = $spreadsheet->createSheet();
+        $instructions->setTitle('Instrucciones');
+        $instructions->fromArray([
+            ['Plantilla de catalogo e inventario inicial'],
+            ['Stock_Critico es el minimo que activa una alerta; no representa existencias.'],
+            ['Para cargar existencias, informa Ubicacion_Codigo (codigo de una ubicacion activa) y Stock_Inicial.'],
+            ['Cada fila corresponde a un producto, talla y ubicacion. El Stock_Inicial fija el saldo de esa talla en esa ubicacion y deja un movimiento trazable.'],
+            ['Si vuelves a importar la misma fila con el mismo saldo, no se duplica stock. Si cambias el saldo, se crea un ajuste trazable.'],
+            ['Deja Ubicacion_Codigo y Stock_Inicial vacios si solo quieres cargar o actualizar el catalogo.'],
+        ], null, 'A1');
+        $instructions->getColumnDimension('A')->setWidth(120);
+        $instructions->getStyle('A1')->getFont()->setBold(true);
+        $instructions->getStyle('A1:A6')->getAlignment()->setWrapText(true);
 
         $path = storage_path('app/plantilla_catalogo_inventario_' . now()->format('YmdHis') . '.xlsx');
         (new Xlsx($spreadsheet))->save($path);

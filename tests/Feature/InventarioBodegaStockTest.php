@@ -343,6 +343,53 @@ class InventarioBodegaStockTest extends TestCase
         ]);
     }
 
+    public function test_catalog_import_sets_stock_by_location_without_confusing_it_with_stock_minimum(): void
+    {
+        [$user, $origin] = $this->inventoryContext();
+        $path = tempnam(sys_get_temp_dir(), 'catalog-stock-') . '.xlsx';
+        $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Stock_Critico', 'Ubicacion_Codigo', 'Stock_Inicial'];
+        $row = ['PARKA-AZUL', 'Parka termica azul', 'EPP', 'Ropa', 'Parkas', 'Unidad', 'M', 5, $origin->codigo, 30];
+
+        try {
+            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet->fromArray([$headers, $row]);
+            (new Xlsx($sheet->getParent()))->save($path);
+            $file = new UploadedFile($path, 'catalogo.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+            $service = app(InventarioStockService::class);
+            $result = $service->importProducts($file, $user);
+            $repeat = $service->importProducts($file, $user);
+
+            $row[9] = 18;
+            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet->fromArray([$headers, $row]);
+            (new Xlsx($sheet->getParent()))->save($path);
+            $adjusted = $service->importProducts(new UploadedFile($path, 'catalogo.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true), $user);
+        } finally {
+            @unlink($path);
+        }
+
+        $product = \App\Models\InventarioProducto::query()->where('codigo', 'PARKA-AZUL')->firstOrFail();
+        $variant = $product->variantes()->where('talla', 'M')->firstOrFail();
+
+        $this->assertSame(1, $result['stocksSet']);
+        $this->assertSame(0, $repeat['stocksSet']);
+        $this->assertSame(1, $adjusted['stocksSet']);
+        $this->assertSame(5.0, (float) $product->stock_minimo);
+        $this->assertSame(18.0, app(InventarioStockService::class)->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'tipo' => 'STOCK_INICIAL',
+            'origen' => 'IMPORTACION_CATALOGO',
+            'variante_id' => $variant->id,
+            'cantidad' => 30,
+        ]);
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'tipo' => 'AJUSTE_NEGATIVO',
+            'origen' => 'IMPORTACION_CATALOGO',
+            'variante_id' => $variant->id,
+            'cantidad' => -12,
+        ]);
+    }
+
     public function test_a_receipt_is_annulled_with_inverse_movements_and_audit_data(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContext();

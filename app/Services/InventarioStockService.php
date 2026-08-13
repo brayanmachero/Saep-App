@@ -619,9 +619,12 @@ class InventarioStockService
         $sheet = $spreadsheet->getActiveSheet();
         $rows = $sheet->toArray(null, true, true, false);
         $headers = array_map(fn ($value) => $this->normalizeHeader($value), array_shift($rows) ?? []);
+
+        return DB::transaction(function () use ($rows, $headers, $user) {
         $created = 0;
         $updated = 0;
         $variantsCreated = 0;
+        $stocksSet = 0;
         $skipped = 0;
         $createdProducts = [];
         $updatedProducts = [];
@@ -642,6 +645,33 @@ class InventarioStockService
                 $talla = $talla ?: $detectedSize;
             }
             $talla = Str::upper($talla ?: 'ESTANDAR');
+
+            $locationCode = $this->importText($values['ubicacion_codigo'] ?? $values['ubicacion'] ?? null);
+            $stockRaw = $this->importText($values['stock_inicial'] ?? $values['stock_actual'] ?? $values['stock'] ?? null);
+            $hasInitialStock = $locationCode !== '' || $stockRaw !== '';
+            $location = null;
+            $initialStock = null;
+            if ($hasInitialStock) {
+                if ($locationCode === '') {
+                    throw ValidationException::withMessages(['archivo' => "El producto '{$nombre}' requiere Ubicacion_Codigo para cargar Stock_Inicial."]);
+                }
+                if ($stockRaw === '') {
+                    throw ValidationException::withMessages(['archivo' => "El producto '{$nombre}' requiere Stock_Inicial para la ubicacion '{$locationCode}'."]);
+                }
+
+                $initialStock = $this->importDecimal($stockRaw);
+                if ($initialStock === null || $initialStock < 0) {
+                    throw ValidationException::withMessages(['archivo' => "El Stock_Inicial de '{$nombre}' debe ser un numero igual o mayor que cero."]);
+                }
+
+                $location = InventarioUbicacion::query()
+                    ->where('codigo', $locationCode)
+                    ->where('activo', true)
+                    ->first();
+                if (! $location) {
+                    throw ValidationException::withMessages(['archivo' => "No existe una ubicacion activa con codigo '{$locationCode}' para '{$nombre}'."]);
+                }
+            }
 
             $codigo = $this->importText($values['codigo'] ?? null);
             $product = $codigo !== ''
@@ -681,9 +711,38 @@ class InventarioStockService
             ]);
             $variant->save();
             $variantsCreated += $isNewVariant ? 1 : 0;
+
+            if ($location && $initialStock !== null) {
+                $currentStock = $this->stockActual($location->id, $variant->id);
+                $difference = $initialStock - $currentStock;
+                if (abs($difference) >= 0.0001) {
+                    $hasMovementHistory = InventarioMovimiento::query()
+                        ->where('ubicacion_id', $location->id)
+                        ->where('variante_id', $variant->id)
+                        ->exists();
+                    $this->createMovement([
+                        'tipo' => $hasMovementHistory
+                            ? ($difference > 0 ? 'AJUSTE_POSITIVO' : 'AJUSTE_NEGATIVO')
+                            : 'STOCK_INICIAL',
+                        'origen' => 'IMPORTACION_CATALOGO',
+                        'ubicacion_id' => $location->id,
+                        'producto_id' => $product->id,
+                        'variante_id' => $variant->id,
+                        'cantidad' => $difference,
+                        'documento_tipo' => 'AJUSTE',
+                        'documento_numero' => 'IMPORTACION-STOCK-INICIAL',
+                        'observacion' => $hasMovementHistory
+                            ? 'Saldo fijado desde importacion de catalogo: ' . $this->number($initialStock) . '.'
+                            : 'Carga de stock inicial desde importacion de catalogo: ' . $this->number($initialStock) . '.',
+                        'ocurrido_en' => now(),
+                    ], $user);
+                    $stocksSet++;
+                }
+            }
         }
 
-        return compact('created', 'updated', 'variantsCreated', 'skipped');
+        return compact('created', 'updated', 'variantsCreated', 'stocksSet', 'skipped');
+        });
     }
 
     public function importReceipts(UploadedFile $file, User $user): array
