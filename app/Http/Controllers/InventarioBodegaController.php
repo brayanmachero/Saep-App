@@ -15,6 +15,8 @@ use App\Modules\Comercial\Models\CentroCosto;
 use App\Services\InventarioStockService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
@@ -36,12 +38,9 @@ class InventarioBodegaController extends Controller
             ? $request->input('vista')
             : 'resumen';
         $selectedLocation = $request->integer('ubicacion_id') ?: null;
-        $search = trim((string) $request->input('buscar'));
-        $balances = $this->stock->balances($selectedLocation);
-        if ($search !== '') {
-            $needle = Str::lower($search);
-            $balances = $balances->filter(fn (InventarioVariante $variant) => str_contains(Str::lower($variant->producto->nombre . ' ' . $variant->producto->codigo . ' ' . $variant->talla), $needle));
-        }
+        $summaryFilters = $this->summaryFilters($request);
+        $search = $summaryFilters['search'];
+        $balances = $this->filterSummaryBalances($this->stock->balances($selectedLocation), $summaryFilters);
 
         $critical = $balances->filter(function (InventarioVariante $variant) {
             $minimum = $variant->stock_minimo ?? $variant->producto->stock_minimo;
@@ -53,6 +52,7 @@ class InventarioBodegaController extends Controller
             ->with(['producto', 'variante', 'ubicacion'])
             ->withCount('reversos')
             ->when($selectedLocation, fn ($query) => $query->where('ubicacion_id', $selectedLocation))
+            ->when($view === 'resumen' && $summaryFilters['applied'], fn ($query) => $query->whereIn('variante_id', $balances->pluck('id')))
             ->latest('ocurrido_en')
             ->limit(20)
             ->get();
@@ -134,11 +134,16 @@ class InventarioBodegaController extends Controller
             'vista' => $view,
             'selectedLocation' => $selectedLocation,
             'search' => $search,
+            'summaryFilters' => $summaryFilters,
             'productSearch' => $productSearch,
             'editingProductId' => $editingProductId,
             'locations' => $locations,
             'activeLocations' => $activeLocations,
             'providers' => InventarioProveedor::query()->orderByDesc('activo')->orderBy('nombre')->get(),
+            'summaryProviders' => InventarioProveedor::query()
+                ->whereHas('ingresos', fn ($query) => $query->whereNull('reversado_en'))
+                ->orderBy('nombre')
+                ->get(),
             'variantOptions' => $variantOptions,
             'variantStocksByLocation' => $variantStocksByLocation,
             'productTypes' => $productTypes,
@@ -507,7 +512,7 @@ class InventarioBodegaController extends Controller
     public function exportBalances(Request $request)
     {
         $locationId = $request->integer('ubicacion_id') ?: null;
-        $balances = $this->stock->balances($locationId);
+        $balances = $this->filterSummaryBalances($this->stock->balances($locationId), $this->summaryFilters($request));
         $locationName = $locationId
             ? InventarioUbicacion::query()->find($locationId)?->nombre
             : 'Todas las ubicaciones';
@@ -547,6 +552,77 @@ class InventarioBodegaController extends Controller
         (new Xlsx($spreadsheet))->save($path);
 
         return response()->download($path, 'stock_inventario.xlsx')->deleteFileAfterSend(true);
+    }
+
+    private function summaryFilters(Request $request): array
+    {
+        $stockStatus = trim((string) $request->input('estado_stock'));
+        $stockStatus = in_array($stockStatus, ['critico', 'con_stock', 'sin_stock', 'sobre_minimo'], true)
+            ? $stockStatus
+            : null;
+        $filters = [
+            'search' => trim((string) $request->input('buscar')),
+            'stock_status' => $stockStatus,
+            'category' => trim((string) $request->input('categoria')) ?: null,
+            'subcategory' => trim((string) $request->input('subcategoria')) ?: null,
+            'provider_id' => $request->integer('proveedor_id') ?: null,
+        ];
+        $filters['applied'] = filled($filters['search'])
+            || filled($filters['stock_status'])
+            || filled($filters['category'])
+            || filled($filters['subcategory'])
+            || filled($filters['provider_id']);
+
+        return $filters;
+    }
+
+    private function filterSummaryBalances(Collection $balances, array $filters): Collection
+    {
+        if ($filters['search'] !== '') {
+            $needle = Str::lower($filters['search']);
+            $balances = $balances->filter(fn (InventarioVariante $variant) => str_contains(
+                Str::lower($variant->producto->nombre . ' ' . $variant->producto->codigo . ' ' . $variant->talla),
+                $needle,
+            ));
+        }
+
+        if ($filters['category']) {
+            $category = Str::lower($filters['category']);
+            $balances = $balances->filter(fn (InventarioVariante $variant) => Str::lower((string) $variant->producto->categoria) === $category);
+        }
+
+        if ($filters['subcategory']) {
+            $subcategory = Str::lower($filters['subcategory']);
+            $balances = $balances->filter(fn (InventarioVariante $variant) => Str::lower((string) $variant->producto->subcategoria) === $subcategory);
+        }
+
+        if ($filters['provider_id']) {
+            $providedVariants = DB::table('inventario_ingreso_items')
+                ->join('inventario_ingresos', 'inventario_ingresos.id', '=', 'inventario_ingreso_items.ingreso_id')
+                ->where('inventario_ingresos.proveedor_id', $filters['provider_id'])
+                ->whereNull('inventario_ingresos.reversado_en')
+                ->pluck('inventario_ingreso_items.variante_id')
+                ->mapWithKeys(fn ($id) => [(int) $id => true])
+                ->all();
+            $balances = $balances->filter(fn (InventarioVariante $variant) => isset($providedVariants[$variant->id]));
+        }
+
+        if ($filters['stock_status']) {
+            $balances = $balances->filter(function (InventarioVariante $variant) use ($filters) {
+                $minimum = (float) ($variant->stock_minimo ?? $variant->producto->stock_minimo);
+                $actual = (float) $variant->stock_actual;
+
+                return match ($filters['stock_status']) {
+                    'critico' => $minimum > 0 && $actual <= $minimum,
+                    'con_stock' => $actual > 0,
+                    'sin_stock' => $actual <= 0,
+                    'sobre_minimo' => $actual > $minimum,
+                    default => true,
+                };
+            });
+        }
+
+        return $balances->values();
     }
 
     private function providerData(Request $request, ?InventarioProveedor $provider = null): array

@@ -343,6 +343,72 @@ class InventarioBodegaStockTest extends TestCase
         ]);
     }
 
+    public function test_summary_filters_balances_kpis_and_recent_movements_by_catalog_supplier_and_stock_status(): void
+    {
+        [$user, $origin] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+        $product = $service->createProduct([
+            'codigo' => 'LENTE-SEG',
+            'nombre' => 'Lente de seguridad',
+            'tipo' => 'EPP',
+            'categoria' => 'Proteccion visual',
+            'subcategoria' => 'Lentes',
+            'unidad_medida' => 'Unidad',
+            'stock_minimo' => 5,
+            'tallas' => 'ESTANDAR',
+            'activo' => true,
+        ], $user);
+        $variant = $product->variantes()->firstOrFail();
+        $provider = \App\Models\InventarioProveedor::create(['nombre' => 'Proveedor de lentes', 'activo' => true]);
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => $provider->id,
+            'tipo_documento' => 'FACTURA',
+            'numero_documento' => 'F-RESUMEN-1',
+            'fecha_documento' => '2026-08-13',
+            'fecha_recepcion' => '2026-08-13',
+            'observacion' => null,
+        ], [[
+            'variante_id' => $variant->id,
+            'cantidad' => 2,
+            'costo_unitario' => null,
+        ]], $user);
+
+        $request = Request::create('/inventario-bodega', 'GET', [
+            'vista' => 'resumen',
+            'categoria' => 'Proteccion visual',
+            'subcategoria' => 'Lentes',
+            'proveedor_id' => $provider->id,
+            'estado_stock' => 'critico',
+        ]);
+        $request->setUserResolver(fn () => $user);
+        $view = (new InventarioBodegaController($service))->index($request);
+        $data = $view->getData();
+
+        $this->assertTrue($data['summaryFilters']['applied']);
+        $this->assertSame('critico', $data['summaryFilters']['stock_status']);
+        $this->assertCount(1, $data['balances']);
+        $this->assertSame($variant->id, $data['balances']->first()->id);
+        $this->assertCount(1, $data['critical']);
+        $this->assertCount(1, $data['movements']);
+        $this->assertSame($variant->id, $data['movements']->first()->variante_id);
+
+        $export = (new InventarioBodegaController($service))->exportBalances(Request::create('/inventario-bodega/exportar', 'GET', [
+            'categoria' => 'Proteccion visual',
+            'subcategoria' => 'Lentes',
+            'proveedor_id' => $provider->id,
+            'estado_stock' => 'critico',
+        ]));
+        $path = $export->getFile()->getPathname();
+        try {
+            $rows = \PhpOffice\PhpSpreadsheet\IOFactory::load($path)->getActiveSheet()->rangeToArray('A1:K3', null, true, true, false);
+        } finally {
+            @unlink($path);
+        }
+        $this->assertSame('LENTE-SEG', $rows[1][0]);
+        $this->assertNull($rows[2][0]);
+    }
+
     public function test_catalog_import_sets_stock_by_location_without_confusing_it_with_stock_minimum(): void
     {
         [$user, $origin] = $this->inventoryContext();
@@ -581,7 +647,7 @@ class InventarioBodegaStockTest extends TestCase
     {
         $view = file_get_contents(dirname(__DIR__, 2) . '/resources/views/inventario_bodega/index.blade.php');
 
-        $this->assertStringContainsString('El catalogo parte en cero.', $view);
+        $this->assertStringContainsString('El catálogo puede incluir stock inicial.', $view);
         $this->assertStringContainsString('Cargar desde compra', $view);
         $this->assertStringContainsString('Cargar desde conteo', $view);
         $this->assertStringContainsString('Desglose por talla', $view);

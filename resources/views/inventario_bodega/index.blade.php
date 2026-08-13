@@ -24,7 +24,7 @@
             <p>Stock por ubicacion, movimientos trazables y conteos fisicos.</p>
         </div>
         <div class="inventory-header-actions">
-            <a class="btn btn-light inventory-btn" href="{{ route('inventario-bodega.export', ['ubicacion_id' => $selectedLocation]) }}" title="Descargar el stock visible en Excel">
+            <a class="btn btn-light inventory-btn" href="{{ route('inventario-bodega.export', array_filter(['ubicacion_id' => $selectedLocation, 'buscar' => $summaryFilters['search'], 'estado_stock' => $summaryFilters['stock_status'], 'categoria' => $summaryFilters['category'], 'subcategoria' => $summaryFilters['subcategory'], 'proveedor_id' => $summaryFilters['provider_id']], fn ($value) => $value !== null && $value !== '')) }}" title="Descargar el stock visible en Excel">
                 <i class="bi bi-file-earmark-excel"></i><span>Exportar stock</span>
             </a>
             @if($canCreate)
@@ -82,8 +82,35 @@
                 <label>Buscar articulo
                     <input type="search" name="buscar" class="form-control" value="{{ $search }}" placeholder="Codigo, producto o talla">
                 </label>
+                <label>Estado de stock
+                    <select name="estado_stock" class="form-select">
+                        <option value="">Todos los estados</option>
+                        <option value="critico" @selected($summaryFilters['stock_status'] === 'critico')>Crítico o bajo mínimo</option>
+                        <option value="con_stock" @selected($summaryFilters['stock_status'] === 'con_stock')>Con stock</option>
+                        <option value="sin_stock" @selected($summaryFilters['stock_status'] === 'sin_stock')>Sin stock</option>
+                        <option value="sobre_minimo" @selected($summaryFilters['stock_status'] === 'sobre_minimo')>Sobre el mínimo</option>
+                    </select>
+                </label>
+                <label>Categoria
+                    <select name="categoria" class="form-select" data-summary-category-select>
+                        <option value="">Todas las categorias</option>
+                        @foreach($productCategories as $category)<option value="{{ $category }}" @selected($summaryFilters['category'] === $category)>{{ $category }}</option>@endforeach
+                    </select>
+                </label>
+                <label>Subcategoria
+                    <select name="subcategoria" class="form-select" data-summary-subcategory-select>
+                        <option value="">Todas las subcategorias</option>
+                        @foreach($productSubcategories as $subcategory)<option value="{{ $subcategory['nombre'] }}" data-category="{{ $subcategory['categoria'] }}" @selected($summaryFilters['subcategory'] === $subcategory['nombre'])>{{ $subcategory['nombre'] }}</option>@endforeach
+                    </select>
+                </label>
+                <label>Proveedor
+                    <select name="proveedor_id" class="form-select" data-inventory-search-select data-search-placeholder="Buscar proveedor">
+                        <option value="">Todos los proveedores</option>
+                        @foreach($summaryProviders as $provider)<option value="{{ $provider->id }}" @selected($summaryFilters['provider_id'] === $provider->id)>{{ $provider->nombre }}</option>@endforeach
+                    </select>
+                </label>
                 <button class="btn btn-primary inventory-btn" type="submit"><i class="bi bi-funnel-fill"></i>Aplicar</button>
-                @if($selectedLocation || $search !== '')
+                @if($selectedLocation || $summaryFilters['applied'])
                     <a href="{{ route('inventario-bodega.index') }}" class="btn btn-light inventory-icon-btn" title="Limpiar filtros"><i class="bi bi-x-lg"></i></a>
                 @endif
             </form>
@@ -513,7 +540,7 @@
     .inventory-onboarding { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:.8rem 1rem; padding:1rem 1.1rem; }
     .inventory-onboarding .btn { margin-left:0; }
     .inventory-filter-section { padding:.9rem 1rem; }
-    .inventory-filter-grid { grid-template-columns:minmax(195px,260px) minmax(260px,430px) auto auto; justify-content:start; gap:.7rem; }
+    .inventory-filter-grid { grid-template-columns:repeat(3,minmax(190px,1fr)) auto auto; justify-content:start; gap:.7rem; }
     .inventory-filter-grid label { display:grid; gap:.08rem; }
     .inventory-filter-grid .form-control, .inventory-filter-grid .form-select { margin-top:.2rem; }
     .inventory-section { box-sizing:border-box; padding:1rem; }
@@ -775,6 +802,26 @@ document.addEventListener('DOMContentLoaded', function () {
         category.addEventListener('change', function () { syncProductSubcategoryOptions(scope); });
         syncProductSubcategoryOptions(scope);
     });
+    function syncSummarySubcategoryOptions() {
+        var category = document.querySelector('[data-summary-category-select]');
+        var subcategory = document.querySelector('[data-summary-subcategory-select]');
+        if (!category || !subcategory) return;
+        Array.prototype.slice.call(subcategory.options, 1).forEach(function (option) {
+            var isAvailable = !category.value || option.dataset.category === category.value;
+            option.hidden = !isAvailable;
+            option.disabled = !isAvailable;
+        });
+        if (subcategory.selectedOptions[0] && subcategory.selectedOptions[0].disabled) {
+            subcategory.value = '';
+        }
+        subcategory.dispatchEvent(new Event('inventory:options-updated'));
+        if (Array.isArray(searchableSelects)) setupSearchSelects(subcategory.closest('label'));
+    }
+    var summaryCategory = document.querySelector('[data-summary-category-select]');
+    if (summaryCategory) {
+        summaryCategory.addEventListener('change', syncSummarySubcategoryOptions);
+        syncSummarySubcategoryOptions();
+    }
     if (productSelect) productSelect.addEventListener('change', function () { syncProductSubcategoryOptions(productSelect.closest('form')); });
     if (refreshProductEditor) refreshProductEditor();
     if (productSelect) syncProductSubcategoryOptions(productSelect.closest('form'));
