@@ -594,13 +594,14 @@ class InventarioBodegaController extends Controller
         foreach (range('A', 'K') as $column) {
             $sheet->getColumnDimension($column)->setWidth($column === 'B' ? 34 : 20);
         }
+        $sheet->getStyle('H2:H5000')->getNumberFormat()->setFormatCode('#,##0.00');
 
         $instructions = $spreadsheet->createSheet();
         $instructions->setTitle('Instrucciones');
         $instructions->fromArray([
             ['Plantilla de catalogo e inventario inicial'],
             ['Stock_Critico es el minimo que activa una alerta; no representa existencias.'],
-            ['Costo_Referencia es el último costo conocido de esa talla. Puedes usar Precio, Precio_Referencia, Costo o Costo_Unitario como alias al importar. Cero o vacío significa sin información y no borra un costo ya registrado.'],
+            ['Costo_Referencia es el último costo conocido de esa talla. Ingresa solo el número (por ejemplo, 41590); Excel puede mostrarlo con separador de miles. Puedes usar Precio, Precio_Referencia, Costo o Costo_Unitario como alias. Cero o vacío significa sin información y no borra un costo ya registrado.'],
             ['Para cargar existencias, informa Ubicacion_Codigo (codigo de una ubicacion activa) y Stock_Inicial.'],
             ['Cada fila corresponde a un producto, talla y ubicacion. El Stock_Inicial fija el saldo de esa talla en esa ubicacion y deja un movimiento trazable.'],
             ['Si vuelves a importar la misma fila con el mismo saldo, no se duplica stock. Si cambias el saldo, se crea un ajuste trazable.'],

@@ -530,6 +530,41 @@ class InventarioBodegaStockTest extends TestCase
         ]);
     }
 
+    public function test_catalog_import_keeps_excel_prices_with_thousands_separator(): void
+    {
+        [$user] = $this->inventoryContext();
+        $path = tempnam(sys_get_temp_dir(), 'catalog-price-format-') . '.xlsx';
+        $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia'];
+        $row = ['BOTIN-PRECIO', 'Botín con precio', 'EPP', 'Calzado', 'Botines', 'Unidad', '40', 41590];
+
+        try {
+            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet->fromArray([$headers, $row]);
+            $sheet->getStyle('H2')->getNumberFormat()->setFormatCode('#,##0');
+            $this->assertSame('41,590', $sheet->toArray(null, true, true, false)[1][7]);
+            (new Xlsx($sheet->getParent()))->save($path);
+
+            app(InventarioStockService::class)->importProducts(
+                new UploadedFile($path, 'catalogo.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true),
+                $user,
+            );
+        } finally {
+            @unlink($path);
+        }
+
+        $variant = InventarioVariante::query()
+            ->whereHas('producto', fn ($products) => $products->where('codigo', 'BOTIN-PRECIO'))
+            ->where('talla', '40')
+            ->firstOrFail();
+
+        $this->assertSame(41590.0, (float) $variant->costo_referencia);
+        $this->assertDatabaseHas('inventario_historial_costos', [
+            'variante_id' => $variant->id,
+            'costo_unitario' => 41590,
+            'origen' => 'IMPORTACION_CATALOGO',
+        ]);
+    }
+
     public function test_a_receipt_is_annulled_with_inverse_movements_and_audit_data(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContext();
@@ -796,10 +831,12 @@ class InventarioBodegaStockTest extends TestCase
         $variant->load('producto');
         $path = tempnam(sys_get_temp_dir(), 'receipt-import-') . '.xlsx';
         $spreadsheet = new Spreadsheet();
-        $spreadsheet->getActiveSheet()->fromArray([
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray([
             ['Referencia_Ingreso', 'Ubicacion_Codigo', 'Proveedor', 'Proveedor_Rut', 'Tipo_Documento', 'Numero_Documento', 'Fecha_Documento', 'Fecha_Recepcion', 'Codigo_Producto', 'Talla', 'Cantidad', 'Costo_Unitario', 'Observacion'],
-            ['COMPRA-AGOSTO-01', $origin->codigo, 'Proveedor importado', '76543210-1', 'FACTURA', 'F-IMPORT-1', '10/08/2026', '11/08/2026', $variant->producto->codigo, 'M', '4', '1500', 'Carga desde planilla'],
+            ['COMPRA-AGOSTO-01', $origin->codigo, 'Proveedor importado', '76543210-1', 'FACTURA', 'F-IMPORT-1', '10/08/2026', '11/08/2026', $variant->producto->codigo, 'M', '4', 41590, 'Carga desde planilla'],
         ]);
+        $sheet->getStyle('L2')->getNumberFormat()->setFormatCode('#,##0');
         (new Xlsx($spreadsheet))->save($path);
 
         try {
@@ -814,6 +851,7 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertSame(4.0, app(InventarioStockService::class)->stockActual($origin->id, $variant->id));
         $this->assertDatabaseHas('inventario_proveedores', ['rut' => '76543210-1', 'nombre' => 'Proveedor importado']);
         $this->assertDatabaseHas('inventario_ingresos', ['numero_documento' => 'F-IMPORT-1']);
+        $this->assertDatabaseHas('inventario_movimientos', ['variante_id' => $variant->id, 'costo_unitario' => 41590]);
     }
 
     public function test_csv_upload_validation_accepts_a_browser_plain_text_csv(): void

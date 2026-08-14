@@ -1077,14 +1077,32 @@ class InventarioStockService
 
     private function importDecimal(mixed $value): ?float
     {
+        if (is_int($value) || is_float($value)) {
+            return (float) $value;
+        }
+
         $value = $this->importText($value);
         if ($value === '') {
             return null;
         }
 
-        if (str_contains($value, ',')) {
+        // PhpSpreadsheet returns formatted cells during import. A Chilean price such as
+        // 41.590 can therefore arrive as "41,590" depending on the workbook locale.
+        // Treat a separator followed by three-digit groups as a thousands separator;
+        // only the remaining comma/dot form is considered a decimal separator.
+        if (str_contains($value, ',') && str_contains($value, '.')) {
+            $lastComma = strrpos($value, ',');
+            $lastDot = strrpos($value, '.');
+            $decimalSeparator = $lastComma > $lastDot ? ',' : '.';
+            $thousandsSeparator = $decimalSeparator === ',' ? '.' : ',';
+            $value = str_replace($thousandsSeparator, '', $value);
+            $value = $decimalSeparator === ',' ? str_replace(',', '.', $value) : $value;
+        } elseif (str_contains($value, ',')) {
+            $value = preg_match('/^[+-]?\d{1,3}(?:,\d{3})+$/', $value)
+                ? str_replace(',', '', $value)
+                : str_replace(',', '.', $value);
+        } elseif (str_contains($value, '.') && preg_match('/^[+-]?\d{1,3}(?:\.\d{3})+$/', $value)) {
             $value = str_replace('.', '', $value);
-            $value = str_replace(',', '.', $value);
         }
 
         return is_numeric($value) ? (float) $value : null;
