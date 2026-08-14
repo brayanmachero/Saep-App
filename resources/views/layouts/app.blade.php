@@ -28,8 +28,8 @@
                 <img src="{{ asset('brand/wp/Logo_Saep.svg') }}" alt="SAEP" class="logo-img">
                 <img src="{{ asset('brand/wp/Logo-Saep_footer.svg') }}" alt="SAEP" class="logo-img-collapsed">
             </div>
-            <button class="toggle-btn" id="sidebar-toggle">
-                <i class="bi bi-list"></i>
+            <button class="toggle-btn" id="sidebar-toggle" type="button" aria-label="Contraer menú" aria-expanded="true">
+                <i class="bi bi-chevron-left"></i>
             </button>
         </div>
 
