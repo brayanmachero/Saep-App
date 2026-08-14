@@ -23,6 +23,11 @@
             <i class="bi bi-plus-lg"></i> Nuevo Programa
         </a>
         @endif
+        @if($puedeAccesoGlobal ?? false)
+        <a href="{{ route('carta-gantt.dashboard') }}" class="btn-ghost">
+            <i class="bi bi-bar-chart-line"></i> Dashboard ejecutivo
+        </a>
+        @endif
         <a href="{{ route('carta-gantt.mis-tareas') }}" class="btn-ghost">
             <i class="bi bi-list-task"></i> Mis tareas
         </a>

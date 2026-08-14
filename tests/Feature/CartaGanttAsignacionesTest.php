@@ -479,6 +479,86 @@ class CartaGanttAsignacionesTest extends TestCase
             ->assertOk();
     }
 
+    public function test_coordinator_dashboard_compares_real_progress_against_planned_goal_and_filters_programs(): void
+    {
+        $creator = $this->createCartaGanttUser(['puede_ver' => true, 'puede_crear' => true, 'puede_editar' => true]);
+        $coordinator = $this->createCartaGanttUser(['puede_ver' => true], 'COORDINADOR');
+        $programLead = $this->createCartaGanttUser(['puede_ver' => true]);
+        $activityOwner = $this->createCartaGanttUser(['puede_ver' => true]);
+
+        $atrasado = $this->createPrograma($creator, 'Programa ejecutivo con brecha');
+        $atrasado->update(['responsable_id' => $programLead->id]);
+        $categoriaAtrasada = SstCategoria::create([
+            'programa_id' => $atrasado->id,
+            'nombre' => 'Plan anual',
+            'orden' => 1,
+        ]);
+        $actividadAtrasada = SstActividad::create([
+            'categoria_id' => $categoriaAtrasada->id,
+            'nombre' => 'Actividad anual con avance pendiente',
+            'responsable_id' => $activityOwner->id,
+            'responsable' => $activityOwner->nombre_completo,
+            'prioridad' => 'ALTA',
+            'estado' => 'EN_PROGRESO',
+            'cantidad_programada' => 1,
+            'orden' => 1,
+        ]);
+        foreach (range(1, 12) as $mes) {
+            $actividadAtrasada->seguimiento()->create([
+                'mes' => $mes,
+                'programado' => true,
+                'realizado' => $mes === 1,
+                'cantidad_realizada' => $mes === 1 ? 1 : 0,
+            ]);
+        }
+        foreach (['Responsable manual A', 'Responsable manual B'] as $orden => $responsableManual) {
+            $actividadManual = SstActividad::create([
+                'categoria_id' => $categoriaAtrasada->id,
+                'nombre' => 'Actividad con responsable manual ' . ($orden + 1),
+                'responsable' => $responsableManual,
+                'prioridad' => 'MEDIA',
+                'estado' => 'PENDIENTE',
+                'cantidad_programada' => 1,
+                'orden' => $orden + 2,
+            ]);
+            $actividadManual->seguimiento()->create(['mes' => 1, 'programado' => true]);
+        }
+
+        $otroPrograma = $this->createPrograma($creator, 'Programa que no debe aparecer al filtrar');
+        $categoriaOtro = SstCategoria::create([
+            'programa_id' => $otroPrograma->id,
+            'nombre' => 'Otro plan',
+            'orden' => 1,
+        ]);
+        $this->createActividad($categoriaOtro, 'Actividad del otro programa')
+            ->seguimiento()
+            ->create(['mes' => 1, 'programado' => true]);
+
+        $this->actingAs($coordinator)
+            ->get(route('carta-gantt.dashboard', [
+                'anio' => $atrasado->anio,
+                'programa_id' => $atrasado->id,
+                'responsable_gantt_id' => $programLead->id,
+                'estado' => 'ACTIVO',
+            ]))
+            ->assertOk()
+            ->assertSee('Dashboard ejecutivo Carta Gantt')
+            ->assertSee('Meta acumulada')
+            ->assertSee('Avance real')
+            ->assertSee('Brecha contra meta')
+            ->assertSee('Programa ejecutivo con brecha')
+            ->assertSee($activityOwner->nombre_completo)
+            ->assertSee('Responsable manual A')
+            ->assertSee('Responsable manual B')
+            ->assertSee('Mes de mayor brecha')
+            // El selector conserva las otras cartas disponibles; el resultado no debe mostrarlas como fila de desempeño.
+            ->assertDontSee('<strong>Programa que no debe aparecer al filtrar</strong>', false);
+
+        $this->actingAs($activityOwner)
+            ->get(route('carta-gantt.dashboard'))
+            ->assertForbidden();
+    }
+
     public function test_assigned_user_cannot_update_program_assignment(): void
     {
         $creator = $this->createCartaGanttUser(['puede_ver' => true, 'puede_crear' => true, 'puede_editar' => true]);

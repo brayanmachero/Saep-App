@@ -82,6 +82,63 @@ class CartaGanttController extends Controller
         return view('carta_gantt.index', compact('programas', 'stats', 'centros', 'anios', 'puedeAccesoGlobal'));
     }
 
+    /**
+     * Tablero ejecutivo para coordinación: compara el avance registrado con la
+     * carga que debía estar ejecutada a la fecha de corte.
+     */
+    public function dashboard(Request $request)
+    {
+        $user = $request->user();
+        abort_unless($user?->tieneAcceso('carta_gantt', 'puede_ver') && $this->canAccessAllProgramas($user), 403);
+
+        $anios = ProgramaSst::query()
+            ->distinct()
+            ->orderByDesc('anio')
+            ->pluck('anio');
+        $anio = $request->integer('anio') ?: (int) now()->year;
+        $estado = $request->input('estado', 'ACTIVO');
+
+        $programasDisponibles = ProgramaSst::with('responsable')
+            ->where('anio', $anio)
+            ->orderBy('titulo')
+            ->get();
+        $responsablesGantt = $programasDisponibles
+            ->filter(fn (ProgramaSst $programa) => $programa->responsable)
+            ->pluck('responsable')
+            ->unique('id')
+            ->sortBy('nombre_completo')
+            ->values();
+
+        $query = ProgramaSst::with([
+            'responsable',
+            'categorias.actividades.responsableUser',
+            'categorias.actividades.seguimiento',
+        ])->where('anio', $anio);
+
+        if ($estado !== '') {
+            $query->where('estado', $estado);
+        }
+        if ($request->filled('programa_id')) {
+            $query->whereKey($request->integer('programa_id'));
+        }
+        if ($request->filled('responsable_gantt_id')) {
+            $query->where('responsable_id', $request->integer('responsable_gantt_id'));
+        }
+
+        $programas = $query->orderBy('titulo')->get();
+        $dashboard = $this->construirDashboardGantt($programas, $anio, now()->startOfDay());
+
+        return view('carta_gantt.dashboard', compact(
+            'anios',
+            'anio',
+            'estado',
+            'programasDisponibles',
+            'responsablesGantt',
+            'programas',
+            'dashboard'
+        ));
+    }
+
     public function misTareas(Request $request)
     {
         $user = $request->user();
@@ -1123,6 +1180,195 @@ class CartaGanttController extends Controller
                 ->orWhereHas('asignados', fn ($asignados) => $asignados->where('users.id', $user->id))
                 ->orWhereHas('categorias.actividades', fn ($actividad) => $actividad->where('responsable_id', $user->id));
         });
+    }
+
+    /**
+     * Construye métricas ponderadas por la cantidad programada de cada actividad.
+     * Los meses cerrados cuentan al 100% y el mes vigente se prorratea según el
+     * día de corte; así la meta refleja el plan real, no un porcentaje fijo anual.
+     */
+    private function construirDashboardGantt($programas, int $anio, Carbon $fechaCorte): array
+    {
+        $meses = collect(range(1, 12))->mapWithKeys(fn (int $mes) => [$mes => [
+            'mes' => $mes,
+            'esperado' => 0.0,
+            'real' => 0.0,
+            'planificado' => 0.0,
+        ]])->all();
+        $resumen = $this->metricasDashboardVacias();
+        $porResponsable = [];
+        $porPrograma = [];
+
+        foreach ($programas as $programa) {
+            $metricasPrograma = $this->metricasDashboardVacias();
+            $metricasPrograma['programa'] = $programa;
+
+            foreach ($programa->categorias as $categoria) {
+                foreach ($categoria->actividades as $actividad) {
+                    if ($actividad->estado === 'CANCELADA') {
+                        continue;
+                    }
+
+                    $responsableId = $actividad->responsable_id ?: 0;
+                    $responsableNombre = $actividad->responsableUser?->nombre_completo
+                        ?? $actividad->responsable
+                        ?? 'Sin responsable asignado';
+                    $responsableClave = $responsableId ?: 'texto:' . mb_strtolower(trim($responsableNombre));
+                    if (!isset($porResponsable[$responsableClave])) {
+                        $porResponsable[$responsableClave] = $this->metricasDashboardVacias();
+                        $porResponsable[$responsableClave]['responsable_id'] = $responsableId ?: null;
+                        $porResponsable[$responsableClave]['responsable'] = $responsableNombre;
+                        $porResponsable[$responsableClave]['programas'] = [];
+                    }
+
+                    $cantidadProgramada = max(1, (int) ($actividad->cantidad_programada ?? 1));
+                    foreach ($actividad->seguimiento as $seguimiento) {
+                        if (!$seguimiento->programado) {
+                            continue;
+                        }
+
+                        $mes = (int) $seguimiento->mes;
+                        $factorEsperado = $this->factorEsperadoDashboard($anio, $mes, $fechaCorte);
+                        $cantidadReal = $seguimiento->realizado
+                            ? $cantidadProgramada
+                            : min($cantidadProgramada, max(0, (int) $seguimiento->cantidad_realizada));
+
+                        $this->acumularMetricasDashboard($resumen, $mes, $cantidadProgramada, $cantidadReal, $factorEsperado);
+                        $this->acumularMetricasDashboard($metricasPrograma, $mes, $cantidadProgramada, $cantidadReal, $factorEsperado);
+                        $this->acumularMetricasDashboard($porResponsable[$responsableClave], $mes, $cantidadProgramada, $cantidadReal, $factorEsperado);
+
+                        $meses[$mes]['planificado'] += $cantidadProgramada;
+                        $meses[$mes]['esperado'] += $cantidadProgramada * $factorEsperado;
+                        $meses[$mes]['real'] += $cantidadReal;
+                    }
+
+                    $porResponsable[$responsableClave]['programas'][$programa->id] = $programa->titulo;
+                }
+            }
+
+            $porPrograma[] = $this->finalizarMetricasDashboard($metricasPrograma, $fechaCorte);
+        }
+
+        $resumen = $this->finalizarMetricasDashboard($resumen, $fechaCorte);
+        $responsables = collect($porResponsable)
+            ->map(fn (array $metricas) => $this->finalizarMetricasDashboard($metricas, $fechaCorte))
+            ->filter(fn (array $metricas) => $metricas['planificado'] > 0)
+            ->sortByDesc(fn (array $metricas) => ($metricas['brecha_unidades'] * 100000) + $metricas['esperado'])
+            ->values();
+        $programasMetricas = collect($porPrograma)
+            ->filter(fn (array $metricas) => $metricas['planificado'] > 0)
+            ->sortByDesc(fn (array $metricas) => ($metricas['brecha_unidades'] * 100000) + $metricas['esperado'])
+            ->values();
+
+        $acumuladoEsperado = 0.0;
+        $acumuladoReal = 0.0;
+        $serieMensual = collect($meses)->map(function (array $mes) use (&$acumuladoEsperado, &$acumuladoReal) {
+            $acumuladoEsperado += $mes['esperado'];
+            $acumuladoReal += $mes['real'];
+
+            return [
+                'mes' => $mes['mes'],
+                'planificado' => $mes['planificado'],
+                'esperado' => $mes['esperado'],
+                'real' => $mes['real'],
+                'esperado_acumulado' => $acumuladoEsperado,
+                'real_acumulado' => $acumuladoReal,
+                'brecha' => max(0, $mes['esperado'] - $mes['real']),
+            ];
+        })->values();
+        $mesCritico = $serieMensual
+            ->filter(fn (array $mes) => $mes['esperado'] > 0)
+            ->sortByDesc('brecha')
+            ->first();
+
+        return [
+            'fecha_corte' => $fechaCorte,
+            'resumen' => $resumen,
+            'responsables' => $responsables,
+            'programas' => $programasMetricas,
+            'serie_mensual' => $serieMensual,
+            'mes_critico' => $mesCritico,
+            'responsables_en_riesgo' => $responsables->filter(fn (array $fila) => $fila['estado'] !== 'al_dia')->count(),
+            'programas_en_riesgo' => $programasMetricas->filter(fn (array $fila) => $fila['estado'] !== 'al_dia')->count(),
+        ];
+    }
+
+    private function metricasDashboardVacias(): array
+    {
+        return [
+            'planificado' => 0.0,
+            'esperado' => 0.0,
+            'real' => 0.0,
+            'mensual' => collect(range(1, 12))->mapWithKeys(fn (int $mes) => [$mes => [
+                'esperado' => 0.0,
+                'real' => 0.0,
+            ]])->all(),
+        ];
+    }
+
+    private function factorEsperadoDashboard(int $anio, int $mes, Carbon $fechaCorte): float
+    {
+        if ($anio < $fechaCorte->year || ($anio === $fechaCorte->year && $mes < $fechaCorte->month)) {
+            return 1.0;
+        }
+        if ($anio > $fechaCorte->year || $mes > $fechaCorte->month) {
+            return 0.0;
+        }
+
+        return round($fechaCorte->day / $fechaCorte->daysInMonth, 4);
+    }
+
+    private function acumularMetricasDashboard(array &$metricas, int $mes, int $planificado, int $real, float $factorEsperado): void
+    {
+        $esperado = $planificado * $factorEsperado;
+        $metricas['planificado'] += $planificado;
+        $metricas['esperado'] += $esperado;
+        $metricas['real'] += $real;
+        $metricas['mensual'][$mes]['esperado'] += $esperado;
+        $metricas['mensual'][$mes]['real'] += $real;
+    }
+
+    private function finalizarMetricasDashboard(array $metricas, Carbon $fechaCorte): array
+    {
+        $planificado = (float) $metricas['planificado'];
+        $esperado = (float) $metricas['esperado'];
+        $real = min($planificado, (float) $metricas['real']);
+        $esperadoPorcentaje = $planificado > 0 ? round(($esperado / $planificado) * 100, 1) : 0.0;
+        $realPorcentaje = $planificado > 0 ? round(($real / $planificado) * 100, 1) : 0.0;
+        $brechaPuntos = round($realPorcentaje - $esperadoPorcentaje, 1);
+        $brechaUnidades = max(0, $esperado - $real);
+        $cumplimiento = $esperado > 0 ? round(min(100, ($real / $esperado) * 100), 1) : null;
+
+        $mesCritico = collect($metricas['mensual'])
+            ->map(function (array $mes, int $numero) {
+                return [
+                    'mes' => $numero,
+                    'esperado' => $mes['esperado'],
+                    'real' => $mes['real'],
+                    'brecha' => max(0, $mes['esperado'] - $mes['real']),
+                ];
+            })
+            ->filter(fn (array $mes) => $mes['esperado'] > 0)
+            ->sortByDesc('brecha')
+            ->first();
+
+        $estado = $esperado <= 0
+            ? 'sin_meta'
+            : ($cumplimiento >= 95 ? 'al_dia' : ($cumplimiento >= 75 ? 'en_riesgo' : 'critico'));
+
+        return array_merge($metricas, [
+            'planificado' => $planificado,
+            'esperado' => $esperado,
+            'real' => $real,
+            'esperado_porcentaje' => $esperadoPorcentaje,
+            'real_porcentaje' => $realPorcentaje,
+            'brecha_puntos' => $brechaPuntos,
+            'brecha_unidades' => $brechaUnidades,
+            'cumplimiento' => $cumplimiento,
+            'estado' => $estado,
+            'mes_critico' => $mesCritico,
+            'fecha_corte' => $fechaCorte,
+        ]);
     }
 
     private function resumenOperativoPrograma(ProgramaSst $programa, User $user, bool $puedeAccesoGlobal): array
