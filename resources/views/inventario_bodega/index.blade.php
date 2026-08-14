@@ -428,56 +428,67 @@
             </form>
 
             <div class="inventory-master-tables">
-                <section class="inventory-master-table-card">
-                    <div class="inventory-master-table-heading"><div><h3>Centros de costo</h3><p>{{ $masterCenters->total() }} registro(s) para el filtro aplicado.</p></div><span class="inventory-status is-review">{{ $inventoryCostCenters->count() }} activos</span></div>
-                    <div class="inventory-table-wrap"><table class="inventory-table inventory-master-table"><thead><tr><th>N°</th><th>Centro</th><th>Ubicación</th><th>Coordinador</th><th>Contacto</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
-                        @forelse($masterCenters as $center)
-                            <tr>
-                                <td>{{ $center->numero_maestro ?: '—' }}</td>
-                                <td><strong>{{ $center->nombre }}</strong><small>{{ $center->tipo ?: 'Sin tipo' }}{{ $center->jefe_operaciones ? ' · ' . $center->jefe_operaciones : '' }}</small></td>
-                                <td>{{ $center->comuna ?: '—' }}<small>{{ $center->direccion ?: '' }}</small></td>
-                                <td>{{ $center->coordinador?->nombre ?: ($center->coordinador_nombre_origen ?: 'Sin asignar') }}<small>{{ $center->coordinador?->cargo ?: $center->cargo_contacto ?: '' }}</small></td>
-                                <td>{{ $center->correo_contacto ?: '—' }}<small>{{ $center->telefono_contacto ?: '' }}</small></td>
-                                <td><span class="inventory-status {{ $center->activo ? 'is-ok' : 'is-empty' }}">{{ $center->activo ? 'Activo' : 'Inactivo' }}</span></td>
-                                <td>@if($canEdit)<a class="btn btn-light inventory-btn" href="{{ $masterUrl(['maestro_editar' => 'centro', 'maestro_id' => $center->id]) }}"><i class="bi bi-pencil-square"></i>Editar</a>@else<span class="inventory-muted">Sin permiso</span>@endif</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="7" class="inventory-empty">No hay centros de costo para el filtro seleccionado.</td></tr>
-                        @endforelse
-                    </tbody></table></div>
-                    <div class="inventory-pagination">{{ $masterCenters->onEachSide(1)->links() }}</div>
-                </section>
+                <details class="inventory-details inventory-master-details" open>
+                    <summary><span><i class="bi bi-building"></i>Centros de costo</span><i class="bi bi-chevron-down"></i></summary>
+                    <div class="inventory-details-body inventory-master-details-body">
+                        <div class="inventory-master-table-heading"><div><h3>Centros registrados</h3><p>{{ $masterCenters->total() }} registro(s) para el filtro aplicado.</p></div><span class="inventory-status is-review">{{ $inventoryCostCenters->count() }} activos</span></div>
+                        <div class="inventory-table-wrap"><table class="inventory-table inventory-master-table"><thead><tr><th>N°</th><th>Centro</th><th>Ubicación</th><th>Coordinador</th><th>Contacto</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+                            @forelse($masterCenters as $center)
+                                <tr>
+                                    <td>{{ $center->numero_maestro ?: '—' }}</td>
+                                    <td><strong>{{ $center->nombre }}</strong><small>{{ $center->tipo ?: 'Sin tipo' }}{{ $center->jefe_operaciones ? ' · ' . $center->jefe_operaciones : '' }}</small></td>
+                                    <td>{{ $center->comuna ?: '—' }}<small>{{ $center->direccion ?: '' }}</small></td>
+                                    <td>{{ $center->coordinador?->nombre ?: ($center->coordinador_nombre_origen ?: 'Sin asignar') }}<small>{{ $center->coordinador?->cargo ?: $center->cargo_contacto ?: '' }}</small></td>
+                                    <td>{{ $center->correo_contacto ?: '—' }}<small>{{ $center->telefono_contacto ?: '' }}</small></td>
+                                    <td><span class="inventory-status {{ $center->activo ? 'is-ok' : 'is-empty' }}">{{ $center->activo ? 'Activo' : 'Inactivo' }}</span></td>
+                                    <td>@if($canEdit)<a class="btn btn-light inventory-btn" href="{{ $masterUrl(['maestro_editar' => 'centro', 'maestro_id' => $center->id]) }}"><i class="bi bi-pencil-square"></i>Editar</a>@else<span class="inventory-muted">Sin permiso</span>@endif</td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="7" class="inventory-empty">No hay centros de costo para el filtro seleccionado.</td></tr>
+                            @endforelse
+                        </tbody></table></div>
+                        <div class="inventory-pagination">{{ $masterCenters->onEachSide(1)->links() }}</div>
+                    </div>
+                </details>
 
-                <section class="inventory-master-table-card">
-                    <div class="inventory-master-table-heading"><div><h3>Coordinadores</h3><p>{{ $masterCoordinators->total() }} registro(s) para el filtro aplicado.</p></div><span class="inventory-status is-review">{{ $coordinators->count() }} activos</span></div>
-                    <div class="inventory-table-wrap"><table class="inventory-table inventory-master-table"><thead><tr><th>Coordinador</th><th>RUT</th><th>Cargo</th><th>Contacto</th><th>Centros</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
-                        @forelse($masterCoordinators as $coordinator)
-                            <tr>
-                                <td><strong>{{ $coordinator->nombre }}</strong><small>{{ $coordinator->jefe_operaciones ?: '' }}</small></td>
-                                <td>{{ $coordinator->rut ?: '—' }}</td>
-                                <td>{{ $coordinator->cargo ?: '—' }}</td>
-                                <td>{{ $coordinator->correo ?: '—' }}<small>{{ $coordinator->telefono ?: '' }}</small></td>
-                                <td>{{ $coordinator->centros_costo_count }}</td>
-                                <td><span class="inventory-status {{ $coordinator->activo ? 'is-ok' : 'is-empty' }}">{{ $coordinator->activo ? 'Activo' : 'Inactivo' }}</span></td>
-                                <td>@if($canEdit)<a class="btn btn-light inventory-btn" href="{{ $masterUrl(['maestro_editar' => 'coordinador', 'maestro_id' => $coordinator->id]) }}"><i class="bi bi-pencil-square"></i>Editar</a>@else<span class="inventory-muted">Sin permiso</span>@endif</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="7" class="inventory-empty">No hay coordinadores para el filtro seleccionado.</td></tr>
-                        @endforelse
-                    </tbody></table></div>
-                    <div class="inventory-pagination">{{ $masterCoordinators->onEachSide(1)->links() }}</div>
-                </section>
+                <details class="inventory-details inventory-master-details">
+                    <summary><span><i class="bi bi-people"></i>Coordinadores</span><i class="bi bi-chevron-down"></i></summary>
+                    <div class="inventory-details-body inventory-master-details-body">
+                        <div class="inventory-master-table-heading"><div><h3>Coordinadores registrados</h3><p>{{ $masterCoordinators->total() }} registro(s) para el filtro aplicado.</p></div><span class="inventory-status is-review">{{ $coordinators->count() }} activos</span></div>
+                        <div class="inventory-table-wrap"><table class="inventory-table inventory-master-table"><thead><tr><th>Coordinador</th><th>RUT</th><th>Cargo</th><th>Contacto</th><th>Centros</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+                            @forelse($masterCoordinators as $coordinator)
+                                <tr>
+                                    <td><strong>{{ $coordinator->nombre }}</strong><small>{{ $coordinator->jefe_operaciones ?: '' }}</small></td>
+                                    <td>{{ $coordinator->rut ?: '—' }}</td>
+                                    <td>{{ $coordinator->cargo ?: '—' }}</td>
+                                    <td>{{ $coordinator->correo ?: '—' }}<small>{{ $coordinator->telefono ?: '' }}</small></td>
+                                    <td>{{ $coordinator->centros_costo_count }}</td>
+                                    <td><span class="inventory-status {{ $coordinator->activo ? 'is-ok' : 'is-empty' }}">{{ $coordinator->activo ? 'Activo' : 'Inactivo' }}</span></td>
+                                    <td>@if($canEdit)<a class="btn btn-light inventory-btn" href="{{ $masterUrl(['maestro_editar' => 'coordinador', 'maestro_id' => $coordinator->id]) }}"><i class="bi bi-pencil-square"></i>Editar</a>@else<span class="inventory-muted">Sin permiso</span>@endif</td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="7" class="inventory-empty">No hay coordinadores para el filtro seleccionado.</td></tr>
+                            @endforelse
+                        </tbody></table></div>
+                        <div class="inventory-pagination">{{ $masterCoordinators->onEachSide(1)->links() }}</div>
+                    </div>
+                </details>
             </div>
 
-            <section class="inventory-master-import">
-                <div><h3>Actualizar desde libro</h3><p>Usa esta opción para sincronizar las hojas <strong>Maestro_CC</strong> y <strong>Maestro_Coordinador</strong>. Se actualiza por nombre y no se duplican registros existentes.</p></div>
-                @if($canCreate)
-                    <form method="POST" action="{{ route('inventario-bodega.maestros.importar') }}" enctype="multipart/form-data" class="inventory-import-master-form">@csrf
-                        <label>Libro de maestros<input name="archivo" type="file" accept=".xlsx,.xls" class="form-control" required></label>
-                        <button class="btn btn-light inventory-btn" type="submit"><i class="bi bi-upload"></i>Actualizar maestros</button>
-                    </form>
-                @endif
-            </section>
+            <details class="inventory-details inventory-master-details">
+                <summary><span><i class="bi bi-file-earmark-arrow-up"></i>Actualizar desde libro</span><i class="bi bi-chevron-down"></i></summary>
+                <div class="inventory-details-body">
+                    <section class="inventory-master-import">
+                        <div><h3>Sincronización de maestros</h3><p>Usa esta opción para sincronizar las hojas <strong>Maestro_CC</strong> y <strong>Maestro_Coordinador</strong>. Se actualiza por nombre y no se duplican registros existentes.</p></div>
+                        @if($canCreate)
+                            <form method="POST" action="{{ route('inventario-bodega.maestros.importar') }}" enctype="multipart/form-data" class="inventory-import-master-form">@csrf
+                                <label>Libro de maestros<input name="archivo" type="file" accept=".xlsx,.xls" class="form-control" required></label>
+                                <button class="btn btn-light inventory-btn" type="submit"><i class="bi bi-upload"></i>Actualizar maestros</button>
+                            </form>
+                        @endif
+                    </section>
+                </div>
+            </details>
         </section>
 
         @if($masterEditorKind)

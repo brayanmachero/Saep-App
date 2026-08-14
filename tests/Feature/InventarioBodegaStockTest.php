@@ -632,13 +632,17 @@ class InventarioBodegaStockTest extends TestCase
             'activo' => true,
         ]);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $mastersResponse = $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
             ->actingAs($user)
-            ->get(route('inventario-bodega.index', ['vista' => 'maestros']))
+            ->get(route('inventario-bodega.index', ['vista' => 'maestros']));
+
+        $mastersResponse
             ->assertOk()
             ->assertSee('Maestros operativos')
             ->assertSee('Centros de costo')
             ->assertSee('Coordinadores')
+            ->assertSee('<details class="inventory-details inventory-master-details" open>', false)
+            ->assertSee('<details class="inventory-details inventory-master-details">', false)
             ->assertSee('Centro Bodega Norte')
             ->assertSee('Andrea Operaciones');
 
