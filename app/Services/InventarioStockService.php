@@ -7,6 +7,7 @@ use App\Models\InventarioConteo;
 use App\Models\InventarioConteoLinea;
 use App\Models\InventarioEntregaKizeoAplicacion;
 use App\Models\InventarioEntregaKizeoLinea;
+use App\Models\InventarioHistorialCosto;
 use App\Models\InventarioIngreso;
 use App\Models\InventarioIngresoItem;
 use App\Models\InventarioMovimiento;
@@ -132,6 +133,16 @@ class InventarioStockService
                     'observacion' => $ingreso->observacion,
                     'ocurrido_en' => Carbon::parse($ingreso->fecha_recepcion)->startOfDay(),
                 ], $user);
+
+                $this->syncReferenceCost(
+                    $variante,
+                    $item['costo_unitario'] ?? null,
+                    $user,
+                    'INGRESO_BODEGA',
+                    InventarioIngreso::class,
+                    $ingreso->id,
+                    Carbon::parse($ingreso->fecha_recepcion)->endOfDay(),
+                );
             }
 
             return $ingreso;
@@ -627,6 +638,7 @@ class InventarioStockService
         $updated = 0;
         $variantsCreated = 0;
         $stocksSet = 0;
+        $costsUpdated = 0;
         $skipped = 0;
         $createdProducts = [];
         $updatedProducts = [];
@@ -650,6 +662,18 @@ class InventarioStockService
 
             $locationCode = $this->importText($values['ubicacion_codigo'] ?? $values['ubicacion'] ?? null);
             $stockRaw = $this->importText($values['stock_inicial'] ?? $values['stock_actual'] ?? $values['stock'] ?? null);
+            $costRaw = $this->importText(
+                $values['costo_referencia']
+                    ?? $values['precio_referencia']
+                    ?? $values['precio']
+                    ?? $values['costo']
+                    ?? $values['costo_unitario']
+                    ?? null,
+            );
+            $referenceCost = $costRaw === '' ? null : $this->importDecimal($costRaw);
+            if ($costRaw !== '' && ($referenceCost === null || $referenceCost < 0)) {
+                throw ValidationException::withMessages(['archivo' => "El Costo_Referencia de '{$nombre}' debe ser un número igual o mayor que cero."]);
+            }
             $hasInitialStock = $locationCode !== '' || $stockRaw !== '';
             $location = null;
             $initialStock = null;
@@ -713,6 +737,7 @@ class InventarioStockService
             ]);
             $variant->save();
             $variantsCreated += $isNewVariant ? 1 : 0;
+            $costsUpdated += $this->syncReferenceCost($variant, $referenceCost, $user, 'IMPORTACION_CATALOGO') ? 1 : 0;
 
             if ($location && $initialStock !== null) {
                 $currentStock = $this->stockActual($location->id, $variant->id);
@@ -731,6 +756,7 @@ class InventarioStockService
                         'producto_id' => $product->id,
                         'variante_id' => $variant->id,
                         'cantidad' => $difference,
+                        'costo_unitario' => $referenceCost && $referenceCost > 0 ? $referenceCost : null,
                         'documento_tipo' => 'AJUSTE',
                         'documento_numero' => 'IMPORTACION-STOCK-INICIAL',
                         'observacion' => $hasMovementHistory
@@ -743,7 +769,7 @@ class InventarioStockService
             }
         }
 
-        return compact('created', 'updated', 'variantsCreated', 'stocksSet', 'skipped');
+        return compact('created', 'updated', 'variantsCreated', 'stocksSet', 'costsUpdated', 'skipped');
         });
     }
 
@@ -990,6 +1016,53 @@ class InventarioStockService
                 $variant->update(['activo' => true]);
             }
         }
+    }
+
+    /**
+     * Persists only meaningful changes. Zero represents an unknown value and must never
+     * overwrite an already-known cost or create a fictitious financial record.
+     */
+    private function syncReferenceCost(
+        InventarioVariante $variant,
+        mixed $cost,
+        User $user,
+        string $source,
+        ?string $referenceType = null,
+        ?int $referenceId = null,
+        ?Carbon $effectiveAt = null,
+    ): bool {
+        $cost = $cost === null ? null : (float) $cost;
+        if ($cost === null || $cost <= 0) {
+            return false;
+        }
+
+        $cost = round($cost, 2);
+        $effectiveAt ??= now();
+        $latest = $variant->historialCostos()->first();
+
+        if ($latest && abs((float) $latest->costo_unitario - $cost) < 0.005) {
+            if ($variant->costo_referencia === null) {
+                $variant->update(['costo_referencia' => $cost]);
+            }
+
+            return false;
+        }
+
+        InventarioHistorialCosto::create([
+            'variante_id' => $variant->id,
+            'costo_unitario' => $cost,
+            'origen' => $source,
+            'referencia_tipo' => $referenceType,
+            'referencia_id' => $referenceId,
+            'vigente_desde' => $effectiveAt,
+            'registrado_por' => $user->id,
+        ]);
+
+        if (! $latest || $effectiveAt->gte($latest->vigente_desde)) {
+            $variant->update(['costo_referencia' => $cost]);
+        }
+
+        return true;
     }
 
     private function normalizeHeader(mixed $header): string

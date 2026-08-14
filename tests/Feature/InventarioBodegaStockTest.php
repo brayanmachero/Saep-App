@@ -35,7 +35,7 @@ class InventarioBodegaStockTest extends TestCase
         foreach ([
             'inventario_entrega_kizeo_lineas', 'inventario_entrega_kizeo_aplicaciones',
             'inventario_conteo_lineas', 'inventario_conteos', 'inventario_movimientos',
-            'inventario_ingreso_items', 'inventario_ingresos', 'inventario_variantes',
+            'inventario_historial_costos', 'inventario_ingreso_items', 'inventario_ingresos', 'inventario_variantes',
             'inventario_productos', 'inventario_proveedores', 'inventario_ubicaciones',
             'entrega_bodega_items', 'entregas_bodega',
             'rol_modulo', 'modulos', 'users', 'roles',
@@ -89,6 +89,8 @@ class InventarioBodegaStockTest extends TestCase
         $receiptReversalMigration->up();
         $operationalMastersMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_13_190000_add_operational_masters_to_inventario.php';
         $operationalMastersMigration->up();
+        $referenceCostMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_14_150000_add_reference_cost_history_to_inventario.php';
+        $referenceCostMigration->up();
 
         Schema::create('entregas_bodega', function (Blueprint $table) {
             $table->id();
@@ -482,6 +484,52 @@ class InventarioBodegaStockTest extends TestCase
         ]);
     }
 
+    public function test_catalog_import_preserves_reference_cost_history_by_size(): void
+    {
+        [$user] = $this->inventoryContext();
+        $path = tempnam(sys_get_temp_dir(), 'catalog-cost-') . '.xlsx';
+        $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia'];
+        $row = ['GUANTE-COSTO', 'Guante con costo', 'EPP', 'Guantes', 'Nitrilo', 'Unidad', 'M', 1250];
+
+        try {
+            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet->fromArray([$headers, $row]);
+            (new Xlsx($sheet->getParent()))->save($path);
+            $service = app(InventarioStockService::class);
+            $first = $service->importProducts(new UploadedFile($path, 'catalogo.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true), $user);
+
+            $row[7] = 1475;
+            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet->fromArray([$headers, $row]);
+            (new Xlsx($sheet->getParent()))->save($path);
+            $second = $service->importProducts(new UploadedFile($path, 'catalogo.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true), $user);
+
+            $row[7] = 0;
+            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet->fromArray([$headers, $row]);
+            (new Xlsx($sheet->getParent()))->save($path);
+            $unknown = $service->importProducts(new UploadedFile($path, 'catalogo.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true), $user);
+        } finally {
+            @unlink($path);
+        }
+
+        $variant = InventarioVariante::query()
+            ->whereHas('producto', fn ($products) => $products->where('codigo', 'GUANTE-COSTO'))
+            ->where('talla', 'M')
+            ->firstOrFail();
+
+        $this->assertSame(1, $first['costsUpdated']);
+        $this->assertSame(1, $second['costsUpdated']);
+        $this->assertSame(0, $unknown['costsUpdated']);
+        $this->assertSame(1475.0, (float) $variant->costo_referencia);
+        $this->assertDatabaseCount('inventario_historial_costos', 2);
+        $this->assertDatabaseHas('inventario_historial_costos', [
+            'variante_id' => $variant->id,
+            'costo_unitario' => 1475,
+            'origen' => 'IMPORTACION_CATALOGO',
+        ]);
+    }
+
     public function test_a_receipt_is_annulled_with_inverse_movements_and_audit_data(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContext();
@@ -799,7 +847,15 @@ class InventarioBodegaStockTest extends TestCase
             'fecha_documento' => '2026-08-12',
             'fecha_recepcion' => '2026-08-12',
             'observacion' => null,
-        ], [['variante_id' => $variant->id, 'cantidad' => 3, 'costo_unitario' => null]], $user);
+        ], [['variante_id' => $variant->id, 'cantidad' => 3, 'costo_unitario' => 1750]], $user);
+
+        $variant->refresh();
+        $this->assertSame(1750.0, (float) $variant->costo_referencia);
+        $this->assertDatabaseHas('inventario_historial_costos', [
+            'variante_id' => $variant->id,
+            'costo_unitario' => 1750,
+            'origen' => 'INGRESO_BODEGA',
+        ]);
 
         $response = (new InventarioBodegaController($service))->exportBalances(Request::create('/inventario-bodega/exportar', 'GET', [
             'ubicacion_id' => $origin->id,
@@ -807,21 +863,23 @@ class InventarioBodegaStockTest extends TestCase
         $path = $response->getFile()->getPathname();
 
         try {
-            $rows = \PhpOffice\PhpSpreadsheet\IOFactory::load($path)->getActiveSheet()->rangeToArray('A1:K2', null, true, true, false);
+            $rows = \PhpOffice\PhpSpreadsheet\IOFactory::load($path)->getActiveSheet()->rangeToArray('A1:L2', null, true, true, false);
         } finally {
             @unlink($path);
         }
 
-        $this->assertSame(['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Stock_Critico', 'Stock_Actual', 'Ubicacion', 'Estado'], $rows[0]);
-        $this->assertSame(3.0, (float) $rows[1][8]);
-        $this->assertSame($origin->nombre, $rows[1][9]);
+        $this->assertSame(['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia', 'Stock_Critico', 'Stock_Actual', 'Ubicacion', 'Estado'], $rows[0]);
+        $this->assertSame(1750.0, (float) $rows[1][7]);
+        $this->assertSame(3.0, (float) $rows[1][9]);
+        $this->assertSame($origin->nombre, $rows[1][10]);
     }
 
     public function test_catalog_explains_how_to_load_stock_after_import(): void
     {
         $view = file_get_contents(dirname(__DIR__, 2) . '/resources/views/inventario_bodega/index.blade.php');
 
-        $this->assertStringContainsString('El catálogo puede incluir stock inicial.', $view);
+        $this->assertStringContainsString('El catálogo puede incluir stock y costo de referencia.', $view);
+        $this->assertStringContainsString('Costo_Referencia', $view);
         $this->assertStringContainsString('Cargar desde compra', $view);
         $this->assertStringContainsString('Cargar desde conteo', $view);
         $this->assertStringContainsString('Desglose por talla', $view);
