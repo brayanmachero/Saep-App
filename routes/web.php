@@ -508,6 +508,18 @@ Route::middleware('auth')->group(function () {
           Route::post('maestros-operativos/importar', [InventarioBodegaController::class, 'importOperationalMasters'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('maestros.importar');
+          Route::post('maestros-operativos/coordinadores', [InventarioBodegaController::class, 'storeOperationalCoordinator'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('maestros.coordinadores.store');
+          Route::put('maestros-operativos/coordinadores/{coordinador}', [InventarioBodegaController::class, 'updateOperationalCoordinator'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('maestros.coordinadores.update');
+          Route::post('maestros-operativos/centros-costo', [InventarioBodegaController::class, 'storeOperationalCostCenter'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('maestros.centros.store');
+          Route::put('maestros-operativos/centros-costo/{centroCosto}', [InventarioBodegaController::class, 'updateOperationalCostCenter'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('maestros.centros.update');
           Route::post('ubicaciones', [InventarioBodegaController::class, 'storeLocation'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('ubicaciones.store');

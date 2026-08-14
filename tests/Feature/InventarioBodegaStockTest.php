@@ -612,6 +612,86 @@ class InventarioBodegaStockTest extends TestCase
         ]);
     }
 
+    public function test_operational_master_tab_lists_and_edits_centers_and_coordinators_without_deleting_history(): void
+    {
+        [$user] = $this->inventoryContext();
+        $coordinator = InventarioCoordinador::create([
+            'nombre' => 'Andrea Operaciones',
+            'nombre_normalizado' => 'andrea operaciones',
+            'rut' => '11111111-1',
+            'cargo' => 'Coordinadora',
+            'activo' => true,
+        ]);
+        $center = InventarioCentroCosto::create([
+            'numero_maestro' => 17,
+            'nombre' => 'Centro Bodega Norte',
+            'nombre_normalizado' => 'centro bodega norte',
+            'comuna' => 'Recoleta',
+            'coordinador_id' => $coordinator->id,
+            'coordinador_nombre_origen' => $coordinator->nombre,
+            'activo' => true,
+        ]);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'maestros']))
+            ->assertOk()
+            ->assertSee('Maestros operativos')
+            ->assertSee('Centros de costo')
+            ->assertSee('Coordinadores')
+            ->assertSee('Centro Bodega Norte')
+            ->assertSee('Andrea Operaciones');
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->put(route('inventario-bodega.maestros.coordinadores.update', $coordinator), [
+                'nombre' => 'Andrea Operaciones Actualizada',
+                'rut' => '11111111-1',
+                'cargo' => 'Jefa de Operaciones',
+                'correo' => 'andrea.actualizada@saep.cl',
+                'activo' => 0,
+            ])
+            ->assertRedirect();
+
+        $coordinator = $coordinator->fresh();
+        $this->assertSame('Andrea Operaciones Actualizada', $coordinator->nombre);
+        $this->assertFalse($coordinator->activo);
+        $this->assertSame($coordinator->id, $center->fresh()->coordinador_id);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->put(route('inventario-bodega.maestros.centros.update', $center), [
+                'numero_maestro' => 17,
+                'nombre' => 'Centro Bodega Norte Actualizado',
+                'comuna' => 'Quilicura',
+                'coordinador_id' => $coordinator->id,
+                'activo' => 0,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('inventario_centros_costo', [
+            'id' => $center->id,
+            'nombre' => 'Centro Bodega Norte Actualizado',
+            'coordinador_id' => $coordinator->id,
+            'activo' => false,
+        ]);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->post(route('inventario-bodega.maestros.coordinadores.store'), [
+                'nombre' => 'Bruno Nuevo',
+                'cargo' => 'Supervisor',
+                'activo' => 1,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('inventario_coordinadores', [
+            'nombre' => 'Bruno Nuevo',
+            'nombre_normalizado' => 'bruno nuevo',
+            'activo' => true,
+        ]);
+    }
+
     public function test_manual_movement_accepts_a_document_type_from_the_catalog(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContext();

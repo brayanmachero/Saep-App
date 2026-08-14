@@ -42,7 +42,7 @@ class InventarioBodegaController extends Controller
 
     public function index(Request $request)
     {
-        $view = in_array($request->input('vista'), ['resumen', 'ingresos', 'movimientos', 'conteos', 'kizeo', 'catalogo'], true)
+        $view = in_array($request->input('vista'), ['resumen', 'ingresos', 'movimientos', 'conteos', 'kizeo', 'catalogo', 'maestros'], true)
             ? $request->input('vista')
             : 'resumen';
         $selectedLocation = $request->integer('ubicacion_id') ?: null;
@@ -116,6 +116,65 @@ class InventarioBodegaController extends Controller
         $legacyCostCenters = $inventoryCostCenters->isEmpty() && Schema::hasTable('comercial_centros_costo')
             ? CentroCosto::query()->activos()->whereNotNull('codigo')->where('codigo', '!=', '')->orderBy('nombre')->get(['id', 'codigo', 'nombre'])
             : collect();
+        $masterSearch = trim((string) $request->input('maestro_buscar'));
+        $masterStatus = in_array($request->input('maestro_estado'), ['activos', 'inactivos'], true)
+            ? $request->input('maestro_estado')
+            : '';
+        $masterCenters = null;
+        $masterCoordinators = null;
+        $masterCoordinatorOptions = collect();
+        $masterEditorKind = null;
+        $masterEditRecord = null;
+        $masterCreateKind = null;
+
+        if ($view === 'maestros' && Schema::hasTable('inventario_centros_costo') && Schema::hasTable('inventario_coordinadores')) {
+            $masterCenters = InventarioCentroCosto::query()
+                ->with('coordinador')
+                ->when($masterSearch !== '', function ($query) use ($masterSearch) {
+                    $query->where(function ($centers) use ($masterSearch) {
+                        $centers->where('nombre', 'like', '%' . $masterSearch . '%')
+                            ->orWhere('numero_maestro', 'like', '%' . $masterSearch . '%')
+                            ->orWhere('comuna', 'like', '%' . $masterSearch . '%')
+                            ->orWhereHas('coordinador', fn ($coordinators) => $coordinators->where('nombre', 'like', '%' . $masterSearch . '%'));
+                    });
+                })
+                ->when($masterStatus !== '', fn ($query) => $query->where('activo', $masterStatus === 'activos'))
+                ->orderByDesc('activo')
+                ->orderBy('nombre')
+                ->paginate(20, ['*'], 'centros_pagina')
+                ->withQueryString();
+            $masterCoordinators = InventarioCoordinador::query()
+                ->withCount('centrosCosto')
+                ->when($masterSearch !== '', function ($query) use ($masterSearch) {
+                    $query->where(function ($coordinators) use ($masterSearch) {
+                        $coordinators->where('nombre', 'like', '%' . $masterSearch . '%')
+                            ->orWhere('rut', 'like', '%' . $masterSearch . '%')
+                            ->orWhere('correo', 'like', '%' . $masterSearch . '%')
+                            ->orWhere('cargo', 'like', '%' . $masterSearch . '%');
+                    });
+                })
+                ->when($masterStatus !== '', fn ($query) => $query->where('activo', $masterStatus === 'activos'))
+                ->orderByDesc('activo')
+                ->orderBy('nombre')
+                ->paginate(20, ['*'], 'coordinadores_pagina')
+                ->withQueryString();
+            $masterCoordinatorOptions = InventarioCoordinador::query()
+                ->orderByDesc('activo')
+                ->orderBy('nombre')
+                ->get();
+
+            $editorKind = $request->input('maestro_editar');
+            if ($editorKind === 'centro' && $request->integer('maestro_id')) {
+                $masterEditRecord = InventarioCentroCosto::query()->find($request->integer('maestro_id'));
+                $masterEditorKind = $masterEditRecord ? 'centro' : null;
+            } elseif ($editorKind === 'coordinador' && $request->integer('maestro_id')) {
+                $masterEditRecord = InventarioCoordinador::query()->find($request->integer('maestro_id'));
+                $masterEditorKind = $masterEditRecord ? 'coordinador' : null;
+            } elseif (in_array($request->input('maestro_nuevo'), ['centro', 'coordinador'], true)) {
+                $masterCreateKind = $request->input('maestro_nuevo');
+                $masterEditorKind = $masterCreateKind;
+            }
+        }
 
         $kizeoDeliveries = $view === 'kizeo'
             ? EntregaBodega::query()
@@ -167,6 +226,14 @@ class InventarioBodegaController extends Controller
             'inventoryCostCenters' => $inventoryCostCenters,
             'coordinators' => $coordinators,
             'legacyCostCenters' => $legacyCostCenters,
+            'masterSearch' => $masterSearch,
+            'masterStatus' => $masterStatus,
+            'masterCenters' => $masterCenters,
+            'masterCoordinators' => $masterCoordinators,
+            'masterCoordinatorOptions' => $masterCoordinatorOptions,
+            'masterEditorKind' => $masterEditorKind,
+            'masterEditRecord' => $masterEditRecord,
+            'masterCreateKind' => $masterCreateKind,
             'balances' => $balances,
             'critical' => $critical,
             'movements' => $movements,
@@ -475,8 +542,36 @@ class InventarioBodegaController extends Controller
             ? ''
             : ' Se conservaron sin vínculo automático: ' . implode(', ', $result['coordinadoresSinRelacion']) . '.';
 
-        return redirect()->route('inventario-bodega.index', ['vista' => 'catalogo'])
+        return redirect()->route('inventario-bodega.index', ['vista' => 'maestros'])
             ->with('success', "Maestros actualizados: {$result['centrosCreados']} centros creados, {$result['centrosActualizados']} actualizados, {$result['coordinadoresCreados']} coordinadores creados y {$result['coordinadoresActualizados']} actualizados." . $pending);
+    }
+
+    public function storeOperationalCoordinator(Request $request): RedirectResponse
+    {
+        InventarioCoordinador::create($this->operationalCoordinatorData($request));
+
+        return back()->with('success', 'Coordinador agregado. Ya puede asignarse a un centro de costo y usarse como destinatario.');
+    }
+
+    public function updateOperationalCoordinator(Request $request, InventarioCoordinador $coordinador): RedirectResponse
+    {
+        $coordinador->update($this->operationalCoordinatorData($request, $coordinador));
+
+        return back()->with('success', 'Coordinador actualizado. Sus movimientos históricos y relaciones se conservan.');
+    }
+
+    public function storeOperationalCostCenter(Request $request): RedirectResponse
+    {
+        InventarioCentroCosto::create($this->operationalCostCenterData($request));
+
+        return back()->with('success', 'Centro de costo agregado. Ya queda disponible en Movimientos.');
+    }
+
+    public function updateOperationalCostCenter(Request $request, InventarioCentroCosto $centroCosto): RedirectResponse
+    {
+        $centroCosto->update($this->operationalCostCenterData($request, $centroCosto));
+
+        return back()->with('success', 'Centro de costo actualizado. Sus movimientos históricos se conservan.');
     }
 
     public function productTemplate()
@@ -673,6 +768,81 @@ class InventarioBodegaController extends Controller
         }
 
         return $balances->values();
+    }
+
+    private function operationalCoordinatorData(Request $request, ?InventarioCoordinador $coordinator = null): array
+    {
+        $data = $request->validate([
+            'nombre' => ['required', 'string', 'max:200'],
+            'rut' => ['nullable', 'string', 'max:30', Rule::unique('inventario_coordinadores', 'rut')->ignore($coordinator?->id)],
+            'cargo' => ['nullable', 'string', 'max:180'],
+            'correo' => ['nullable', 'email', 'max:180'],
+            'telefono' => ['nullable', 'string', 'max:50'],
+            'jefe_operaciones' => ['nullable', 'string', 'max:200'],
+            'activo' => ['nullable', 'boolean'],
+        ]);
+        $data['nombre'] = trim($data['nombre']);
+        $data['nombre_normalizado'] = $this->normalizeOperationalMasterName($data['nombre']);
+
+        if (InventarioCoordinador::query()
+            ->where('nombre_normalizado', $data['nombre_normalizado'])
+            ->when($coordinator, fn ($query) => $query->whereKeyNot($coordinator->id))
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'nombre' => 'Ya existe un coordinador con este nombre.',
+            ]);
+        }
+
+        foreach (['rut', 'cargo', 'correo', 'telefono', 'jefe_operaciones'] as $field) {
+            $data[$field] = filled($data[$field] ?? null) ? trim((string) $data[$field]) : null;
+        }
+        $data['activo'] = $request->boolean('activo');
+
+        return $data;
+    }
+
+    private function operationalCostCenterData(Request $request, ?InventarioCentroCosto $costCenter = null): array
+    {
+        $data = $request->validate([
+            'numero_maestro' => ['nullable', 'integer', 'min:0', Rule::unique('inventario_centros_costo', 'numero_maestro')->ignore($costCenter?->id)],
+            'nombre' => ['required', 'string', 'max:220'],
+            'tipo' => ['nullable', 'string', 'max:20'],
+            'comuna' => ['nullable', 'string', 'max:120'],
+            'direccion' => ['nullable', 'string', 'max:300'],
+            'jefe_operaciones' => ['nullable', 'string', 'max:200'],
+            'coordinador_id' => ['nullable', 'exists:inventario_coordinadores,id'],
+            'coordinador_nombre_origen' => ['nullable', 'string', 'max:200'],
+            'cargo_contacto' => ['nullable', 'string', 'max:180'],
+            'correo_contacto' => ['nullable', 'email', 'max:180'],
+            'telefono_contacto' => ['nullable', 'string', 'max:50'],
+            'activo' => ['nullable', 'boolean'],
+        ]);
+        $data['nombre'] = trim($data['nombre']);
+        $data['nombre_normalizado'] = $this->normalizeOperationalMasterName($data['nombre']);
+
+        if (InventarioCentroCosto::query()
+            ->where('nombre_normalizado', $data['nombre_normalizado'])
+            ->when($costCenter, fn ($query) => $query->whereKeyNot($costCenter->id))
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'nombre' => 'Ya existe un centro de costo con este nombre.',
+            ]);
+        }
+
+        foreach (['tipo', 'comuna', 'direccion', 'jefe_operaciones', 'coordinador_nombre_origen', 'cargo_contacto', 'correo_contacto', 'telefono_contacto'] as $field) {
+            $data[$field] = filled($data[$field] ?? null) ? trim((string) $data[$field]) : null;
+        }
+        if ($data['coordinador_id'] ?? null) {
+            $data['coordinador_nombre_origen'] = InventarioCoordinador::query()->find($data['coordinador_id'])?->nombre;
+        }
+        $data['activo'] = $request->boolean('activo');
+
+        return $data;
+    }
+
+    private function normalizeOperationalMasterName(string $value): string
+    {
+        return Str::of($value)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString();
     }
 
     private function providerData(Request $request, ?InventarioProveedor $provider = null): array

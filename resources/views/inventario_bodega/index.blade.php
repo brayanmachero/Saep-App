@@ -12,6 +12,7 @@
         'movimientos' => ['Movimientos', 'bi-arrow-left-right'],
         'conteos' => ['Conteos', 'bi-clipboard-check'],
         'kizeo' => ['Entregas Kizeo', 'bi-phone'],
+        'maestros' => ['Maestros', 'bi-diagram-3'],
         'catalogo' => ['Catalogo', 'bi-sliders'],
     ];
 @endphp
@@ -387,6 +388,140 @@
             @endforelse
         </section>
 
+    @elseif($vista === 'maestros')
+        @php
+            $masterQuery = array_filter([
+                'vista' => 'maestros',
+                'maestro_buscar' => $masterSearch,
+                'maestro_estado' => $masterStatus,
+            ], fn ($value) => $value !== null && $value !== '');
+            $masterUrl = fn (array $extra = []) => route('inventario-bodega.index', array_merge($masterQuery, $extra));
+            $isEditingMaster = $masterEditRecord !== null;
+        @endphp
+        <section class="inventory-section inventory-masters-section" id="maestros-operativos">
+            <div class="inventory-section-title inventory-master-title">
+                <div><h2>Maestros operativos</h2><p>Administra por separado los centros de costo y coordinadores que se usan en Movimientos. Desactivar un registro no borra su historial.</p></div>
+                @if($canCreate)
+                    <div class="inventory-master-title-actions">
+                        <a class="btn btn-light inventory-btn" href="{{ $masterUrl(['maestro_nuevo' => 'coordinador']) }}"><i class="bi bi-person-plus"></i>Nuevo coordinador</a>
+                        <a class="btn btn-primary inventory-btn" href="{{ $masterUrl(['maestro_nuevo' => 'centro']) }}"><i class="bi bi-building-add"></i>Nuevo centro</a>
+                    </div>
+                @endif
+            </div>
+
+            <aside class="inventory-side-note inventory-ribbon-note"><i class="bi bi-diagram-3"></i><strong>Relación controlada.</strong><span>Un centro puede tener un coordinador asociado. Al usarlo en Movimientos, el sistema propone esa relación sin alterar registros históricos.</span></aside>
+
+            <form method="GET" action="{{ route('inventario-bodega.index') }}" class="inventory-master-filter">
+                <input type="hidden" name="vista" value="maestros">
+                <label>Buscar
+                    <input type="search" name="maestro_buscar" class="form-control" value="{{ $masterSearch }}" placeholder="Centro, comuna, coordinador, RUT o correo">
+                </label>
+                <label>Estado
+                    <select name="maestro_estado" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="activos" @selected($masterStatus === 'activos')>Activos</option>
+                        <option value="inactivos" @selected($masterStatus === 'inactivos')>Inactivos</option>
+                    </select>
+                </label>
+                <button class="btn btn-primary inventory-btn" type="submit"><i class="bi bi-funnel-fill"></i>Aplicar</button>
+                @if($masterSearch !== '' || $masterStatus !== '')<a href="{{ route('inventario-bodega.index', ['vista' => 'maestros']) }}" class="btn btn-light inventory-icon-btn" title="Limpiar filtros"><i class="bi bi-x-lg"></i></a>@endif
+            </form>
+
+            <div class="inventory-master-tables">
+                <section class="inventory-master-table-card">
+                    <div class="inventory-master-table-heading"><div><h3>Centros de costo</h3><p>{{ $masterCenters->total() }} registro(s) para el filtro aplicado.</p></div><span class="inventory-status is-review">{{ $inventoryCostCenters->count() }} activos</span></div>
+                    <div class="inventory-table-wrap"><table class="inventory-table inventory-master-table"><thead><tr><th>N°</th><th>Centro</th><th>Ubicación</th><th>Coordinador</th><th>Contacto</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+                        @forelse($masterCenters as $center)
+                            <tr>
+                                <td>{{ $center->numero_maestro ?: '—' }}</td>
+                                <td><strong>{{ $center->nombre }}</strong><small>{{ $center->tipo ?: 'Sin tipo' }}{{ $center->jefe_operaciones ? ' · ' . $center->jefe_operaciones : '' }}</small></td>
+                                <td>{{ $center->comuna ?: '—' }}<small>{{ $center->direccion ?: '' }}</small></td>
+                                <td>{{ $center->coordinador?->nombre ?: ($center->coordinador_nombre_origen ?: 'Sin asignar') }}<small>{{ $center->coordinador?->cargo ?: $center->cargo_contacto ?: '' }}</small></td>
+                                <td>{{ $center->correo_contacto ?: '—' }}<small>{{ $center->telefono_contacto ?: '' }}</small></td>
+                                <td><span class="inventory-status {{ $center->activo ? 'is-ok' : 'is-empty' }}">{{ $center->activo ? 'Activo' : 'Inactivo' }}</span></td>
+                                <td>@if($canEdit)<a class="btn btn-light inventory-btn" href="{{ $masterUrl(['maestro_editar' => 'centro', 'maestro_id' => $center->id]) }}"><i class="bi bi-pencil-square"></i>Editar</a>@else<span class="inventory-muted">Sin permiso</span>@endif</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="7" class="inventory-empty">No hay centros de costo para el filtro seleccionado.</td></tr>
+                        @endforelse
+                    </tbody></table></div>
+                    <div class="inventory-pagination">{{ $masterCenters->onEachSide(1)->links() }}</div>
+                </section>
+
+                <section class="inventory-master-table-card">
+                    <div class="inventory-master-table-heading"><div><h3>Coordinadores</h3><p>{{ $masterCoordinators->total() }} registro(s) para el filtro aplicado.</p></div><span class="inventory-status is-review">{{ $coordinators->count() }} activos</span></div>
+                    <div class="inventory-table-wrap"><table class="inventory-table inventory-master-table"><thead><tr><th>Coordinador</th><th>RUT</th><th>Cargo</th><th>Contacto</th><th>Centros</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+                        @forelse($masterCoordinators as $coordinator)
+                            <tr>
+                                <td><strong>{{ $coordinator->nombre }}</strong><small>{{ $coordinator->jefe_operaciones ?: '' }}</small></td>
+                                <td>{{ $coordinator->rut ?: '—' }}</td>
+                                <td>{{ $coordinator->cargo ?: '—' }}</td>
+                                <td>{{ $coordinator->correo ?: '—' }}<small>{{ $coordinator->telefono ?: '' }}</small></td>
+                                <td>{{ $coordinator->centros_costo_count }}</td>
+                                <td><span class="inventory-status {{ $coordinator->activo ? 'is-ok' : 'is-empty' }}">{{ $coordinator->activo ? 'Activo' : 'Inactivo' }}</span></td>
+                                <td>@if($canEdit)<a class="btn btn-light inventory-btn" href="{{ $masterUrl(['maestro_editar' => 'coordinador', 'maestro_id' => $coordinator->id]) }}"><i class="bi bi-pencil-square"></i>Editar</a>@else<span class="inventory-muted">Sin permiso</span>@endif</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="7" class="inventory-empty">No hay coordinadores para el filtro seleccionado.</td></tr>
+                        @endforelse
+                    </tbody></table></div>
+                    <div class="inventory-pagination">{{ $masterCoordinators->onEachSide(1)->links() }}</div>
+                </section>
+            </div>
+
+            <section class="inventory-master-import">
+                <div><h3>Actualizar desde libro</h3><p>Usa esta opción para sincronizar las hojas <strong>Maestro_CC</strong> y <strong>Maestro_Coordinador</strong>. Se actualiza por nombre y no se duplican registros existentes.</p></div>
+                @if($canCreate)
+                    <form method="POST" action="{{ route('inventario-bodega.maestros.importar') }}" enctype="multipart/form-data" class="inventory-import-master-form">@csrf
+                        <label>Libro de maestros<input name="archivo" type="file" accept=".xlsx,.xls" class="form-control" required></label>
+                        <button class="btn btn-light inventory-btn" type="submit"><i class="bi bi-upload"></i>Actualizar maestros</button>
+                    </form>
+                @endif
+            </section>
+        </section>
+
+        @if($masterEditorKind)
+            <button type="button" class="inventory-detail-backdrop" data-inventory-master-close aria-label="Cerrar edición"></button>
+            <aside class="inventory-detail-drawer inventory-master-drawer" aria-hidden="false" aria-label="Gestionar maestro operativo" data-inventory-master-drawer data-close-url="{{ $masterUrl() }}">
+                <div class="inventory-detail-drawer-bar"><span>{{ $isEditingMaster ? 'Editar' : 'Nuevo' }} {{ $masterEditorKind === 'centro' ? 'centro de costo' : 'coordinador' }}</span><a href="{{ $masterUrl() }}" class="btn btn-light inventory-icon-btn" data-inventory-master-close aria-label="Cerrar edición"><i class="bi bi-x-lg"></i></a></div>
+                <div class="inventory-detail-drawer-content">
+                    @if($masterEditorKind === 'coordinador')
+                        <form method="POST" action="{{ $isEditingMaster ? route('inventario-bodega.maestros.coordinadores.update', $masterEditRecord) : route('inventario-bodega.maestros.coordinadores.store') }}" class="inventory-form inventory-master-form">@csrf @if($isEditingMaster) @method('PUT') @endif
+                            <div class="inventory-detail-heading"><div><span class="inventory-detail-kicker">Maestra de personas</span><h2>{{ $isEditingMaster ? $masterEditRecord->nombre : 'Nuevo coordinador' }}</h2><p>Los cambios se reflejan en los desplegables sin eliminar los movimientos existentes.</p></div></div>
+                            <div class="inventory-form-grid two">
+                                <label>Nombre completo<input name="nombre" class="form-control" maxlength="200" required value="{{ old('nombre', $isEditingMaster ? $masterEditRecord->nombre : '') }}"></label>
+                                <label>RUT<input name="rut" class="form-control" maxlength="30" placeholder="Sin puntos, con guion" value="{{ old('rut', $isEditingMaster ? $masterEditRecord->rut : '') }}"></label>
+                                <label>Cargo<input name="cargo" class="form-control" maxlength="180" value="{{ old('cargo', $isEditingMaster ? $masterEditRecord->cargo : '') }}"></label>
+                                <label>Correo<input name="correo" type="email" class="form-control" maxlength="180" value="{{ old('correo', $isEditingMaster ? $masterEditRecord->correo : '') }}"></label>
+                                <label>Teléfono<input name="telefono" class="form-control" maxlength="50" value="{{ old('telefono', $isEditingMaster ? $masterEditRecord->telefono : '') }}"></label>
+                                <label>Jefe de operaciones<input name="jefe_operaciones" class="form-control" maxlength="200" value="{{ old('jefe_operaciones', $isEditingMaster ? $masterEditRecord->jefe_operaciones : '') }}"></label>
+                            </div>
+                            <label class="inventory-checkbox"><input type="hidden" name="activo" value="0"><input name="activo" type="checkbox" value="1" @checked(old('activo', $isEditingMaster ? $masterEditRecord->activo : true))><span>Coordinador activo y disponible para nuevas selecciones</span></label>
+                            <div class="inventory-form-actions"><button class="btn btn-primary inventory-btn" type="submit"><i class="bi bi-save2"></i>{{ $isEditingMaster ? 'Guardar cambios' : 'Crear coordinador' }}</button></div>
+                        </form>
+                    @else
+                        <form method="POST" action="{{ $isEditingMaster ? route('inventario-bodega.maestros.centros.update', $masterEditRecord) : route('inventario-bodega.maestros.centros.store') }}" class="inventory-form inventory-master-form">@csrf @if($isEditingMaster) @method('PUT') @endif
+                            <div class="inventory-detail-heading"><div><span class="inventory-detail-kicker">Maestra de centros</span><h2>{{ $isEditingMaster ? $masterEditRecord->nombre : 'Nuevo centro de costo' }}</h2><p>La asignación de coordinador se utilizará como propuesta en Movimientos.</p></div></div>
+                            <div class="inventory-form-grid two">
+                                <label>Número maestro<input name="numero_maestro" type="number" min="0" class="form-control" value="{{ old('numero_maestro', $isEditingMaster ? $masterEditRecord->numero_maestro : '') }}"></label>
+                                <label>Nombre<input name="nombre" class="form-control" maxlength="220" required value="{{ old('nombre', $isEditingMaster ? $masterEditRecord->nombre : '') }}"></label>
+                                <label>Tipo<input name="tipo" class="form-control" maxlength="20" value="{{ old('tipo', $isEditingMaster ? $masterEditRecord->tipo : '') }}"></label>
+                                <label>Comuna<input name="comuna" class="form-control" maxlength="120" value="{{ old('comuna', $isEditingMaster ? $masterEditRecord->comuna : '') }}"></label>
+                                <label class="inventory-form-span-two">Dirección<input name="direccion" class="form-control" maxlength="300" value="{{ old('direccion', $isEditingMaster ? $masterEditRecord->direccion : '') }}"></label>
+                                <label>Jefe de operaciones<input name="jefe_operaciones" class="form-control" maxlength="200" value="{{ old('jefe_operaciones', $isEditingMaster ? $masterEditRecord->jefe_operaciones : '') }}"></label>
+                                <label>Coordinador asignado<select name="coordinador_id" class="form-select"><option value="">Sin coordinador asignado</option>@foreach($masterCoordinatorOptions as $option)<option value="{{ $option->id }}" @selected((int) old('coordinador_id', $isEditingMaster ? $masterEditRecord->coordinador_id : 0) === $option->id)>{{ $option->nombre }}{{ $option->cargo ? ' · ' . $option->cargo : '' }}{{ ! $option->activo ? ' (inactivo)' : '' }}</option>@endforeach</select></label>
+                                <label>Coordinador informado<input name="coordinador_nombre_origen" class="form-control" maxlength="200" value="{{ old('coordinador_nombre_origen', $isEditingMaster ? $masterEditRecord->coordinador_nombre_origen : '') }}"></label>
+                                <label>Cargo contacto<input name="cargo_contacto" class="form-control" maxlength="180" value="{{ old('cargo_contacto', $isEditingMaster ? $masterEditRecord->cargo_contacto : '') }}"></label>
+                                <label>Correo contacto<input name="correo_contacto" type="email" class="form-control" maxlength="180" value="{{ old('correo_contacto', $isEditingMaster ? $masterEditRecord->correo_contacto : '') }}"></label>
+                                <label>Teléfono contacto<input name="telefono_contacto" class="form-control" maxlength="50" value="{{ old('telefono_contacto', $isEditingMaster ? $masterEditRecord->telefono_contacto : '') }}"></label>
+                            </div>
+                            <label class="inventory-checkbox"><input type="hidden" name="activo" value="0"><input name="activo" type="checkbox" value="1" @checked(old('activo', $isEditingMaster ? $masterEditRecord->activo : true))><span>Centro activo y disponible para nuevas selecciones</span></label>
+                            <div class="inventory-form-actions"><button class="btn btn-primary inventory-btn" type="submit"><i class="bi bi-save2"></i>{{ $isEditingMaster ? 'Guardar cambios' : 'Crear centro' }}</button></div>
+                        </form>
+                    @endif
+                </div>
+            </aside>
+        @endif
     @else
         <section class="inventory-section" id="catalogo">
             <div class="inventory-section-title"><div><h2>Catalogo autogestionable</h2><p>Productos, ubicaciones y proveedores se administran aqui. Los movimientos historicos no se eliminan al desactivar un registro.</p></div></div>
@@ -434,29 +569,6 @@
                             @endif
                             </section>
                         @endif
-                    </div>
-                </details>
-
-                <details class="inventory-details" id="maestros-operativos">
-                    <summary><span><i class="bi bi-diagram-3"></i>Centros de costo y coordinadores</span><i class="bi bi-chevron-down"></i></summary>
-                    <div class="inventory-details-body inventory-split-forms">
-                        <div class="inventory-compact-form">
-                            <h3>Maestros operativos</h3>
-                            <p>Estos datos alimentan los desplegables de Centro de costo y Coordinador o destinatario en Movimientos. Al seleccionar un centro, se propone únicamente su coordinador asociado.</p>
-                            @if($canCreate)
-                                <form method="POST" action="{{ route('inventario-bodega.maestros.importar') }}" enctype="multipart/form-data" class="inventory-import-master-form">@csrf
-                                    <label>Libro con Maestro_CC y Maestro_Coordinador<input name="archivo" type="file" accept=".xlsx,.xls" class="form-control" required></label>
-                                    <button class="btn btn-light inventory-btn" type="submit"><i class="bi bi-upload"></i>Actualizar maestros</button>
-                                </form>
-                                <small class="inventory-import-hint">Se actualiza por nombre, conserva el historial y no duplica los registros existentes.</small>
-                            @endif
-                        </div>
-                        <div class="inventory-list-panel">
-                            <h3>Datos disponibles</h3>
-                            <div class="inventory-list-row"><div><strong>{{ $inventoryCostCenters->count() }} centros de costo</strong><small>Con comuna, dirección y responsable operativo cuando el libro los informa.</small></div></div>
-                            <div class="inventory-list-row"><div><strong>{{ $coordinators->count() }} coordinadores</strong><small>Disponibles para seleccionar como destinatario en una salida o despacho.</small></div></div>
-                            @if($inventoryCostCenters->isNotEmpty())<div class="inventory-list-row"><div><strong>Ejemplo de relación</strong><small>{{ optional($inventoryCostCenters->first())->nombre }}{{ optional($inventoryCostCenters->first())->coordinador ? ' · ' . $inventoryCostCenters->first()->coordinador->nombre : ' · Sin coordinador asociado' }}</small></div></div>@endif
-                        </div>
                     </div>
                 </details>
 
@@ -632,8 +744,11 @@
     .inventory-receipt-section { display:grid; gap:.9rem; margin-bottom:1.25rem; }.inventory-receipt-note,.inventory-ribbon-note { display:grid; grid-template-columns:auto minmax(0,1fr); column-gap:.7rem; row-gap:.14rem; align-items:start; max-width:none; padding:.85rem 1rem; }.inventory-receipt-note i,.inventory-ribbon-note i { grid-row:1 / span 2; }.inventory-receipt-note strong,.inventory-ribbon-note strong { margin:0; }.inventory-receipt-note span,.inventory-ribbon-note span { width:auto; max-width:none; }.inventory-ribbon-note { margin-top:.85rem; }
     @container (max-width: 760px) { .inventory-receipt-note,.inventory-ribbon-note { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; flex-wrap:nowrap; }.inventory-receipt-note span,.inventory-ribbon-note span { width:auto; } }
     .inventory-template-download { display:inline-flex; align-items:center; justify-content:center; gap:.4rem; min-height:2.42rem; padding:.5rem .8rem; color:#351178; background:#fff; border:1px solid #7250ca; border-radius:.5rem; box-shadow:0 .12rem .32rem rgba(53,17,120,.08); font-size:.82rem; font-weight:800; line-height:1.2; text-align:center; text-decoration:none; white-space:nowrap; }.inventory-template-download:hover { color:#23085d; background:#f8f6ff; border-color:#4d28a5; box-shadow:0 .18rem .5rem rgba(53,17,120,.14); }.inventory-template-download:focus-visible { outline:3px solid rgba(114,80,202,.28); outline-offset:2px; }.dark-mode .inventory-template-download { color:#e7ddff; background:#1f1934; border-color:#a78bfa; box-shadow:none; }.dark-mode .inventory-template-download:hover { color:#fff; background:#2b2345; border-color:#c4b5fd; }
-    .inventory-table-actions { display:flex; align-items:flex-start; flex-wrap:wrap; gap:.45rem; min-width:max-content; }.inventory-table-actions .inventory-btn { min-height:2.25rem; font-size:.76rem; }.inventory-table-actions .inventory-receipt-reverse[open] { min-width:20rem; }.inventory-detail-backdrop { position:fixed; z-index:1050; inset:0; background:rgba(15,23,42,.48); backdrop-filter:blur(1px); }.inventory-detail-drawer { position:fixed; z-index:1051; top:0; right:0; bottom:0; width:min(100%,35rem); display:grid; grid-template-rows:auto minmax(0,1fr); color:#17213a; background:#fff; box-shadow:-.8rem 0 2rem rgba(15,23,42,.2); transform:translateX(101%); transition:transform .2s ease; pointer-events:none; }.inventory-detail-drawer[aria-hidden="false"] { transform:translateX(0); pointer-events:auto; }.inventory-detail-drawer-bar { position:sticky; top:0; z-index:1; display:flex; align-items:center; justify-content:space-between; padding:.8rem 1rem; color:#28105f; background:#faf9ff; border-bottom:1px solid #e1dcf8; font-size:.76rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }.inventory-detail-drawer-content { min-width:0; overflow:auto; padding:1.1rem; }.inventory-detail-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; padding-bottom:1rem; border-bottom:1px solid #e6eaf1; }.inventory-detail-kicker { display:block; margin-bottom:.22rem; color:#7a52ce; font-size:.69rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }.inventory-detail-heading h2 { margin:0; color:#1d143d; font-size:1.25rem; font-weight:800; }.inventory-detail-heading p { margin:.2rem 0 0; color:#718096; font-size:.82rem; }.inventory-detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.7rem; margin:1rem 0; }.inventory-detail-grid > div { min-width:0; padding:.7rem; background:#f8fafc; border:1px solid #e6eaf1; border-radius:.48rem; }.inventory-detail-grid span,.inventory-detail-note > span { display:block; color:#738097; font-size:.67rem; font-weight:800; letter-spacing:.045em; text-transform:uppercase; }.inventory-detail-grid strong { display:block; margin-top:.2rem; color:#26334d; font-size:.82rem; overflow-wrap:anywhere; }.inventory-detail-note { margin:0 0 .75rem; padding:.75rem .8rem; background:#f7f5ff; border-left:3px solid #8757ec; color:#4a3b76; }.inventory-detail-note p { margin:.22rem 0 0; font-size:.82rem; line-height:1.45; white-space:pre-wrap; }.inventory-detail-warning { display:flex; gap:.6rem; align-items:flex-start; margin:0 0 .75rem; padding:.75rem .8rem; background:#fff5e8; border-left:3px solid #e88120; color:#80520e; font-size:.82rem; line-height:1.45; }.inventory-detail-warning i { margin-top:.08rem; }.inventory-detail-warning strong,.inventory-detail-warning span { display:block; }.inventory-detail-warning span { margin-top:.12rem; }.inventory-detail-lines { margin-top:1rem; }.inventory-detail-section-title { display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:.55rem; }.inventory-detail-section-title h3 { margin:0; color:#273450; font-size:.9rem; font-weight:800; }.inventory-detail-section-title > strong { color:#4a347e; font-size:.78rem; }.inventory-detail-table { width:100%; border-collapse:collapse; font-size:.78rem; }.inventory-detail-table th { padding:.48rem .38rem; color:#667085; border-bottom:1px solid #dfe5ef; font-size:.65rem; font-weight:800; letter-spacing:.04em; text-align:left; text-transform:uppercase; }.inventory-detail-table td { padding:.58rem .38rem; border-bottom:1px solid #edf0f5; vertical-align:top; }.inventory-detail-table td small { display:block; margin-top:.12rem; color:#748198; font-size:.68rem; }.inventory-search-select.is-disabled .inventory-search-select-trigger { color:#94a3b8; background:#f1f5f9; border-color:#d9e1ec; cursor:not-allowed; }
+    .inventory-table-actions { display:flex; align-items:flex-start; flex-wrap:wrap; gap:.45rem; min-width:max-content; }.inventory-table-actions .inventory-btn { min-height:2.25rem; font-size:.76rem; }.inventory-table-actions .inventory-receipt-reverse[open] { min-width:20rem; }.inventory-masters-section { display:grid; gap:1rem; }.inventory-master-title { align-items:flex-start; }.inventory-master-title-actions { display:flex; flex-wrap:wrap; gap:.55rem; }.inventory-master-filter { display:grid; grid-template-columns:minmax(0,1fr) minmax(170px,220px) auto auto; gap:.7rem; align-items:end; padding:.85rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:.6rem; }.inventory-master-filter label { display:grid; gap:.28rem; min-width:0; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-master-filter .form-control,.inventory-master-filter .form-select { min-height:2.42rem; font-size:.88rem; letter-spacing:0; text-transform:none; }.inventory-master-tables { display:grid; gap:1rem; }.inventory-master-table-card { min-width:0; padding:1rem; background:#fff; border:1px solid #dfe6f0; border-radius:.65rem; box-shadow:0 .28rem .9rem rgba(29,41,67,.035); }.inventory-master-table-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:.65rem; }.inventory-master-table-heading h3,.inventory-master-import h3 { margin:0; color:#273450; font-size:1rem; font-weight:800; }.inventory-master-table-heading p,.inventory-master-import p { margin:.18rem 0 0; color:#708099; font-size:.8rem; line-height:1.42; }.inventory-master-table { min-width:960px; }.inventory-master-table td { white-space:normal; }.inventory-master-table .inventory-btn { min-height:2.2rem; font-size:.75rem; white-space:nowrap; }.inventory-master-import { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,.9fr); gap:1rem; align-items:end; padding:1rem; background:#f5f3ff; border:1px solid #ded5ff; border-radius:.6rem; }.inventory-master-import strong { color:#4d2d99; }.inventory-master-form { gap:1rem; }.inventory-master-form .inventory-checkbox { padding-top:0; }.inventory-form-span-two { grid-column:1 / -1; }.inventory-detail-backdrop { position:fixed; z-index:1050; inset:0; padding:0; border:0; background:rgba(15,23,42,.48); backdrop-filter:blur(1px); }.inventory-detail-drawer { position:fixed; z-index:1051; top:0; right:0; bottom:0; width:min(100%,35rem); display:grid; grid-template-rows:auto minmax(0,1fr); color:#17213a; background:#fff; box-shadow:-.8rem 0 2rem rgba(15,23,42,.2); transform:translateX(101%); transition:transform .2s ease; pointer-events:none; }.inventory-detail-drawer[aria-hidden="false"] { transform:translateX(0); pointer-events:auto; }.inventory-detail-drawer-bar { position:sticky; top:0; z-index:1; display:flex; align-items:center; justify-content:space-between; padding:.8rem 1rem; color:#28105f; background:#faf9ff; border-bottom:1px solid #e1dcf8; font-size:.76rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }.inventory-detail-drawer-content { min-width:0; overflow:auto; padding:1.1rem; }.inventory-detail-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; padding-bottom:1rem; border-bottom:1px solid #e6eaf1; }.inventory-detail-kicker { display:block; margin-bottom:.22rem; color:#7a52ce; font-size:.69rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }.inventory-detail-heading h2 { margin:0; color:#1d143d; font-size:1.25rem; font-weight:800; }.inventory-detail-heading p { margin:.2rem 0 0; color:#718096; font-size:.82rem; }.inventory-detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.7rem; margin:1rem 0; }.inventory-detail-grid > div { min-width:0; padding:.7rem; background:#f8fafc; border:1px solid #e6eaf1; border-radius:.48rem; }.inventory-detail-grid span,.inventory-detail-note > span { display:block; color:#738097; font-size:.67rem; font-weight:800; letter-spacing:.045em; text-transform:uppercase; }.inventory-detail-grid strong { display:block; margin-top:.2rem; color:#26334d; font-size:.82rem; overflow-wrap:anywhere; }.inventory-detail-note { margin:0 0 .75rem; padding:.75rem .8rem; background:#f7f5ff; border-left:3px solid #8757ec; color:#4a3b76; }.inventory-detail-note p { margin:.22rem 0 0; font-size:.82rem; line-height:1.45; white-space:pre-wrap; }.inventory-detail-warning { display:flex; gap:.6rem; align-items:flex-start; margin:0 0 .75rem; padding:.75rem .8rem; background:#fff5e8; border-left:3px solid #e88120; color:#80520e; font-size:.82rem; line-height:1.45; }.inventory-detail-warning i { margin-top:.08rem; }.inventory-detail-warning strong,.inventory-detail-warning span { display:block; }.inventory-detail-warning span { margin-top:.12rem; }.inventory-detail-lines { margin-top:1rem; }.inventory-detail-section-title { display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:.55rem; }.inventory-detail-section-title h3 { margin:0; color:#273450; font-size:.9rem; font-weight:800; }.inventory-detail-section-title > strong { color:#4a347e; font-size:.78rem; }.inventory-detail-table { width:100%; border-collapse:collapse; font-size:.78rem; }.inventory-detail-table th { padding:.48rem .38rem; color:#667085; border-bottom:1px solid #dfe5ef; font-size:.65rem; font-weight:800; letter-spacing:.04em; text-align:left; text-transform:uppercase; }.inventory-detail-table td { padding:.58rem .38rem; border-bottom:1px solid #edf0f5; vertical-align:top; }.inventory-detail-table td small { display:block; margin-top:.12rem; color:#748198; font-size:.68rem; }.inventory-search-select.is-disabled .inventory-search-select-trigger { color:#94a3b8; background:#f1f5f9; border-color:#d9e1ec; cursor:not-allowed; }
     .dark-mode .inventory-detail-drawer { color:#eef2ff; background:#141b2b; }.dark-mode .inventory-detail-drawer-bar { color:#e7ddff; background:#1d1931; border-color:#4c3e77; }.dark-mode .inventory-detail-heading { border-color:#374151; }.dark-mode .inventory-detail-heading h2,.dark-mode .inventory-detail-grid strong,.dark-mode .inventory-detail-section-title h3 { color:#f3f5fb; }.dark-mode .inventory-detail-heading p,.dark-mode .inventory-detail-grid span,.dark-mode .inventory-detail-note > span { color:#aeb9cc; }.dark-mode .inventory-detail-grid > div { background:#111827; border-color:#374151; }.dark-mode .inventory-detail-note { background:rgba(135,87,236,.12); color:#ddd6fe; }.dark-mode .inventory-detail-table th,.dark-mode .inventory-detail-table td { border-color:#374151; }.dark-mode .inventory-detail-table td small { color:#aeb9cc; }.dark-mode .inventory-detail-section-title > strong { color:#ddd6fe; }.dark-mode .inventory-search-select.is-disabled .inventory-search-select-trigger { color:#8794aa; background:#1a2333; border-color:#334155; }
+    .dark-mode .inventory-master-filter,.dark-mode .inventory-master-table-card { background:#1f2937; border-color:#374151; box-shadow:none; }.dark-mode .inventory-master-filter label,.dark-mode .inventory-master-table-heading p,.dark-mode .inventory-master-import p { color:#aeb9cc; }.dark-mode .inventory-master-table-heading h3,.dark-mode .inventory-master-import h3 { color:#f3f5fb; }.dark-mode .inventory-master-import { background:rgba(135,87,236,.12); border-color:rgba(167,139,250,.25); }.dark-mode .inventory-master-import strong { color:#ddd6fe; }
+    @container (max-width: 760px) { .inventory-master-title { flex-direction:column; }.inventory-master-title-actions { width:100%; }.inventory-master-title-actions .inventory-btn { flex:1; }.inventory-master-filter { grid-template-columns:1fr 1fr; }.inventory-master-filter > :first-child { grid-column:1 / -1; }.inventory-master-filter .inventory-btn { width:100%; }.inventory-master-import { grid-template-columns:1fr; }.inventory-master-import .inventory-btn { width:100%; }.inventory-form-span-two { grid-column:auto; } }
+    @container (max-width: 440px) { .inventory-master-filter { grid-template-columns:1fr 2.55rem; }.inventory-master-filter label { grid-column:1 / -1; }.inventory-master-filter .inventory-btn { grid-column:1; }.inventory-master-filter .inventory-icon-btn { grid-column:2; }.inventory-master-title-actions { display:grid; grid-template-columns:1fr; }.inventory-master-title-actions .inventory-btn { width:100%; } }
     @container (max-width: 560px) { .inventory-detail-drawer { width:100%; }.inventory-detail-drawer-content { padding:1rem .85rem; }.inventory-detail-grid { grid-template-columns:1fr; }.inventory-detail-table { font-size:.72rem; }.inventory-detail-table th,.inventory-detail-table td { padding:.46rem .24rem; }.inventory-table-actions { min-width:0; }.inventory-table-actions .inventory-btn { flex:1; } }
 </style>
 
@@ -1141,6 +1256,20 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') closeInventoryDetail();
+    });
+    var masterDrawer = document.querySelector('[data-inventory-master-drawer]');
+    function closeInventoryMaster() {
+        if (!masterDrawer) return;
+        window.location.assign(masterDrawer.dataset.closeUrl);
+    }
+    document.querySelectorAll('[data-inventory-master-close]').forEach(function (trigger) {
+        trigger.addEventListener('click', function (event) {
+            event.preventDefault();
+            closeInventoryMaster();
+        });
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeInventoryMaster();
     });
     if (addButton) addLine();
     window.addEventListener('resize', function () {
