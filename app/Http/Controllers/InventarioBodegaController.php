@@ -214,7 +214,7 @@ class InventarioBodegaController extends Controller
             'activeLocations' => $activeLocations,
             'providers' => InventarioProveedor::query()->orderByDesc('activo')->orderBy('nombre')->get(),
             'summaryProviders' => InventarioProveedor::query()
-                ->whereHas('ingresos', fn ($query) => $query->whereNull('reversado_en'))
+                ->where('activo', true)
                 ->orderBy('nombre')
                 ->get(),
             'variantOptions' => $variantOptions,

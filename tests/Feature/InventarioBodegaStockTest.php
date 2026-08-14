@@ -365,6 +365,8 @@ class InventarioBodegaStockTest extends TestCase
         ], $user);
         $variant = $product->variantes()->firstOrFail();
         $provider = \App\Models\InventarioProveedor::create(['nombre' => 'Proveedor de lentes', 'activo' => true]);
+        $availableProvider = \App\Models\InventarioProveedor::create(['nombre' => 'Proveedor disponible sin ingresos', 'activo' => true]);
+        $inactiveProvider = \App\Models\InventarioProveedor::create(['nombre' => 'Proveedor inactivo', 'activo' => false]);
         $service->registerReceipt([
             'ubicacion_id' => $origin->id,
             'proveedor_id' => $provider->id,
@@ -397,6 +399,25 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertCount(1, $data['critical']);
         $this->assertCount(1, $data['movements']);
         $this->assertSame($variant->id, $data['movements']->first()->variante_id);
+        $this->assertTrue($data['summaryProviders']->contains('id', $provider->id));
+        $this->assertTrue($data['summaryProviders']->contains('id', $availableProvider->id));
+        $this->assertFalse($data['summaryProviders']->contains('id', $inactiveProvider->id));
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'resumen']))
+            ->assertOk()
+            ->assertSee('Proveedor de lentes')
+            ->assertSee('Proveedor disponible sin ingresos')
+            ->assertDontSee('Proveedor inactivo');
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'ingresos']))
+            ->assertOk()
+            ->assertSee('Proveedor de lentes')
+            ->assertSee('Proveedor disponible sin ingresos')
+            ->assertDontSee('Proveedor inactivo');
 
         $export = (new InventarioBodegaController($service))->exportBalances(Request::create('/inventario-bodega/exportar', 'GET', [
             'categoria' => 'Proteccion visual',
