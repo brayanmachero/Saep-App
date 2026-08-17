@@ -26,6 +26,8 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class InventarioStockService
 {
+    public const KIZEO_ORIGIN_LOCATION_CODE = 'SAEP-CENTRAL';
+
     public function createProduct(array $data, User $user): InventarioProducto
     {
         $requestedCode = trim((string) ($data['codigo'] ?? ''));
@@ -456,10 +458,7 @@ class InventarioStockService
         });
     }
 
-    /**
-     * Suggests inventory variants without applying a Kizeo delivery automatically.
-     * The warehouse must always confirm the source location before stock is affected.
-     */
+    /** Suggests the inventory variants used by an individual Kizeo delivery. */
     public function suggestedKizeoVariants(EntregaBodega $delivery, Collection $variants): array
     {
         $byNameAndSize = [];
@@ -482,6 +481,76 @@ class InventarioStockService
         }
 
         return $suggestions;
+    }
+
+    /** La operación Kizeo siempre descuenta desde la bodega central SAEP. */
+    public function kizeoOriginLocation(): InventarioUbicacion
+    {
+        $location = InventarioUbicacion::query()
+            ->where('activo', true)
+            ->where('codigo', self::KIZEO_ORIGIN_LOCATION_CODE)
+            ->first();
+
+        if (! $location) {
+            throw ValidationException::withMessages([
+                'entrega' => 'No existe una ubicación activa con código SAEP-CENTRAL para descontar las entregas Kizeo.',
+            ]);
+        }
+
+        return $location;
+    }
+
+    /**
+     * Resuelve las líneas que pueden aplicarse en lote. Una relación ambigua se
+     * detiene antes de tocar stock y debe revisarse individualmente.
+     *
+     * @return array<int, array{variante_id: int}>
+     */
+    public function suggestedKizeoLineMappings(EntregaBodega $delivery, ?Collection $variants = null): array
+    {
+        $delivery->loadMissing('items');
+        $items = $delivery->items->where('cantidad', '>', 0)->values();
+        if ($items->isEmpty()) {
+            throw ValidationException::withMessages(['entrega' => 'La entrega de Kizeo no tiene ítems con cantidad para aplicar.']);
+        }
+
+        $variants ??= InventarioVariante::query()
+            ->with('producto')
+            ->where('activo', true)
+            ->whereHas('producto', fn ($query) => $query->where('activo', true))
+            ->orderBy('talla')
+            ->get();
+        $byNameAndSize = [];
+        foreach ($variants as $variant) {
+            $byNameAndSize[$this->comparisonKey($variant->producto->nombre).'|'.$this->comparisonKey($variant->talla)] = $variant->id;
+        }
+        $mappings = [];
+
+        foreach ($items as $item) {
+            $name = $this->comparisonKey($item->articulo);
+            $size = $this->comparisonKey($item->talla ?: 'ESTANDAR');
+            $variantId = $byNameAndSize[$name.'|'.$size] ?? null;
+            if (! $variantId) {
+                throw ValidationException::withMessages([
+                    'entrega' => "No se pudo relacionar automáticamente '{$item->articulo}' talla '{$item->talla}' con el catálogo. Revísala de forma individual.",
+                ]);
+            }
+
+            $mappings[$item->id] = ['variante_id' => $variantId];
+        }
+
+        return $mappings;
+    }
+
+    /** Aplica una entrega Kizeo con relaciones inequívocas desde Sede Central. */
+    public function applyKizeoDeliveryFromCentral(EntregaBodega $delivery, User $user): InventarioEntregaKizeoAplicacion
+    {
+        return $this->applyKizeoDelivery(
+            $delivery,
+            $this->kizeoOriginLocation()->id,
+            $this->suggestedKizeoLineMappings($delivery),
+            $user,
+        );
     }
 
     public function kizeoDeliveryNeedsReview(EntregaBodega $delivery): bool

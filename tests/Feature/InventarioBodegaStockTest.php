@@ -300,6 +300,75 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertDatabaseHas('inventario_movimientos', ['tipo' => 'REVERSO', 'origen' => 'REVERSO_KIZEO_EPP', 'cantidad' => 2]);
     }
 
+    public function test_kizeo_batch_application_always_uses_sede_central_and_only_exact_variant_matches(): void
+    {
+        [$user, $central, , $variant] = $this->inventoryContext();
+        $central->update([
+            'codigo' => InventarioStockService::KIZEO_ORIGIN_LOCATION_CODE,
+            'nombre' => 'Sede Central SAEP',
+        ]);
+        $service = app(InventarioStockService::class);
+        $service->registerReceipt([
+            'ubicacion_id' => $central->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'GUIA_DESPACHO',
+            'numero_documento' => 'GD-KIZEO-LOTE',
+            'fecha_documento' => null,
+            'fecha_recepcion' => '2026-08-12',
+            'observacion' => null,
+        ], [['variante_id' => $variant->id, 'cantidad' => 7, 'costo_unitario' => null]], $user);
+
+        $first = EntregaBodega::create([
+            'kizeo_data_id' => 'kizeo-batch-central-1',
+            'kizeo_record_number' => 801,
+            'nombre' => 'Primera persona',
+            'fecha_pedido' => '2026-08-12',
+        ]);
+        $first->items()->create(['linea' => 1, 'articulo' => 'Casco de seguridad', 'talla' => 'M', 'cantidad' => 2]);
+        $second = EntregaBodega::create([
+            'kizeo_data_id' => 'kizeo-batch-central-2',
+            'kizeo_record_number' => 802,
+            'nombre' => 'Segunda persona',
+            'fecha_pedido' => '2026-08-12',
+        ]);
+        $second->items()->create(['linea' => 1, 'articulo' => 'Casco de seguridad', 'talla' => 'M', 'cantidad' => 3]);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->post(route('inventario-bodega.entregas-kizeo.aplicar-masivo'), ['entregas' => [$first->id, $second->id]])
+            ->assertRedirect(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->assertSessionHas('success', '2 salida(s) fueron descontadas desde Sede Central SAEP y quedaron trazables en Kardex.');
+
+        $this->assertSame(2.0, $service->stockActual($central->id, $variant->id));
+        $this->assertDatabaseCount('inventario_entrega_kizeo_aplicaciones', 2);
+        $this->assertDatabaseHas('inventario_entrega_kizeo_aplicaciones', [
+            'entrega_bodega_id' => $first->id,
+            'ubicacion_id' => $central->id,
+            'estado' => 'APLICADA',
+        ]);
+
+        $unmatched = EntregaBodega::create([
+            'kizeo_data_id' => 'kizeo-batch-no-match',
+            'kizeo_record_number' => 803,
+            'nombre' => 'Relación pendiente',
+            'fecha_pedido' => '2026-08-12',
+        ]);
+        $unmatched->items()->create(['linea' => 1, 'articulo' => 'Casco de seguridad', 'talla' => 'L', 'cantidad' => 1]);
+        try {
+            $service->suggestedKizeoLineMappings($unmatched->load('items'));
+            $this->fail('Una talla sin relación exacta no debe entrar a la aplicación masiva.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('entrega', $exception->errors());
+        }
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->assertOk()
+            ->assertSee('Aplicación masiva desde Sede Central SAEP')
+            ->assertSee('inventory-kizeo-batch-form', false);
+    }
+
     public function test_epp_roster_import_starts_at_zero_and_can_be_loaded_later(): void
     {
         [$user, $origin] = $this->inventoryContext();
@@ -941,6 +1010,7 @@ class InventarioBodegaStockTest extends TestCase
     public function test_kizeo_queue_is_collapsed_and_displays_whether_stock_was_discounted(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContext();
+        $origin->update(['codigo' => InventarioStockService::KIZEO_ORIGIN_LOCATION_CODE, 'nombre' => 'Sede Central SAEP']);
         $service = app(InventarioStockService::class);
         $service->registerReceipt([
             'ubicacion_id' => $origin->id,

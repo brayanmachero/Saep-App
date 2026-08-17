@@ -185,12 +185,30 @@ class InventarioBodegaController extends Controller
                 ])
                 ->orderByDesc('fecha_pedido')
                 ->orderByDesc('id')
-                ->limit(40)
-                ->get()
+                ->paginate(40, ['*'], 'kizeo_pagina')
+                ->withQueryString()
             : collect();
         $kizeoSuggestions = [];
         foreach ($kizeoDeliveries as $delivery) {
             $kizeoSuggestions[$delivery->id] = $this->stock->suggestedKizeoVariants($delivery, $variantOptions);
+        }
+        $centralKizeoLocation = $activeLocations->firstWhere('codigo', InventarioStockService::KIZEO_ORIGIN_LOCATION_CODE);
+        $kizeoBatchEligibleIds = [];
+        if ($centralKizeoLocation) {
+            foreach ($kizeoDeliveries as $delivery) {
+                if ($delivery->inventarioAplicacion
+                    || $delivery->flujo_inventario !== 'SALIDA'
+                    || ($delivery->estado_fuente ?: 'ACTIVA') !== 'ACTIVA') {
+                    continue;
+                }
+
+                try {
+                    $this->stock->suggestedKizeoLineMappings($delivery, $variantOptions);
+                    $kizeoBatchEligibleIds[] = $delivery->id;
+                } catch (ValidationException) {
+                    // Las relaciones no inequívocas se corrigen en la aplicación individual.
+                }
+            }
         }
         $kizeoApplications = InventarioEntregaKizeoAplicacion::query()
             ->with('entrega')
@@ -263,6 +281,8 @@ class InventarioBodegaController extends Controller
             'kizeoDeliveries' => $kizeoDeliveries,
             'kizeoSuggestions' => $kizeoSuggestions,
             'kizeoStats' => $kizeoStats,
+            'centralKizeoLocation' => $centralKizeoLocation,
+            'kizeoBatchEligibleIds' => $kizeoBatchEligibleIds,
             'canCreate' => $request->user()->tieneAcceso('inventario_bodega', 'puede_crear'),
             'canEdit' => $request->user()->tieneAcceso('inventario_bodega', 'puede_editar'),
         ]);
@@ -500,14 +520,59 @@ class InventarioBodegaController extends Controller
     public function applyKizeoDelivery(Request $request, EntregaBodega $entrega): RedirectResponse
     {
         $data = $request->validate([
-            'ubicacion_id' => ['required', 'exists:inventario_ubicaciones,id'],
             'lineas' => ['required', 'array', 'min:1'],
             'lineas.*.variante_id' => ['required', 'exists:inventario_variantes,id'],
         ]);
-        $application = $this->stock->applyKizeoDelivery($entrega->load('items'), (int) $data['ubicacion_id'], $data['lineas'], $request->user());
+        $origin = $this->stock->kizeoOriginLocation();
+        $application = $this->stock->applyKizeoDelivery($entrega->load('items'), $origin->id, $data['lineas'], $request->user());
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'kizeo'])
-            ->with('success', "Entrega Kizeo aplicada desde {$application->ubicacion->nombre}. El descuento quedo vinculado al comprobante original.");
+            ->with('success', "Entrega Kizeo aplicada desde {$application->ubicacion->nombre}. El descuento quedó vinculado al comprobante original.");
+    }
+
+    public function applyKizeoDeliveriesBatch(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'entregas' => ['required', 'array', 'min:1', 'max:40'],
+            'entregas.*' => ['required', 'integer', 'distinct', 'exists:entregas_bodega,id'],
+        ]);
+
+        $deliveries = EntregaBodega::query()
+            ->with(['items', 'inventarioAplicacion'])
+            ->whereIn('id', $data['entregas'])
+            ->get()
+            ->keyBy('id');
+        $applied = 0;
+        $issues = [];
+
+        foreach ($data['entregas'] as $deliveryId) {
+            /** @var EntregaBodega|null $delivery */
+            $delivery = $deliveries->get($deliveryId);
+            if (! $delivery) {
+                $issues[] = "Entrega #{$deliveryId}: ya no está disponible.";
+
+                continue;
+            }
+
+            try {
+                $this->stock->applyKizeoDeliveryFromCentral($delivery, $request->user());
+                $applied++;
+            } catch (ValidationException $exception) {
+                $reason = collect($exception->errors())->flatten()->first() ?: 'No se pudo aplicar.';
+                $issues[] = 'KZ-'.($delivery->kizeo_record_number ?: $delivery->kizeo_data_id).': '.$reason;
+            }
+        }
+
+        $response = redirect()->route('inventario-bodega.index', ['vista' => 'kizeo']);
+        if ($applied > 0) {
+            $response->with('success', "{$applied} salida(s) fueron descontadas desde Sede Central SAEP y quedaron trazables en Kardex.");
+        }
+
+        if ($issues !== []) {
+            $response->with('warning', count($issues).' entrega(s) no se aplicaron. '.implode(' · ', array_slice($issues, 0, 3)));
+        }
+
+        return $response;
     }
 
     public function reverseKizeoDelivery(Request $request, InventarioEntregaKizeoAplicacion $aplicacion): RedirectResponse

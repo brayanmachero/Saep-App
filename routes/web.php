@@ -568,6 +568,9 @@ Route::middleware('auth')->group(function () {
           Route::post('entregas-kizeo/{entrega}/aplicar', [InventarioBodegaController::class, 'applyKizeoDelivery'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('entregas-kizeo.aplicar');
+          Route::post('entregas-kizeo/aplicar-masivo', [InventarioBodegaController::class, 'applyKizeoDeliveriesBatch'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('entregas-kizeo.aplicar-masivo');
           Route::post('entregas-kizeo/{aplicacion}/revertir', [InventarioBodegaController::class, 'reverseKizeoDelivery'])
               ->middleware('modulo:inventario_bodega,puede_editar')
               ->name('entregas-kizeo.revertir');

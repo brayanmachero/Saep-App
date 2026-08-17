@@ -302,7 +302,7 @@
             <div>
                 <p class="inventory-kicker">Conciliacion operativa</p>
                 <h2>Entregas de EPP desde Kizeo</h2>
-                <p>Se sincronizan las entregas masivas y las entregas a personal. Bodega confirma la ubicacion de salida antes de descontar stock; las devoluciones se distinguen para registrarlas como ingreso.</p>
+                <p>Se sincronizan las entregas masivas y las entregas a personal. Todas las salidas se descuentan desde Sede Central SAEP; las devoluciones se distinguen para registrarlas como ingreso.</p>
             </div>
             <a href="{{ route('entregas-bodega-dashboard.index') }}" class="btn btn-light inventory-btn"><i class="bi bi-box-seam"></i>Ver entregas Kizeo</a>
         </section>
@@ -314,7 +314,20 @@
             <article class="inventory-kpi accent-blue"><span>Devoluciones pendientes</span><strong>{{ $kizeoStats['returns'] }}</strong><small>Se ingresan, no se descuentan</small></article>
         </section>
 
-        <section class="inventory-kizeo-notice"><i class="bi bi-shield-check"></i><div><strong>Antes de aplicar</strong><span>Verifica que la entrega este completa en Kizeo y selecciona la bodega real de salida. Si Kizeo se corrige luego, usa el reverso para reponer el stock y deja el motivo registrado.</span></div></section>
+        <section class="inventory-kizeo-notice"><i class="bi bi-shield-check"></i><div><strong>Salida centralizada</strong><span>Las entregas Kizeo siempre descuentan desde <strong>{{ $centralKizeoLocation?->nombre ?: 'SAEP-CENTRAL' }}</strong>. Las seleccionadas para aplicación masiva solo incluyen artículos y tallas relacionados de forma exacta; si Kizeo se corrige luego, usa el reverso para reponer el stock y deja el motivo registrado.</span></div></section>
+
+        @if(! $centralKizeoLocation)
+            <section class="inventory-notice"><i class="bi bi-exclamation-triangle"></i><div><strong>No se puede aplicar Kizeo.</strong><br>Falta una ubicación activa con código <strong>SAEP-CENTRAL</strong>. Crea o activa esa bodega antes de descontar stock.</div></section>
+        @elseif($canCreate)
+            <form id="inventory-kizeo-batch-form" method="POST" action="{{ route('inventario-bodega.entregas-kizeo.aplicar-masivo') }}" class="inventory-kizeo-batch-form">
+                @csrf
+                <div><strong>Aplicación masiva desde Sede Central SAEP</strong><span data-kizeo-batch-copy>Selecciona salidas con artículo y talla validados para descontarlas en un solo paso.</span></div>
+                @if(count($kizeoBatchEligibleIds))
+                    <label class="inventory-kizeo-batch-all"><input type="checkbox" data-kizeo-batch-all><span>Seleccionar las {{ count($kizeoBatchEligibleIds) }} disponibles en esta página</span></label>
+                @endif
+                <button class="btn btn-primary inventory-btn" type="submit" disabled data-kizeo-batch-submit onclick="return confirm('Se descontarán las salidas seleccionadas desde Sede Central SAEP. Las que no tengan stock suficiente no se aplicarán y se informarán al finalizar. ¿Continuar?')"><i class="bi bi-check2-square"></i>Aplicar seleccionadas <span data-kizeo-batch-count></span></button>
+            </form>
+        @endif
 
         <section class="inventory-kizeo-queue">
             @forelse($kizeoDeliveries as $delivery)
@@ -327,6 +340,7 @@
                     $sourceState = $delivery->estado_fuente ?: 'ACTIVA';
                     $sourceBlocked = in_array($sourceState, ['ELIMINADA_EN_KIZEO', 'INCOMPLETA'], true);
                     $needsReview = $needsReview || $sourceState === 'REQUIERE_REVISION';
+                    $batchSelectable = in_array($delivery->id, $kizeoBatchEligibleIds, true);
                 @endphp
                 <details class="inventory-delivery-card{{ $needsReview ? ' needs-review' : '' }}">
                     <summary class="inventory-delivery-header" title="Abrir o cerrar el detalle de esta entrega">
@@ -337,6 +351,9 @@
                             <p>{{ $delivery->origen_formulario ?: 'Formulario Kizeo' }}@if($delivery->tipo_operacion) · {{ $delivery->tipo_operacion }}@endif</p>
                         </div>
                         <div class="inventory-delivery-status">
+                            @if($batchSelectable && $canCreate)
+                                <label class="inventory-kizeo-batch-select" onclick="event.stopPropagation()" title="Incluir en la aplicación masiva desde Sede Central SAEP"><input form="inventory-kizeo-batch-form" type="checkbox" name="entregas[]" value="{{ $delivery->id }}" data-kizeo-batch-checkbox><span>Seleccionar</span></label>
+                            @endif
                             <span class="inventory-delivery-items"><i class="bi bi-list-check"></i>{{ $deliveryItems->count() }} {{ $deliveryItems->count() === 1 ? 'item' : 'items' }}</span>
                             @if($sourceState === 'ELIMINADA_EN_KIZEO')
                                 <span class="inventory-status is-critical" title="El comprobante ya no existe en Kizeo y no puede aplicarse.">Kizeo eliminado</span>
@@ -365,14 +382,16 @@
                         @elseif($isReturn && ! $application)
                             <div class="inventory-notice"><i class="bi bi-box-arrow-in-down"></i><div><strong>Devolución detectada.</strong><br>Este comprobante corresponde a una entrada de inventario. Aún no se descuenta ni se aplica como salida; quedará disponible para el flujo de ingreso con su ubicación de recepción.</div></div>
                         @elseif(! $application)
-                            @if($activeLocations->isEmpty() || $variantOptions->isEmpty())
+                            @if(! $centralKizeoLocation)
+                                <div class="inventory-notice"><i class="bi bi-exclamation-triangle"></i>Falta la ubicación Sede Central SAEP para aplicar las salidas Kizeo.</div>
+                            @elseif($variantOptions->isEmpty())
                                 <div class="inventory-notice"><i class="bi bi-info-circle"></i>Debes tener ubicaciones y articulos activos antes de aplicar entregas Kizeo.</div>
                             @else
                                 <form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.aplicar', $delivery) }}" class="inventory-kizeo-form">
                                     @csrf
                                     <div class="inventory-kizeo-form-heading">
-                                        <label>Ubicacion de salida<select name="ubicacion_id" class="form-select" required><option value="">Selecciona la bodega que entrego</option>@foreach($activeLocations as $location)<option value="{{ $location->id }}">{{ $location->nombre }}</option>@endforeach</select></label>
-                                        <p>Las cantidades vienen de Kizeo. Solo se elige la variante real del inventario cuando el nombre no coincide.</p>
+                                        <label>Ubicacion de salida<input class="form-control" value="{{ $centralKizeoLocation->nombre }}" readonly></label>
+                                        <p>Las cantidades vienen de Kizeo. Esta salida se descuenta siempre desde Sede Central SAEP; ajusta la variante solo si el nombre no coincide.</p>
                                     </div>
                                     <div class="inventory-table-wrap"><table class="inventory-table inventory-table-compact"><thead><tr><th>Articulo informado</th><th>Talla</th><th class="text-end">Cantidad</th><th>Relacion con inventario</th></tr></thead><tbody>
                                         @foreach($deliveryItems as $item)
@@ -402,6 +421,7 @@
                 <section class="inventory-section"><div class="inventory-empty">Aun no hay entregas sincronizadas desde Kizeo. Usa el boton “Sincronizar Kizeo” en Entregas EPP y vuelve aqui para conciliarlas.</div></section>
             @endforelse
         </section>
+        @if(method_exists($kizeoDeliveries, 'links'))<div class="inventory-pagination">{{ $kizeoDeliveries->onEachSide(1)->links() }}</div>@endif
 
     @elseif($vista === 'maestros')
         @php
@@ -686,6 +706,8 @@
     .inventory-delivery-body { min-width:0; }
     .inventory-delivery-body-actions { display:flex; justify-content:flex-end; padding:.48rem 1rem; border-bottom:1px solid #edf1f6; background:#fbfcfe; }
     .inventory-delivery-body-actions .inventory-link { font-size:.78rem; }
+    .inventory-kizeo-batch-form { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:.75rem; align-items:center; margin:0 0 1rem; padding:.85rem 1rem; color:#3d2a71; background:#f6f3ff; border:1px solid #ded5ff; border-left:4px solid #7250ca; border-radius:.65rem; }.inventory-kizeo-batch-form > div { min-width:0; }.inventory-kizeo-batch-form strong,.inventory-kizeo-batch-form span { display:block; }.inventory-kizeo-batch-form strong { color:#2e1a68; font-size:.84rem; }.inventory-kizeo-batch-form [data-kizeo-batch-copy] { margin-top:.16rem; color:#68588f; font-size:.77rem; line-height:1.38; }.inventory-kizeo-batch-all,.inventory-kizeo-batch-select { display:inline-flex; align-items:center; gap:.42rem; color:#4b397d; font-size:.76rem; font-weight:750; white-space:nowrap; cursor:pointer; }.inventory-kizeo-batch-all { min-height:2.25rem; padding:.45rem .65rem; border:1px solid #cfc1f3; border-radius:.45rem; background:#fff; }.inventory-kizeo-batch-all input,.inventory-kizeo-batch-select input { width:1rem; height:1rem; accent-color:#4d28a5; }.inventory-kizeo-batch-select { padding:.34rem .5rem; border:1px solid #d8cffa; border-radius:999px; background:#f7f4ff; }.inventory-kizeo-batch-select:hover,.inventory-kizeo-batch-all:hover { background:#eee8ff; border-color:#a78bfa; }.inventory-kizeo-batch-form .inventory-btn:disabled { cursor:not-allowed; opacity:.58; }.dark-mode .inventory-kizeo-batch-form { color:#e7ddff; background:rgba(135,87,236,.12); border-color:#5c478f; }.dark-mode .inventory-kizeo-batch-form strong { color:#f1ebff; }.dark-mode .inventory-kizeo-batch-form [data-kizeo-batch-copy] { color:#d8cff7; }.dark-mode .inventory-kizeo-batch-all,.dark-mode .inventory-kizeo-batch-select { color:#e7ddff; background:#1f1934; border-color:#5c478f; }
+    @container (max-width: 760px) { .inventory-kizeo-batch-form { grid-template-columns:1fr; align-items:stretch; }.inventory-kizeo-batch-form .inventory-btn { width:100%; }.inventory-kizeo-batch-all { width:max-content; max-width:100%; white-space:normal; } }
     .dark-mode .inventory-delivery-card[open] > .inventory-delivery-header,.dark-mode .inventory-delivery-body-actions { background:rgba(255,255,255,.025); border-color:#374151; }
     .dark-mode .inventory-delivery-items { color:#aeb9cc; }.dark-mode .inventory-delivery-toggle { color:#c4b5fd; background:#1f2937; border-color:#475569; }
 
@@ -1232,6 +1254,32 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     setupSearchSelects();
+
+    var kizeoBatchChecks = Array.prototype.slice.call(document.querySelectorAll('[data-kizeo-batch-checkbox]'));
+    var kizeoBatchAll = document.querySelector('[data-kizeo-batch-all]');
+    var kizeoBatchSubmit = document.querySelector('[data-kizeo-batch-submit]');
+    var kizeoBatchCount = document.querySelector('[data-kizeo-batch-count]');
+    var kizeoBatchCopy = document.querySelector('[data-kizeo-batch-copy]');
+    function refreshKizeoBatchSelection() {
+        var selected = kizeoBatchChecks.filter(function (checkbox) { return checkbox.checked; }).length;
+        if (kizeoBatchSubmit) kizeoBatchSubmit.disabled = selected === 0;
+        if (kizeoBatchCount) kizeoBatchCount.textContent = selected ? '(' + selected + ')' : '';
+        if (kizeoBatchCopy) kizeoBatchCopy.textContent = selected
+            ? selected + ' salida(s) se descontarán desde Sede Central SAEP al confirmar.'
+            : 'Selecciona salidas con artículo y talla validados para descontarlas en un solo paso.';
+        if (kizeoBatchAll) {
+            kizeoBatchAll.checked = kizeoBatchChecks.length > 0 && selected === kizeoBatchChecks.length;
+            kizeoBatchAll.indeterminate = selected > 0 && selected < kizeoBatchChecks.length;
+        }
+    }
+    if (kizeoBatchAll) {
+        kizeoBatchAll.addEventListener('change', function () {
+            kizeoBatchChecks.forEach(function (checkbox) { checkbox.checked = kizeoBatchAll.checked; });
+            refreshKizeoBatchSelection();
+        });
+    }
+    kizeoBatchChecks.forEach(function (checkbox) { checkbox.addEventListener('change', refreshKizeoBatchSelection); });
+    refreshKizeoBatchSelection();
 
     function syncMovementCoordinatorOptions() {
         var costCenter = document.querySelector('[data-inventory-cost-center-select]');
