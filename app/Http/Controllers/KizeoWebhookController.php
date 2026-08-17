@@ -10,6 +10,7 @@ use App\Models\WebhookLog;
 use App\Notifications\AppNotification;
 use App\Services\KizeoAutomationService;
 use App\Services\KizeoService;
+use App\Services\EntregaBodegaSyncService;
 use App\Services\OneDriveService;
 use App\Services\ReservaVehiculoKizeoService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -41,16 +42,19 @@ class KizeoWebhookController extends Controller
 
     private KizeoService $kizeo;
     private KizeoAutomationService $automations;
+    private EntregaBodegaSyncService $bodegaDeliveries;
     private ReservaVehiculoKizeoService $vehicleReservations;
 
     public function __construct(
         KizeoService $kizeo,
         KizeoAutomationService $automations,
+        EntregaBodegaSyncService $bodegaDeliveries,
         ReservaVehiculoKizeoService $vehicleReservations,
     )
     {
         $this->kizeo = $kizeo;
         $this->automations = $automations;
+        $this->bodegaDeliveries = $bodegaDeliveries;
         $this->vehicleReservations = $vehicleReservations;
     }
 
@@ -100,6 +104,18 @@ class KizeoWebhookController extends Controller
                 Log::warning('Webhook sin formId o dataId', ['payload_keys' => array_keys($payload)]);
                 WebhookLog::logIgnored(['origen' => 'kizeo', 'form_id' => $formId, 'data_id' => $dataId, 'tipo' => 'sin_identificar', 'resumen' => 'Payload sin form_id o data_id', 'ip' => $request->ip()]);
                 return response()->json(['status' => 'ignored', 'message' => 'Sin form_id o data_id'], 200);
+            }
+
+            // Bodega tiene un flujo propio y prioritario: el webhook actualiza
+            // la fuente de inmediato, pero nunca descuenta stock por sí solo.
+            if ($this->bodegaDeliveries->supportsForm((string) $formId)) {
+                return $this->handleEntregaBodegaWebhook(
+                    (string) $formId,
+                    (string) $dataId,
+                    (string) $eventType,
+                    $payload,
+                    $request->ip(),
+                );
             }
 
             $automationResult = $this->automations->process((string) $formId, (string) $dataId, $payload, $request->ip());
@@ -170,6 +186,77 @@ class KizeoWebhookController extends Controller
         } catch (\Throwable $e) {
             Log::error('Error en Kizeo Webhook: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['status' => 'error', 'message' => 'Internal processing error'], 500);
+        }
+    }
+
+    /**
+     * Atiende en segundos los formularios operativos de Bodega. El comprobante
+     * se consulta de nuevo en Kizeo antes de persistirlo, evitando confiar en
+     * un payload parcial o desactualizado.
+     */
+    private function handleEntregaBodegaWebhook(string $formId, string $dataId, string $eventType, array $payload, ?string $ip)
+    {
+        try {
+            $event = strtolower(trim($eventType));
+            $isDeleted = str_contains($event, 'delete')
+                || str_contains($event, 'remove')
+                || str_contains($event, 'cancel');
+
+            if ($isDeleted) {
+                $delivery = $this->bodegaDeliveries->markSourceRecordMissing(
+                    $formId,
+                    $dataId,
+                    'Kizeo notificó que el registro fue eliminado o cancelado. No puede aplicarse como una nueva salida de stock.',
+                );
+                $summary = $delivery
+                    ? 'Eliminación de Kizeo conciliada; la salida queda bloqueada o requiere revisión.'
+                    : 'Eliminación recibida sin una salida local que conciliar.';
+            } else {
+                $delivery = $this->bodegaDeliveries->syncSourceRecord(
+                    $formId,
+                    $dataId,
+                    is_array($payload['data'] ?? null) ? $payload['data'] : $payload,
+                );
+                $summary = 'Comprobante de Bodega sincronizado desde webhook de Kizeo.';
+            }
+
+            WebhookLog::logSuccess([
+                'origen' => 'kizeo',
+                'form_id' => $formId,
+                'data_id' => $dataId,
+                'tipo' => 'inventario_bodega_'.$event,
+                'resumen' => $summary,
+                'metadata' => [
+                    'estado_fuente' => $delivery?->estado_fuente,
+                    'flujo_inventario' => $delivery?->flujo_inventario,
+                    'entrega_bodega_id' => $delivery?->id,
+                ],
+                'ip' => $ip,
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => $summary,
+                'estado_fuente' => $delivery?->estado_fuente,
+            ]);
+        } catch (\Throwable $exception) {
+            Log::error('Error en webhook Kizeo de Bodega.', [
+                'form_id' => $formId,
+                'data_id' => $dataId,
+                'event' => $eventType,
+                'error' => $exception->getMessage(),
+            ]);
+            WebhookLog::logError([
+                'origen' => 'kizeo',
+                'form_id' => $formId,
+                'data_id' => $dataId,
+                'tipo' => 'inventario_bodega_'.strtolower(trim($eventType)),
+                'resumen' => 'No se pudo conciliar el webhook de Bodega.',
+                'error_message' => $exception->getMessage(),
+                'ip' => $ip,
+            ]);
+
+            return response()->json(['status' => 'error', 'message' => 'No se pudo sincronizar el comprobante de Bodega'], 500);
         }
     }
 

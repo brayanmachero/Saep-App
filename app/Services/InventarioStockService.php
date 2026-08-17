@@ -199,7 +199,7 @@ class InventarioStockService
                     'referencia_id' => $receipt->id,
                     'documento_tipo' => $receipt->tipo_documento,
                     'documento_numero' => $receipt->numero_documento,
-                    'observacion' => 'Anulacion de ingreso ' . $receipt->codigo . ': ' . $reason,
+                    'observacion' => 'Anulacion de ingreso '.$receipt->codigo.': '.$reason,
                     'ocurrido_en' => now(),
                     'reverso_de_id' => $original->id,
                 ], $user);
@@ -271,7 +271,7 @@ class InventarioStockService
                     'centro_costo' => $original->centro_costo,
                     'centro_costo_id' => $original->centro_costo_id,
                     'coordinador_id' => $original->coordinador_id,
-                    'observacion' => 'Anulación de movimiento ' . $original->codigo . ': ' . trim($reason),
+                    'observacion' => 'Anulación de movimiento '.$original->codigo.': '.trim($reason),
                     'ocurrido_en' => now(),
                     'reverso_de_id' => $original->id,
                 ], $user);
@@ -312,7 +312,7 @@ class InventarioStockService
                 'cantidad' => $difference,
                 'documento_tipo' => 'AJUSTE_STOCK_TALLA',
                 'documento_numero' => $variant->codigo,
-                'observacion' => 'Saldo fijado desde Catalogo para talla ' . $variant->talla . ': ' . trim($data['observacion']),
+                'observacion' => 'Saldo fijado desde Catalogo para talla '.$variant->talla.': '.trim($data['observacion']),
                 'ocurrido_en' => now(),
             ], $user);
 
@@ -468,7 +468,7 @@ class InventarioStockService
         foreach ($variants as $variant) {
             $name = $this->comparisonKey($variant->producto->nombre);
             $size = $this->comparisonKey($variant->talla);
-            $byNameAndSize[$name . '|' . $size] = $variant->id;
+            $byNameAndSize[$name.'|'.$size] = $variant->id;
             $byName[$name][] = $variant;
         }
 
@@ -476,8 +476,8 @@ class InventarioStockService
         foreach ($delivery->items as $item) {
             $name = $this->comparisonKey($item->articulo);
             $size = $this->comparisonKey($item->talla ?: 'ESTANDAR');
-            $suggestions[$item->id] = $byNameAndSize[$name . '|' . $size]
-                ?? $byNameAndSize[$name . '|estandar']
+            $suggestions[$item->id] = $byNameAndSize[$name.'|'.$size]
+                ?? $byNameAndSize[$name.'|estandar']
                 ?? ($byName[$name][0]->id ?? null);
         }
 
@@ -497,6 +497,19 @@ class InventarioStockService
 
     public function applyKizeoDelivery(EntregaBodega $delivery, int $locationId, array $lineMappings, User $user): InventarioEntregaKizeoAplicacion
     {
+        if ($delivery->flujo_inventario === 'ENTRADA') {
+            throw ValidationException::withMessages([
+                'entrega' => 'Esta respuesta de Kizeo corresponde a una devolución. No se puede descontar: debe registrarse como ingreso en la ubicación que reciba el material.',
+            ]);
+        }
+
+        if (in_array($delivery->estado_fuente, ['ELIMINADA_EN_KIZEO', 'INCOMPLETA', 'REQUIERE_REVISION'], true)) {
+            throw ValidationException::withMessages([
+                'entrega' => $delivery->alerta_fuente
+                    ?: 'La fuente Kizeo fue modificada o ya no está disponible. Revisa el comprobante antes de afectar inventario.',
+            ]);
+        }
+
         return DB::transaction(function () use ($delivery, $locationId, $lineMappings, $user) {
             $existing = InventarioEntregaKizeoAplicacion::query()
                 ->where('entrega_bodega_id', $delivery->id)
@@ -566,7 +579,7 @@ class InventarioStockService
                     'destinatario_nombre' => $delivery->nombre,
                     'destinatario_rut' => $delivery->rut,
                     'centro_costo' => $delivery->centro,
-                    'observacion' => 'Entrega Kizeo #' . ($delivery->kizeo_record_number ?: $delivery->kizeo_data_id) . ' aplicada por Bodega.',
+                    'observacion' => 'Entrega Kizeo #'.($delivery->kizeo_record_number ?: $delivery->kizeo_data_id).' aplicada por Bodega.',
                     'ocurrido_en' => $this->kizeoOccurredAt($delivery),
                 ], $user);
 
@@ -609,7 +622,7 @@ class InventarioStockService
                     'destinatario_nombre' => $original->destinatario_nombre,
                     'destinatario_rut' => $original->destinatario_rut,
                     'centro_costo' => $original->centro_costo,
-                    'observacion' => 'Reverso de entrega Kizeo: ' . $reason,
+                    'observacion' => 'Reverso de entrega Kizeo: '.$reason,
                     'ocurrido_en' => now(),
                     'reverso_de_id' => $original->id,
                 ], $user);
@@ -634,142 +647,143 @@ class InventarioStockService
         $headers = array_map(fn ($value) => $this->normalizeHeader($value), array_shift($rows) ?? []);
 
         return DB::transaction(function () use ($rows, $headers, $user) {
-        $created = 0;
-        $updated = 0;
-        $variantsCreated = 0;
-        $stocksSet = 0;
-        $costsUpdated = 0;
-        $skipped = 0;
-        $createdProducts = [];
-        $updatedProducts = [];
+            $created = 0;
+            $updated = 0;
+            $variantsCreated = 0;
+            $stocksSet = 0;
+            $costsUpdated = 0;
+            $skipped = 0;
+            $createdProducts = [];
+            $updatedProducts = [];
 
-        foreach ($rows as $row) {
-            $values = array_combine($headers, array_pad($row, count($headers), null));
-            $nombre = $this->importText($values['producto'] ?? $values['nombre'] ?? $values['item'] ?? null);
-            if ($nombre === '') {
-                $skipped++;
-                continue;
-            }
+            foreach ($rows as $row) {
+                $values = array_combine($headers, array_pad($row, count($headers), null));
+                $nombre = $this->importText($values['producto'] ?? $values['nombre'] ?? $values['item'] ?? null);
+                if ($nombre === '') {
+                    $skipped++;
 
-            // The Bodega EPP roster stores the size in its Item column (for example, "Botin T-39").
-            // Keep one product per item and turn that suffix into a reusable stock variant.
-            $talla = $this->importText($values['talla'] ?? $values['variante'] ?? null);
-            if (isset($values['item']) && ! isset($values['producto']) && ! isset($values['nombre'])) {
-                [$nombre, $detectedSize] = $this->eppItemAndVariant($nombre);
-                $talla = $talla ?: $detectedSize;
-            }
-            $talla = Str::upper($talla ?: 'ESTANDAR');
-
-            $locationCode = $this->importText($values['ubicacion_codigo'] ?? $values['ubicacion'] ?? null);
-            $stockRaw = $this->importText($values['stock_inicial'] ?? $values['stock_actual'] ?? $values['stock'] ?? null);
-            $costRaw = $this->importText(
-                $values['costo_referencia']
-                    ?? $values['precio_referencia']
-                    ?? $values['precio']
-                    ?? $values['costo']
-                    ?? $values['costo_unitario']
-                    ?? null,
-            );
-            $referenceCost = $costRaw === '' ? null : $this->importDecimal($costRaw);
-            if ($costRaw !== '' && ($referenceCost === null || $referenceCost < 0)) {
-                throw ValidationException::withMessages(['archivo' => "El Costo_Referencia de '{$nombre}' debe ser un número igual o mayor que cero."]);
-            }
-            $hasInitialStock = $locationCode !== '' || $stockRaw !== '';
-            $location = null;
-            $initialStock = null;
-            if ($hasInitialStock) {
-                if ($locationCode === '') {
-                    throw ValidationException::withMessages(['archivo' => "El producto '{$nombre}' requiere Ubicacion_Codigo para cargar Stock_Inicial."]);
-                }
-                if ($stockRaw === '') {
-                    throw ValidationException::withMessages(['archivo' => "El producto '{$nombre}' requiere Stock_Inicial para la ubicacion '{$locationCode}'."]);
+                    continue;
                 }
 
-                $initialStock = $this->importDecimal($stockRaw);
-                if ($initialStock === null || $initialStock < 0) {
-                    throw ValidationException::withMessages(['archivo' => "El Stock_Inicial de '{$nombre}' debe ser un numero igual o mayor que cero."]);
+                // The Bodega EPP roster stores the size in its Item column (for example, "Botin T-39").
+                // Keep one product per item and turn that suffix into a reusable stock variant.
+                $talla = $this->importText($values['talla'] ?? $values['variante'] ?? null);
+                if (isset($values['item']) && ! isset($values['producto']) && ! isset($values['nombre'])) {
+                    [$nombre, $detectedSize] = $this->eppItemAndVariant($nombre);
+                    $talla = $talla ?: $detectedSize;
+                }
+                $talla = Str::upper($talla ?: 'ESTANDAR');
+
+                $locationCode = $this->importText($values['ubicacion_codigo'] ?? $values['ubicacion'] ?? null);
+                $stockRaw = $this->importText($values['stock_inicial'] ?? $values['stock_actual'] ?? $values['stock'] ?? null);
+                $costRaw = $this->importText(
+                    $values['costo_referencia']
+                        ?? $values['precio_referencia']
+                        ?? $values['precio']
+                        ?? $values['costo']
+                        ?? $values['costo_unitario']
+                        ?? null,
+                );
+                $referenceCost = $costRaw === '' ? null : $this->importDecimal($costRaw);
+                if ($costRaw !== '' && ($referenceCost === null || $referenceCost < 0)) {
+                    throw ValidationException::withMessages(['archivo' => "El Costo_Referencia de '{$nombre}' debe ser un número igual o mayor que cero."]);
+                }
+                $hasInitialStock = $locationCode !== '' || $stockRaw !== '';
+                $location = null;
+                $initialStock = null;
+                if ($hasInitialStock) {
+                    if ($locationCode === '') {
+                        throw ValidationException::withMessages(['archivo' => "El producto '{$nombre}' requiere Ubicacion_Codigo para cargar Stock_Inicial."]);
+                    }
+                    if ($stockRaw === '') {
+                        throw ValidationException::withMessages(['archivo' => "El producto '{$nombre}' requiere Stock_Inicial para la ubicacion '{$locationCode}'."]);
+                    }
+
+                    $initialStock = $this->importDecimal($stockRaw);
+                    if ($initialStock === null || $initialStock < 0) {
+                        throw ValidationException::withMessages(['archivo' => "El Stock_Inicial de '{$nombre}' debe ser un numero igual o mayor que cero."]);
+                    }
+
+                    $location = InventarioUbicacion::query()
+                        ->where('codigo', $locationCode)
+                        ->where('activo', true)
+                        ->first();
+                    if (! $location) {
+                        throw ValidationException::withMessages(['archivo' => "No existe una ubicacion activa con codigo '{$locationCode}' para '{$nombre}'."]);
+                    }
                 }
 
-                $location = InventarioUbicacion::query()
-                    ->where('codigo', $locationCode)
-                    ->where('activo', true)
-                    ->first();
-                if (! $location) {
-                    throw ValidationException::withMessages(['archivo' => "No existe una ubicacion activa con codigo '{$locationCode}' para '{$nombre}'."]);
+                $codigo = $this->importText($values['codigo'] ?? null);
+                $product = $codigo !== ''
+                    ? InventarioProducto::query()->where('codigo', $codigo)->first()
+                    : InventarioProducto::query()->whereRaw('LOWER(nombre) = ?', [Str::lower($nombre)])->first();
+                $codigo = $codigo ?: ($product?->codigo ?: $this->availableProductCode(Str::upper(Str::slug($nombre, '-'))));
+
+                $attributes = [
+                    'nombre' => $nombre,
+                    'tipo' => $this->nullable($values['tipo'] ?? null),
+                    'categoria' => $this->nullable($values['categoria'] ?? null),
+                    'subcategoria' => $this->nullable($values['subcategoria'] ?? $values['sub_categoria'] ?? null),
+                    'unidad_medida' => $this->nullable($values['formato'] ?? $values['unidad_medida'] ?? null) ?: 'Unidad',
+                    'stock_minimo' => $this->decimal($values['stock_critico'] ?? $values['stock_minimo'] ?? 0),
+                    'activo' => true,
+                    'creado_por' => $user->id,
+                ];
+
+                if ($product) {
+                    $product->update($attributes);
+                    if (! isset($createdProducts[$product->id]) && ! isset($updatedProducts[$product->id])) {
+                        $updatedProducts[$product->id] = true;
+                        $updated++;
+                    }
+                } else {
+                    $product = InventarioProducto::create(['codigo' => $codigo] + $attributes);
+                    $createdProducts[$product->id] = true;
+                    $created++;
+                }
+
+                $variant = $product->variantes()->firstOrNew(['talla' => $talla]);
+                $isNewVariant = ! $variant->exists;
+                $variant->fill([
+                    'codigo' => $variant->exists ? $variant->codigo : $this->availableVariantCode($product->codigo, $talla),
+                    'descripcion' => $this->nullable($values['descripcion_variante'] ?? null),
+                    'activo' => true,
+                ]);
+                $variant->save();
+                $variantsCreated += $isNewVariant ? 1 : 0;
+                $costsUpdated += $this->syncReferenceCost($variant, $referenceCost, $user, 'IMPORTACION_CATALOGO') ? 1 : 0;
+
+                if ($location && $initialStock !== null) {
+                    $currentStock = $this->stockActual($location->id, $variant->id);
+                    $difference = $initialStock - $currentStock;
+                    if (abs($difference) >= 0.0001) {
+                        $hasMovementHistory = InventarioMovimiento::query()
+                            ->where('ubicacion_id', $location->id)
+                            ->where('variante_id', $variant->id)
+                            ->exists();
+                        $this->createMovement([
+                            'tipo' => $hasMovementHistory
+                                ? ($difference > 0 ? 'AJUSTE_POSITIVO' : 'AJUSTE_NEGATIVO')
+                                : 'STOCK_INICIAL',
+                            'origen' => 'IMPORTACION_CATALOGO',
+                            'ubicacion_id' => $location->id,
+                            'producto_id' => $product->id,
+                            'variante_id' => $variant->id,
+                            'cantidad' => $difference,
+                            'costo_unitario' => $referenceCost && $referenceCost > 0 ? $referenceCost : null,
+                            'documento_tipo' => 'AJUSTE',
+                            'documento_numero' => 'IMPORTACION-STOCK-INICIAL',
+                            'observacion' => $hasMovementHistory
+                                ? 'Saldo fijado desde importacion de catalogo: '.$this->number($initialStock).'.'
+                                : 'Carga de stock inicial desde importacion de catalogo: '.$this->number($initialStock).'.',
+                            'ocurrido_en' => now(),
+                        ], $user);
+                        $stocksSet++;
+                    }
                 }
             }
 
-            $codigo = $this->importText($values['codigo'] ?? null);
-            $product = $codigo !== ''
-                ? InventarioProducto::query()->where('codigo', $codigo)->first()
-                : InventarioProducto::query()->whereRaw('LOWER(nombre) = ?', [Str::lower($nombre)])->first();
-            $codigo = $codigo ?: ($product?->codigo ?: $this->availableProductCode(Str::upper(Str::slug($nombre, '-'))));
-
-            $attributes = [
-                'nombre' => $nombre,
-                'tipo' => $this->nullable($values['tipo'] ?? null),
-                'categoria' => $this->nullable($values['categoria'] ?? null),
-                'subcategoria' => $this->nullable($values['subcategoria'] ?? $values['sub_categoria'] ?? null),
-                'unidad_medida' => $this->nullable($values['formato'] ?? $values['unidad_medida'] ?? null) ?: 'Unidad',
-                'stock_minimo' => $this->decimal($values['stock_critico'] ?? $values['stock_minimo'] ?? 0),
-                'activo' => true,
-                'creado_por' => $user->id,
-            ];
-
-            if ($product) {
-                $product->update($attributes);
-                if (! isset($createdProducts[$product->id]) && ! isset($updatedProducts[$product->id])) {
-                    $updatedProducts[$product->id] = true;
-                    $updated++;
-                }
-            } else {
-                $product = InventarioProducto::create(['codigo' => $codigo] + $attributes);
-                $createdProducts[$product->id] = true;
-                $created++;
-            }
-
-            $variant = $product->variantes()->firstOrNew(['talla' => $talla]);
-            $isNewVariant = ! $variant->exists;
-            $variant->fill([
-                'codigo' => $variant->exists ? $variant->codigo : $this->availableVariantCode($product->codigo, $talla),
-                'descripcion' => $this->nullable($values['descripcion_variante'] ?? null),
-                'activo' => true,
-            ]);
-            $variant->save();
-            $variantsCreated += $isNewVariant ? 1 : 0;
-            $costsUpdated += $this->syncReferenceCost($variant, $referenceCost, $user, 'IMPORTACION_CATALOGO') ? 1 : 0;
-
-            if ($location && $initialStock !== null) {
-                $currentStock = $this->stockActual($location->id, $variant->id);
-                $difference = $initialStock - $currentStock;
-                if (abs($difference) >= 0.0001) {
-                    $hasMovementHistory = InventarioMovimiento::query()
-                        ->where('ubicacion_id', $location->id)
-                        ->where('variante_id', $variant->id)
-                        ->exists();
-                    $this->createMovement([
-                        'tipo' => $hasMovementHistory
-                            ? ($difference > 0 ? 'AJUSTE_POSITIVO' : 'AJUSTE_NEGATIVO')
-                            : 'STOCK_INICIAL',
-                        'origen' => 'IMPORTACION_CATALOGO',
-                        'ubicacion_id' => $location->id,
-                        'producto_id' => $product->id,
-                        'variante_id' => $variant->id,
-                        'cantidad' => $difference,
-                        'costo_unitario' => $referenceCost && $referenceCost > 0 ? $referenceCost : null,
-                        'documento_tipo' => 'AJUSTE',
-                        'documento_numero' => 'IMPORTACION-STOCK-INICIAL',
-                        'observacion' => $hasMovementHistory
-                            ? 'Saldo fijado desde importacion de catalogo: ' . $this->number($initialStock) . '.'
-                            : 'Carga de stock inicial desde importacion de catalogo: ' . $this->number($initialStock) . '.',
-                        'ocurrido_en' => now(),
-                    ], $user);
-                    $stocksSet++;
-                }
-            }
-        }
-
-        return compact('created', 'updated', 'variantsCreated', 'stocksSet', 'costsUpdated', 'skipped');
+            return compact('created', 'updated', 'variantsCreated', 'stocksSet', 'costsUpdated', 'skipped');
         });
     }
 
@@ -859,6 +873,7 @@ class InventarioStockService
             ];
             if (isset($groups[$reference]) && $groups[$reference]['header'] !== $header) {
                 $errors[] = "Fila {$line}: las lineas con Referencia_Ingreso '{$reference}' deben tener los mismos datos de cabecera.";
+
                 continue;
             }
             $groups[$reference] ??= ['header' => $header, 'items' => []];
@@ -951,7 +966,7 @@ class InventarioStockService
         return InventarioMovimiento::create($attributes + [
             'codigo' => $this->code('MOV'),
             'registrado_por' => $user->id,
-            'registrado_por_nombre' => trim($user->name . ' ' . ($user->apellido_paterno ?? '')),
+            'registrado_por_nombre' => trim($user->name.' '.($user->apellido_paterno ?? '')),
         ]);
     }
 
@@ -960,14 +975,14 @@ class InventarioStockService
         $available = $this->stockActual($ubicacionId, $varianteId);
         if ($available + 0.0001 < $quantity) {
             throw ValidationException::withMessages([
-                'cantidad' => 'Stock insuficiente en la ubicacion seleccionada. Disponible: ' . $this->number($available) . '.',
+                'cantidad' => 'Stock insuficiente en la ubicacion seleccionada. Disponible: '.$this->number($available).'.',
             ]);
         }
     }
 
     private function code(string $prefix): string
     {
-        return $prefix . '-' . now()->format('Ymd') . '-' . Str::upper(Str::random(5));
+        return $prefix.'-'.now()->format('Ymd').'-'.Str::upper(Str::random(5));
     }
 
     private function availableProductCode(string $base): string
@@ -976,7 +991,7 @@ class InventarioStockService
         $candidate = $base;
         $index = 2;
         while (InventarioProducto::query()->where('codigo', $candidate)->exists()) {
-            $candidate = Str::limit($base, 58, '') . '-' . $index++;
+            $candidate = Str::limit($base, 58, '').'-'.$index++;
         }
 
         return $candidate;
@@ -984,11 +999,11 @@ class InventarioStockService
 
     private function availableVariantCode(string $productCode, string $size): string
     {
-        $base = Str::limit($productCode . '-' . Str::upper(Str::slug($size ?: 'ESTANDAR')), 94, '');
+        $base = Str::limit($productCode.'-'.Str::upper(Str::slug($size ?: 'ESTANDAR')), 94, '');
         $candidate = $base;
         $index = 2;
         while (InventarioVariante::query()->where('codigo', $candidate)->exists()) {
-            $candidate = Str::limit($base, 94, '') . '-' . $index++;
+            $candidate = Str::limit($base, 94, '').'-'.$index++;
         }
 
         return $candidate;
@@ -1187,7 +1202,7 @@ class InventarioStockService
 
     private function kizeoDocumentNumber(EntregaBodega $delivery): string
     {
-        return 'KZ-' . ($delivery->kizeo_record_number ?: $delivery->kizeo_data_id);
+        return 'KZ-'.($delivery->kizeo_record_number ?: $delivery->kizeo_data_id);
     }
 
     private function kizeoOccurredAt(EntregaBodega $delivery): Carbon

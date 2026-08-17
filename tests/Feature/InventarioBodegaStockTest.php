@@ -95,6 +95,13 @@ class InventarioBodegaStockTest extends TestCase
         Schema::create('entregas_bodega', function (Blueprint $table) {
             $table->id();
             $table->string('kizeo_data_id', 32)->unique();
+            $table->string('kizeo_form_id', 50)->nullable();
+            $table->string('origen_formulario', 120)->nullable();
+            $table->string('tipo_operacion', 120)->nullable();
+            $table->string('flujo_inventario', 20)->default('SALIDA');
+            $table->string('estado_fuente', 40)->default('ACTIVA');
+            $table->string('alerta_fuente', 500)->nullable();
+            $table->timestamp('fuente_ausente_desde')->nullable();
             $table->unsignedInteger('kizeo_record_number')->nullable();
             $table->timestamp('kizeo_created_at')->nullable();
             $table->timestamp('kizeo_updated_at')->nullable();

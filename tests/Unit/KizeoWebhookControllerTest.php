@@ -3,8 +3,10 @@
 namespace Tests\Unit;
 
 use App\Http\Controllers\KizeoWebhookController;
+use App\Services\EntregaBodegaSyncService;
 use App\Services\KizeoAutomationService;
 use App\Services\KizeoService;
+use App\Services\ReservaVehiculoKizeoService;
 use Mockery;
 use ReflectionMethod;
 use Tests\TestCase;
@@ -59,7 +61,9 @@ class KizeoWebhookControllerTest extends TestCase
     {
         return new KizeoWebhookController(
             Mockery::mock(KizeoService::class),
-            Mockery::mock(KizeoAutomationService::class)
+            Mockery::mock(KizeoAutomationService::class),
+            Mockery::mock(EntregaBodegaSyncService::class),
+            Mockery::mock(ReservaVehiculoKizeoService::class),
         );
     }
 }

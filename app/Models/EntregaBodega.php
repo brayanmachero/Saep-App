@@ -17,6 +17,7 @@ class EntregaBodega extends Model
         'kizeo_created_at' => 'datetime',
         'kizeo_updated_at' => 'datetime',
         'synced_at' => 'datetime',
+        'fuente_ausente_desde' => 'datetime',
         'raw_payload' => 'array',
     ];
 

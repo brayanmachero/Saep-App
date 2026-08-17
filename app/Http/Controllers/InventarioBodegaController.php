@@ -20,8 +20,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -70,9 +70,9 @@ class InventarioBodegaController extends Controller
         $products = InventarioProducto::query()
             ->with('variantes')
             ->when($productSearch !== '', fn ($query) => $query->where(function ($products) use ($productSearch) {
-                $products->where('nombre', 'like', '%' . $productSearch . '%')
-                    ->orWhere('codigo', 'like', '%' . $productSearch . '%')
-                    ->orWhere('categoria', 'like', '%' . $productSearch . '%');
+                $products->where('nombre', 'like', '%'.$productSearch.'%')
+                    ->orWhere('codigo', 'like', '%'.$productSearch.'%')
+                    ->orWhere('categoria', 'like', '%'.$productSearch.'%');
             }))
             ->orderBy('nombre')
             ->paginate(30, ['*'], 'productos_pagina')
@@ -103,8 +103,8 @@ class InventarioBodegaController extends Controller
                 'categoria' => (string) $product->categoria,
                 'nombre' => (string) $product->subcategoria,
             ])
-            ->unique(fn (array $subcategory) => Str::lower($subcategory['categoria'] . '|' . $subcategory['nombre']))
-            ->sortBy(fn (array $subcategory) => Str::lower($subcategory['categoria'] . '|' . $subcategory['nombre']))
+            ->unique(fn (array $subcategory) => Str::lower($subcategory['categoria'].'|'.$subcategory['nombre']))
+            ->sortBy(fn (array $subcategory) => Str::lower($subcategory['categoria'].'|'.$subcategory['nombre']))
             ->values();
         $productUnits = $catalogValues->pluck('unidad_medida')->filter()->prepend('Unidad')->unique()->sort()->values();
         $inventoryCostCenters = Schema::hasTable('inventario_centros_costo')
@@ -132,10 +132,10 @@ class InventarioBodegaController extends Controller
                 ->with('coordinador')
                 ->when($masterSearch !== '', function ($query) use ($masterSearch) {
                     $query->where(function ($centers) use ($masterSearch) {
-                        $centers->where('nombre', 'like', '%' . $masterSearch . '%')
-                            ->orWhere('numero_maestro', 'like', '%' . $masterSearch . '%')
-                            ->orWhere('comuna', 'like', '%' . $masterSearch . '%')
-                            ->orWhereHas('coordinador', fn ($coordinators) => $coordinators->where('nombre', 'like', '%' . $masterSearch . '%'));
+                        $centers->where('nombre', 'like', '%'.$masterSearch.'%')
+                            ->orWhere('numero_maestro', 'like', '%'.$masterSearch.'%')
+                            ->orWhere('comuna', 'like', '%'.$masterSearch.'%')
+                            ->orWhereHas('coordinador', fn ($coordinators) => $coordinators->where('nombre', 'like', '%'.$masterSearch.'%'));
                     });
                 })
                 ->when($masterStatus !== '', fn ($query) => $query->where('activo', $masterStatus === 'activos'))
@@ -147,10 +147,10 @@ class InventarioBodegaController extends Controller
                 ->withCount('centrosCosto')
                 ->when($masterSearch !== '', function ($query) use ($masterSearch) {
                     $query->where(function ($coordinators) use ($masterSearch) {
-                        $coordinators->where('nombre', 'like', '%' . $masterSearch . '%')
-                            ->orWhere('rut', 'like', '%' . $masterSearch . '%')
-                            ->orWhere('correo', 'like', '%' . $masterSearch . '%')
-                            ->orWhere('cargo', 'like', '%' . $masterSearch . '%');
+                        $coordinators->where('nombre', 'like', '%'.$masterSearch.'%')
+                            ->orWhere('rut', 'like', '%'.$masterSearch.'%')
+                            ->orWhere('correo', 'like', '%'.$masterSearch.'%')
+                            ->orWhere('cargo', 'like', '%'.$masterSearch.'%');
                     });
                 })
                 ->when($masterStatus !== '', fn ($query) => $query->where('activo', $masterStatus === 'activos'))
@@ -195,12 +195,27 @@ class InventarioBodegaController extends Controller
         $kizeoApplications = InventarioEntregaKizeoAplicacion::query()
             ->with('entrega')
             ->get();
-        $kizeoStats = [
-            'pending' => EntregaBodega::query()->whereDoesntHave('inventarioAplicacion')->count(),
-            'applied' => $kizeoApplications->where('estado', 'APLICADA')->count(),
-            'review' => $kizeoApplications->filter(fn (InventarioEntregaKizeoAplicacion $application) => $application->estado === 'APLICADA'
+        $applicationReviewIds = $kizeoApplications
+            ->filter(fn (InventarioEntregaKizeoAplicacion $application) => $application->estado === 'APLICADA'
                 && $application->entrega?->kizeo_updated_at
-                && (! $application->fuente_actualizada_en || $application->entrega->kizeo_updated_at->gt($application->fuente_actualizada_en)))->count(),
+                && (! $application->fuente_actualizada_en || $application->entrega->kizeo_updated_at->gt($application->fuente_actualizada_en)))
+            ->pluck('entrega_bodega_id');
+        $sourceAlertIds = EntregaBodega::query()
+            ->whereIn('estado_fuente', ['REQUIERE_REVISION', 'ELIMINADA_EN_KIZEO', 'INCOMPLETA'])
+            ->pluck('id');
+        $kizeoStats = [
+            'pending' => EntregaBodega::query()
+                ->where('flujo_inventario', 'SALIDA')
+                ->where('estado_fuente', 'ACTIVA')
+                ->whereDoesntHave('inventarioAplicacion')
+                ->count(),
+            'returns' => EntregaBodega::query()
+                ->where('flujo_inventario', 'ENTRADA')
+                ->where('estado_fuente', 'ACTIVA')
+                ->whereDoesntHave('inventarioAplicacion')
+                ->count(),
+            'applied' => $kizeoApplications->where('estado', 'APLICADA')->count(),
+            'review' => $applicationReviewIds->merge($sourceAlertIds)->unique()->count(),
         ];
 
         return view('inventario_bodega.index', [
@@ -320,7 +335,7 @@ class InventarioBodegaController extends Controller
         $data = $request->validate([
             'ubicacion_id' => ['required', 'exists:inventario_ubicaciones,id'],
             'proveedor_id' => ['nullable', 'exists:inventario_proveedores,id'],
-            'tipo_documento' => ['required', Rule::in(array_keys(\App\Models\InventarioIngreso::TIPOS_DOCUMENTO))],
+            'tipo_documento' => ['required', Rule::in(array_keys(InventarioIngreso::TIPOS_DOCUMENTO))],
             'numero_documento' => ['nullable', 'string', 'max:100'],
             'fecha_documento' => ['nullable', 'date'],
             'fecha_recepcion' => ['required', 'date'],
@@ -374,7 +389,7 @@ class InventarioBodegaController extends Controller
         }
 
         return redirect()->route('inventario-bodega.index', $catalogQuery)
-            ->with('success', 'Saldo de la talla actualizado a ' . rtrim(rtrim(number_format($stock, 3, ',', '.'), '0'), ',') . '. El ajuste quedo registrado en el kardex.');
+            ->with('success', 'Saldo de la talla actualizado a '.rtrim(rtrim(number_format($stock, 3, ',', '.'), '0'), ',').'. El ajuste quedo registrado en el kardex.');
     }
 
     public function storeMovement(Request $request): RedirectResponse
@@ -454,7 +469,7 @@ class InventarioBodegaController extends Controller
     public function showStocktake(InventarioConteo $conteo)
     {
         $conteo->load(['ubicacion', 'lineas.producto', 'lineas.variante']);
-        $conteo->setRelation('lineas', $conteo->lineas->sortBy(fn ($line) => $line->producto->nombre . ' ' . $line->variante->talla));
+        $conteo->setRelation('lineas', $conteo->lineas->sortBy(fn ($line) => $line->producto->nombre.' '.$line->variante->talla));
 
         return view('inventario_bodega.conteo', [
             'conteo' => $conteo,
@@ -521,7 +536,7 @@ class InventarioBodegaController extends Controller
             : '';
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'catalogo'])
-            ->with('success', "Importacion finalizada: {$result['created']} productos creados, {$result['updated']} actualizados, {$result['variantsCreated']} variantes creadas y {$result['skipped']} filas omitidas." . $stockMessage . $costMessage);
+            ->with('success', "Importacion finalizada: {$result['created']} productos creados, {$result['updated']} actualizados, {$result['variantsCreated']} variantes creadas y {$result['skipped']} filas omitidas.".$stockMessage.$costMessage);
     }
 
     public function importReceipts(Request $request): RedirectResponse
@@ -543,10 +558,10 @@ class InventarioBodegaController extends Controller
         $result = $this->operationalMasters->import($request->file('archivo'));
         $pending = $result['coordinadoresSinRelacion'] === []
             ? ''
-            : ' Se conservaron sin vínculo automático: ' . implode(', ', $result['coordinadoresSinRelacion']) . '.';
+            : ' Se conservaron sin vínculo automático: '.implode(', ', $result['coordinadoresSinRelacion']).'.';
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'maestros'])
-            ->with('success', "Maestros actualizados: {$result['centrosCreados']} centros creados, {$result['centrosActualizados']} actualizados, {$result['coordinadoresCreados']} coordinadores creados y {$result['coordinadoresActualizados']} actualizados." . $pending);
+            ->with('success', "Maestros actualizados: {$result['centrosCreados']} centros creados, {$result['centrosActualizados']} actualizados, {$result['coordinadoresCreados']} coordinadores creados y {$result['coordinadoresActualizados']} actualizados.".$pending);
     }
 
     public function storeOperationalCoordinator(Request $request): RedirectResponse
@@ -579,7 +594,7 @@ class InventarioBodegaController extends Controller
 
     public function productTemplate()
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Productos');
         $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia', 'Stock_Critico', 'Ubicacion_Codigo', 'Stock_Inicial'];
@@ -611,7 +626,7 @@ class InventarioBodegaController extends Controller
         $instructions->getStyle('A1')->getFont()->setBold(true);
         $instructions->getStyle('A1:A7')->getAlignment()->setWrapText(true);
 
-        $path = storage_path('app/plantilla_catalogo_inventario_' . now()->format('YmdHis') . '.xlsx');
+        $path = storage_path('app/plantilla_catalogo_inventario_'.now()->format('YmdHis').'.xlsx');
         (new Xlsx($spreadsheet))->save($path);
 
         return response()->download($path, 'plantilla_catalogo_inventario.xlsx')->deleteFileAfterSend(true);
@@ -619,7 +634,7 @@ class InventarioBodegaController extends Controller
 
     public function receiptTemplate()
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Ingresos');
         $headers = [
@@ -653,7 +668,7 @@ class InventarioBodegaController extends Controller
         $instructions->getStyle('A1')->getFont()->setBold(true);
         $instructions->getStyle('A1:A6')->getAlignment()->setWrapText(true);
 
-        $path = storage_path('app/plantilla_ingresos_inventario_' . now()->format('YmdHis') . '.xlsx');
+        $path = storage_path('app/plantilla_ingresos_inventario_'.now()->format('YmdHis').'.xlsx');
         (new Xlsx($spreadsheet))->save($path);
 
         return response()->download($path, 'plantilla_ingresos_inventario.xlsx')->deleteFileAfterSend(true);
@@ -666,7 +681,7 @@ class InventarioBodegaController extends Controller
         $locationName = $locationId
             ? InventarioUbicacion::query()->find($locationId)?->nombre
             : 'Todas las ubicaciones';
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Stock actual');
         $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia', 'Stock_Critico', 'Stock_Actual', 'Ubicacion', 'Estado'];
@@ -699,7 +714,7 @@ class InventarioBodegaController extends Controller
             $sheet->getColumnDimension($column)->setWidth(in_array($column, ['B', 'D', 'E', 'K'], true) ? 30 : 18);
         }
 
-        $path = storage_path('app/stock_inventario_' . now()->format('Ymd_His') . '.xlsx');
+        $path = storage_path('app/stock_inventario_'.now()->format('Ymd_His').'.xlsx');
         (new Xlsx($spreadsheet))->save($path);
 
         return response()->download($path, 'stock_inventario.xlsx')->deleteFileAfterSend(true);
@@ -732,7 +747,7 @@ class InventarioBodegaController extends Controller
         if ($filters['search'] !== '') {
             $needle = Str::lower($filters['search']);
             $balances = $balances->filter(fn (InventarioVariante $variant) => str_contains(
-                Str::lower($variant->producto->nombre . ' ' . $variant->producto->codigo . ' ' . $variant->talla),
+                Str::lower($variant->producto->nombre.' '.$variant->producto->codigo.' '.$variant->talla),
                 $needle,
             ));
         }

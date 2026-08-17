@@ -94,7 +94,7 @@ class KizeoService
         $key = "kizeo_form_data_{$formId}";
         if ($forceRefresh) Cache::forget($key);
 
-        return Cache::remember($key, 7200, function () use ($formId) {
+        return Cache::remember($key, 900, function () use ($formId) {
             $data = $this->get("forms/{$formId}/data/all");
             return $data['data'] ?? [];
         });

@@ -302,7 +302,7 @@
             <div>
                 <p class="inventory-kicker">Conciliacion operativa</p>
                 <h2>Entregas de EPP desde Kizeo</h2>
-                <p>Kizeo conserva la evidencia de la entrega. Bodega confirma la ubicacion de origen y el sistema descuenta el stock una sola vez.</p>
+                <p>Se sincronizan las entregas masivas y las entregas a personal. Bodega confirma la ubicacion de salida antes de descontar stock; las devoluciones se distinguen para registrarlas como ingreso.</p>
             </div>
             <a href="{{ route('entregas-bodega-dashboard.index') }}" class="btn btn-light inventory-btn"><i class="bi bi-box-seam"></i>Ver entregas Kizeo</a>
         </section>
@@ -310,8 +310,8 @@
         <section class="inventory-kpis inventory-kizeo-kpis">
             <article class="inventory-kpi accent-orange"><span>Pendientes de aplicar</span><strong>{{ $kizeoStats['pending'] }}</strong><small>Sin afectar el inventario</small></article>
             <article class="inventory-kpi accent-green"><span>Aplicadas</span><strong>{{ $kizeoStats['applied'] }}</strong><small>Con salida trazable</small></article>
-            <article class="inventory-kpi accent-red"><span>Requieren revision</span><strong>{{ $kizeoStats['review'] }}</strong><small>Kizeo fue modificado despues</small></article>
-            <article class="inventory-kpi accent-blue"><span>Regla de control</span><strong>1 vez</strong><small>Una entrega no se descuenta dos veces</small></article>
+            <article class="inventory-kpi accent-red"><span>Requieren revision</span><strong>{{ $kizeoStats['review'] }}</strong><small>Fuente modificada, incompleta o ausente</small></article>
+            <article class="inventory-kpi accent-blue"><span>Devoluciones pendientes</span><strong>{{ $kizeoStats['returns'] }}</strong><small>Se ingresan, no se descuentan</small></article>
         </section>
 
         <section class="inventory-kizeo-notice"><i class="bi bi-shield-check"></i><div><strong>Antes de aplicar</strong><span>Verifica que la entrega este completa en Kizeo y selecciona la bodega real de salida. Si Kizeo se corrige luego, usa el reverso para reponer el stock y deja el motivo registrado.</span></div></section>
@@ -323,6 +323,10 @@
                     $needsReview = $application && $application->estado === 'APLICADA' && $delivery->kizeo_updated_at && (! $application->fuente_actualizada_en || $delivery->kizeo_updated_at->gt($application->fuente_actualizada_en));
                     $deliverySuggestions = $kizeoSuggestions[$delivery->id] ?? [];
                     $deliveryItems = $delivery->items->where('cantidad', '>', 0);
+                    $isReturn = $delivery->flujo_inventario === 'ENTRADA';
+                    $sourceState = $delivery->estado_fuente ?: 'ACTIVA';
+                    $sourceBlocked = in_array($sourceState, ['ELIMINADA_EN_KIZEO', 'INCOMPLETA'], true);
+                    $needsReview = $needsReview || $sourceState === 'REQUIERE_REVISION';
                 @endphp
                 <details class="inventory-delivery-card{{ $needsReview ? ' needs-review' : '' }}">
                     <summary class="inventory-delivery-header" title="Abrir o cerrar el detalle de esta entrega">
@@ -330,10 +334,17 @@
                             <span class="inventory-code">KZ-{{ $delivery->kizeo_record_number ?: $delivery->kizeo_data_id }}</span>
                             <h3>{{ $delivery->nombre ?: 'Sin trabajador identificado' }}</h3>
                             <p>{{ $delivery->rut ?: 'Sin RUT' }} · {{ $delivery->centro ?: 'Sin centro informado' }} · {{ optional($delivery->fecha_pedido)->format('d/m/Y') ?: 'Sin fecha' }}</p>
+                            <p>{{ $delivery->origen_formulario ?: 'Formulario Kizeo' }}@if($delivery->tipo_operacion) · {{ $delivery->tipo_operacion }}@endif</p>
                         </div>
                         <div class="inventory-delivery-status">
                             <span class="inventory-delivery-items"><i class="bi bi-list-check"></i>{{ $deliveryItems->count() }} {{ $deliveryItems->count() === 1 ? 'item' : 'items' }}</span>
-                            @if(! $application)
+                            @if($sourceState === 'ELIMINADA_EN_KIZEO')
+                                <span class="inventory-status is-critical" title="El comprobante ya no existe en Kizeo y no puede aplicarse.">Kizeo eliminado</span>
+                            @elseif($sourceState === 'INCOMPLETA')
+                                <span class="inventory-status is-critical" title="Faltan campos o cantidades válidas en la fuente Kizeo.">Fuente incompleta</span>
+                            @elseif($isReturn && ! $application)
+                                <span class="inventory-status is-review" title="Una devolución debe registrarse como ingreso y nunca se descuenta.">Pendiente de ingresar</span>
+                            @elseif(! $application)
                                 <span class="inventory-status is-review" title="Esta entrega aun no genera una salida de stock.">No descontada</span>
                             @elseif($application->estado === 'REVERSADA')
                                 <span class="inventory-status is-empty" title="La salida fue reversada y el stock ya fue repuesto.">Stock repuesto</span>
@@ -349,7 +360,11 @@
 
                     <div class="inventory-delivery-body">
                         <div class="inventory-delivery-body-actions"><a href="{{ route('entregas-bodega-dashboard.document', $delivery) }}" class="inventory-link" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i>Ver comprobante de Kizeo</a></div>
-                        @if(! $application)
+                        @if($sourceBlocked && ! $application)
+                            <div class="inventory-notice"><i class="bi bi-shield-exclamation"></i><div><strong>Conciliación requerida.</strong><br>{{ $delivery->alerta_fuente ?: 'La fuente Kizeo no está disponible para validar esta entrega. No se puede descontar stock.' }}</div></div>
+                        @elseif($isReturn && ! $application)
+                            <div class="inventory-notice"><i class="bi bi-box-arrow-in-down"></i><div><strong>Devolución detectada.</strong><br>Este comprobante corresponde a una entrada de inventario. Aún no se descuenta ni se aplica como salida; quedará disponible para el flujo de ingreso con su ubicación de recepción.</div></div>
+                        @elseif(! $application)
                             @if($activeLocations->isEmpty() || $variantOptions->isEmpty())
                                 <div class="inventory-notice"><i class="bi bi-info-circle"></i>Debes tener ubicaciones y articulos activos antes de aplicar entregas Kizeo.</div>
                             @else
@@ -375,7 +390,7 @@
                                 @if($application->estado === 'REVERSADA')<div><span>Reversada</span><strong>{{ optional($application->revertida_en)->format('d/m/Y H:i') ?: '-' }}</strong></div>@endif
                             </div>
                             @if($needsReview)
-                                <div class="inventory-source-warning"><i class="bi bi-exclamation-triangle-fill"></i><span>Esta entrega fue modificada en Kizeo despues de aplicar el stock. Revisa el comprobante y reversa la salida si ya no corresponde.</span></div>
+                                <div class="inventory-source-warning"><i class="bi bi-exclamation-triangle-fill"></i><span>{{ $delivery->alerta_fuente ?: 'Esta entrega fue modificada en Kizeo despues de aplicar el stock. Revisa el comprobante y reversa la salida si ya no corresponde.' }}</span></div>
                             @endif
                             @if($application->estado === 'APLICADA' && $canEdit)
                                 <details class="inventory-reverse-details"><summary><i class="bi bi-arrow-counterclockwise"></i>Corregir esta aplicacion</summary><form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.revertir', $application) }}" class="inventory-reverse-form">@csrf<label>Motivo del reverso<input name="motivo_reversion" class="form-control" minlength="5" maxlength="500" required placeholder="Ej. entrega anulada o cantidades corregidas en Kizeo"></label><button type="submit" class="btn btn-light inventory-btn" onclick="return confirm('Se repondra el stock con movimientos nuevos. ¿Continuar?')"><i class="bi bi-arrow-counterclockwise"></i>Reversar salida</button></form></details>

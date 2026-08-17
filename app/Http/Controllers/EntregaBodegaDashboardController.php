@@ -11,14 +11,12 @@ use Illuminate\Http\Request;
 
 class EntregaBodegaDashboardController extends Controller
 {
-    private const KIZEO_FORM_ID = '947762';
+    private const LEGACY_KIZEO_FORM_ID = '947762';
 
     public function __construct(
         private readonly EntregaBodegaAnalyticsService $analytics,
         private readonly KizeoService $kizeo,
-    )
-    {
-    }
+    ) {}
 
     public function index(Request $request)
     {
@@ -41,7 +39,7 @@ class EntregaBodegaDashboardController extends Controller
                 ['--force' => true],
             );
         } catch (\Throwable $exception) {
-            return back()->with('error', 'No fue posible iniciar la sincronización de entregas de bodega: ' . $exception->getMessage());
+            return back()->with('error', 'No fue posible iniciar la sincronización de entregas de bodega: '.$exception->getMessage());
         }
 
         if (! $queued) {
@@ -60,21 +58,21 @@ class EntregaBodegaDashboardController extends Controller
             return back()->with('error', 'No hay entregas con los filtros seleccionados para exportar.');
         }
 
-        $path = (new EntregaBodegaExcelExport())->generate(
+        $path = (new EntregaBodegaExcelExport)->generate(
             $this->analytics->getFilteredAnalytics($filters),
             $records,
             $filters,
         );
 
         return response()
-            ->download($path, 'entregas_bodega_' . now()->format('Ymd_His') . '.xlsx')
+            ->download($path, 'entregas_bodega_'.now()->format('Ymd_His').'.xlsx')
             ->deleteFileAfterSend(true);
     }
 
     public function viewDocument(EntregaBodega $entrega)
     {
         try {
-            $pdf = $this->kizeo->downloadPdf(self::KIZEO_FORM_ID, $entrega->kizeo_data_id);
+            $pdf = $this->kizeo->downloadPdf($entrega->kizeo_form_id ?: self::LEGACY_KIZEO_FORM_ID, $entrega->kizeo_data_id);
         } catch (\Throwable $exception) {
             report($exception);
 
@@ -91,7 +89,7 @@ class EntregaBodegaDashboardController extends Controller
 
         return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="entrega-bodega-' . ($entrega->kizeo_record_number ?: $entrega->kizeo_data_id) . '.pdf"',
+            'Content-Disposition' => 'inline; filename="entrega-bodega-'.($entrega->kizeo_record_number ?: $entrega->kizeo_data_id).'.pdf"',
             'Cache-Control' => 'private, max-age=300',
         ]);
     }

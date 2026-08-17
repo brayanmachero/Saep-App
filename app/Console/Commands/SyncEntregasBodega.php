@@ -12,7 +12,7 @@ class SyncEntregasBodega extends Command
                             {--limit=250 : Máximo de respuestas a consultar por ejecución}
                             {--force : Vuelve a consultar también respuestas ya sincronizadas}';
 
-    protected $description = 'Sincroniza las entregas de bodega desde el formulario Kizeo Control de Entrega Bodega.';
+    protected $description = 'Sincroniza las entregas y devoluciones de Bodega desde los formularios Kizeo vigentes.';
 
     public function handle(KizeoService $kizeo): int
     {
