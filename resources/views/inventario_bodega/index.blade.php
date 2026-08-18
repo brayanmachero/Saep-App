@@ -42,6 +42,12 @@
     @if(session('success'))
         <div class="alert alert-success inventory-alert"><i class="bi bi-check-circle-fill"></i>{{ session('success') }}</div>
     @endif
+    @if(session('warning'))
+        <div class="alert alert-warning inventory-alert"><i class="bi bi-exclamation-triangle-fill"></i>{{ session('warning') }}</div>
+    @endif
+    @if(session('error'))
+        <div class="alert alert-danger inventory-alert"><i class="bi bi-exclamation-octagon-fill"></i>{{ session('error') }}</div>
+    @endif
     @if($errors->any())
         <div class="alert alert-danger inventory-alert">
             <i class="bi bi-exclamation-octagon-fill"></i>
@@ -575,6 +581,12 @@
                 <details class="inventory-details" open>
                     <summary><span><i class="bi bi-box-seam"></i>Productos y tallas</span><i class="bi bi-chevron-down"></i></summary>
                     <div class="inventory-details-body">
+                        <section class="inventory-catalog-sync">
+                            <div><strong><i class="bi bi-cloud-arrow-up"></i> SAEP publica el catálogo en Kizeo</strong><span>La lista avanzada <strong>EPP AVANZADA ({{ $kizeoCatalogListId ?: 'sin configurar' }})</strong> recibe nombre, talla, tipo, categoría, subcategoría y formato. Stock, mínimos y costos se mantienen exclusivamente en SAEP.</span></div>
+                            @if($canEdit && $kizeoCatalogListId)
+                                <form method="POST" action="{{ route('inventario-bodega.catalogo.kizeo.sincronizar') }}">@csrf<button class="btn btn-light inventory-btn" type="submit" onclick="return confirm('Se publicarán en Kizeo los cambios del catálogo maestro SAEP. No se eliminarán ítems automáticamente. ¿Continuar?')"><i class="bi bi-arrow-repeat"></i>Sincronizar ahora</button></form>
+                            @endif
+                        </section>
                         <div class="inventory-split-forms">
                             <form method="POST" action="{{ route('inventario-bodega.productos.store') }}" class="inventory-compact-form">@csrf
                                 <h3>Agregar producto</h3>
@@ -801,6 +813,11 @@
     @container (max-width: 760px) { .inventory-master-title { flex-direction:column; }.inventory-master-title-actions { width:100%; }.inventory-master-title-actions .inventory-btn { flex:1; }.inventory-master-filter { grid-template-columns:1fr 1fr; }.inventory-master-filter > :first-child { grid-column:1 / -1; }.inventory-master-filter .inventory-btn { width:100%; }.inventory-master-import { grid-template-columns:1fr; }.inventory-master-import .inventory-btn { width:100%; }.inventory-form-span-two { grid-column:auto; } }
     @container (max-width: 440px) { .inventory-master-filter { grid-template-columns:1fr 2.55rem; }.inventory-master-filter label { grid-column:1 / -1; }.inventory-master-filter .inventory-btn { grid-column:1; }.inventory-master-filter .inventory-icon-btn { grid-column:2; }.inventory-master-title-actions { display:grid; grid-template-columns:1fr; }.inventory-master-title-actions .inventory-btn { width:100%; } }
     @container (max-width: 560px) { .inventory-detail-drawer { width:100%; }.inventory-detail-drawer-content { padding:1rem .85rem; }.inventory-detail-grid { grid-template-columns:1fr; }.inventory-detail-table { font-size:.72rem; }.inventory-detail-table th,.inventory-detail-table td { padding:.46rem .24rem; }.inventory-table-actions { min-width:0; }.inventory-table-actions .inventory-btn { flex:1; } }
+    /* Publicación unidireccional del catálogo maestro SAEP hacia Kizeo. */
+    .inventory-catalog-sync { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1rem; padding:.78rem .9rem; color:#463070; background:#f6f4ff; border:1px solid #d9d4ff; border-left:4px solid #7250ca; border-radius:.52rem; }
+    .inventory-catalog-sync > div { min-width:0; }.inventory-catalog-sync strong,.inventory-catalog-sync span { display:block; }.inventory-catalog-sync > div > strong { color:#30215f; font-size:.83rem; }.inventory-catalog-sync > div > strong i { margin-right:.32rem; }.inventory-catalog-sync span { margin-top:.16rem; color:#635483; font-size:.77rem; line-height:1.42; }.inventory-catalog-sync span strong { display:inline; color:inherit; font-size:inherit; }.inventory-catalog-sync form { flex:0 0 auto; }
+    .dark-mode .inventory-catalog-sync { color:#ddd6fe; background:rgba(135,87,236,.12); border-color:rgba(167,139,250,.25); }.dark-mode .inventory-catalog-sync > div > strong { color:#f8fafc; }.dark-mode .inventory-catalog-sync span { color:#d8cff7; }
+    @container (max-width: 760px) { .inventory-catalog-sync { align-items:stretch; flex-direction:column; }.inventory-catalog-sync .inventory-btn { width:100%; } }
 </style>
 
 <script>

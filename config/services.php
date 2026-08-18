@@ -56,6 +56,9 @@ return [
         'vehicle_reservation_code_field' => env('KIZEO_VEHICLE_RESERVATION_CODE_FIELD', 'codigo_de_reserva_saep'),
         'vehicle_plate_list_id'    => env('KIZEO_VEHICLE_PLATE_LIST_ID', '486495'),
         'vehicle_plate_field'      => env('KIZEO_VEHICLE_PLATE_FIELD', 'lista'),
+        // Catálogo maestro de Inventario. SAEP publica sus variantes activas
+        // en esta lista avanzada; Kizeo nunca escribe de vuelta al catálogo.
+        'inventory_catalog_list_id' => env('KIZEO_INVENTORY_CATALOG_LIST_ID', '500434'),
         'charla_form_id'              => env('KIZEO_CHARLA_FORM_ID'),
         'charla_sharepoint_folder'    => env('KIZEO_CHARLA_SHAREPOINT_FOLDER', 'Charlas SST'),
         'observacion_form_id'         => env('KIZEO_OBSERVACION_FORM_ID'),

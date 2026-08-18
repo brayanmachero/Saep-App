@@ -783,6 +783,53 @@ class KizeoService
     }
 
     /**
+     * Crea un ítem en una lista avanzada. Las listas avanzadas se gestionan
+     * registro a registro para no reemplazar datos de otros procesos.
+     */
+    public function createListItem(string $listId, array $payload): array
+    {
+        return $this->mutateV4('POST', "lists/{$listId}/items", $payload, $listId);
+    }
+
+    /** Actualiza parcialmente un ítem de una lista avanzada. */
+    public function updateListItem(string $listId, string $itemId, array $payload): array
+    {
+        return $this->mutateV4('PATCH', "lists/{$listId}/items/{$itemId}", $payload, $listId);
+    }
+
+    /**
+     * Elimina un ítem de una lista avanzada.
+     *
+     * La sincronización del catálogo no llama este método en automático; se
+     * expone para una futura limpieza explícita y auditada.
+     */
+    public function deleteListItem(string $listId, string $itemId): void
+    {
+        $this->mutateV4('DELETE', "lists/{$listId}/items/{$itemId}", [], $listId);
+    }
+
+    private function mutateV4(string $method, string $endpoint, array $payload, string $listId): array
+    {
+        $baseV4 = 'https://www.kizeoforms.com/rest/public/v4';
+        $request = Http::withHeaders(['Authorization' => $this->token])->timeout(30);
+        $response = match ($method) {
+            'POST' => $request->post("{$baseV4}/{$endpoint}", $payload),
+            'PATCH' => $request->patch("{$baseV4}/{$endpoint}", $payload),
+            'DELETE' => $request->delete("{$baseV4}/{$endpoint}"),
+            default => throw new \InvalidArgumentException("Método Kizeo v4 no soportado: {$method}"),
+        };
+
+        if ($response->failed()) {
+            throw new \RuntimeException("Kizeo API v4 error [{$response->status()}]: {$response->body()}");
+        }
+
+        Cache::forget("kizeo_list_items_{$listId}");
+        Cache::forget("kizeo_list_def_{$listId}");
+
+        return is_array($response->json()) ? $response->json() : [];
+    }
+
+    /**
      * Obtener la definición (columnas/propiedades) de una lista avanzada.
      */
     public function getListDefinition(string $listId): array

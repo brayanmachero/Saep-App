@@ -20,6 +20,10 @@ Schedule::command('kizeo:sync-inspecciones-preventivas')->everyThirtyMinutes()->
 // Actualizar las entregas de EPP registradas en Bodega desde Kizeo.
 Schedule::command('kizeo:sync-entregas-bodega')->everyThirtyMinutes()->withoutOverlapping();
 
+// SAEP es el maestro del catálogo; publica sus variantes activas en la lista EPP de Kizeo.
+Schedule::command('kizeo:sync-catalogo-inventario')->everyThirtyMinutes()->withoutOverlapping()
+    ->skip(fn () => ! config('services.kizeo.inventory_catalog_list_id'));
+
 // Sincronizar seguimiento de charlas desde Kizeo (cada 6 horas)
 Schedule::command('kizeo:sync-charla-tracking')->everySixHours()->withoutOverlapping();
 

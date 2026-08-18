@@ -15,6 +15,7 @@ use App\Models\InventarioUbicacion;
 use App\Models\InventarioVariante;
 use App\Modules\Comercial\Models\CentroCosto;
 use App\Services\InventarioOperationalMasterService;
+use App\Services\InventarioKizeoCatalogSyncService;
 use App\Services\InventarioStockService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,12 +33,15 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 class InventarioBodegaController extends Controller
 {
     private readonly InventarioOperationalMasterService $operationalMasters;
+    private readonly InventarioKizeoCatalogSyncService $catalogSync;
 
     public function __construct(
         private readonly InventarioStockService $stock,
         ?InventarioOperationalMasterService $operationalMasters = null,
+        ?InventarioKizeoCatalogSyncService $catalogSync = null,
     ) {
         $this->operationalMasters = $operationalMasters ?? app(InventarioOperationalMasterService::class);
+        $this->catalogSync = $catalogSync ?? app(InventarioKizeoCatalogSyncService::class);
     }
 
     public function index(Request $request)
@@ -283,6 +287,7 @@ class InventarioBodegaController extends Controller
             'kizeoStats' => $kizeoStats,
             'centralKizeoLocation' => $centralKizeoLocation,
             'kizeoBatchEligibleIds' => $kizeoBatchEligibleIds,
+            'kizeoCatalogListId' => config('services.kizeo.inventory_catalog_list_id'),
             'canCreate' => $request->user()->tieneAcceso('inventario_bodega', 'puede_crear'),
             'canEdit' => $request->user()->tieneAcceso('inventario_bodega', 'puede_editar'),
         ]);
@@ -602,6 +607,33 @@ class InventarioBodegaController extends Controller
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'catalogo'])
             ->with('success', "Importacion finalizada: {$result['created']} productos creados, {$result['updated']} actualizados, {$result['variantsCreated']} variantes creadas y {$result['skipped']} filas omitidas.".$stockMessage.$costMessage);
+    }
+
+    public function syncCatalogToKizeo(): RedirectResponse
+    {
+        try {
+            $summary = $this->catalogSync->synchronize();
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return redirect()->route('inventario-bodega.index', ['vista' => 'catalogo'])
+                ->with('error', 'No se pudo publicar el catálogo en Kizeo. El catálogo SAEP no fue modificado. Revisa la conexión o inténtalo nuevamente.');
+        }
+
+        $message = "Kizeo actualizado desde SAEP: {$summary['created']} creados, {$summary['updated']} actualizados y {$summary['unchanged']} sin cambios.";
+        $response = redirect()->route('inventario-bodega.index', ['vista' => 'catalogo'])->with('success', $message);
+        $notices = [];
+        if ($summary['deferred'] > 0) {
+            $notices[] = "{$summary['deferred']} cambio(s) quedarán para la siguiente sincronización automática.";
+        }
+        if ($summary['orphans'] !== []) {
+            $notices[] = count($summary['orphans']).' ítem(s) existentes en Kizeo no están activos en SAEP; se conservaron sin eliminar.';
+        }
+        if ($summary['errors'] !== []) {
+            $notices[] = count($summary['errors']).' variante(s) no se publicaron. '.implode(' · ', array_slice($summary['errors'], 0, 2));
+        }
+
+        return $notices === [] ? $response : $response->with('warning', implode(' ', $notices));
     }
 
     public function importReceipts(Request $request): RedirectResponse

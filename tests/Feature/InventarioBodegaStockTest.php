@@ -15,7 +15,11 @@ use App\Models\Rol;
 use App\Models\User;
 use App\Services\InventarioStockService;
 use App\Services\InventarioOperationalMasterService;
+use App\Services\InventarioKizeoCatalogSyncService;
+use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
@@ -36,7 +40,7 @@ class InventarioBodegaStockTest extends TestCase
             'inventario_entrega_kizeo_lineas', 'inventario_entrega_kizeo_aplicaciones',
             'inventario_conteo_lineas', 'inventario_conteos', 'inventario_movimientos',
             'inventario_historial_costos', 'inventario_ingreso_items', 'inventario_ingresos', 'inventario_variantes',
-            'inventario_productos', 'inventario_proveedores', 'inventario_ubicaciones',
+            'inventario_kizeo_catalog_items', 'inventario_productos', 'inventario_proveedores', 'inventario_ubicaciones',
             'entrega_bodega_items', 'entregas_bodega',
             'rol_modulo', 'modulos', 'users', 'roles',
         ] as $table) {
@@ -91,6 +95,9 @@ class InventarioBodegaStockTest extends TestCase
         $operationalMastersMigration->up();
         $referenceCostMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_14_150000_add_reference_cost_history_to_inventario.php';
         $referenceCostMigration->up();
+        $kizeoCatalogMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_18_170000_create_inventario_kizeo_catalog_items_table.php';
+        $kizeoCatalogMigration->up();
+        Cache::flush();
 
         Schema::create('entregas_bodega', function (Blueprint $table) {
             $table->id();
@@ -1145,6 +1152,96 @@ class InventarioBodegaStockTest extends TestCase
             ->get(route('inventario-bodega.index', ['vista' => 'movimientos']))
             ->assertOk()
             ->assertSee('name="variante_id" class="form-select" required data-inventory-search-select', false);
+    }
+
+    public function test_saep_catalog_sync_updates_and_creates_advanced_kizeo_list_items_without_deleting_orphans(): void
+    {
+        [$user] = $this->inventoryContext();
+        $stock = app(InventarioStockService::class);
+        $newProduct = $stock->createProduct([
+            'nombre' => 'Guante de prueba',
+            'tipo' => 'EPP',
+            'categoria' => 'Guantes',
+            'subcategoria' => 'Guante de prueba',
+            'unidad_medida' => 'Unidad',
+            'stock_minimo' => 0,
+            'tallas' => 'ESTANDAR',
+            'activo' => true,
+        ], $user);
+        $existingVariant = InventarioVariante::query()->where('talla', 'M')->firstOrFail();
+        $newVariant = InventarioVariante::query()->where('producto_id', $newProduct->id)->firstOrFail();
+        config(['services.kizeo.inventory_catalog_list_id' => '500434', 'services.kizeo.token' => 'kizeo-test-token']);
+
+        $definition = [
+            'properties_definition' => [
+                'type' => ['id' => 'property-type', 'display_name' => 'Tipo'],
+                'category' => ['id' => 'property-category', 'display_name' => 'Categoria'],
+                'subcategory' => ['id' => 'property-subcategory', 'display_name' => 'Sub Categoria'],
+                'format' => ['id' => 'property-format', 'display_name' => 'Formato'],
+            ],
+        ];
+        $items = [[
+            'id' => 'remote-casco-m',
+            'label' => 'Casco de seguridad T-M',
+            'properties' => [
+                'property-type' => 'EPP',
+                'property-category' => 'Proteccion',
+                'property-subcategory' => 'Casco de seguridad',
+                'property-format' => 'Caja',
+            ],
+        ], [
+            'id' => 'remote-legacy',
+            'label' => 'Producto que ya no está en SAEP T-NA',
+            'properties' => [],
+        ]];
+
+        Http::fake(function (HttpRequest $request) use ($definition, $items) {
+            if ($request->method() === 'GET' && str_ends_with($request->url(), '/definition')) {
+                return Http::response($definition);
+            }
+            if ($request->method() === 'GET' && str_contains($request->url(), '/items')) {
+                return Http::response($items);
+            }
+            if ($request->method() === 'PATCH' && str_ends_with($request->url(), '/remote-casco-m')) {
+                return Http::response(['id' => 'remote-casco-m']);
+            }
+            if ($request->method() === 'POST' && str_ends_with($request->url(), '/items')) {
+                return Http::response(['id' => 'remote-guante-standard'], 201);
+            }
+
+            return Http::response(['message' => 'Ruta de prueba no esperada'], 404);
+        });
+
+        $summary = app(InventarioKizeoCatalogSyncService::class)->synchronize();
+
+        $this->assertSame(1, $summary['created']);
+        $this->assertSame(1, $summary['updated']);
+        $this->assertSame(0, $summary['unchanged']);
+        $this->assertSame([], $summary['errors']);
+        $this->assertSame(['Producto que ya no está en SAEP T-NA'], $summary['orphans']);
+        $this->assertDatabaseHas('inventario_kizeo_catalog_items', ['variante_id' => $existingVariant->id, 'kizeo_item_id' => 'remote-casco-m']);
+        $this->assertDatabaseHas('inventario_kizeo_catalog_items', ['variante_id' => $newVariant->id, 'kizeo_item_id' => 'remote-guante-standard']);
+        Http::assertSent(function (HttpRequest $request) {
+            return $request->method() === 'POST'
+                && str_ends_with($request->url(), '/lists/500434/items')
+                && ($request['label'] ?? null) === 'Guante de prueba T-NA';
+        });
+        Http::assertNotSent(fn (HttpRequest $request) => $request->method() === 'DELETE');
+    }
+
+    public function test_catalog_exposes_the_manual_kizeo_sync_button_to_inventory_editors(): void
+    {
+        [$user] = $this->inventoryContext();
+        config(['services.kizeo.inventory_catalog_list_id' => '500434']);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'catalogo']))
+            ->assertOk()
+            ->assertSee('SAEP publica el catálogo en Kizeo')
+            ->assertSee('EPP AVANZADA (500434)')
+            ->assertSee('Sincronizar ahora')
+            ->assertSee(route('inventario-bodega.catalogo.kizeo.sincronizar'), false);
     }
 
     public function test_manual_movement_and_transfer_are_reversed_without_deleting_history(): void

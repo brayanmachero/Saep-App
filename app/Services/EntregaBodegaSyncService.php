@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\EntregaBodega;
+use App\Models\InventarioKizeoCatalogItem;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -11,6 +12,9 @@ use Illuminate\Support\Str;
 
 class EntregaBodegaSyncService
 {
+    /** @var array<string, array<string, mixed>>|null */
+    private ?array $advancedCatalogItemsById = null;
+
     /**
      * Formularios Kizeo que actualmente alimentan la conciliación de Bodega.
      * Cada formulario conserva sus propias claves para no depender de un esquema fijo.
@@ -170,7 +174,10 @@ class EntregaBodegaSyncService
             $totalSource += count($metadata);
             $sourceDataIds = array_map(fn (array $record) => (string) $record['id'], $metadata);
             $known = EntregaBodega::query()
-                ->with('inventarioAplicacion:id,entrega_bodega_id,estado')
+                ->with([
+                    'inventarioAplicacion:id,entrega_bodega_id,estado',
+                    'items:id,entrega_bodega_id,articulo',
+                ])
                 ->where('kizeo_form_id', $formId)
                 ->whereIn('kizeo_data_id', $sourceDataIds)
                 ->get([
@@ -290,6 +297,17 @@ class EntregaBodegaSyncService
             return true;
         }
 
+        // Desde agosto de 2026 los formularios pueden entregar el UUID del
+        // ítem de la lista avanzada en vez de su etiqueta. Mientras exista un
+        // UUID sin resolver, la respuesta debe reintentarse aunque Kizeo no
+        // haya cambiado su fecha: así se normalizan también entregas que se
+        // sincronizaron antes de desplegar esta compatibilidad.
+        if ($stored->relationLoaded('items') && $stored->items->contains(
+            fn ($item) => $this->isAdvancedCatalogItemId($item->articulo),
+        )) {
+            return true;
+        }
+
         // Las alertas se vuelven a consultar para reconocer una respuesta restaurada
         // en Kizeo o una reversa local que ya resolvió la diferencia de stock.
         if (in_array($stored->estado_fuente, ['ELIMINADA_EN_KIZEO', 'INCOMPLETA', 'REQUIERE_REVISION'], true)) {
@@ -398,6 +416,10 @@ class EntregaBodegaSyncService
             return 'El comprobante no tiene artículos con cantidad válida. Corrige la respuesta en Kizeo antes de aplicarla al inventario.';
         }
 
+        if (collect($items)->contains(fn (array $item) => $this->isAdvancedCatalogItemId($item['articulo'] ?? null))) {
+            return 'Uno o más artículos llegaron como código de la lista avanzada de Kizeo y no se pudieron resolver. La entrega quedó bloqueada para evitar descontar un artículo equivocado.';
+        }
+
         return null;
     }
 
@@ -442,7 +464,7 @@ class EntregaBodegaSyncService
         $items = [];
 
         foreach ($rows as $index => $row) {
-            $articulo = $this->fieldValue($row, $articleKey);
+            $articulo = $this->resolveAdvancedCatalogItem($this->fieldValue($row, $articleKey));
             [$articulo, $tallaEnArticulo] = $this->splitArticleAndSize($articulo);
             $talla = $this->fieldValue($row, $sizeKey ?? '') ?: $tallaEnArticulo;
             $articulo = $this->limit($articulo, 200);
@@ -465,6 +487,81 @@ class EntregaBodegaSyncService
         }
 
         return $items;
+    }
+
+    /**
+     * Los formularios históricos guardaban el texto del artículo. Los nuevos
+     * selectores de la lista avanzada guardan el UUID del ítem. Primero se
+     * usa la relación que SAEP conserva al publicar su catálogo; si la lista
+     * aún no fue publicada, se consulta su etiqueta actual en Kizeo.
+     */
+    private function resolveAdvancedCatalogItem(?string $value): ?string
+    {
+        if (! $this->isAdvancedCatalogItemId($value)) {
+            return $value;
+        }
+
+        $listId = trim((string) config('services.kizeo.inventory_catalog_list_id'));
+        if ($listId === '') {
+            return $value;
+        }
+
+        $mapping = InventarioKizeoCatalogItem::query()
+            ->with('variante.producto')
+            ->where('kizeo_list_id', $listId)
+            ->where('kizeo_item_id', $value)
+            ->first();
+
+        if ($mapping?->variante?->producto) {
+            return trim(preg_replace('/\s+/', ' ', $mapping->variante->producto->nombre)
+                .' T-'.($this->kizeoSizeForCatalog($mapping->variante->talla)));
+        }
+
+        return $this->advancedCatalogItems()[$value]['label'] ?? $value;
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    private function advancedCatalogItems(): array
+    {
+        if ($this->advancedCatalogItemsById !== null) {
+            return $this->advancedCatalogItemsById;
+        }
+
+        $listId = trim((string) config('services.kizeo.inventory_catalog_list_id'));
+        if ($listId === '') {
+            return $this->advancedCatalogItemsById = [];
+        }
+
+        try {
+            return $this->advancedCatalogItemsById = collect($this->kizeo->getListItems($listId))
+                ->filter(fn (array $item) => filled($item['id'] ?? null) && filled($item['label'] ?? null))
+                ->keyBy(fn (array $item) => (string) $item['id'])
+                ->all();
+        } catch (\Throwable $exception) {
+            Log::warning('No se pudo resolver un artículo de la lista avanzada Kizeo.', [
+                'list_id' => $listId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return $this->advancedCatalogItemsById = [];
+        }
+    }
+
+    private function isAdvancedCatalogItemId(?string $value): bool
+    {
+        return (bool) preg_match(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+            trim((string) $value),
+        );
+    }
+
+    private function kizeoSizeForCatalog(?string $size): string
+    {
+        $normalized = $this->comparisonKey($size);
+
+        return in_array($normalized, ['', 'na', 'estandar', 'sintalla', 'unica', 'unitalla'], true)
+            ? 'NA'
+            : Str::upper(trim((string) $size));
     }
 
     /**

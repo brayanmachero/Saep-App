@@ -504,6 +504,9 @@ Route::middleware('auth')->group(function () {
           Route::post('productos/importar', [InventarioBodegaController::class, 'importProducts'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('productos.importar');
+          Route::post('catalogo/kizeo/sincronizar', [InventarioBodegaController::class, 'syncCatalogToKizeo'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('catalogo.kizeo.sincronizar');
           Route::post('ingresos/importar', [InventarioBodegaController::class, 'importReceipts'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('ingresos.importar');

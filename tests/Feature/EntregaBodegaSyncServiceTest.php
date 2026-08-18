@@ -20,6 +20,7 @@ class EntregaBodegaSyncServiceTest extends TestCase
         parent::setUp();
 
         Schema::dropIfExists('inventario_entrega_kizeo_aplicaciones');
+        Schema::dropIfExists('inventario_kizeo_catalog_items');
         Schema::dropIfExists('entrega_bodega_items');
         Schema::dropIfExists('entregas_bodega');
 
@@ -64,6 +65,17 @@ class EntregaBodegaSyncServiceTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('entrega_bodega_id');
             $table->string('estado', 30)->default('APLICADA');
+            $table->timestamps();
+        });
+
+        Schema::create('inventario_kizeo_catalog_items', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('variante_id')->nullable();
+            $table->string('kizeo_list_id', 40);
+            $table->string('kizeo_item_id', 100)->nullable();
+            $table->string('source_hash', 64)->nullable();
+            $table->timestamp('sincronizado_en')->nullable();
+            $table->text('ultimo_error')->nullable();
             $table->timestamps();
         });
     }
@@ -150,6 +162,72 @@ class EntregaBodegaSyncServiceTest extends TestCase
 
         $return = EntregaBodega::query()->where('kizeo_data_id', 'return-1')->firstOrFail();
         $this->assertSame('ENTRADA', $return->flujo_inventario);
+    }
+
+    public function test_syncs_new_advanced_list_item_ids_and_keeps_legacy_article_names_compatible(): void
+    {
+        config(['services.kizeo.inventory_catalog_list_id' => '500434']);
+
+        $legacy = EntregaBodega::create([
+            'kizeo_form_id' => '1195951',
+            'kizeo_data_id' => 'legacy-name',
+            'kizeo_updated_at' => '2026-08-18 10:00:00',
+            'estado_fuente' => 'ACTIVA',
+        ]);
+        $legacy->items()->create([
+            'linea' => 1,
+            'articulo' => 'Botin ST 435 Anticlavo TRECK',
+            'talla' => '42',
+            'cantidad' => 1,
+        ]);
+
+        $uuid = 'a278a28d-8661-449e-9335-fbced6f5cfb3';
+        $advanced = EntregaBodega::create([
+            'kizeo_form_id' => '1195951',
+            'kizeo_data_id' => 'advanced-id',
+            'kizeo_updated_at' => '2026-08-18 10:00:00',
+            'estado_fuente' => 'ACTIVA',
+        ]);
+        $advanced->items()->create([
+            'linea' => 1,
+            'articulo' => $uuid,
+            'talla' => null,
+            'cantidad' => 1,
+        ]);
+
+        $kizeo = Mockery::mock(KizeoService::class);
+        $kizeo->shouldReceive('getFormData')->once()->with('1196386', false)->andReturn([]);
+        $kizeo->shouldReceive('getFormData')->once()->with('1195951', false)->andReturn([
+            ['id' => 'legacy-name', 'record_number' => 601, 'update_time' => '2026-08-18 10:00:00'],
+            ['id' => 'advanced-id', 'record_number' => 602, 'update_time' => '2026-08-18 10:00:00'],
+        ]);
+        $kizeo->shouldReceive('getRecord')->once()->with('1195951', 'advanced-id')->andReturn([
+            'record_number' => 602,
+            'create_time' => '2026-08-18 10:00:00',
+            'fields' => [
+                'centro_de_costo1' => ['value' => 'Centro Sur'],
+                'nombre' => ['value' => 'Persona de prueba'],
+                'fecha_del_pedido' => ['value' => '2026-08-18 10:00:00'],
+                'tipo_de_ingreso' => ['value' => 'Ingreso de Personal'],
+                'epi' => ['value' => [[
+                    'concepto' => ['value' => $uuid],
+                    'cantidad' => ['value' => '1'],
+                ]]],
+            ],
+        ]);
+        $kizeo->shouldReceive('getListItems')->once()->with('500434')->andReturn([[
+            'id' => $uuid,
+            'label' => 'Botin ST 435 Anticlavo TRECK T-43',
+        ]]);
+
+        $summary = (new EntregaBodegaSyncService($kizeo))->sync(10);
+
+        $this->assertSame(1, $summary['updated']);
+        $this->assertSame('Botin ST 435 Anticlavo TRECK', $advanced->fresh()->items()->firstOrFail()->articulo);
+        $this->assertSame('43', $advanced->fresh()->items()->firstOrFail()->talla);
+        $this->assertSame('ACTIVA', $advanced->fresh()->estado_fuente);
+        $this->assertSame('Botin ST 435 Anticlavo TRECK', $legacy->fresh()->items()->firstOrFail()->articulo);
+        $this->assertSame('42', $legacy->fresh()->items()->firstOrFail()->talla);
     }
 
     public function test_marks_a_missing_kizeo_response_as_blocked_without_adjusting_stock(): void
