@@ -197,6 +197,12 @@ class InventarioBodegaController extends Controller
             $kizeoSuggestions[$delivery->id] = $this->stock->suggestedKizeoVariants($delivery, $variantOptions);
         }
         $centralKizeoLocation = $activeLocations->firstWhere('codigo', InventarioStockService::KIZEO_ORIGIN_LOCATION_CODE);
+        $kizeoCentralStockByVariant = $centralKizeoLocation
+            ? $variantStocksByLocation
+                ->get($centralKizeoLocation->id, collect())
+                ->map(fn ($stock) => (float) $stock)
+                ->all()
+            : [];
         $kizeoBatchEligibleIds = [];
         if ($centralKizeoLocation) {
             foreach ($kizeoDeliveries as $delivery) {
@@ -286,6 +292,7 @@ class InventarioBodegaController extends Controller
             'kizeoSuggestions' => $kizeoSuggestions,
             'kizeoStats' => $kizeoStats,
             'centralKizeoLocation' => $centralKizeoLocation,
+            'kizeoCentralStockByVariant' => $kizeoCentralStockByVariant,
             'kizeoBatchEligibleIds' => $kizeoBatchEligibleIds,
             'kizeoCatalogListId' => config('services.kizeo.inventory_catalog_list_id'),
             'canCreate' => $request->user()->tieneAcceso('inventario_bodega', 'puede_crear'),

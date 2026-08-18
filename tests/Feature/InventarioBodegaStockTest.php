@@ -1120,6 +1120,14 @@ class InventarioBodegaStockTest extends TestCase
         ], $user);
         $service->reverseKizeoDelivery($reversedApplication, 'Prueba de salida revertida.', $user);
 
+        $insufficient = EntregaBodega::create([
+            'kizeo_data_id' => 'kizeo-insufficient-ui',
+            'kizeo_record_number' => 704,
+            'nombre' => 'Pendiente sin stock suficiente',
+            'fecha_pedido' => '2026-08-10',
+        ]);
+        $insufficient->items()->create(['linea' => 1, 'articulo' => 'Casco de seguridad', 'talla' => 'M', 'cantidad' => 4]);
+
         $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
@@ -1128,6 +1136,11 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('Salida descontada')
             ->assertSee('Stock repuesto')
             ->assertSee('1 item')
+            ->assertSee('Stock SAEP')
+            ->assertSee('Disponible')
+            ->assertSee('Insuficiente')
+            ->assertSee('data-kizeo-stock-select', false)
+            ->assertSee('inventory-kizeo-central-stock', false)
             ->assertSee('data-inventory-search-select', false)
             ->assertSee('Buscar por codigo, articulo o talla', false)
             ->assertSee('<details class="inventory-delivery-card">', false)
