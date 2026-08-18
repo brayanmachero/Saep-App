@@ -71,6 +71,7 @@ class InventarioBodegaController extends Controller
 
         $productSearch = trim((string) $request->input('producto_buscar'));
         $editingProductId = $request->integer('producto_editar') ?: null;
+        $adjustingVariantId = $request->integer('variante_ajustar') ?: null;
         $products = InventarioProducto::query()
             ->with('variantes')
             ->when($productSearch !== '', fn ($query) => $query->where(function ($products) use ($productSearch) {
@@ -253,6 +254,7 @@ class InventarioBodegaController extends Controller
             'summaryFilters' => $summaryFilters,
             'productSearch' => $productSearch,
             'editingProductId' => $editingProductId,
+            'adjustingVariantId' => $adjustingVariantId,
             'locations' => $locations,
             'activeLocations' => $activeLocations,
             'providers' => InventarioProveedor::query()->orderByDesc('activo')->orderBy('nombre')->get(),

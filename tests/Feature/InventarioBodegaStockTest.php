@@ -1139,12 +1139,26 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('Stock SAEP')
             ->assertSee('Disponible')
             ->assertSee('Insuficiente')
+            ->assertSee('Ajustar stock')
+            ->assertSee('variante_ajustar='.$variant->id, false)
             ->assertSee('data-kizeo-stock-select', false)
             ->assertSee('inventory-kizeo-central-stock', false)
             ->assertSee('data-inventory-search-select', false)
             ->assertSee('Buscar por codigo, articulo o talla', false)
             ->assertSee('<details class="inventory-delivery-card">', false)
             ->assertDontSee('<details class="inventory-delivery-card" open', false);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', [
+                'vista' => 'catalogo',
+                'ubicacion_id' => $origin->id,
+                'producto_editar' => $variant->producto_id,
+                'producto_buscar' => $variant->producto->codigo,
+                'variante_ajustar' => $variant->id,
+            ]))
+            ->assertOk()
+            ->assertSee('data-highlight-variant="'.$variant->id.'"', false);
     }
 
     public function test_article_selectors_and_long_inventory_lists_use_the_searchable_picker(): void
