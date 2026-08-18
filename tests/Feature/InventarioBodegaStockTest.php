@@ -1195,18 +1195,25 @@ class InventarioBodegaStockTest extends TestCase
             'properties' => [],
         ]];
 
-        Http::fake(function (HttpRequest $request) use ($definition, $items) {
+        $listItemReads = 0;
+        Http::fake(function (HttpRequest $request) use ($definition, $items, &$listItemReads) {
             if ($request->method() === 'GET' && str_ends_with($request->url(), '/definition')) {
                 return Http::response($definition);
             }
             if ($request->method() === 'GET' && str_contains($request->url(), '/items')) {
-                return Http::response($items);
+                $listItemReads++;
+
+                return Http::response($listItemReads === 1 ? $items : array_merge($items, [[
+                    'id' => 'remote-guante-standard',
+                    'label' => 'Guante de prueba T-NA',
+                    'properties' => [],
+                ]]));
             }
             if ($request->method() === 'PATCH' && str_ends_with($request->url(), '/remote-casco-m')) {
                 return Http::response(['id' => 'remote-casco-m']);
             }
             if ($request->method() === 'POST' && str_ends_with($request->url(), '/items')) {
-                return Http::response(['items' => [['id' => 'remote-guante-standard']]], 201);
+                return Http::response(['status' => 'ok'], 201);
             }
 
             return Http::response(['message' => 'Ruta de prueba no esperada'], 404);

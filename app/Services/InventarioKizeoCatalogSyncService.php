@@ -141,6 +141,13 @@ class InventarioKizeoCatalogSyncService
                 $response = $this->kizeo->createListItem($listId, $payload);
                 $remoteId = $this->responseItemId($response);
                 if ($remoteId === '') {
+                    // Kizeo puede confirmar un alta en lote sin devolver el
+                    // identificador individual. Se relee la lista recién
+                    // creada para conservar el vínculo SAEP <-> Kizeo y
+                    // evitar un segundo alta en la siguiente ejecución.
+                    $remoteId = $this->findCreatedItemId($listId, $payload);
+                }
+                if ($remoteId === '') {
                     throw new \RuntimeException('Kizeo confirmó la creación, pero no devolvió el identificador del ítem.');
                 }
                 $this->storeMapping($variant, $listId, $remoteId, $payload);
@@ -283,6 +290,18 @@ class InventarioKizeoCatalogSyncService
         }
 
         return '';
+    }
+
+    private function findCreatedItemId(string $listId, array $payload): string
+    {
+        $matches = collect($this->kizeo->getListItems($listId, true))
+            ->filter(fn (array $item) => $this->itemIdentity($item['label'] ?? '') === $this->itemIdentity($payload['label'] ?? ''))
+            ->pluck('id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        return $matches->count() === 1 ? (string) $matches->first() : '';
     }
 
     private function errorFor(InventarioVariante $variant, \Throwable $exception): string
