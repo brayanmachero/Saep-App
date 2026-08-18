@@ -231,10 +231,16 @@
         <section class="inventory-section inventory-movement-section">
                 <div class="inventory-section-title"><div><h2>Registrar movimiento</h2><p>Usa entregas, despachos, traslados o ajustes. El sistema valida que nunca salga mas stock del disponible.</p></div></div>
                 @if($canCreate)
-                    <div class="inventory-inline-editor inventory-movement-receipt-actions">
-                        <div><h3>¿Es una compra o una carga masiva?</h3><p>Los ingresos se registran en su propia pestaña para conservar el documento, proveedor y detalle. Ahí también puedes anular un ingreso de prueba con motivo y reverso trazable.</p></div>
+                    <div class="inventory-inline-editor inventory-receipt-import" id="importar-movimientos">
+                        <div><h3>Importar movimientos manuales</h3><p>Carga en una sola planilla entregas EPP, despachos, traslados y ajustes. Cada fila queda registrada en Kardex; los traslados descuentan el origen y suman automáticamente el destino.</p></div>
+                        <form method="POST" action="{{ route('inventario-bodega.movimientos.importar') }}" enctype="multipart/form-data" class="inventory-import-receipt-form">@csrf
+                            <a href="{{ route('inventario-bodega.movimientos.plantilla') }}" class="inventory-template-download"><i class="bi bi-download"></i>Descargar plantilla de movimientos</a>
+                            <label>Archivo Excel o CSV<input name="archivo" type="file" accept=".xlsx,.xls,.csv" class="form-control" required></label>
+                            <button class="btn btn-light inventory-btn" type="submit"><i class="bi bi-upload"></i>Importar movimientos</button>
+                        </form>
+                        <small class="inventory-import-hint">Cada Referencia_Movimiento se aplica una sola vez. Las entregas de formularios Kizeo no se cargan aquí: se descuentan desde <strong>Entregas Kizeo</strong> con su comprobante vinculado.</small>
                         <div class="inventory-import-actions">
-                            <a href="{{ route('inventario-bodega.index', ['vista' => 'ingresos']) }}#importar-ingresos" class="btn btn-light inventory-btn"><i class="bi bi-upload"></i>Importar ingresos</a>
+                            <a href="{{ route('inventario-bodega.index', ['vista' => 'ingresos']) }}#importar-ingresos" class="btn btn-light inventory-btn"><i class="bi bi-box-arrow-in-down"></i>Importar ingresos</a>
                             <a href="{{ route('inventario-bodega.index', ['vista' => 'ingresos']) }}#ingresos-recientes" class="btn btn-light inventory-btn"><i class="bi bi-arrow-counterclockwise"></i>Ver o anular ingresos</a>
                         </div>
                     </div>

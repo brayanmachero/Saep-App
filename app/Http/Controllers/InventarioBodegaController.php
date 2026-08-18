@@ -14,8 +14,8 @@ use App\Models\InventarioProveedor;
 use App\Models\InventarioUbicacion;
 use App\Models\InventarioVariante;
 use App\Modules\Comercial\Models\CentroCosto;
-use App\Services\InventarioOperationalMasterService;
 use App\Services\InventarioKizeoCatalogSyncService;
+use App\Services\InventarioOperationalMasterService;
 use App\Services\InventarioStockService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,6 +33,7 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 class InventarioBodegaController extends Controller
 {
     private readonly InventarioOperationalMasterService $operationalMasters;
+
     private readonly InventarioKizeoCatalogSyncService $catalogSync;
 
     public function __construct(
@@ -656,6 +657,21 @@ class InventarioBodegaController extends Controller
             ->with('success', "Importacion de ingresos finalizada: {$result['receipts']} comprobantes y {$result['lines']} lineas registradas. El stock ya fue actualizado.");
     }
 
+    public function importMovements(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'archivo' => ['required', 'file', 'extensions:xlsx,xls,csv', 'max:10240'],
+        ]);
+        $result = $this->stock->importManualMovements($request->file('archivo'), $request->user());
+        $message = "Importación de movimientos finalizada: {$result['movements']} fila(s) aplicada(s) y registrada(s) en Kardex.";
+        if ($result['skipped'] > 0) {
+            $message .= " {$result['skipped']} fila(s) ya habían sido importadas y se omitieron para no duplicar el stock.";
+        }
+
+        return redirect()->route('inventario-bodega.index', ['vista' => 'movimientos'])
+            ->with('success', $message);
+    }
+
     public function importOperationalMasters(Request $request): RedirectResponse
     {
         $request->validate([
@@ -778,6 +794,53 @@ class InventarioBodegaController extends Controller
         (new Xlsx($spreadsheet))->save($path);
 
         return response()->download($path, 'plantilla_ingresos_inventario.xlsx')->deleteFileAfterSend(true);
+    }
+
+    public function movementTemplate()
+    {
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Movimientos');
+        $headers = [
+            'Referencia_Movimiento', 'Tipo', 'Ubicacion_Origen_Codigo', 'Ubicacion_Destino_Codigo',
+            'Codigo_Producto', 'Talla', 'Cantidad', 'Fecha_Hora', 'Centro_Costo', 'Coordinador',
+            'Destinatario', 'RUT_Destinatario', 'Tipo_Documento', 'Numero_Documento', 'Costo_Unitario', 'Observacion',
+        ];
+        $sheet->fromArray($headers, null, 'A1');
+        $sheet->getStyle('A1:P1')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF2D0B64']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        ]);
+        $sheet->freezePane('A2');
+        $sheet->setAutoFilter('A1:P1');
+        foreach (range('A', 'P') as $column) {
+            $sheet->getColumnDimension($column)->setWidth(in_array($column, ['A', 'C', 'D', 'E', 'I', 'J', 'K', 'N', 'P'], true) ? 28 : 18);
+        }
+        $sheet->getStyle('G2:G5000')->getNumberFormat()->setFormatCode('0.000');
+        $sheet->getStyle('H2:H5000')->getNumberFormat()->setFormatCode('yyyy-mm-dd hh:mm');
+        $sheet->getStyle('O2:O5000')->getNumberFormat()->setFormatCode('#,##0.00');
+
+        $instructions = $spreadsheet->createSheet();
+        $instructions->setTitle('Instrucciones');
+        $instructions->fromArray([
+            ['Plantilla de importación de movimientos manuales'],
+            ['Cada fila es una operación lógica y Referencia_Movimiento debe ser única. Si vuelves a cargar la misma referencia, SAEP la omite para no duplicar el saldo.'],
+            ['Tipo: ENTREGA_EPP, DESPACHO_CENTRO, TRASLADO, AJUSTE_POSITIVO, AJUSTE_NEGATIVO o STOCK_INICIAL.'],
+            ['Ubicacion_Origen_Codigo, Codigo_Producto, Talla, Cantidad y Fecha_Hora son obligatorios. Fecha_Hora acepta AAAA-MM-DD HH:MM, DD/MM/AAAA HH:MM o fecha de Excel.'],
+            ['Para TRASLADO debes indicar Ubicacion_Destino_Codigo. SAEP descontará el origen y registrará automáticamente la entrada en el destino.'],
+            ['Centro_Costo acepta el número maestro o nombre del centro activo; Coordinador acepta RUT o nombre de la maestra. Si indicas un centro con coordinador asociado, se completa automáticamente.'],
+            ['Las salidas de formularios Kizeo no se cargan aquí. Se aplican desde Entregas Kizeo para conservar el comprobante y evitar descuentos duplicados.'],
+            ['Toda fila importada queda en Kardex como movimiento manual, con su referencia de importación, y puede anularse mediante reverso trazable.'],
+        ], null, 'A1');
+        $instructions->getColumnDimension('A')->setWidth(135);
+        $instructions->getStyle('A1')->getFont()->setBold(true);
+        $instructions->getStyle('A1:A8')->getAlignment()->setWrapText(true);
+
+        $path = storage_path('app/plantilla_movimientos_inventario_'.now()->format('YmdHis').'.xlsx');
+        (new Xlsx($spreadsheet))->save($path);
+
+        return response()->download($path, 'plantilla_movimientos_inventario.xlsx')->deleteFileAfterSend(true);
     }
 
     public function exportBalances(Request $request)

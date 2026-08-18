@@ -501,6 +501,9 @@ Route::middleware('auth')->group(function () {
           Route::get('plantilla-ingresos', [InventarioBodegaController::class, 'receiptTemplate'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('ingresos.plantilla');
+          Route::get('plantilla-movimientos', [InventarioBodegaController::class, 'movementTemplate'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('movimientos.plantilla');
           Route::post('productos/importar', [InventarioBodegaController::class, 'importProducts'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('productos.importar');
@@ -510,6 +513,9 @@ Route::middleware('auth')->group(function () {
           Route::post('ingresos/importar', [InventarioBodegaController::class, 'importReceipts'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('ingresos.importar');
+          Route::post('movimientos/importar', [InventarioBodegaController::class, 'importMovements'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('movimientos.importar');
           Route::post('maestros-operativos/importar', [InventarioBodegaController::class, 'importOperationalMasters'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('maestros.importar');

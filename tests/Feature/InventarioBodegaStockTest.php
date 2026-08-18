@@ -8,6 +8,7 @@ use App\Models\InventarioConteo;
 use App\Models\InventarioCentroCosto;
 use App\Models\InventarioCoordinador;
 use App\Models\InventarioEntregaKizeoAplicacion;
+use App\Models\InventarioImportacionMovimiento;
 use App\Models\InventarioMovimiento;
 use App\Models\InventarioUbicacion;
 use App\Models\InventarioVariante;
@@ -38,7 +39,7 @@ class InventarioBodegaStockTest extends TestCase
         Schema::disableForeignKeyConstraints();
         foreach ([
             'inventario_entrega_kizeo_lineas', 'inventario_entrega_kizeo_aplicaciones',
-            'inventario_conteo_lineas', 'inventario_conteos', 'inventario_movimientos',
+            'inventario_conteo_lineas', 'inventario_conteos', 'inventario_importacion_movimientos', 'inventario_movimientos',
             'inventario_historial_costos', 'inventario_ingreso_items', 'inventario_ingresos', 'inventario_variantes',
             'inventario_kizeo_catalog_items', 'inventario_productos', 'inventario_proveedores', 'inventario_ubicaciones',
             'entrega_bodega_items', 'entregas_bodega',
@@ -97,6 +98,8 @@ class InventarioBodegaStockTest extends TestCase
         $referenceCostMigration->up();
         $kizeoCatalogMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_18_170000_create_inventario_kizeo_catalog_items_table.php';
         $kizeoCatalogMigration->up();
+        $movementImportMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_18_200000_create_inventario_importacion_movimientos_table.php';
+        $movementImportMigration->up();
         Cache::flush();
 
         Schema::create('entregas_bodega', function (Blueprint $table) {
@@ -989,12 +992,19 @@ class InventarioBodegaStockTest extends TestCase
             @unlink($path);
         }
 
+        $service = app(InventarioStockService::class);
         $this->assertSame(1, $result['receipts']);
         $this->assertSame(1, $result['lines']);
-        $this->assertSame(4.0, app(InventarioStockService::class)->stockActual($origin->id, $variant->id));
+        $this->assertSame(4.0, $service->stockActual($origin->id, $variant->id));
         $this->assertDatabaseHas('inventario_proveedores', ['rut' => '76543210-1', 'nombre' => 'Proveedor importado']);
         $this->assertDatabaseHas('inventario_ingresos', ['numero_documento' => 'F-IMPORT-1']);
         $this->assertDatabaseHas('inventario_movimientos', ['variante_id' => $variant->id, 'costo_unitario' => 41590]);
+
+        $receipt = \App\Models\InventarioIngreso::query()->where('numero_documento', 'F-IMPORT-1')->firstOrFail();
+        $service->reverseReceipt($receipt, 'Ingreso importado de prueba.', $user);
+
+        $this->assertSame(0.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseHas('inventario_ingresos', ['id' => $receipt->id, 'motivo_reversion' => 'Ingreso importado de prueba.']);
     }
 
     public function test_csv_upload_validation_accepts_a_browser_plain_text_csv(): void
@@ -1014,6 +1024,75 @@ class InventarioBodegaStockTest extends TestCase
         }
 
         $this->assertFalse($fails, $errors);
+    }
+
+    public function test_movement_import_updates_stock_avoids_duplicates_and_can_be_reversed(): void
+    {
+        [$user, $origin, $destination, $variant] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'FACTURA',
+            'numero_documento' => 'F-IMPORT-MOV-1',
+            'fecha_documento' => '2026-08-18',
+            'fecha_recepcion' => '2026-08-18',
+            'observacion' => null,
+        ], [['variante_id' => $variant->id, 'cantidad' => 10, 'costo_unitario' => null]], $user);
+
+        $coordinator = InventarioCoordinador::create([
+            'nombre' => 'Coordinadora importada',
+            'nombre_normalizado' => 'coordinadora importada',
+            'rut' => '11111111-1',
+            'activo' => true,
+        ]);
+        $costCenter = InventarioCentroCosto::create([
+            'numero_maestro' => 108,
+            'nombre' => 'Centro importado',
+            'nombre_normalizado' => 'centro importado',
+            'coordinador_id' => $coordinator->id,
+            'activo' => true,
+        ]);
+
+        $path = tempnam(sys_get_temp_dir(), 'movement-import-') . '.xlsx';
+        $spreadsheet = new Spreadsheet();
+        $spreadsheet->getActiveSheet()->fromArray([
+            ['Referencia_Movimiento', 'Tipo', 'Ubicacion_Origen_Codigo', 'Ubicacion_Destino_Codigo', 'Codigo_Producto', 'Talla', 'Cantidad', 'Fecha_Hora', 'Centro_Costo', 'Coordinador', 'Destinatario', 'RUT_Destinatario', 'Tipo_Documento', 'Numero_Documento', 'Costo_Unitario', 'Observacion'],
+            ['MOV-IMP-001', 'ENTREGA_EPP', $origin->codigo, '', $variant->producto->codigo, $variant->talla, 2, '18/08/2026 09:30', 108, '', '', '', 'ACTA', 'ACTA-001', '', 'Entrega importada'],
+            ['MOV-IMP-002', 'TRASLADO', $origin->codigo, $destination->codigo, $variant->producto->codigo, $variant->talla, 3, '2026-08-18 10:00', '', '', '', '', 'GUIA_DESPACHO', 'GD-001', '', 'Traslado importado'],
+        ]);
+        (new Xlsx($spreadsheet))->save($path);
+
+        try {
+            $file = new UploadedFile($path, 'movimientos.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+            $result = $service->importManualMovements($file, $user);
+            $repeat = $service->importManualMovements($file, $user);
+        } finally {
+            @unlink($path);
+        }
+
+        $this->assertSame(2, $result['movements']);
+        $this->assertSame(0, $result['skipped']);
+        $this->assertSame(0, $repeat['movements']);
+        $this->assertSame(2, $repeat['skipped']);
+        $this->assertSame(5.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertSame(3.0, $service->stockActual($destination->id, $variant->id));
+        $this->assertSame(2, InventarioImportacionMovimiento::query()->count());
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'tipo' => 'ENTREGA_EPP',
+            'origen' => 'MANUAL',
+            'centro_costo_id' => $costCenter->id,
+            'coordinador_id' => $coordinator->id,
+            'cantidad' => -2,
+        ]);
+
+        $imported = InventarioImportacionMovimiento::query()->with('movimiento')->get()->keyBy('referencia');
+        $service->reverseManualMovement($imported->get('MOV-IMP-001')->movimiento, 'Salida importada de prueba.', $user);
+        $this->assertSame(7.0, $service->stockActual($origin->id, $variant->id));
+
+        $service->reverseManualMovement($imported->get('MOV-IMP-002')->movimiento, 'Traslado importado de prueba.', $user);
+        $this->assertSame(10.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertSame(0.0, $service->stockActual($destination->id, $variant->id));
     }
 
     public function test_stock_export_uses_the_catalog_fields_and_current_balance(): void
@@ -1069,7 +1148,9 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertStringContainsString('inventory-variant-card', $view);
         $this->assertStringContainsString('data-product-category-select', $view);
         $this->assertStringContainsString('data-product-subcategory-select', $view);
-        $this->assertStringContainsString('¿Es una compra o una carga masiva?', $view);
+        $this->assertStringContainsString('Importar movimientos manuales', $view);
+        $this->assertStringContainsString('Referencia_Movimiento', $view);
+        $this->assertStringContainsString('Entregas Kizeo', $view);
         $this->assertStringContainsString('Ver o anular ingresos', $view);
         $this->assertStringContainsString('InventarioMovimiento::TIPOS_DOCUMENTO', $view);
     }

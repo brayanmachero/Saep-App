@@ -3,11 +3,14 @@
 namespace App\Services;
 
 use App\Models\EntregaBodega;
+use App\Models\InventarioCentroCosto;
 use App\Models\InventarioConteo;
 use App\Models\InventarioConteoLinea;
+use App\Models\InventarioCoordinador;
 use App\Models\InventarioEntregaKizeoAplicacion;
 use App\Models\InventarioEntregaKizeoLinea;
 use App\Models\InventarioHistorialCosto;
+use App\Models\InventarioImportacionMovimiento;
 use App\Models\InventarioIngreso;
 use App\Models\InventarioIngresoItem;
 use App\Models\InventarioMovimiento;
@@ -23,6 +26,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 
 class InventarioStockService
 {
@@ -322,9 +326,9 @@ class InventarioStockService
         });
     }
 
-    public function registerManualMovement(array $data, User $user): void
+    public function registerManualMovement(array $data, User $user): InventarioMovimiento
     {
-        DB::transaction(function () use ($data, $user) {
+        return DB::transaction(function () use ($data, $user) {
             $variante = InventarioVariante::query()->with('producto')->findOrFail($data['variante_id']);
             $cantidad = (float) $data['cantidad'];
             $tipo = $data['tipo'];
@@ -341,14 +345,14 @@ class InventarioStockService
                 $base['grupo_traslado'] = $grupo;
                 $base['tipo'] = 'TRASLADO_SALIDA';
                 $base['cantidad'] = -$cantidad;
-                $this->createMovement($base, $user);
+                $sourceMovement = $this->createMovement($base, $user);
 
                 $base['tipo'] = 'TRASLADO_ENTRADA';
                 $base['ubicacion_id'] = $destino;
                 $base['cantidad'] = $cantidad;
                 $this->createMovement($base, $user);
 
-                return;
+                return $sourceMovement;
             }
 
             $signed = in_array($tipo, ['AJUSTE_POSITIVO', 'STOCK_INICIAL'], true) ? $cantidad : -$cantidad;
@@ -359,7 +363,8 @@ class InventarioStockService
             $payload = $this->movementPayload($data, $variante, $cantidad);
             $payload['tipo'] = $tipo;
             $payload['cantidad'] = $signed;
-            $this->createMovement($payload, $user);
+
+            return $this->createMovement($payload, $user);
         });
     }
 
@@ -1014,6 +1019,165 @@ class InventarioStockService
         });
     }
 
+    /**
+     * Imports manual operational movements. Kizeo exits are intentionally not
+     * accepted here: they are applied from their source voucher in the Kizeo tab.
+     */
+    public function importManualMovements(UploadedFile $file, User $user): array
+    {
+        $spreadsheet = IOFactory::load($file->getPathname());
+        $sheet = $spreadsheet->getActiveSheet();
+        $rows = $sheet->toArray(null, true, true, false);
+        $headers = array_map(fn ($value) => $this->normalizeHeader($value), array_shift($rows) ?? []);
+        $requiredHeaders = ['referencia_movimiento', 'tipo', 'ubicacion_origen_codigo', 'codigo_producto', 'cantidad', 'fecha_hora'];
+        if (array_diff($requiredHeaders, $headers)) {
+            throw ValidationException::withMessages([
+                'archivo' => 'La plantilla debe incluir Referencia_Movimiento, Tipo, Ubicacion_Origen_Codigo, Codigo_Producto, Cantidad y Fecha_Hora.',
+            ]);
+        }
+
+        $allowedTypes = ['ENTREGA_EPP', 'DESPACHO_CENTRO', 'TRASLADO', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'STOCK_INICIAL'];
+        $prepared = [];
+        $seenReferences = [];
+        $errors = [];
+
+        foreach ($rows as $index => $row) {
+            $line = $index + 2;
+            $values = array_combine($headers, array_pad($row, count($headers), null));
+            if (collect($values)->filter(fn ($value) => $this->importText($value) !== '')->isEmpty()) {
+                continue;
+            }
+
+            $reference = $this->importText($values['referencia_movimiento'] ?? null);
+            $type = Str::upper($this->importText($values['tipo'] ?? null));
+            $originCode = $this->importText($values['ubicacion_origen_codigo'] ?? null);
+            $destinationCode = $this->importText($values['ubicacion_destino_codigo'] ?? null);
+            $productCode = $this->importText($values['codigo_producto'] ?? $values['codigo'] ?? null);
+            $size = Str::upper($this->importText($values['talla'] ?? $values['variante'] ?? 'ESTANDAR') ?: 'ESTANDAR');
+            $quantity = $this->importDecimal($values['cantidad'] ?? null);
+            $occurredAt = $this->importMovementDate($values['fecha_hora'] ?? null);
+            $cost = $this->importText($values['costo_unitario'] ?? null) === '' ? null : $this->importDecimal($values['costo_unitario']);
+            $documentType = Str::upper($this->importText($values['tipo_documento'] ?? null));
+            $documentNumber = $this->importText($values['numero_documento'] ?? null);
+            $costCenterText = $this->importText($values['centro_costo'] ?? null);
+            $coordinatorText = $this->importText($values['coordinador'] ?? null);
+
+            if ($reference === '') {
+                $errors[] = "Fila {$line}: Referencia_Movimiento es obligatoria.";
+            } elseif (isset($seenReferences[$reference])) {
+                $errors[] = "Fila {$line}: la referencia '{$reference}' ya fue usada en la fila {$seenReferences[$reference]}. Cada fila debe tener una referencia única.";
+            } else {
+                $seenReferences[$reference] = $line;
+            }
+            if (! in_array($type, $allowedTypes, true)) {
+                $errors[] = "Fila {$line}: Tipo debe ser ENTREGA_EPP, DESPACHO_CENTRO, TRASLADO, AJUSTE_POSITIVO, AJUSTE_NEGATIVO o STOCK_INICIAL. Las salidas Kizeo se aplican desde la pestaña Entregas Kizeo.";
+            }
+            $origin = $originCode === '' ? null : InventarioUbicacion::query()->where('codigo', $originCode)->where('activo', true)->first();
+            if (! $origin) {
+                $errors[] = "Fila {$line}: no existe una ubicación de origen activa con código '{$originCode}'.";
+            }
+            $destination = null;
+            if ($type === 'TRASLADO') {
+                $destination = $destinationCode === '' ? null : InventarioUbicacion::query()->where('codigo', $destinationCode)->where('activo', true)->first();
+                if (! $destination) {
+                    $errors[] = "Fila {$line}: Ubicacion_Destino_Codigo es obligatoria y debe existir para un TRASLADO.";
+                } elseif ($origin && $destination->id === $origin->id) {
+                    $errors[] = "Fila {$line}: el origen y destino del traslado deben ser distintos.";
+                }
+            }
+            $product = $productCode === '' ? null : InventarioProducto::query()->where('codigo', $productCode)->where('activo', true)->first();
+            $variant = $product?->variantes()->where('talla', $size)->where('activo', true)->first();
+            if (! $variant) {
+                $errors[] = "Fila {$line}: no existe el artículo activo '{$productCode}' con talla '{$size}'.";
+            }
+            if ($quantity === null || $quantity <= 0) {
+                $errors[] = "Fila {$line}: Cantidad debe ser mayor que cero.";
+            }
+            if (! $occurredAt) {
+                $errors[] = "Fila {$line}: Fecha_Hora debe usar AAAA-MM-DD HH:MM, DD/MM/AAAA HH:MM o una fecha de Excel válida.";
+            }
+            if ($cost !== null && $cost < 0) {
+                $errors[] = "Fila {$line}: Costo_Unitario no puede ser negativo.";
+            }
+            if ($documentType !== '' && ! array_key_exists($documentType, InventarioMovimiento::TIPOS_DOCUMENTO)) {
+                $errors[] = "Fila {$line}: Tipo_Documento debe ser ACTA, FACTURA, GUIA_DESPACHO, AJUSTE u OTRO.";
+            }
+
+            $costCenter = $costCenterText === '' ? null : $this->findImportedCostCenter($costCenterText);
+            if ($costCenterText !== '' && ! $costCenter) {
+                $errors[] = "Fila {$line}: no se encontró el Centro_Costo '{$costCenterText}' en los maestros activos.";
+            }
+            $coordinator = $coordinatorText === '' ? null : $this->findImportedCoordinator($coordinatorText);
+            if ($coordinatorText !== '' && ! $coordinator) {
+                $errors[] = "Fila {$line}: no se encontró el Coordinador '{$coordinatorText}' en los maestros activos.";
+            }
+            if (count($errors) > 15) {
+                break;
+            }
+
+            if (! $reference || ! $origin || ! $variant || ! $occurredAt || $quantity === null || $quantity <= 0 || ! in_array($type, $allowedTypes, true) || ($type === 'TRASLADO' && ! $destination) || ($costCenterText !== '' && ! $costCenter) || ($coordinatorText !== '' && ! $coordinator)) {
+                continue;
+            }
+
+            $coordinator ??= $costCenter?->coordinador;
+            $prepared[] = [
+                'referencia' => $reference,
+                'data' => [
+                    'tipo' => $type,
+                    'ubicacion_id' => $origin->id,
+                    'ubicacion_destino_id' => $destination?->id,
+                    'variante_id' => $variant->id,
+                    'cantidad' => $quantity,
+                    'ocurrido_en' => $occurredAt,
+                    'destinatario_nombre' => $this->nullable($values['destinatario'] ?? $values['destinatario_nombre'] ?? null) ?: $coordinator?->nombre,
+                    'destinatario_rut' => $this->nullable($values['rut_destinatario'] ?? $values['destinatario_rut'] ?? null) ?: $coordinator?->rut,
+                    'centro_costo' => $costCenter?->nombre,
+                    'centro_costo_id' => $costCenter?->id,
+                    'coordinador_id' => $coordinator?->id,
+                    'documento_tipo' => $documentType ?: null,
+                    'documento_numero' => $documentNumber ?: null,
+                    'costo_unitario' => $cost,
+                    'observacion' => $this->importMovementObservation($reference, $this->importText($values['observacion'] ?? null)),
+                ],
+            ];
+        }
+
+        if ($errors) {
+            throw ValidationException::withMessages(['archivo' => implode(' ', array_slice($errors, 0, 15))]);
+        }
+        if ($prepared === []) {
+            throw ValidationException::withMessages(['archivo' => 'El archivo no contiene filas de movimientos válidas.']);
+        }
+
+        $existingReferences = InventarioImportacionMovimiento::query()
+            ->whereIn('referencia', collect($prepared)->pluck('referencia'))
+            ->pluck('referencia')
+            ->flip();
+
+        return DB::transaction(function () use ($prepared, $existingReferences, $user) {
+            $movements = 0;
+            $skipped = 0;
+
+            foreach ($prepared as $row) {
+                if ($existingReferences->has($row['referencia'])) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                $movement = $this->registerManualMovement($row['data'], $user);
+                InventarioImportacionMovimiento::create([
+                    'referencia' => $row['referencia'],
+                    'movimiento_id' => $movement->id,
+                    'registrado_por' => $user->id,
+                ]);
+                $movements++;
+            }
+
+            return compact('movements', 'skipped');
+        });
+    }
+
     private function movementPayload(array $data, InventarioVariante $variante, float $cantidad): array
     {
         return [
@@ -1216,6 +1380,71 @@ class InventarioStockService
         }
 
         return null;
+    }
+
+    private function importMovementDate(mixed $value): ?string
+    {
+        if (is_int($value) || is_float($value)) {
+            if ($value > 1 && $value < 100000) {
+                try {
+                    return Date::excelToDateTimeObject((float) $value)->format('Y-m-d H:i:s');
+                } catch (\Throwable) {
+                    return null;
+                }
+            }
+        }
+
+        $value = $this->importText($value);
+        if ($value === '') {
+            return null;
+        }
+
+        foreach (['Y-m-d H:i:s', 'Y-m-d H:i', 'Y-m-d\\TH:i:s', 'Y-m-d\\TH:i', 'd/m/Y H:i:s', 'd/m/Y H:i', 'd-m-Y H:i', 'Y/m/d H:i', 'Y-m-d', 'd/m/Y', 'd-m-Y', 'Y/m/d'] as $format) {
+            try {
+                $date = Carbon::createFromFormat($format, $value);
+            } catch (\Throwable) {
+                continue;
+            }
+            if ($date && $date->format($format) === $value) {
+                return $date->format('Y-m-d H:i:s');
+            }
+        }
+
+        return null;
+    }
+
+    private function findImportedCostCenter(string $value): ?InventarioCentroCosto
+    {
+        $normalized = $this->comparisonKey($value);
+
+        return InventarioCentroCosto::query()
+            ->with('coordinador')
+            ->where('activo', true)
+            ->where(function ($query) use ($value, $normalized) {
+                $query->where('numero_maestro', $value)
+                    ->orWhere('nombre_normalizado', $normalized);
+            })
+            ->first();
+    }
+
+    private function findImportedCoordinator(string $value): ?InventarioCoordinador
+    {
+        return InventarioCoordinador::query()
+            ->where('activo', true)
+            ->where(function ($query) use ($value) {
+                $query->where('rut', $value)
+                    ->orWhere('nombre_normalizado', $this->comparisonKey($value));
+            })
+            ->first();
+    }
+
+    private function importMovementObservation(string $reference, string $observation): string
+    {
+        return Str::limit(
+            'Importación masiva · Ref. '.$reference.($observation !== '' ? ' · '.$observation : ''),
+            500,
+            '',
+        );
     }
 
     private function resolveImportedProvider(array $header): ?InventarioProveedor
