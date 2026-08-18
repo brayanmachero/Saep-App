@@ -1206,7 +1206,7 @@ class InventarioBodegaStockTest extends TestCase
                 return Http::response(['id' => 'remote-casco-m']);
             }
             if ($request->method() === 'POST' && str_ends_with($request->url(), '/items')) {
-                return Http::response(['id' => 'remote-guante-standard'], 201);
+                return Http::response(['items' => [['id' => 'remote-guante-standard']]], 201);
             }
 
             return Http::response(['message' => 'Ruta de prueba no esperada'], 404);
@@ -1224,7 +1224,7 @@ class InventarioBodegaStockTest extends TestCase
         Http::assertSent(function (HttpRequest $request) {
             return $request->method() === 'POST'
                 && str_ends_with($request->url(), '/lists/500434/items')
-                && ($request['label'] ?? null) === 'Guante de prueba T-NA';
+                && ($request['items'][0]['label'] ?? null) === 'Guante de prueba T-NA';
         });
         Http::assertNotSent(fn (HttpRequest $request) => $request->method() === 'DELETE');
     }

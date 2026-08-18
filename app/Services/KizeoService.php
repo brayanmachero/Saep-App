@@ -784,11 +784,13 @@ class KizeoService
 
     /**
      * Crea un ítem en una lista avanzada. Las listas avanzadas se gestionan
-     * registro a registro para no reemplazar datos de otros procesos.
+     * registro a registro para no reemplazar datos de otros procesos. El
+     * endpoint de alta v4 recibe un lote, incluso cuando contiene una sola
+     * fila; las actualizaciones PATCH siguen recibiendo un ítem individual.
      */
     public function createListItem(string $listId, array $payload): array
     {
-        return $this->mutateV4('POST', "lists/{$listId}/items", $payload, $listId);
+        return $this->mutateV4('POST', "lists/{$listId}/items", ['items' => [$payload]], $listId);
     }
 
     /** Actualiza parcialmente un ítem de una lista avanzada. */

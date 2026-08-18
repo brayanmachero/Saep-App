@@ -273,7 +273,9 @@ class InventarioKizeoCatalogSyncService
         foreach ([
             $response['id'] ?? null,
             $response['item']['id'] ?? null,
+            $response['items'][0]['id'] ?? null,
             $response['data']['id'] ?? null,
+            $response['data']['items'][0]['id'] ?? null,
         ] as $itemId) {
             if (filled($itemId)) {
                 return (string) $itemId;
