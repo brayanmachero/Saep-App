@@ -530,6 +530,11 @@ class InventarioStockService
             $name = $this->comparisonKey($item->articulo);
             $size = $this->comparisonKey($item->talla ?: 'ESTANDAR');
             $variantId = $byNameAndSize[$name.'|'.$size] ?? null;
+            if (! $variantId && $this->isGenericKizeoSize($item->talla)) {
+                // Kizeo usa NA para prendas sin talla. Solo en ese caso se puede
+                // asociar automáticamente a la variante ESTANDAR del mismo artículo.
+                $variantId = $byNameAndSize[$name.'|estandar'] ?? null;
+            }
             if (! $variantId) {
                 throw ValidationException::withMessages([
                     'entrega' => "No se pudo relacionar automáticamente '{$item->articulo}' talla '{$item->talla}' con el catálogo. Revísala de forma individual.",
@@ -1267,6 +1272,14 @@ class InventarioStockService
             ->replaceMatches('/[^a-z0-9]+/', ' ')
             ->squish()
             ->toString();
+    }
+
+    /** Identifica tallas genéricas de Kizeo que equivalen a la variante ESTANDAR. */
+    private function isGenericKizeoSize(?string $size): bool
+    {
+        return in_array($this->comparisonKey($size), [
+            '', 'na', 'n a', 'estandar', 'sin talla', 'unica', 'unitalla',
+        ], true);
     }
 
     private function kizeoDocumentNumber(EntregaBodega $delivery): string

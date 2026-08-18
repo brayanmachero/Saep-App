@@ -314,7 +314,7 @@
             <article class="inventory-kpi accent-blue"><span>Devoluciones pendientes</span><strong>{{ $kizeoStats['returns'] }}</strong><small>Se ingresan, no se descuentan</small></article>
         </section>
 
-        <section class="inventory-kizeo-notice"><i class="bi bi-shield-check"></i><div><strong>Salida centralizada</strong><span>Las entregas Kizeo siempre descuentan desde <strong>{{ $centralKizeoLocation?->nombre ?: 'SAEP-CENTRAL' }}</strong>. Las seleccionadas para aplicación masiva solo incluyen artículos y tallas relacionados de forma exacta; si Kizeo se corrige luego, usa el reverso para reponer el stock y deja el motivo registrado.</span></div></section>
+        <section class="inventory-kizeo-notice"><i class="bi bi-shield-check"></i><div><strong>Salida centralizada</strong><span>Las entregas Kizeo siempre descuentan desde <strong>{{ $centralKizeoLocation?->nombre ?: 'SAEP-CENTRAL' }}</strong>. La aplicación masiva exige artículo y talla exactos; las tallas genéricas <strong>NA</strong> se asocian de forma segura a la variante <strong>ESTANDAR</strong> del mismo artículo. Si Kizeo se corrige luego, usa el reverso para reponer el stock y deja el motivo registrado.</span></div></section>
 
         @if(! $centralKizeoLocation)
             <section class="inventory-notice"><i class="bi bi-exclamation-triangle"></i><div><strong>No se puede aplicar Kizeo.</strong><br>Falta una ubicación activa con código <strong>SAEP-CENTRAL</strong>. Crea o activa esa bodega antes de descontar stock.</div></section>

@@ -369,6 +369,66 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('inventory-kizeo-batch-form', false);
     }
 
+    public function test_kizeo_batch_application_maps_na_to_the_standard_variant_of_the_same_product(): void
+    {
+        [$user, $central] = $this->inventoryContext();
+        $central->update([
+            'codigo' => InventarioStockService::KIZEO_ORIGIN_LOCATION_CODE,
+            'nombre' => 'Sede Central SAEP',
+        ]);
+        $service = app(InventarioStockService::class);
+        $product = $service->createProduct([
+            'nombre' => 'Cuello Polar Azul RAC',
+            'tipo' => 'EPP',
+            'categoria' => 'Ropa de trabajo',
+            'subcategoria' => null,
+            'unidad_medida' => 'Unidad',
+            'stock_minimo' => 0,
+            'tallas' => 'ESTANDAR',
+            'activo' => true,
+        ], $user);
+        $variant = InventarioVariante::query()->where('producto_id', $product->id)->firstOrFail();
+        $service->registerReceipt([
+            'ubicacion_id' => $central->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'GUIA_DESPACHO',
+            'numero_documento' => 'GD-KIZEO-NA',
+            'fecha_documento' => null,
+            'fecha_recepcion' => '2026-08-12',
+            'observacion' => null,
+        ], [['variante_id' => $variant->id, 'cantidad' => 3, 'costo_unitario' => null]], $user);
+
+        $delivery = EntregaBodega::create([
+            'kizeo_data_id' => 'kizeo-batch-na-standard',
+            'kizeo_record_number' => 804,
+            'nombre' => 'Persona sin talla',
+            'fecha_pedido' => '2026-08-12',
+        ]);
+        $item = $delivery->items()->create([
+            'linea' => 1,
+            'articulo' => 'Cuello Polar Azul RAC',
+            'talla' => 'NA',
+            'cantidad' => 1,
+        ]);
+
+        $mappings = $service->suggestedKizeoLineMappings($delivery->load('items'));
+        $this->assertSame($variant->id, $mappings[$item->id]['variante_id']);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->assertOk()
+            ->assertSee('name="entregas[]" value="'.$delivery->id.'" data-kizeo-batch-checkbox', false);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->post(route('inventario-bodega.entregas-kizeo.aplicar-masivo'), ['entregas' => [$delivery->id]])
+            ->assertRedirect(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->assertSessionHas('success', '1 salida(s) fueron descontadas desde Sede Central SAEP y quedaron trazables en Kardex.');
+
+        $this->assertSame(2.0, $service->stockActual($central->id, $variant->id));
+    }
+
     public function test_epp_roster_import_starts_at_zero_and_can_be_loaded_later(): void
     {
         [$user, $origin] = $this->inventoryContext();
