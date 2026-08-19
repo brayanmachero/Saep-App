@@ -61,6 +61,8 @@ return [
         'inventory_catalog_list_id' => env('KIZEO_INVENTORY_CATALOG_LIST_ID', '500434'),
         'charla_form_id'              => env('KIZEO_CHARLA_FORM_ID'),
         'charla_sharepoint_folder'    => env('KIZEO_CHARLA_SHAREPOINT_FOLDER', 'Charlas SST'),
+        'charla_export_id'            => env('KIZEO_CHARLA_EXPORT_ID', '1438365'),
+        'charla_export_name'          => env('KIZEO_CHARLA_EXPORT_NAME', 'Formato charla Prevención Riesgo'),
         'observacion_form_id'         => env('KIZEO_OBSERVACION_FORM_ID'),
         'observacion_sharepoint_folder' => env('KIZEO_OBSERVACION_SHAREPOINT_FOLDER', 'Observaciones Conducta'),
         'inspeccion_form_id'          => env('KIZEO_INSPECCION_FORM_ID', '973787'),

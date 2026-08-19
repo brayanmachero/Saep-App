@@ -596,11 +596,17 @@ class KizeoWebhookController extends Controller
                 'lugar' => $lugar, 'actividad' => $actividad,
             ]);
 
-            // Descargar el PDF generado por Kizeo
-            $pdfContent = $this->kizeo->downloadPdf($formId, $dataId);
+            $download = $this->downloadPreferredKizeoPdf($formId, $dataId, [
+                'export_id' => config('services.kizeo.charla_export_id'),
+                'export_name' => config('services.kizeo.charla_export_name', 'Formato charla Prevención Riesgo'),
+            ]);
+            $pdfContent = $download['content'];
 
-            if (!$pdfContent || strlen($pdfContent) < 100) {
-                Log::warning('PDF de Charla SST vacío o inválido', ['size' => strlen($pdfContent ?? '')]);
+            if (!$this->isValidPdfContent($pdfContent)) {
+                Log::warning('PDF de Charla SST vacío o inválido', [
+                    'size' => strlen($pdfContent ?? ''),
+                    'source' => $download['source'] ?? 'unknown',
+                ]);
                 return response()->json(['status' => 'error', 'message' => 'PDF descargado está vacío'], 200);
             }
 
@@ -1398,6 +1404,107 @@ class KizeoWebhookController extends Controller
         Log::info("{$label} subido a SharePoint", ['path' => $remotePath]);
 
         return $remotePath;
+    }
+
+    private function downloadPreferredKizeoPdf(string $formId, string $dataId, array $documentConfig): array
+    {
+        $exportId = trim((string) ($documentConfig['export_id'] ?? ''));
+        $exportName = trim((string) ($documentConfig['export_name'] ?? ''));
+
+        if ($exportId === '') {
+            $export = $this->resolveKizeoExport($formId, $exportName);
+            $exportId = (string) ($export['id'] ?? '');
+            $exportName = (string) ($export['name'] ?? $exportName);
+        }
+
+        if ($exportId !== '') {
+            try {
+                $content = $this->kizeo->downloadExportPdf($formId, $dataId, $exportId);
+                if ($this->isValidPdfContent($content)) {
+                    return [
+                        'content' => $content,
+                        'source' => 'custom_export',
+                        'export_id' => $exportId,
+                        'export_name' => $exportName ?: null,
+                    ];
+                }
+
+                Log::warning('Kizeo export personalizado no devolvió un PDF válido; usando PDF estándar', [
+                    'formId' => $formId,
+                    'dataId' => $dataId,
+                    'export_id' => $exportId,
+                    'size' => strlen($content ?? ''),
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo descargar export personalizado de Kizeo; usando PDF estándar', [
+                    'formId' => $formId,
+                    'dataId' => $dataId,
+                    'export_id' => $exportId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return [
+            'content' => $this->kizeo->downloadPdf($formId, $dataId),
+            'source' => 'standard_pdf',
+            'export_id' => null,
+            'export_name' => null,
+        ];
+    }
+
+    private function resolveKizeoExport(string $formId, string $preferredName = ''): ?array
+    {
+        try {
+            $exports = array_values(array_filter(
+                $this->kizeo->getExports($formId),
+                fn (array $export) => !($export['deleted'] ?? false)
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo obtener lista de exports Kizeo', [
+                'formId' => $formId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($exports === []) {
+            return null;
+        }
+
+        $normalize = fn ($value) => mb_strtolower(trim((string) $value));
+        $preferred = $normalize($preferredName);
+
+        if ($preferred !== '') {
+            foreach ($exports as $export) {
+                $name = $normalize($export['name'] ?? '');
+                if ($name === $preferred || str_contains($name, $preferred) || str_contains($preferred, $name)) {
+                    return $export;
+                }
+            }
+        }
+
+        foreach ($exports as $export) {
+            if (($export['is_default'] ?? false) && ($export['type'] ?? '') === 'word') {
+                return $export;
+            }
+        }
+
+        foreach ($exports as $export) {
+            if (($export['type'] ?? '') === 'word') {
+                return $export;
+            }
+        }
+
+        return $exports[0] ?? null;
+    }
+
+    private function isValidPdfContent(?string $content): bool
+    {
+        return is_string($content)
+            && strlen($content) >= 100
+            && str_contains(substr($content, 0, 32), '%PDF');
     }
 
     private function getKizeoFieldValue(array $fields, string $key, string $default = '-'): string
