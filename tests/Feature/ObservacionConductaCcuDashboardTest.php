@@ -28,7 +28,7 @@ class ObservacionConductaCcuDashboardTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_sync_resolves_ccu_center_and_classifies_safe_and_unsafe_observations(): void
+    public function test_sync_resolves_ccu_center_and_classifies_all_observation_types_as_negative(): void
     {
         ObservacionConductaCcu::query()->delete();
 
@@ -37,9 +37,9 @@ class ObservacionConductaCcuDashboardTest extends TestCase
             ->once()
             ->with('1156826', false)
             ->andReturn([
-                ['id' => 'ccu-positive', 'record_number' => '1', 'create_time' => '2026-07-20 08:00:00'],
-                ['id' => 'ccu-negative', 'record_number' => '2', 'create_time' => '2026-07-20 09:00:00'],
-                ['id' => 'ccu-review', 'record_number' => '3', 'create_time' => '2026-07-20 10:00:00'],
+                ['id' => 'ccu-siempre', 'record_number' => '1', 'create_time' => '2026-07-20 08:00:00'],
+                ['id' => 'ccu-nunca', 'record_number' => '2', 'create_time' => '2026-07-20 09:00:00'],
+                ['id' => 'ccu-mixto', 'record_number' => '3', 'create_time' => '2026-07-20 10:00:00'],
             ]);
         $kizeo->shouldReceive('getListItems')
             ->once()
@@ -49,16 +49,16 @@ class ObservacionConductaCcuDashboardTest extends TestCase
             ]);
         $kizeo->shouldReceive('getRecord')
             ->once()
-            ->with('1156826', 'ccu-positive')
-            ->andReturn($this->record('ccu-positive', '01.SIEMPRE utilizar todos los EPP'));
+            ->with('1156826', 'ccu-siempre')
+            ->andReturn($this->record('ccu-siempre', '01.SIEMPRE utilizar todos los EPP'));
         $kizeo->shouldReceive('getRecord')
             ->once()
-            ->with('1156826', 'ccu-negative')
-            ->andReturn($this->record('ccu-negative', '06. NUNCA girar con carga en altura'));
+            ->with('1156826', 'ccu-nunca')
+            ->andReturn($this->record('ccu-nunca', '06. NUNCA girar con carga en altura'));
         $kizeo->shouldReceive('getRecord')
             ->once()
-            ->with('1156826', 'ccu-review')
-            ->andReturn($this->record('ccu-review', [
+            ->with('1156826', 'ccu-mixto')
+            ->andReturn($this->record('ccu-mixto', [
                 '01.SIEMPRE utilizar todos los EPP',
                 '06. NUNCA girar con carga en altura',
             ]));
@@ -67,18 +67,18 @@ class ObservacionConductaCcuDashboardTest extends TestCase
 
         $this->assertSame(3, $summary['created']);
         $this->assertSame(0, $summary['failed']);
-        $this->assertSame('CCU CENTRAL', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-positive')->value('centro'));
-        $this->assertSame('Turno A', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-positive')->value('turno'));
-        $this->assertSame('Positiva', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-positive')->value('clasificacion'));
-        $this->assertSame('Negativa', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-negative')->value('clasificacion'));
-        $this->assertSame('Por revisar', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-review')->value('clasificacion'));
+        $this->assertSame('CCU CENTRAL', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-siempre')->value('centro'));
+        $this->assertSame('Turno A', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-siempre')->value('turno'));
+        $this->assertSame('Negativa', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-siempre')->value('clasificacion'));
+        $this->assertSame('Negativa', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-nunca')->value('clasificacion'));
+        $this->assertSame('Negativa', ObservacionConductaCcu::where('kizeo_data_id', 'ccu-mixto')->value('clasificacion'));
     }
 
     public function test_analytics_respects_center_and_classification_filters(): void
     {
         ObservacionConductaCcu::query()->delete();
 
-        $this->createObservation('CCU CENTRAL', 'Positiva', '2026-07-05', 'Ana Trabajadora', 'Turno A');
+        $this->createObservation('CCU CENTRAL', 'Negativa', '2026-07-05', 'Ana Trabajadora', 'Turno A');
         $this->createObservation('CCU CENTRAL', 'Negativa', '2026-07-06', 'Ana Trabajadora', 'Turno B');
         $this->createObservation('CCU RENCA', 'Negativa', '2026-07-06', 'Luis Trabajador', 'Turno A');
 

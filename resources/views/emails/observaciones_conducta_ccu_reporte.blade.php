@@ -57,10 +57,10 @@
                             <tr>
                                 @foreach([
                                     ['Observaciones', $analytics['total'] ?? 0, '#21064f'],
-                                    ['Conductas seguras', $analytics['positivas'] ?? 0, '#15803d'],
                                     ['Hallazgos', $analytics['negativas'] ?? 0, '#dc2626'],
                                     ['Por revisar', $analytics['por_revisar'] ?? 0, '#475569'],
-                                    ['Resultado positivo', number_format($analytics['porcentaje_positivo'] ?? 0, 1) . '%', '#d97706'],
+                                    ['Observadores', $analytics['observadores_activos'] ?? 0, '#21064f'],
+                                    ['Trabajadores', $analytics['trabajadores_activos'] ?? 0, '#d97706'],
                                 ] as $index => [$label, $value, $color])
                                     <td class="ccu-kpi-card {{ $index === 4 ? 'ccu-kpi-last' : '' }}" style="padding:{{ $index === 4 ? '0 0 8px 0' : '0 8px 8px 0' }};width:20%;vertical-align:middle;">
                                         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:12px 8px;text-align:center;">
@@ -174,7 +174,7 @@
 
                         <div style="background:#f8fafc;border-left:4px solid #ff6b35;border-radius:6px;padding:13px 15px;margin-bottom:22px;">
                             <p style="font-size:12px;line-height:1.55;color:#475569;margin:0;">
-                                <strong style="color:#334155;">Criterio de lectura:</strong> “Por revisar” identifica selecciones múltiples que combinan conductas seguras y de riesgo en Kizeo. Se mantiene separada para no alterar los indicadores positivos ni negativos.
+                                <strong style="color:#334155;">Criterio de lectura:</strong> este formulario CCU registra solo hallazgos. Las opciones SIEMPRE, NUNCA y No Cumple PTS son tipos de conducta observada; todas se leen como negativas.
                             </p>
                         </div>
 

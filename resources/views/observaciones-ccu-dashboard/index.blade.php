@@ -167,7 +167,6 @@
                 <label for="ccu-clasificacion">Resultado</label>
                 <select id="ccu-clasificacion" name="clasificacion">
                     <option value="">Todos los resultados</option>
-                    <option value="Positiva" @selected(($filters['clasificacion'] ?? '') === 'Positiva')>Positivas</option>
                     <option value="Negativa" @selected(($filters['clasificacion'] ?? '') === 'Negativa')>Negativas</option>
                     <option value="Por revisar" @selected(($filters['clasificacion'] ?? '') === 'Por revisar')>Por revisar</option>
                 </select>
@@ -214,23 +213,22 @@
     @else
         <section class="ccu-kpis" aria-label="Indicadores principales">
             <article class="glass-card ccu-kpi"><div class="label">Observaciones</div><div class="value">{{ number_format($analytics['total']) }}</div><div class="hint">En el periodo filtrado</div></article>
-            <article class="glass-card ccu-kpi positive"><div class="label">Conductas seguras</div><div class="value">{{ number_format($analytics['positivas']) }}</div><div class="hint">Observaciones positivas</div></article>
-            <article class="glass-card ccu-kpi negative"><div class="label">Hallazgos</div><div class="value">{{ number_format($analytics['negativas']) }}</div><div class="hint">Requieren seguimiento</div></article>
-            <article class="glass-card ccu-kpi review"><div class="label">Por revisar</div><div class="value">{{ number_format($analytics['por_revisar']) }}</div><div class="hint">Selección múltiple en Kizeo</div></article>
-            <article class="glass-card ccu-kpi warning"><div class="label">Resultado positivo</div><div class="value">{{ number_format($analytics['porcentaje_positivo'], 1) }}%</div><div class="hint">Del total observado</div></article>
+            <article class="glass-card ccu-kpi negative"><div class="label">Hallazgos</div><div class="value">{{ number_format($analytics['negativas']) }}</div><div class="hint">Todas son observaciones negativas</div></article>
+            <article class="glass-card ccu-kpi review"><div class="label">Por revisar</div><div class="value">{{ number_format($analytics['por_revisar']) }}</div><div class="hint">Sin tipo de observación</div></article>
+            <article class="glass-card ccu-kpi"><div class="label">Observadores</div><div class="value">{{ number_format($analytics['observadores_activos']) }}</div><div class="hint">Con registros</div></article>
             <article class="glass-card ccu-kpi"><div class="label">Centros activos</div><div class="value">{{ number_format($analytics['centros_activos']) }}</div><div class="hint">Con registros</div></article>
+            <article class="glass-card ccu-kpi warning"><div class="label">Trabajadores</div><div class="value">{{ number_format($analytics['trabajadores_activos'] ?? 0) }}</div><div class="hint">Observados en el periodo</div></article>
         </section>
 
         <section class="ccu-grid">
             <article class="glass-card ccu-panel">
                 <h3><i class="bi bi-bar-chart-line-fill"></i> Tendencia mensual</h3>
                 @if(!empty($analytics['by_month']))
-                    @php $maxMonth = max(array_map(fn ($month) => max($month['positivas'], $month['negativas'], $month['por_revisar']), $analytics['by_month'])) ?: 1; @endphp
+                    @php $maxMonth = max(array_map(fn ($month) => max($month['negativas'], $month['por_revisar']), $analytics['by_month'])) ?: 1; @endphp
                     <div class="ccu-trend">
                         @foreach($analytics['by_month'] as $month)
-                            <div class="ccu-trend-item" title="{{ $month['label'] }}: {{ $month['positivas'] }} positivas, {{ $month['negativas'] }} negativas y {{ $month['por_revisar'] }} por revisar">
+                            <div class="ccu-trend-item" title="{{ $month['label'] }}: {{ $month['negativas'] }} hallazgos y {{ $month['por_revisar'] }} por revisar">
                                 <div class="ccu-trend-bars">
-                                    <span class="ccu-trend-bar ccu-bar-positive" style="height:{{ max(3, ($month['positivas'] / $maxMonth) * 100) }}%"></span>
                                     <span class="ccu-trend-bar ccu-bar-negative" style="height:{{ max(3, ($month['negativas'] / $maxMonth) * 100) }}%"></span>
                                     <span class="ccu-trend-bar ccu-bar-review" style="height:{{ max(3, ($month['por_revisar'] / $maxMonth) * 100) }}%"></span>
                                 </div>
@@ -238,7 +236,7 @@
                             </div>
                         @endforeach
                     </div>
-                    <div class="ccu-legend"><span class="positive">Positivas</span><span class="negative">Negativas</span><span class="review">Por revisar</span></div>
+                    <div class="ccu-legend"><span class="negative">Hallazgos</span><span class="review">Por revisar</span></div>
                 @else
                     <div class="ccu-empty">No hay registros para el periodo seleccionado.</div>
                 @endif
@@ -380,9 +378,9 @@
         <section class="glass-card ccu-panel" style="margin-bottom:1rem">
             <h3><i class="bi bi-info-circle-fill"></i> Lectura del resultado</h3>
             <p class="ccu-muted" style="font-size:.8rem;line-height:1.6;margin:0">
-                <strong style="color:#166534">Positiva:</strong> la selección contiene solo conductas seguras.
-                <br><strong style="color:#b91c1c">Negativa:</strong> contiene una conducta de riesgo o incumplimiento.
-                <br><strong style="color:#334155">Por revisar:</strong> Kizeo entregó una selección múltiple con ambos tipos; se mantiene separada para no alterar los indicadores.
+                Este formulario registra <strong>solo observaciones negativas</strong>. Las opciones <strong>SIEMPRE</strong>, <strong>NUNCA</strong> y <strong>No Cumple PTS</strong> identifican el tipo de conducta observada, no un resultado positivo.
+                <br><strong style="color:#b91c1c">Negativa:</strong> toda observación con un tipo seleccionado en Kizeo.
+                <br><strong style="color:#334155">Por revisar:</strong> el registro llegó sin tipo de observación.
             </p>
         </section>
 

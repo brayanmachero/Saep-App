@@ -6,7 +6,6 @@ use App\Models\ObservacionConductaCcu;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class ObservacionConductaCcuSyncService
 {
@@ -190,29 +189,14 @@ class ObservacionConductaCcuSyncService
 
     private function classificationFor(array $types): string
     {
-        $hasPositive = false;
-        $hasNegative = false;
+        $types = array_values(array_filter(
+            $types,
+            fn ($type) => trim((string) $type) !== '',
+        ));
 
-        foreach ($types as $type) {
-            $normalized = Str::upper((string) $type);
-            $isNegative = str_contains($normalized, 'NO CUMPLE')
-                || str_contains($normalized, 'NUNCA')
-                || (bool) preg_match('/^0?[6-9]\./', $normalized)
-                || str_starts_with($normalized, '10.');
-
-            $hasNegative = $hasNegative || $isNegative;
-            $hasPositive = $hasPositive || !$isNegative;
-        }
-
-        if ($hasPositive && $hasNegative) {
-            return 'Por revisar';
-        }
-
-        if ($hasNegative) {
-            return 'Negativa';
-        }
-
-        return $hasPositive ? 'Positiva' : 'Por revisar';
+        // El formulario CCU registra solo hallazgos. Las opciones SIEMPRE, NUNCA
+        // y "No Cumple PTS" identifican la conducta observada, no un resultado positivo.
+        return $types === [] ? 'Por revisar' : 'Negativa';
     }
 
     private function dateValue(?string $value): ?string

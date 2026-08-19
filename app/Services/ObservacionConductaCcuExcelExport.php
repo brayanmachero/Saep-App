@@ -13,7 +13,6 @@ class ObservacionConductaCcuExcelExport
 {
     private const SAEP_ORANGE = 'FF5A31';
     private const SAEP_PURPLE = '2D0B64';
-    private const GREEN = '166534';
     private const RED = 'B91C1C';
     private const GRAY = 'F8FAFC';
 
@@ -55,11 +54,11 @@ class ObservacionConductaCcuExcelExport
 
         $cards = [
             ['Observaciones', $analytics['total'] ?? 0, self::SAEP_ORANGE],
-            ['Positivas', $analytics['positivas'] ?? 0, self::GREEN],
-            ['Negativas', $analytics['negativas'] ?? 0, self::RED],
+            ['Hallazgos', $analytics['negativas'] ?? 0, self::RED],
             ['Por revisar', $analytics['por_revisar'] ?? 0, '475569'],
-            ['Resultado positivo', ($analytics['porcentaje_positivo'] ?? 0) . '%', self::SAEP_PURPLE],
+            ['Observadores', $analytics['observadores_activos'] ?? 0, self::SAEP_PURPLE],
             ['Centros activos', $analytics['centros_activos'] ?? 0, self::SAEP_ORANGE],
+            ['Trabajadores', $analytics['trabajadores_activos'] ?? 0, self::RED],
         ];
 
         foreach ($cards as $index => [$label, $value, $color]) {

@@ -50,6 +50,7 @@ class ObservacionConductaCcuAnalyticsService
             'porcentaje_positivo' => $total > 0 ? round(($positivas / $total) * 100, 1) : 0,
             'centros_activos' => $rows->pluck('centro')->filter()->unique()->count(),
             'observadores_activos' => $rows->pluck('observador_nombre')->filter()->unique()->count(),
+            'trabajadores_activos' => $rows->pluck('trabajador_nombre')->filter()->unique()->count(),
             'by_month' => $this->monthlyBreakdown($rows),
             'centros' => $this->groupCount($rows, 'centro', 10),
             'turnos' => $rows
