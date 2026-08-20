@@ -20,6 +20,7 @@ class DescargaContenedorController extends Controller
     {
         $puedeGestionarCostos = $this->puedeGestionarCostos();
         $puedeEditarContenedores = auth()->user()?->tieneAcceso('descarga_contenedores', 'puede_editar') ?? false;
+        $this->associateMissingUniqueTarifas();
         $query = DescargaContenedor::with(['carga', 'centroCosto', 'participantes', 'creadoPor', 'tarifa'])
             ->withCount('participantes');
 
@@ -150,49 +151,25 @@ class DescargaContenedorController extends Controller
         });
 
         return redirect()
-            ->route('descarga-contenedores.show', $descarga)
+            ->route('descarga-contenedores.index', [
+                'abrir' => $descarga->id,
+                'modo' => 'edit',
+            ])
             ->with('success', 'Descarga registrada correctamente.');
     }
 
     public function show(DescargaContenedor $descarga)
     {
-        $descarga = $descarga->load([
-            'centroCosto',
-            'tarifa.centroCosto',
-            'supervisor',
-            'creadoPor',
-            'validadoPor',
-            'liquidadoPor',
-            'participantes.talanaTrabajador.centroCosto',
-            'participantes.talanaTrabajador.centroOperativo',
-            'participantes.talanaTrabajador.cargo',
-            'participantes.user.centroCosto',
-            'participantes.user.cargo',
-            'evidencias.subidoPor',
-        ]);
+        abort_unless(auth()->user()?->tieneAcceso('descarga_contenedores'), 403);
 
-        $tarifas = $this->puedeGestionarCostos()
-            ? DescargaContenedorTarifa::with('centroCosto')
-                ->where('activo', true)
-                ->where('codigo', $descarga->fact_codigo)
-                ->orderBy('cliente')
-                ->orderBy('centro_costo_id')
-                ->get()
-            : collect();
-
-        return view('descarga_contenedores.show', compact('descarga', 'tarifas'));
+        return $this->redirectToListPanel($descarga, 'detail');
     }
 
     public function edit(DescargaContenedor $descarga)
     {
         $this->ensureEditable($descarga);
 
-        $descarga = $descarga->load(['participantes', 'evidencias.subidoPor']);
-
-        return view('descarga_contenedores.edit', array_merge(
-            $this->formData($descarga),
-            compact('descarga')
-        ));
+        return $this->redirectToListPanel($descarga, 'edit');
     }
 
     public function update(Request $request, DescargaContenedor $descarga)
@@ -213,14 +190,15 @@ class DescargaContenedorController extends Controller
             $this->storeEvidencias($descarga, $request);
         });
 
-        return redirect()
-            ->route('descarga-contenedores.show', $descarga)
+        return $this->redirectToListPanel($descarga, 'detail')
             ->with('success', 'Descarga actualizada correctamente.');
     }
 
     public function quickPanel(DescargaContenedor $descarga)
     {
         abort_unless(auth()->user()?->tieneAcceso('descarga_contenedores'), 403);
+
+        $this->associateUniqueTarifaIfMissing($descarga);
 
         $descarga->load([
             'participantes',
@@ -278,8 +256,6 @@ class DescargaContenedorController extends Controller
                 'can_delete' => auth()->user()?->tieneAcceso('descarga_contenedores', 'puede_eliminar')
                     && $descarga->estado !== 'liquidado',
                 'blockers' => $this->visibleBlockers($descarga)->all(),
-                'show_url' => route('descarga-contenedores.show', $descarga),
-                'edit_url' => route('descarga-contenedores.edit', $descarga),
                 'participantes' => $descarga->participantes
                     ->map(fn ($p) => [
                         'id' => $p->talana_trabajador_id,
@@ -1301,6 +1277,14 @@ class DescargaContenedorController extends Controller
         abort_if($descarga->estado === 'liquidado', 403, 'No se puede editar un registro liquidado.');
     }
 
+    private function redirectToListPanel(DescargaContenedor $descarga, string $mode = 'detail')
+    {
+        return redirect()->route('descarga-contenedores.index', [
+            'abrir' => $descarga->id,
+            'modo' => $mode === 'edit' ? 'edit' : 'detail',
+        ]);
+    }
+
     private function canQuickEdit(DescargaContenedor $descarga): bool
     {
         return (bool) auth()->user()?->puedeEditarDescargaContenedor($descarga)
@@ -1727,6 +1711,50 @@ class DescargaContenedorController extends Controller
         $data['costo_unitario_snapshot'] = $tarifa->costo_unitario;
         $data['pago_colaborador_snapshot'] = $tarifa->pago_colaborador;
         $data['requiere_revision_tarifa'] = $tarifa->requiere_revision;
+    }
+
+    private function associateMissingUniqueTarifas(): void
+    {
+        DescargaContenedor::query()
+            ->where('estado', 'borrador')
+            ->whereNull('tarifa_id')
+            ->whereNotNull('fact_codigo')
+            ->where('fact_codigo', '<>', '')
+            ->orderBy('id')
+            ->limit(200)
+            ->get()
+            ->each(fn (DescargaContenedor $descarga) => $this->associateUniqueTarifaIfMissing($descarga));
+    }
+
+    private function associateUniqueTarifaIfMissing(DescargaContenedor $descarga): bool
+    {
+        if ($descarga->tarifa_id || $descarga->estado === 'liquidado' || blank($descarga->fact_codigo)) {
+            return false;
+        }
+
+        $data = [
+            'tarifa_id' => null,
+            'fact_codigo' => $descarga->fact_codigo,
+            'operacion' => $descarga->operacion,
+            'centro_costo_id' => $descarga->centro_costo_id,
+        ];
+        $this->applyTarifaSnapshot($data);
+
+        if (empty($data['tarifa_id'])) {
+            return false;
+        }
+
+        $descarga->forceFill([
+            'tarifa_id' => $data['tarifa_id'],
+            'fact_codigo' => $data['fact_codigo'],
+            'tarifa_cliente_snapshot' => $data['tarifa_cliente_snapshot'],
+            'tarifa_proceso_snapshot' => $data['tarifa_proceso_snapshot'],
+            'costo_unitario_snapshot' => $data['costo_unitario_snapshot'],
+            'pago_colaborador_snapshot' => $data['pago_colaborador_snapshot'],
+            'requiere_revision_tarifa' => $data['requiere_revision_tarifa'],
+        ])->save();
+
+        return true;
     }
 
     private function normalizeBulkRow(array $row): array

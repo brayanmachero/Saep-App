@@ -39,6 +39,7 @@
         </div>
         <button type="button" class="icon-btn" data-drawer-close title="Cerrar"><i class="bi bi-x-lg"></i></button>
     </header>
+    <div class="contenedores-drawer-alerts" data-drawer-alerts hidden></div>
     <div class="contenedores-drawer-body">
         <section data-drawer-detail></section>
         <section class="contenedores-detail-card" data-drawer-fields hidden>
@@ -82,7 +83,7 @@
                 <div data-fact-select></div>
                 <button type="button" class="icon-btn" data-clear-tarifa title="Limpiar tarifa"><i class="bi bi-x-lg"></i></button>
             </div>
-            <small class="muted-hint">Buscador con dependencias: cliente según operación y tarifas del centro. Si el código es único, se asocia solo.</small>
+            <small class="muted-hint" data-fact-hint>Buscador con dependencias: cliente según operación y tarifas del centro. Si el código es único, se asocia solo.</small>
         </section>
         <section class="contenedores-detail-card" data-drawer-workers>
             <h4>Trabajadores</h4>
@@ -139,6 +140,7 @@
     const fieldsSection = drawer.querySelector('[data-drawer-fields]');
     const workersSection = drawer.querySelector('[data-drawer-workers]');
     const detailSection = drawer.querySelector('[data-drawer-detail]');
+    const alertsEl = drawer.querySelector('[data-drawer-alerts]');
     const tabsEl = drawer.querySelector('[data-drawer-tabs]');
     const toEditBtn = drawer.querySelector('[data-drawer-to-edit]');
     const deleteBtn = drawer.querySelector('[data-drawer-delete]');
@@ -148,6 +150,7 @@
     const crewBox = drawer.querySelector('[data-drawer-crew]');
     const tarifaIdInput = drawer.querySelector('[data-drawer-tarifa-id]');
     const factInput = drawer.querySelector('[data-drawer-fact-codigo]');
+    const factHint = drawer.querySelector('[data-fact-hint]');
     const saveBtn = drawer.querySelector('[data-drawer-save]');
     const drawerBody = drawer.querySelector('.contenedores-drawer-body');
     const fieldEls = {
@@ -241,6 +244,18 @@
         return `<div class="contenedores-detail-metric"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`;
     }
 
+    function renderAlerts(d) {
+        if (!alertsEl) return;
+        const blockers = d.blockers || [];
+        if (!blockers.length) {
+            alertsEl.hidden = true;
+            alertsEl.innerHTML = '';
+            return;
+        }
+        alertsEl.hidden = false;
+        alertsEl.innerHTML = `<strong>Pendiente para validar</strong>${blockers.map(item => `<span class="badge warning">${escapeHtml(capitalize(item))}</span>`).join('')}`;
+    }
+
     function renderDetail(d) {
         const blockers = d.blockers || [];
         const workers = d.participantes || [];
@@ -251,6 +266,7 @@
         const percentTotal = workers.reduce((sum, item) => sum + (Number(item.porcentaje) || 0), 0);
         const montoTotal = workers.reduce((sum, item) => sum + (Number(item.monto) || 0), 0);
         const tarifaText = [d.tarifa_cliente, d.tarifa_proceso].filter(Boolean).join(' · ');
+        renderAlerts(d);
 
         detailSection.innerHTML = `
             ${blockers.length ? `<div class="contenedores-detail-alerts">${blockers.map(item => `<span class="badge warning">${escapeHtml(capitalize(item))}</span>`).join('')}</div>` : ''}
@@ -640,6 +656,15 @@
         tarifaIdInput.value = tarifa ? String(tarifa.id) : '';
         factInput.value = tarifa ? tarifa.codigo : String(manualCode || '').trim().toUpperCase();
         if (factSelect) factSelect.sync();
+        if (factHint) {
+            if (tarifa) {
+                factHint.textContent = 'Tarifa asociada. El pago de colaboradores se toma de este código FACT.';
+            } else if (factInput.value) {
+                factHint.textContent = 'Hay un código FACT informado, pero todavía no está asociada una tarifa. Búscalo y pulsa Guardar para confirmarlo.';
+            } else {
+                factHint.textContent = 'Buscador con dependencias: cliente según operación y tarifas del centro. Si el código es único, se asocia solo.';
+            }
+        }
         crewBox.dispatchEvent(new Event('tarifa-change'));
     }
 
@@ -651,7 +676,7 @@
         getTriggerLabel() {
             const tarifa = byTarifaId.get(String(tarifaIdInput.value || ''));
             if (tarifa) return tarifaLabel(tarifa);
-            return factInput.value ? `Código manual: ${factInput.value}` : 'Selecciona tarifa FACT';
+            return factInput.value ? `Código informado, sin asociar: ${factInput.value}` : 'Selecciona tarifa FACT';
         },
         getOptions() {
             const selectedId = String(tarifaIdInput.value || '');
@@ -872,8 +897,9 @@
             const ok = Math.abs(total - 100) <= 0.01 && selected.size > 0;
             hintEl.textContent = selected.size === 0
                 ? 'Agrega trabajadores para completar el equipo.'
-                : (ok ? 'Distribución lista para validar.' : 'Debe sumar 100% para validar.');
+                : (ok ? 'Distribución lista para validar.' : `La distribución suma ${Math.round(total * 100) / 100}%. Debe quedar en 100% (usa Repartir igual).`);
             hintEl.classList.toggle('is-ok', ok);
+            hintEl.classList.toggle('is-warn', !ok && selected.size > 0);
             if (pagoEl) {
                 const tarifa = currentTarifa();
                 const pago = tarifa && tarifa.pago_colaborador != null ? Number(tarifa.pago_colaborador) : null;
@@ -1136,7 +1162,7 @@
         openDrawerShell(d.contenedor || 'Sin contenedor', [d.fecha, d.bodega, d.operacion].filter(Boolean).join(' · '));
         renderDetail(d);
         fillFields(d);
-        const tarifa = byTarifaId.get(String(d.tarifa_id || '')) || uniqueTarifaByCode(d.fact_codigo, currentCenterId, clienteFromOperacion(currentOperacion));
+        const tarifa = byTarifaId.get(String(d.tarifa_id || ''));
         setSelectedTarifa(tarifa || null, d.fact_codigo || '');
         initCrewPicker(d.participantes || []);
 
@@ -1167,6 +1193,10 @@
         currentCanEdit = true;
         currentCanDelete = false;
         openDrawerShell('Asignación masiva', `${ids.length} contenedor(es) seleccionados`);
+        if (alertsEl) {
+            alertsEl.hidden = true;
+            alertsEl.innerHTML = '';
+        }
         initCrewPicker([]);
         setPanelMode('edit');
     }
@@ -1208,7 +1238,7 @@
             metaEl.textContent = [d.fecha, d.bodega, d.operacion].filter(Boolean).join(' · ');
             renderDetail(d);
             fillFields(d);
-            const tarifa = byTarifaId.get(String(d.tarifa_id || '')) || uniqueTarifaByCode(d.fact_codigo, currentCenterId, clienteFromOperacion(currentOperacion));
+            const tarifa = byTarifaId.get(String(d.tarifa_id || ''));
             setSelectedTarifa(tarifa || null, d.fact_codigo || '');
             initCrewPicker(d.participantes || []);
             setPanelMode(panelMode || 'edit');
@@ -1368,6 +1398,20 @@
         if (drawer.classList.contains('is-open')) closeDrawer();
     });
 
+    (function openFromQuery() {
+        const params = new URLSearchParams(window.location.search);
+        const openId = params.get('abrir');
+        if (!openId) return;
+        const focus = params.get('modo') === 'edit' ? 'edit' : 'detail';
+        openSingle(openId, focus).catch(error => {
+            toast(error.message || 'No se pudo abrir el registro.', 'error');
+        });
+        params.delete('abrir');
+        params.delete('modo');
+        const query = params.toString();
+        history.replaceState({}, '', window.location.pathname + (query ? '?' + query : ''));
+    })();
+
     (function bindResizer() {
         const resizer = drawer.querySelector('[data-drawer-resizer]');
         if (!resizer) return;
@@ -1460,6 +1504,21 @@ body.is-drawer-resizing * { cursor: col-resize !important; }
     flex-wrap: wrap;
     gap: .5rem;
     align-items: center;
+}
+.contenedores-drawer-alerts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .35rem;
+    padding: .65rem 1.15rem;
+    border-bottom: 1px solid #fed7aa;
+    background: #fff7ed;
+}
+.contenedores-drawer-alerts[hidden] { display: none; }
+.contenedores-drawer-alerts strong {
+    width: 100%;
+    color: #9a3412;
+    font-size: .78rem;
 }
 .contenedores-btn-danger {
     color: #dc2626;
@@ -1676,12 +1735,13 @@ tr[data-descarga-id]:hover { background: rgba(114, 80, 202, .04); }
     padding: 0;
     cursor: pointer;
 }
-.pending-details:not([hidden]) {
+.pending-details {
     display: flex;
     flex-wrap: wrap;
     gap: .25rem;
     margin-top: .35rem;
 }
+.pending-details[hidden] { display: none; }
 .pending-details .review-next-step {
     flex: 1 1 100%;
     max-width: none;
@@ -1822,6 +1882,7 @@ tr[data-descarga-id]:hover { background: rgba(114, 80, 202, .04); }
 }
 .distribution-status { color: #d97706; font-weight: 700; }
 .distribution-status.is-ok { color: var(--success-color); }
+.distribution-status.is-warn { color: #b45309; }
 .worker-tags { display: grid; gap: .4rem; }
 .worker-tag {
     display: grid;

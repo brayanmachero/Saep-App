@@ -142,10 +142,8 @@
                             <strong>{{ $item->contenedor ?: 'Sin contenedor' }}</strong>
                             <small>{{ $item->fecha?->format('d/m/Y') ?? 'Sin fecha' }} · {{ $item->bodega ?: ($item->centroCosto->nombre ?? 'Sin centro') }}</small>
                             <div class="review-badges">
-                                <button type="button" class="pending-compact" data-pending-toggle aria-expanded="false">
-                                    <span class="badge warning">{{ $visibleBlockers->count() }} {{ $visibleBlockers->count() === 1 ? 'pendiente' : 'pendientes' }}</span>
-                                </button>
-                                <div class="pending-details" hidden>
+                                <span class="badge warning">{{ $visibleBlockers->count() }} {{ $visibleBlockers->count() === 1 ? 'pendiente' : 'pendientes' }}</span>
+                                <div class="pending-details">
                                     @foreach($visibleBlockers as $blocker)
                                         <span class="badge warning">{{ ucfirst($blocker) }}</span>
                                     @endforeach
@@ -585,6 +583,13 @@
     flex-wrap: wrap;
     gap: .25rem;
     margin-top: .35rem;
+}
+.review-badges .pending-details {
+    flex: 1 1 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+    margin-top: .15rem;
 }
 .review-next-step {
     display: flex;

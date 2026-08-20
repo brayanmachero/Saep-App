@@ -157,10 +157,9 @@ class DescargaContenedorTest extends TestCase
         Storage::disk('local')->assertExists($evidencia->ruta);
 
         $this->actingAs($capturador)
-            ->get(route('descarga-contenedores.show', $descarga))
+            ->getJson(route('descarga-contenedores.panel', $descarga))
             ->assertOk()
-            ->assertSee('Evidencia fotográfica')
-            ->assertSee('evidencia-descarga.jpg');
+            ->assertJsonPath('descarga.evidencias.0.nombre', 'evidencia-descarga.jpg');
 
         $this->actingAs($capturador)
             ->get(route('descarga-contenedores.evidencias.ver', $evidencia))
@@ -224,16 +223,22 @@ class DescargaContenedorTest extends TestCase
 
         $this->actingAs($capturador)
             ->get(route('descarga-contenedores.show', $descargaPropia))
+            ->assertRedirect(route('descarga-contenedores.index', [
+                'abrir' => $descargaPropia->id,
+                'modo' => 'detail',
+            ]));
+
+        $this->actingAs($capturador)
+            ->getJson(route('descarga-contenedores.panel', $descargaPropia))
             ->assertOk()
-            ->assertSee('Editar')
-            ->assertDontSee('Validar')
-            ->assertDontSee('Liquidar');
+            ->assertJsonPath('can_edit', true);
 
         $this->actingAs($capturador)
             ->get(route('descarga-contenedores.edit', $descargaPropia))
-            ->assertOk()
-            ->assertSee('Pago estimado')
-            ->assertDontSee('"costo_unitario"', false);
+            ->assertRedirect(route('descarga-contenedores.index', [
+                'abrir' => $descargaPropia->id,
+                'modo' => 'edit',
+            ]));
 
         $this->actingAs($capturador)
             ->put(route('descarga-contenedores.update', $descargaPropia), [
@@ -309,10 +314,17 @@ class DescargaContenedorTest extends TestCase
 
         $this->actingAs($capturador)
             ->get(route('descarga-contenedores.edit', $descarga))
+            ->assertRedirect(route('descarga-contenedores.index', [
+                'abrir' => $descarga->id,
+                'modo' => 'edit',
+            ]));
+
+        $this->actingAs($capturador)
+            ->getJson(route('descarga-contenedores.panel', $descarga))
             ->assertOk()
-            ->assertSee('Centro Externo Selector QA')
-            ->assertSee('CNTEXTERNO')
-            ->assertSee('Trabajador Externo Selector QA');
+            ->assertJsonPath('can_edit', true)
+            ->assertJsonPath('descarga.fact_codigo', 'CNTEXTERNO')
+            ->assertJsonPath('descarga.participantes.0.nombre', 'Trabajador Externo Selector QA');
 
         $this->actingAs($capturador)
             ->put(route('descarga-contenedores.update', $descarga), [
@@ -1058,10 +1070,16 @@ class DescargaContenedorTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('descarga-contenedores.show', $descarga))
+            ->assertRedirect(route('descarga-contenedores.index', [
+                'abrir' => $descarga->id,
+                'modo' => 'detail',
+            ]));
+
+        $this->actingAs($user)
+            ->getJson(route('descarga-contenedores.panel', $descarga))
             ->assertOk()
-            ->assertSee('Liquidado')
-            ->assertSee('Reabrir como validado')
-            ->assertDontSee('Editar');
+            ->assertJsonPath('descarga.estado', 'liquidado')
+            ->assertJsonPath('can_edit', false);
 
         $this->actingAs($user)
             ->patch(route('descarga-contenedores.volver-validado', $descarga))
@@ -1076,11 +1094,17 @@ class DescargaContenedorTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('descarga-contenedores.show', $descarga))
+            ->assertRedirect(route('descarga-contenedores.index', [
+                'abrir' => $descarga->id,
+                'modo' => 'detail',
+            ]));
+
+        $this->actingAs($user)
+            ->getJson(route('descarga-contenedores.panel', $descarga))
             ->assertOk()
-            ->assertSee('Liquidar')
-            ->assertSee('Editar')
-            ->assertDontSee('Liquidado por')
-            ->assertDontSee('Fecha liquidación');
+            ->assertJsonPath('descarga.estado', 'validado')
+            ->assertJsonPath('can_edit', true)
+            ->assertJsonPath('descarga.liquidado_por', '');
     }
 
     public function test_liquidated_records_are_locked_until_reopened(): void
@@ -1260,7 +1284,7 @@ class DescargaContenedorTest extends TestCase
         $this->assertTrue($descarga->validationBlockers()->contains('porcentajes no suman 100%'));
     }
 
-    public function test_pending_detail_shows_workflow_status_and_completion_action(): void
+    public function test_pending_records_open_in_the_list_panel_instead_of_a_full_page(): void
     {
         $user = $this->createSuperAdminUser();
 
@@ -1268,21 +1292,26 @@ class DescargaContenedorTest extends TestCase
             ->post(route('descarga-contenedores.store'), [
                 'contenedor' => 'CONT-PENDIENTE-001',
             ])
-            ->assertRedirect()
+            ->assertRedirect(route('descarga-contenedores.index', [
+                'abrir' => DescargaContenedor::where('contenedor', 'CONT-PENDIENTE-001')->value('id'),
+                'modo' => 'edit',
+            ]))
             ->assertSessionHasNoErrors();
 
         $descarga = DescargaContenedor::where('contenedor', 'CONT-PENDIENTE-001')->firstOrFail();
 
         $this->actingAs($user)
             ->get(route('descarga-contenedores.show', $descarga))
+            ->assertRedirect(route('descarga-contenedores.index', [
+                'abrir' => $descarga->id,
+                'modo' => 'detail',
+            ]));
+
+        $this->actingAs($user)
+            ->getJson(route('descarga-contenedores.panel', $descarga))
             ->assertOk()
-            ->assertSee('Estado del proceso')
-            ->assertSee('Registro en carga, con pendientes antes de validar.')
-            ->assertSee('Fecha registrada')
-            ->assertSee('Antes de validar falta:')
-            ->assertSee('Completar registro')
-            ->assertSee('Pendiente')
-            ->assertDontSee('Listo para validar.');
+            ->assertJsonPath('can_edit', true);
+        $this->assertNotEmpty($descarga->validationBlockers());
     }
 
     public function test_reportes_page_groups_by_operation_and_fact(): void
@@ -1380,19 +1409,16 @@ class DescargaContenedorTest extends TestCase
 
         $this->actingAs($capturador)
             ->get(route('descarga-contenedores.show', $descarga))
-            ->assertOk()
-            ->assertSee('CONT-CAPTURA-001')
-            ->assertSee('100,00%')
-            ->assertSee('Pago colaboradores')
-            ->assertSee('$36.000')
-            ->assertDontSee('Costo unitario')
-            ->assertDontSee('$75.000')
-            ->assertDontSee('Tarifas relacionadas');
+            ->assertRedirect(route('descarga-contenedores.index', [
+                'abrir' => $descarga->id,
+                'modo' => 'detail',
+            ]));
 
         $this->actingAs($capturador)
             ->getJson(route('descarga-contenedores.panel', $descarga))
             ->assertOk()
             ->assertJsonPath('can_view_costs', false)
+            ->assertJsonPath('descarga.contenedor', 'CONT-CAPTURA-001')
             ->assertJsonPath('descarga.costo_unitario', null);
         $this->assertEquals(36000.0, (float) $this->actingAs($capturador)
             ->getJson(route('descarga-contenedores.panel', $descarga))
@@ -1450,22 +1476,27 @@ class DescargaContenedorTest extends TestCase
 
         $this->actingAs($operativo)
             ->get(route('descarga-contenedores.show', $descarga))
+            ->assertRedirect(route('descarga-contenedores.index', [
+                'abrir' => $descarga->id,
+                'modo' => 'detail',
+            ]));
+
+        $this->actingAs($operativo)
+            ->getJson(route('descarga-contenedores.panel', $descarga))
             ->assertOk()
-            ->assertSee('CONT-OPERATIVO-001')
-            ->assertSee('Editar')
-            ->assertSee('Pago colaboradores')
-            ->assertSee('$36.000')
-            ->assertDontSee('Costo unitario')
-            ->assertDontSee('Tarifas relacionadas')
-            ->assertDontSee('$75.000');
+            ->assertJsonPath('can_edit', true)
+            ->assertJsonPath('can_view_costs', false)
+            ->assertJsonPath('descarga.costo_unitario', null);
+        $this->assertEquals(36000.0, (float) $this->actingAs($operativo)
+            ->getJson(route('descarga-contenedores.panel', $descarga))
+            ->json('descarga.pago'));
 
         $this->actingAs($operativo)
             ->get(route('descarga-contenedores.edit', $descarga))
-            ->assertOk()
-            ->assertSee('Tarifa FACT')
-            ->assertSee('Pago estimado')
-            ->assertDontSee('"costo_unitario"', false)
-            ->assertDontSee('$75.000');
+            ->assertRedirect(route('descarga-contenedores.index', [
+                'abrir' => $descarga->id,
+                'modo' => 'edit',
+            ]));
 
         foreach ([
             'descarga-contenedores.dotacion',
@@ -1505,12 +1536,17 @@ class DescargaContenedorTest extends TestCase
 
         $this->actingAs($coordinador)
             ->get(route('descarga-contenedores.show', $descarga))
+            ->assertRedirect(route('descarga-contenedores.index', [
+                'abrir' => $descarga->id,
+                'modo' => 'detail',
+            ]));
+
+        $panel = $this->actingAs($coordinador)
+            ->getJson(route('descarga-contenedores.panel', $descarga))
             ->assertOk()
-            ->assertSee('Costo unitario')
-            ->assertSee('Pago colaboradores')
-            ->assertSee('Tarifas relacionadas')
-            ->assertSee('$75.000')
-            ->assertSee('$36.000');
+            ->assertJsonPath('can_view_costs', true);
+        $this->assertEquals(75000.0, (float) $panel->json('descarga.costo_unitario'));
+        $this->assertEquals(36000.0, (float) $panel->json('descarga.pago'));
     }
 
     public function test_generic_coordinator_role_does_not_see_container_cost_detail(): void
@@ -1538,13 +1574,19 @@ class DescargaContenedorTest extends TestCase
 
         $this->actingAs($coordinadorGenerico)
             ->get(route('descarga-contenedores.show', $descarga))
+            ->assertRedirect(route('descarga-contenedores.index', [
+                'abrir' => $descarga->id,
+                'modo' => 'detail',
+            ]));
+
+        $this->actingAs($coordinadorGenerico)
+            ->getJson(route('descarga-contenedores.panel', $descarga))
             ->assertOk()
-            ->assertSee('CONT-COORD-GENERICO-001')
-            ->assertSee('Pago colaboradores')
-            ->assertSee('$36.000')
-            ->assertDontSee('Costo unitario')
-            ->assertDontSee('Tarifas relacionadas')
-            ->assertDontSee('$75.000');
+            ->assertJsonPath('can_view_costs', false)
+            ->assertJsonPath('descarga.costo_unitario', null);
+        $this->assertEquals(36000.0, (float) $this->actingAs($coordinadorGenerico)
+            ->getJson(route('descarga-contenedores.panel', $descarga))
+            ->json('descarga.pago'));
 
         foreach ([
             'descarga-contenedores.dotacion',
@@ -1605,6 +1647,59 @@ class DescargaContenedorTest extends TestCase
             ->assertOk()
             ->assertDontSee('Bandeja de revisión')
             ->assertDontSee('Validar registro');
+    }
+
+    public function test_review_queue_associates_unique_fact_code_and_keeps_percentage_blockers(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('EL PEÑON FACT QA');
+        $tarifa = $this->createTarifa('CNTAUTOQA', 75000, 36000, 'CONTENEDOR ESTANDAR');
+        $workerA = $this->createTalanaWorker('Diego Fact Pendiente QA', $centro);
+        $workerB = $this->createTalanaWorker('Brayan Fact Pendiente QA', $centro);
+
+        $descarga = DescargaContenedor::create([
+            'estado' => 'borrador',
+            'origen' => 'pegado',
+            'operacion' => 'Walmart',
+            'centro_costo_id' => $centro->id,
+            'bodega' => 'EL PEÑÓN',
+            'fecha' => '2026-08-01',
+            'contenedor' => 'CGMU5809562QA',
+            'fact_codigo' => 'CNTAUTOQA',
+            'creado_por' => $user->id,
+            'supervisor_id' => $user->id,
+        ]);
+
+        foreach ([$workerA, $workerB] as $worker) {
+            $descarga->participantes()->create([
+                'talana_trabajador_id' => $worker->id,
+                'nombre_snapshot' => $worker->nombre,
+                'rut_snapshot' => $worker->rut,
+                'cargo_snapshot' => $worker->cargo_nombre,
+                'centro_costo_id_snapshot' => $centro->id,
+                'centro_costo_snapshot' => $centro->nombre,
+                'rol_en_descarga' => 'descargador',
+                'porcentaje_participacion' => 10,
+                'monto_calculado' => 3600,
+            ]);
+        }
+
+        $this->assertNull($descarga->tarifa_id);
+        $this->assertSame('Completar tarifa FACT', $descarga->validationNextAction()['label']);
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.index'))
+            ->assertOk()
+            ->assertSee('CGMU5809562QA')
+            ->assertSee('Completar equipo')
+            ->assertSee('Porcentajes no suman 100%')
+            ->assertDontSee('Completar tarifa FACT');
+
+        $descarga->refresh();
+        $this->assertSame($tarifa->id, $descarga->tarifa_id);
+        $this->assertEquals(36000.0, (float) $descarga->pago_colaborador_snapshot);
+        $this->assertTrue($descarga->validationBlockers()->contains('porcentajes no suman 100%'));
+        $this->assertSame('Completar equipo', $descarga->validationNextAction()['label']);
     }
 
     public function test_index_exposes_inline_drawer_and_bulk_worker_assignment(): void
