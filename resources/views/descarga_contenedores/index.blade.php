@@ -166,55 +166,6 @@
     </details>
     @endif
 
-    <div class="stats-grid">
-        <div class="glass-card stat-item" title="Total de registros de descarga guardados en el módulo.">
-            <div class="stat-icon primary"><i class="bi bi-box-seam"></i></div>
-            <div class="stat-info"><h3>{{ $stats['total'] }}</h3><p>Registros</p></div>
-        </div>
-        <div class="glass-card stat-item" title="Registros pendientes de revisión o cierre por coordinación.">
-            <div class="stat-icon warning"><i class="bi bi-pencil-square"></i></div>
-            <div class="stat-info"><h3>{{ $stats['borradores'] }}</h3><p>Borradores</p></div>
-        </div>
-        <div class="glass-card stat-item" title="Registros revisados y autorizados para seguir el flujo.">
-            <div class="stat-icon success"><i class="bi bi-check2-circle"></i></div>
-            <div class="stat-info"><h3>{{ $stats['validadas'] }}</h3><p>Validadas</p></div>
-        </div>
-        @if($puedeGestionarCostos)
-        <div class="glass-card stat-item" title="Registros ya cerrados para pago referencial.">
-            <div class="stat-icon success"><i class="bi bi-cash-stack"></i></div>
-            <div class="stat-info"><h3>{{ $stats['liquidadas'] }}</h3><p>Liquidadas</p></div>
-        </div>
-        @endif
-        <div class="glass-card stat-item" title="Borradores sin pendientes de validación.">
-            <div class="stat-icon success"><i class="bi bi-shield-check"></i></div>
-            <div class="stat-info"><h3>{{ $stats['listos_validar'] }}</h3><p>Listos para validar</p></div>
-        </div>
-        <div class="glass-card stat-item" title="Cantidad total de asignaciones de trabajadores en descargas.">
-            <div class="stat-icon primary"><i class="bi bi-people"></i></div>
-            <div class="stat-info"><h3>{{ $stats['participantes'] }}</h3><p>Participaciones</p></div>
-        </div>
-        <div class="glass-card stat-item" title="Borradores con datos faltantes, equipo incompleto o porcentajes que no suman 100%.">
-            <div class="stat-icon warning"><i class="bi bi-clipboard-x"></i></div>
-            <div class="stat-info"><h3>{{ $stats['pendientes_validar'] }}</h3><p>Pendientes</p></div>
-        </div>
-        @if($puedeGestionarCostos)
-        <div class="glass-card stat-item" title="Registros con código FACT manual, duplicado o marcado para revisión.">
-            <div class="stat-icon warning"><i class="bi bi-exclamation-triangle"></i></div>
-            <div class="stat-info"><h3>{{ $stats['revision_tarifa'] }}</h3><p>Tarifa por revisar</p></div>
-        </div>
-        @endif
-        <div class="glass-card stat-item" title="Registros sin trabajadores asignados.">
-            <div class="stat-icon warning"><i class="bi bi-person-dash"></i></div>
-            <div class="stat-info"><h3>{{ $stats['sin_equipo'] }}</h3><p>Sin equipo</p></div>
-        </div>
-        @if($puedeGestionarCostos)
-        <div class="glass-card stat-item" title="Suma referencial de pagos a colaboradores según tarifas asociadas.">
-            <div class="stat-icon success"><i class="bi bi-cash-coin"></i></div>
-            <div class="stat-info"><h3>${{ number_format((float) $stats['pago_total'], 0, ',', '.') }}</h3><p>Pago total ref.</p></div>
-        </div>
-        @endif
-    </div>
-
     <div class="glass-card" style="margin-bottom:1rem;padding:.75rem 1rem">
         <form method="GET" action="{{ route('descarga-contenedores.index') }}" style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:flex-end">
             <div style="flex:1;min-width:220px">

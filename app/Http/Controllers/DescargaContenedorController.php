@@ -93,16 +93,13 @@ class DescargaContenedorController extends Controller
 
         $centros = $this->centrosOperacion();
         $stats = [
-            'total' => DescargaContenedor::count(),
-            'borradores' => DescargaContenedor::where('estado', 'borrador')->count(),
             'validadas' => DescargaContenedor::where('estado', 'validado')->count(),
             'liquidadas' => DescargaContenedor::where('estado', 'liquidado')->count(),
-            'participantes' => DB::table('descarga_contenedor_participantes')->count(),
-            'revision_tarifa' => DescargaContenedor::where('requiere_revision_tarifa', true)->count(),
-            'sin_equipo' => DescargaContenedor::doesntHave('participantes')->count(),
+            'revision_tarifa' => $puedeGestionarCostos
+                ? DescargaContenedor::where('requiere_revision_tarifa', true)->count()
+                : 0,
             'listos_validar' => $this->readyForValidationQuery()->count(),
             'pendientes_validar' => $this->pendingValidationQuery()->count(),
-            'pago_total' => DescargaContenedor::whereNotNull('pago_colaborador_snapshot')->sum('pago_colaborador_snapshot'),
         ];
 
         $filterKeys = ['buscar', 'centro_costo_id', 'estado', 'validacion_estado', 'tarifa_estado', 'equipo_estado', 'fecha_desde', 'fecha_hasta'];
