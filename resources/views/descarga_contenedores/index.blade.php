@@ -444,14 +444,6 @@
         @if($descargas->hasPages())
             <div style="padding:1rem 0">{{ $descargas->links() }}</div>
         @endif
-        <div class="contenedores-bulk-bar" data-bulk-bar hidden>
-            <strong data-bulk-count>0 seleccionados</strong>
-            <span>Los mismos trabajadores se asignan a todos los contenedores marcados.</span>
-            <button type="button" class="btn-premium" data-bulk-open>
-                <i class="bi bi-people-fill"></i> Asignar trabajadores
-            </button>
-            <button type="button" class="btn-secondary" data-bulk-clear>Limpiar selección</button>
-        </div>
     </div>
 </div>
 @include('descarga_contenedores._list_panel')

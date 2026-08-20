@@ -51,6 +51,15 @@
     </footer>
 </aside>
 
+<div class="contenedores-bulk-bar" data-bulk-bar hidden>
+    <strong data-bulk-count>0 seleccionados</strong>
+    <span>Los mismos trabajadores se asignan a todos los contenedores marcados.</span>
+    <button type="button" class="btn-premium" data-bulk-open>
+        <i class="bi bi-people-fill"></i> Asignar trabajadores
+    </button>
+    <button type="button" class="btn-secondary" data-bulk-clear>Limpiar selección</button>
+</div>
+
 <script type="application/json" id="contenedores_trabajadores_data">@json($trabajadores)</script>
 <script type="application/json" id="contenedores_tarifas_data">@json($tarifasPickerData)</script>
 <script>
@@ -68,6 +77,7 @@
     if (!drawer || !backdrop) return;
 
     document.body.append(backdrop, drawer);
+    if (bulkBar) document.body.append(bulkBar);
 
     const titleEl = drawer.querySelector('[data-drawer-title]');
     const metaEl = drawer.querySelector('[data-drawer-meta]');
@@ -821,12 +831,15 @@
     });
 
     document.addEventListener('change', event => {
-        if (event.target.matches('.contenedores-select, [data-select-all]')) {
-            if (event.target.matches('[data-select-all]')) {
-                document.querySelectorAll('.contenedores-select').forEach(box => {
-                    box.checked = event.target.checked;
-                });
-            }
+        if (event.target.closest('[data-select-all]')) {
+            const checked = event.target.closest('[data-select-all]').checked;
+            document.querySelectorAll('.contenedores-select').forEach(box => {
+                box.checked = checked;
+            });
+            syncSelection();
+            return;
+        }
+        if (event.target.closest('.contenedores-select')) {
             syncSelection();
         }
     });
@@ -901,20 +914,25 @@
     letter-spacing: .04em;
 }
 .contenedores-bulk-bar {
-    position: sticky;
-    bottom: 0;
-    z-index: 5;
-    display: flex;
+    position: fixed;
+    left: 50%;
+    bottom: 1.4rem;
+    z-index: 3500;
+    display: none;
     flex-wrap: wrap;
     align-items: center;
-    gap: .65rem;
-    margin-top: .75rem;
-    padding: .75rem 1rem;
+    justify-content: center;
+    gap: .75rem;
+    max-width: min(720px, calc(100vw - 2rem));
+    padding: .85rem 1.1rem;
     border: 1px solid var(--surface-border);
-    border-radius: 8px;
-    background: var(--surface-color);
-    box-shadow: 0 -8px 20px rgba(15, 23, 42, .06);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, .18);
+    transform: translateX(-50%);
 }
+.contenedores-bulk-bar:not([hidden]) { display: flex; }
+.contenedores-bulk-bar[hidden] { display: none !important; }
 .contenedores-bulk-bar span { color: var(--text-muted); font-size: .8rem; }
 .pending-compact {
     border: 0;
