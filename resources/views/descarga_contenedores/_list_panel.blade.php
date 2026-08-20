@@ -45,11 +45,15 @@
             <h4>Datos del registro</h4>
             <div class="contenedores-edit-grid">
                 <label>Fecha<input type="date" class="form-control" data-field="fecha"></label>
-                <label>Operación<input type="text" class="form-control" data-field="operacion" placeholder="Walmart, SMU..."></label>
+                <label>Operación
+                    <input type="hidden" data-field="operacion">
+                    <div data-operacion-select></div>
+                    <small class="muted-hint">Define el cliente FACT: Walmart → WM, SMU/Unimarc → SMU.</small>
+                </label>
                 <label>Centro de costo
-                    <select class="form-control" data-field="centro_costo_id">
-                        <option value="">Sin asociar</option>
-                    </select>
+                    <input type="hidden" data-field="centro_costo_id">
+                    <div data-centro-select></div>
+                    <small class="muted-hint">Filtra tarifas FACT y prioriza las de este centro.</small>
                 </label>
                 <label>Bodega / CD<input type="text" class="form-control" data-field="bodega"></label>
                 <label>Facturación / mes<input type="text" class="form-control" data-field="facturacion_mes"></label>
@@ -78,7 +82,7 @@
                 <div data-fact-select></div>
                 <button type="button" class="icon-btn" data-clear-tarifa title="Limpiar tarifa"><i class="bi bi-x-lg"></i></button>
             </div>
-            <small class="muted-hint">Busca como en inventario. Si el código es único del cliente, se asocia solo.</small>
+            <small class="muted-hint">Buscador con dependencias: cliente según operación y tarifas del centro. Si el código es único, se asocia solo.</small>
         </section>
         <section data-drawer-workers>
             <h4>Trabajadores</h4>
@@ -139,6 +143,8 @@
     const toEditBtn = drawer.querySelector('[data-drawer-to-edit]');
     const deleteBtn = drawer.querySelector('[data-drawer-delete]');
     const factMount = drawer.querySelector('[data-fact-select]');
+    const operacionMount = drawer.querySelector('[data-operacion-select]');
+    const centroMount = drawer.querySelector('[data-centro-select]');
     const crewBox = drawer.querySelector('[data-drawer-crew]');
     const tarifaIdInput = drawer.querySelector('[data-drawer-tarifa-id]');
     const factInput = drawer.querySelector('[data-drawer-fact-codigo]');
@@ -171,6 +177,8 @@
     let currentOperacion = '';
     let currentCanEdit = false;
     let currentCanDelete = false;
+    let operacionSelect = null;
+    let centroSelect = null;
     let selectedIds = new Set();
     const portalMenus = [];
     const WIDTH_KEY = 'saep_contenedores_drawer_width';
@@ -333,24 +341,10 @@
         if (isBulk) saveBtn.textContent = 'Asignar a seleccionados';
     }
 
-    function fillCenterSelect(selectedId) {
-        const select = fieldEls.centro_costo_id;
-        if (!select) return;
-        const current = String(selectedId || '');
-        const options = [{ id: '', nombre: 'Sin asociar' }, ...centros];
-        if (current && !options.some(item => String(item.id) === current)) {
-            options.push({ id: current, nombre: 'Centro actual' });
-        }
-        select.innerHTML = options.map(item => (
-            `<option value="${escapeHtml(item.id)}"${String(item.id) === current ? ' selected' : ''}>${escapeHtml(item.nombre)}</option>`
-        )).join('');
-        select.value = current;
-    }
-
     function fillFields(d) {
-        fillCenterSelect(d.centro_costo_id || '');
         fieldEls.fecha.value = d.fecha_iso || '';
         fieldEls.operacion.value = d.operacion || '';
+        fieldEls.centro_costo_id.value = d.centro_costo_id || '';
         fieldEls.bodega.value = d.bodega || '';
         fieldEls.facturacion_mes.value = d.facturacion_mes || '';
         fieldEls.contenedor.value = d.contenedor || '';
@@ -367,6 +361,8 @@
         if (fieldEls.evidencias) fieldEls.evidencias.value = '';
         currentCenterId = d.centro_costo_id || '';
         currentOperacion = d.operacion || '';
+        operacionSelect?.sync();
+        centroSelect?.sync();
     }
 
     function appendRecordForm(form) {
@@ -592,6 +588,31 @@
         return api;
     }
 
+    function tarifaMatchesContext(tarifa) {
+        if (!tarifa) return false;
+        if (currentCenterId && tarifa.centro_costo_id && String(tarifa.centro_costo_id) !== String(currentCenterId)) {
+            return false;
+        }
+        const cliente = clienteFromOperacion(currentOperacion);
+        if (cliente && String(tarifa.cliente || '').toUpperCase() !== cliente) {
+            return false;
+        }
+        return true;
+    }
+
+    function refreshFactForContext() {
+        const selected = byTarifaId.get(String(tarifaIdInput.value || ''));
+        const cliente = clienteFromOperacion(currentOperacion);
+        if (selected && !tarifaMatchesContext(selected)) {
+            const auto = uniqueTarifaByCode(selected.codigo, currentCenterId, cliente);
+            setSelectedTarifa(auto, auto ? auto.codigo : '');
+        } else if (!selected && factInput.value) {
+            const auto = uniqueTarifaByCode(factInput.value, currentCenterId, cliente);
+            if (auto) setSelectedTarifa(auto, factInput.value);
+        }
+        factSelect?.sync();
+    }
+
     function setSelectedTarifa(tarifa, manualCode = '') {
         tarifaIdInput.value = tarifa ? String(tarifa.id) : '';
         factInput.value = tarifa ? tarifa.codigo : String(manualCode || '').trim().toUpperCase();
@@ -603,17 +624,18 @@
         mount: factMount,
         placeholder: 'Selecciona tarifa FACT',
         searchPlaceholder: 'Buscar código FACT, cliente, centro o proceso',
-        help: 'Escribe el código. Si es único del cliente, se asocia solo.',
+        help: 'Se listan tarifas del cliente de la operación y del centro. Si el código es único, se asocia solo.',
         getTriggerLabel() {
             const tarifa = byTarifaId.get(String(tarifaIdInput.value || ''));
             if (tarifa) return tarifaLabel(tarifa);
             return factInput.value ? `Código manual: ${factInput.value}` : 'Selecciona tarifa FACT';
         },
         getOptions() {
-            const cliente = clienteFromOperacion(currentOperacion);
+            const selectedId = String(tarifaIdInput.value || '');
             return tarifas
-                .filter(tarifa => !currentCenterId || !tarifa.centro_costo_id || String(tarifa.centro_costo_id) === String(currentCenterId))
+                .filter(tarifa => tarifaMatchesContext(tarifa) || String(tarifa.id) === selectedId)
                 .sort((a, b) => {
+                    const cliente = clienteFromOperacion(currentOperacion);
                     if (!cliente) return 0;
                     const aMatch = String(a.cliente || '').toUpperCase() === cliente ? 0 : 1;
                     const bMatch = String(b.cliente || '').toUpperCase() === cliente ? 0 : 1;
@@ -651,6 +673,93 @@
     drawer.querySelector('[data-clear-tarifa]')?.addEventListener('click', () => {
         setSelectedTarifa(null, '');
         closeAllPortals();
+    });
+
+    function operacionSuggestions() {
+        const labels = new Map();
+        ['Walmart', 'SMU', 'Unimarc'].forEach(name => labels.set(normalizeText(name), name));
+        tarifas.forEach(tarifa => {
+            const cliente = String(tarifa.cliente || '').trim();
+            if (!cliente) return;
+            const key = normalizeText(cliente);
+            if (!labels.has(key)) labels.set(key, cliente);
+        });
+        const current = String(fieldEls.operacion.value || '').trim();
+        if (current && !labels.has(normalizeText(current))) {
+            labels.set(normalizeText(current), current);
+        }
+        return [...labels.values()];
+    }
+
+    operacionSelect = createPortalSelect({
+        mount: operacionMount,
+        placeholder: 'Selecciona operación',
+        searchPlaceholder: 'Buscar Walmart, SMU, Unimarc...',
+        help: 'La operación determina el cliente de las tarifas FACT.',
+        getTriggerLabel() {
+            return fieldEls.operacion.value || 'Selecciona operación';
+        },
+        getOptions() {
+            const current = String(fieldEls.operacion.value || '').trim();
+            return operacionSuggestions().map(name => ({
+                id: name,
+                label: name,
+                meta: clienteFromOperacion(name) ? `Cliente FACT: ${clienteFromOperacion(name)}` : '',
+                selected: normalizeText(name) === normalizeText(current),
+            }));
+        },
+        onSelect(option) {
+            fieldEls.operacion.value = option.label || '';
+            currentOperacion = fieldEls.operacion.value;
+            refreshFactForContext();
+        },
+        renderEmpty(results, raw) {
+            const value = String(raw || '').trim();
+            if (!value) return;
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'contenedores-search-select-option';
+            button.innerHTML = `<span>Usar operación: ${escapeHtml(value)}</span>`;
+            button.addEventListener('click', () => {
+                fieldEls.operacion.value = value;
+                currentOperacion = value;
+                operacionSelect.sync();
+                refreshFactForContext();
+                operacionSelect.close();
+            });
+            results.appendChild(button);
+        },
+        emptyText: 'Sin coincidencias. Escribe para usar un valor nuevo.',
+    });
+
+    centroSelect = createPortalSelect({
+        mount: centroMount,
+        placeholder: 'Sin asociar',
+        searchPlaceholder: 'Buscar centro de costo',
+        help: 'Filtra FACT y trabajadores de este centro.',
+        getTriggerLabel() {
+            const current = String(fieldEls.centro_costo_id.value || '');
+            const match = centros.find(item => String(item.id) === current);
+            return match ? match.nombre : (current ? 'Centro actual' : 'Sin asociar');
+        },
+        getOptions() {
+            const current = String(fieldEls.centro_costo_id.value || '');
+            const options = [{ id: '', nombre: 'Sin asociar' }, ...centros];
+            if (current && !options.some(item => String(item.id) === current)) {
+                options.push({ id: current, nombre: 'Centro actual' });
+            }
+            return options.map(item => ({
+                id: item.id,
+                label: item.nombre,
+                selected: String(item.id) === current,
+            }));
+        },
+        onSelect(option) {
+            fieldEls.centro_costo_id.value = option.id || '';
+            currentCenterId = fieldEls.centro_costo_id.value || '';
+            refreshFactForContext();
+        },
+        emptyText: 'No hay centros que coincidan.',
     });
 
     function initCrewPicker(initial = []) {
@@ -1223,12 +1332,6 @@
         if (!currentId || !currentCanDelete) return;
         deleteSelected([currentId]).catch(error => toast(error.message || 'No se pudo eliminar.', 'error'));
     });
-    fieldEls.operacion?.addEventListener('input', () => {
-        currentOperacion = fieldEls.operacion.value || '';
-    });
-    fieldEls.centro_costo_id?.addEventListener('change', () => {
-        currentCenterId = fieldEls.centro_costo_id.value || '';
-    });
     window.addEventListener('resize', repositionPortals);
     drawerBody.addEventListener('scroll', repositionPortals);
     document.addEventListener('keydown', event => {
@@ -1363,7 +1466,9 @@ body.is-drawer-resizing * { cursor: col-resize !important; }
     letter-spacing: .035em;
     text-transform: uppercase;
 }
-.contenedores-edit-grid .form-control {
+.contenedores-edit-grid .form-control,
+.contenedores-edit-grid .contenedores-search-select,
+.contenedores-edit-grid .muted-hint {
     font-weight: 500;
     text-transform: none;
     letter-spacing: 0;
