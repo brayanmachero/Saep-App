@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Configuracion;
 use App\Models\EntregaBodega;
 use App\Models\InventarioCentroCosto;
 use App\Models\InventarioConteo;
@@ -23,6 +24,8 @@ use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -31,6 +34,12 @@ use PhpOffice\PhpSpreadsheet\Shared\Date;
 class InventarioStockService
 {
     public const KIZEO_ORIGIN_LOCATION_CODE = 'SAEP-CENTRAL';
+
+    public const KIZEO_AUTO_APPLY_KEY = 'inventario_kizeo_auto_aplicar';
+
+    public const KIZEO_AUTO_APPLY_SINCE_KEY = 'inventario_kizeo_auto_aplicar_desde';
+
+    public const KIZEO_AUTO_APPLY_BY_KEY = 'inventario_kizeo_auto_aplicar_por';
 
     public function createProduct(array $data, User $user): InventarioProducto
     {
@@ -552,8 +561,130 @@ class InventarioStockService
         return $mappings;
     }
 
+    /**
+     * @return array{enabled: bool, since: ?Carbon, by: ?string}
+     */
+    public function kizeoAutoApplyState(): array
+    {
+        return [
+            'enabled' => $this->kizeoAutoApplyEnabled(),
+            'since' => $this->kizeoAutoApplySince(),
+            'by' => $this->nullable($this->configValue(self::KIZEO_AUTO_APPLY_BY_KEY)),
+        ];
+    }
+
+    public function kizeoAutoApplyEnabled(): bool
+    {
+        return $this->configValue(self::KIZEO_AUTO_APPLY_KEY) === '1';
+    }
+
+    public function setKizeoAutoApply(bool $enabled, User $user): void
+    {
+        if (! Schema::hasTable('configuraciones')) {
+            throw ValidationException::withMessages([
+                'activo' => 'Falta la configuración de inventario. Ejecuta las migraciones antes de activar el descuento automático.',
+            ]);
+        }
+
+        $this->storeConfigValue(self::KIZEO_AUTO_APPLY_KEY, $enabled ? '1' : '0');
+        $this->storeConfigValue(self::KIZEO_AUTO_APPLY_BY_KEY, (string) $user->id);
+        if ($enabled) {
+            $this->storeConfigValue(self::KIZEO_AUTO_APPLY_SINCE_KEY, now()->toIso8601String());
+        }
+    }
+
+    /**
+     * Descuenta una entrega recién sincronizada si el interruptor está activo
+     * y la respuesta de Kizeo es posterior a la activación. Nunca recorre la cola histórica.
+     */
+    public function tryAutoApplyNewKizeoDelivery(EntregaBodega $delivery, bool $isNewRecord): ?InventarioEntregaKizeoAplicacion
+    {
+        if (! $this->shouldAutoApplyNewKizeoDelivery($delivery, $isNewRecord)) {
+            return null;
+        }
+
+        try {
+            $application = $this->applyKizeoDelivery(
+                $delivery->loadMissing('items'),
+                $this->kizeoOriginLocation()->id,
+                $this->suggestedKizeoLineMappings($delivery),
+                null,
+            );
+            Log::info('Entrega Kizeo descontada automáticamente del stock.', [
+                'entrega_bodega_id' => $delivery->id,
+                'kizeo_form_id' => $delivery->kizeo_form_id,
+                'kizeo_data_id' => $delivery->kizeo_data_id,
+                'aplicacion_id' => $application->id,
+            ]);
+
+            return $application;
+        } catch (ValidationException $exception) {
+            Log::warning('Entrega Kizeo nueva no se descontó automáticamente.', [
+                'entrega_bodega_id' => $delivery->id,
+                'kizeo_form_id' => $delivery->kizeo_form_id,
+                'kizeo_data_id' => $delivery->kizeo_data_id,
+                'reason' => collect($exception->errors())->flatten()->first(),
+            ]);
+
+            return null;
+        } catch (\Throwable $exception) {
+            Log::error('Error al descontar automáticamente una entrega Kizeo.', [
+                'entrega_bodega_id' => $delivery->id,
+                'kizeo_form_id' => $delivery->kizeo_form_id,
+                'kizeo_data_id' => $delivery->kizeo_data_id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    public function shouldAutoApplyNewKizeoDelivery(EntregaBodega $delivery, bool $isNewRecord): bool
+    {
+        if (! $isNewRecord || ! $this->kizeoAutoApplyEnabled()) {
+            return false;
+        }
+
+        $since = $this->kizeoAutoApplySince();
+        if (! $since) {
+            return false;
+        }
+
+        if (! EntregaBodegaSyncService::isCurrentBodegaForm($delivery->kizeo_form_id)) {
+            return false;
+        }
+
+        $delivery->loadMissing('inventarioAplicacion');
+        if ($delivery->inventarioAplicacion
+            || $delivery->flujo_inventario !== 'SALIDA'
+            || ($delivery->estado_fuente ?: 'ACTIVA') !== 'ACTIVA') {
+            return false;
+        }
+
+        $createdAt = $delivery->kizeo_created_at ?? $delivery->created_at;
+        if (! $createdAt || $createdAt->lt($since)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function kizeoAutoApplySince(): ?Carbon
+    {
+        $value = trim((string) $this->configValue(self::KIZEO_AUTO_APPLY_SINCE_KEY));
+        if ($value === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     /** Aplica una entrega Kizeo con relaciones inequívocas desde Sede Central. */
-    public function applyKizeoDeliveryFromCentral(EntregaBodega $delivery, User $user): InventarioEntregaKizeoAplicacion
+    public function applyKizeoDeliveryFromCentral(EntregaBodega $delivery, ?User $user = null): InventarioEntregaKizeoAplicacion
     {
         return $this->applyKizeoDelivery(
             $delivery,
@@ -574,7 +705,7 @@ class InventarioStockService
             && (! $application->fuente_actualizada_en || $delivery->kizeo_updated_at->gt($application->fuente_actualizada_en));
     }
 
-    public function applyKizeoDelivery(EntregaBodega $delivery, int $locationId, array $lineMappings, User $user): InventarioEntregaKizeoAplicacion
+    public function applyKizeoDelivery(EntregaBodega $delivery, int $locationId, array $lineMappings, ?User $user = null): InventarioEntregaKizeoAplicacion
     {
         if ($delivery->flujo_inventario === 'ENTRADA') {
             throw ValidationException::withMessages([
@@ -628,9 +759,11 @@ class InventarioStockService
                 'ubicacion_id' => $location->id,
                 'estado' => 'APLICADA',
                 'fuente_actualizada_en' => $delivery->kizeo_updated_at,
-                'aplicada_por' => $user->id,
+                'aplicada_por' => $user?->id,
                 'aplicada_en' => now(),
-                'observacion' => 'Salida confirmada desde entrega Kizeo.',
+                'observacion' => $user
+                    ? 'Salida confirmada desde entrega Kizeo.'
+                    : 'Salida automática desde Kizeo (interruptor activo).',
             ]);
 
             foreach ($resolved as ['item' => $item, 'variant' => $variant, 'quantity' => $quantity]) {
@@ -658,7 +791,9 @@ class InventarioStockService
                     'destinatario_nombre' => $delivery->nombre,
                     'destinatario_rut' => $delivery->rut,
                     'centro_costo' => $delivery->centro,
-                    'observacion' => 'Entrega Kizeo #'.($delivery->kizeo_record_number ?: $delivery->kizeo_data_id).' aplicada por Bodega.',
+                    'observacion' => $user
+                        ? 'Entrega Kizeo #'.($delivery->kizeo_record_number ?: $delivery->kizeo_data_id).' aplicada por Bodega.'
+                        : 'Entrega Kizeo #'.($delivery->kizeo_record_number ?: $delivery->kizeo_data_id).' descontada automáticamente.',
                     'ocurrido_en' => $this->kizeoOccurredAt($delivery),
                 ], $user);
 
@@ -1199,12 +1334,42 @@ class InventarioStockService
         ];
     }
 
-    private function createMovement(array $attributes, User $user): InventarioMovimiento
+    private function createMovement(array $attributes, ?User $user = null): InventarioMovimiento
     {
         return InventarioMovimiento::create($attributes + [
             'codigo' => $this->code('MOV'),
-            'registrado_por' => $user->id,
-            'registrado_por_nombre' => trim($user->name.' '.($user->apellido_paterno ?? '')),
+            'registrado_por' => $user?->id,
+            'registrado_por_nombre' => $user
+                ? trim($user->name.' '.($user->apellido_paterno ?? ''))
+                : 'Kizeo automático',
+        ]);
+    }
+
+    private function configValue(string $key): string
+    {
+        if (! Schema::hasTable('configuraciones')) {
+            return '';
+        }
+
+        return (string) (Configuracion::get($key, '') ?? '');
+    }
+
+    private function storeConfigValue(string $key, string $value): void
+    {
+        $existing = Configuracion::query()->where('clave', $key)->first();
+        if ($existing) {
+            $existing->update(['valor' => $value]);
+
+            return;
+        }
+
+        Configuracion::query()->create([
+            'clave' => $key,
+            'valor' => $value,
+            'tipo' => $key === self::KIZEO_AUTO_APPLY_KEY ? 'BOOLEAN' : 'TEXT',
+            'categoria' => 'inventario',
+            'descripcion' => null,
+            'editable' => false,
         ]);
     }
 

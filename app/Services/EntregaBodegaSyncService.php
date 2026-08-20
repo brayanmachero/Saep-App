@@ -46,9 +46,17 @@ class EntregaBodegaSyncService
         ],
     ];
 
-    public function __construct(private readonly KizeoService $kizeo) {}
+    public function __construct(
+        private readonly KizeoService $kizeo,
+        private readonly ?InventarioStockService $inventoryStock = null,
+    ) {}
 
     public function supportsForm(string|int $formId): bool
+    {
+        return self::isCurrentBodegaForm($formId);
+    }
+
+    public static function isCurrentBodegaForm(string|int|null $formId): bool
     {
         return array_key_exists((string) $formId, self::FORMS);
     }
@@ -276,7 +284,13 @@ class EntregaBodegaSyncService
      */
     private function persistNormalizedRecord(string $formId, string $dataId, array $normalized): EntregaBodega
     {
-        return DB::transaction(function () use ($formId, $dataId, $normalized) {
+        $isNew = false;
+        $delivery = DB::transaction(function () use ($formId, $dataId, $normalized, &$isNew) {
+            $isNew = ! EntregaBodega::query()
+                ->where('kizeo_form_id', $formId)
+                ->where('kizeo_data_id', $dataId)
+                ->exists();
+
             $delivery = EntregaBodega::updateOrCreate(
                 ['kizeo_form_id' => $formId, 'kizeo_data_id' => $dataId],
                 $normalized['attributes'],
@@ -289,6 +303,15 @@ class EntregaBodegaSyncService
 
             return $delivery->refresh();
         });
+
+        $this->inventoryStock()->tryAutoApplyNewKizeoDelivery($delivery->load('items'), $isNew);
+
+        return $delivery->fresh(['items']) ?? $delivery;
+    }
+
+    private function inventoryStock(): InventarioStockService
+    {
+        return $this->inventoryStock ?? app(InventarioStockService::class);
     }
 
     private function needsSync(array $metadata, ?EntregaBodega $stored): bool

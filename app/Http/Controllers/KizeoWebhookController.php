@@ -217,7 +217,10 @@ class KizeoWebhookController extends Controller
                     $dataId,
                     is_array($payload['data'] ?? null) ? $payload['data'] : $payload,
                 );
-                $summary = 'Comprobante de Bodega sincronizado desde webhook de Kizeo.';
+                $delivery?->loadMissing('inventarioAplicacion');
+                $summary = $delivery?->inventarioAplicacion?->estado === 'APLICADA'
+                    ? 'Comprobante sincronizado y descontado automáticamente del stock de Sede Central.'
+                    : 'Comprobante de Bodega sincronizado desde webhook de Kizeo.';
             }
 
             WebhookLog::logSuccess([
@@ -230,6 +233,7 @@ class KizeoWebhookController extends Controller
                     'estado_fuente' => $delivery?->estado_fuente,
                     'flujo_inventario' => $delivery?->flujo_inventario,
                     'entrega_bodega_id' => $delivery?->id,
+                    'inventario_aplicado' => $delivery?->inventarioAplicacion?->estado === 'APLICADA',
                 ],
                 'ip' => $ip,
             ]);

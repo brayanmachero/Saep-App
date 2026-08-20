@@ -42,7 +42,7 @@ class InventarioBodegaStockTest extends TestCase
             'inventario_conteo_lineas', 'inventario_conteos', 'inventario_importacion_movimientos', 'inventario_movimientos',
             'inventario_historial_costos', 'inventario_ingreso_items', 'inventario_ingresos', 'inventario_variantes',
             'inventario_kizeo_catalog_items', 'inventario_productos', 'inventario_proveedores', 'inventario_ubicaciones',
-            'entrega_bodega_items', 'entregas_bodega',
+            'entrega_bodega_items', 'entregas_bodega', 'configuraciones',
             'rol_modulo', 'modulos', 'users', 'roles',
         ] as $table) {
             Schema::dropIfExists($table);
@@ -1226,6 +1226,8 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('inventory-kizeo-central-stock', false)
             ->assertSee('data-inventory-search-select', false)
             ->assertSee('Buscar por codigo, articulo o talla', false)
+            ->assertSee('Descuento automático desactivado')
+            ->assertSee('No aplica el histórico')
             ->assertSee('<details class="inventory-delivery-card">', false)
             ->assertDontSee('<details class="inventory-delivery-card" open', false);
 
@@ -1435,6 +1437,86 @@ class InventarioBodegaStockTest extends TestCase
         }
     }
 
+    public function test_kizeo_auto_apply_stays_off_and_does_not_discount_new_deliveries(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContextWithCentralStock(6);
+        $service = app(InventarioStockService::class);
+        $delivery = $this->newKizeoDelivery('kizeo-auto-off', $variant, 2, now());
+
+        $this->assertNull($service->tryAutoApplyNewKizeoDelivery($delivery->load('items'), true));
+        $this->assertSame(6.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseCount('inventario_entrega_kizeo_aplicaciones', 0);
+        $this->assertFalse($service->kizeoAutoApplyEnabled());
+    }
+
+    public function test_kizeo_auto_apply_discounts_only_new_deliveries_after_the_switch_is_on(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContextWithCentralStock(8);
+        $service = app(InventarioStockService::class);
+        $this->ensureConfiguracionesTable();
+        $service->setKizeoAutoApply(true, $user);
+
+        $historical = $this->newKizeoDelivery('kizeo-auto-old', $variant, 2, now()->subDay());
+        $this->assertNull($service->tryAutoApplyNewKizeoDelivery($historical->load('items'), true));
+        $this->assertSame(8.0, $service->stockActual($origin->id, $variant->id));
+
+        $fresh = $this->newKizeoDelivery('kizeo-auto-new', $variant, 3, now()->addMinute());
+        $application = $service->tryAutoApplyNewKizeoDelivery($fresh->load('items'), true);
+
+        $this->assertNotNull($application);
+        $this->assertSame('APLICADA', $application->estado);
+        $this->assertNull($application->aplicada_por);
+        $this->assertSame(5.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'origen' => 'KIZEO_EPP',
+            'cantidad' => -3,
+            'registrado_por_nombre' => 'Kizeo automático',
+        ]);
+        $this->assertNull($service->tryAutoApplyNewKizeoDelivery($fresh->fresh(['items', 'inventarioAplicacion']), false));
+    }
+
+    public function test_kizeo_auto_apply_leaves_unmatched_or_insufficient_new_deliveries_pending(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContextWithCentralStock(1);
+        $service = app(InventarioStockService::class);
+        $this->ensureConfiguracionesTable();
+        $service->setKizeoAutoApply(true, $user);
+
+        $unmatched = $this->newKizeoDelivery('kizeo-auto-unmatched', $variant, 1, now()->addMinute(), 'L');
+        $this->assertNull($service->tryAutoApplyNewKizeoDelivery($unmatched->load('items'), true));
+
+        $insufficient = $this->newKizeoDelivery('kizeo-auto-stock', $variant, 4, now()->addMinute());
+        $this->assertNull($service->tryAutoApplyNewKizeoDelivery($insufficient->load('items'), true));
+
+        $this->assertSame(1.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseCount('inventario_entrega_kizeo_aplicaciones', 0);
+    }
+
+    public function test_kizeo_auto_apply_toggle_does_not_apply_the_existing_queue(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContextWithCentralStock(10);
+        $pending = $this->newKizeoDelivery('kizeo-auto-queue', $variant, 2, now()->subDays(3));
+        $this->ensureConfiguracionesTable();
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->post(route('inventario-bodega.entregas-kizeo.auto-aplicar'), ['activo' => 1])
+            ->assertRedirect(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->assertSessionHas('success');
+
+        $this->assertTrue(app(InventarioStockService::class)->kizeoAutoApplyEnabled());
+        $this->assertDatabaseCount('inventario_entrega_kizeo_aplicaciones', 0);
+        $this->assertSame(10.0, app(InventarioStockService::class)->stockActual($origin->id, $variant->id));
+        $this->assertNotNull($pending->fresh());
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->assertOk()
+            ->assertSee('Descuento automático activo')
+            ->assertSee('La cola histórica no se descuenta sola');
+    }
+
     private function inventoryContext(): array
     {
         $role = Rol::create(['codigo' => 'SUPER_ADMIN', 'nombre' => 'Super Admin']);
@@ -1457,5 +1539,67 @@ class InventarioBodegaStockTest extends TestCase
         ], $user);
 
         return [$user, $origin, $destination, InventarioVariante::query()->where('producto_id', $product->id)->firstOrFail()];
+    }
+
+    private function inventoryContextWithCentralStock(float $quantity): array
+    {
+        [$user, $origin, $destination, $variant] = $this->inventoryContext();
+        $origin->update([
+            'codigo' => InventarioStockService::KIZEO_ORIGIN_LOCATION_CODE,
+            'nombre' => 'Sede Central SAEP',
+        ]);
+        app(InventarioStockService::class)->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'GUIA_DESPACHO',
+            'numero_documento' => 'GD-AUTO-'.uniqid(),
+            'fecha_documento' => null,
+            'fecha_recepcion' => now()->toDateString(),
+            'observacion' => null,
+        ], [['variante_id' => $variant->id, 'cantidad' => $quantity, 'costo_unitario' => null]], $user);
+
+        return [$user, $origin, $destination, $variant];
+    }
+
+    private function newKizeoDelivery(string $dataId, InventarioVariante $variant, float $quantity, $createdAt, string $size = 'M'): EntregaBodega
+    {
+        $delivery = EntregaBodega::create([
+            'kizeo_form_id' => '1195951',
+            'kizeo_data_id' => $dataId,
+            'kizeo_record_number' => random_int(9000, 9999),
+            'origen_formulario' => 'Registro de Entrega Bodega',
+            'flujo_inventario' => 'SALIDA',
+            'estado_fuente' => 'ACTIVA',
+            'nombre' => 'Trabajador automático',
+            'fecha_pedido' => now()->toDateString(),
+            'kizeo_created_at' => $createdAt,
+            'kizeo_updated_at' => $createdAt,
+        ]);
+        $delivery->items()->create([
+            'linea' => 1,
+            'articulo' => $variant->producto->nombre,
+            'talla' => $size,
+            'cantidad' => $quantity,
+        ]);
+
+        return $delivery->load('items');
+    }
+
+    private function ensureConfiguracionesTable(): void
+    {
+        if (Schema::hasTable('configuraciones')) {
+            return;
+        }
+
+        Schema::create('configuraciones', function (Blueprint $table) {
+            $table->id();
+            $table->string('clave', 100)->unique();
+            $table->text('valor')->nullable();
+            $table->string('tipo', 40)->nullable();
+            $table->string('categoria', 80)->nullable();
+            $table->string('descripcion', 500)->nullable();
+            $table->boolean('editable')->default(true);
+            $table->timestamps();
+        });
     }
 }

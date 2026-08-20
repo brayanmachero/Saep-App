@@ -297,6 +297,7 @@ class InventarioBodegaController extends Controller
             'centralKizeoLocation' => $centralKizeoLocation,
             'kizeoCentralStockByVariant' => $kizeoCentralStockByVariant,
             'kizeoBatchEligibleIds' => $kizeoBatchEligibleIds,
+            'kizeoAutoApply' => $this->stock->kizeoAutoApplyState(),
             'kizeoCatalogListId' => config('services.kizeo.inventory_catalog_list_id'),
             'canCreate' => $request->user()->tieneAcceso('inventario_bodega', 'puede_crear'),
             'canEdit' => $request->user()->tieneAcceso('inventario_bodega', 'puede_editar'),
@@ -530,6 +531,20 @@ class InventarioBodegaController extends Controller
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'conteos'])
             ->with('success', "Conteo {$conteo->codigo} aprobado. Las diferencias se registraron como ajustes trazables.");
+    }
+
+    public function toggleKizeoAutoApply(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'activo' => ['required', 'boolean'],
+        ]);
+        $enabled = (bool) $data['activo'];
+        $this->stock->setKizeoAutoApply($enabled, $request->user());
+
+        return redirect()->route('inventario-bodega.index', ['vista' => 'kizeo'])
+            ->with('success', $enabled
+                ? 'Descuento automático activado. Solo las entregas nuevas de Kizeo, posteriores a este momento, se descontarán de Sede Central. La cola histórica no se aplica.'
+                : 'Descuento automático desactivado. Las nuevas entregas de Kizeo quedarán pendientes para aplicarlas a mano.');
     }
 
     public function applyKizeoDelivery(Request $request, EntregaBodega $entrega): RedirectResponse
