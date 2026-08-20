@@ -15,6 +15,9 @@ class EntregaBodegaSyncService
     /** @var array<string, array<string, mixed>>|null */
     private ?array $advancedCatalogItemsById = null;
 
+    /** Formulario antiguo de Control de Entrega Bodega. Se conserva para consulta y no descuenta stock. */
+    public const LEGACY_FORM_ID = '947762';
+
     /**
      * Formularios Kizeo que actualmente alimentan la conciliación de Bodega.
      * Cada formulario conserva sus propias claves para no depender de un esquema fijo.
@@ -59,6 +62,17 @@ class EntregaBodegaSyncService
     public static function isCurrentBodegaForm(string|int|null $formId): bool
     {
         return array_key_exists((string) $formId, self::FORMS);
+    }
+
+    public static function isHistoricalStockForm(string|int|null $formId): bool
+    {
+        return (string) $formId === self::LEGACY_FORM_ID;
+    }
+
+    /** @return array<int, string> */
+    public static function currentFormIds(): array
+    {
+        return array_keys(self::FORMS);
     }
 
     /**

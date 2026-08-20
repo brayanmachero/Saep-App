@@ -1514,7 +1514,63 @@ class InventarioBodegaStockTest extends TestCase
             ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
             ->assertOk()
             ->assertSee('Descuento automático activo')
-            ->assertSee('La cola histórica no se descuenta sola');
+            ->assertSee('formulario histórico');
+    }
+
+    public function test_legacy_kizeo_form_cannot_discount_stock_and_stays_out_of_the_live_queue(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContextWithCentralStock(5);
+        $service = app(InventarioStockService::class);
+        $legacy = EntregaBodega::create([
+            'kizeo_form_id' => \App\Services\EntregaBodegaSyncService::LEGACY_FORM_ID,
+            'kizeo_data_id' => 'kizeo-legacy-947762',
+            'kizeo_record_number' => 947,
+            'origen_formulario' => 'Control de Entrega Bodega',
+            'flujo_inventario' => 'SALIDA',
+            'estado_fuente' => 'ACTIVA',
+            'nombre' => 'Entrega histórica',
+            'fecha_pedido' => '2025-03-01',
+        ]);
+        $item = $legacy->items()->create(['linea' => 1, 'articulo' => 'Casco de seguridad', 'talla' => 'M', 'cantidad' => 2]);
+
+        try {
+            $service->applyKizeoDelivery($legacy->load('items'), $origin->id, [
+                $item->id => ['variante_id' => $variant->id],
+            ], $user);
+            $this->fail('El formulario histórico no debe descontar stock.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('entrega', $exception->errors());
+        }
+
+        $this->assertSame(5.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseCount('inventario_entrega_kizeo_aplicaciones', 0);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->from(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->post(route('inventario-bodega.entregas-kizeo.aplicar-masivo'), ['entregas' => [$legacy->id]])
+            ->assertRedirect(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->assertSessionHas('warning');
+
+        $this->assertSame(5.0, $service->stockActual($origin->id, $variant->id));
+
+        $live = $this->newKizeoDelivery('kizeo-live-queue', $variant, 1, now());
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->assertOk()
+            ->assertSee('Histórico Kizeo')
+            ->assertSee($live->nombre)
+            ->assertDontSee('>'.$legacy->nombre.'<', false);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo', 'kizeo_origen' => 'historico']))
+            ->assertOk()
+            ->assertSee($legacy->nombre)
+            ->assertSee('Histórico · no descuenta')
+            ->assertDontSee('Aplicar salida de stock');
     }
 
     private function inventoryContext(): array

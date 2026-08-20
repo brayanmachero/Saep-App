@@ -14,6 +14,7 @@ use App\Models\InventarioProveedor;
 use App\Models\InventarioUbicacion;
 use App\Models\InventarioVariante;
 use App\Modules\Comercial\Models\CentroCosto;
+use App\Services\EntregaBodegaSyncService;
 use App\Services\InventarioKizeoCatalogSyncService;
 use App\Services\InventarioOperationalMasterService;
 use App\Services\InventarioStockService;
@@ -182,6 +183,9 @@ class InventarioBodegaController extends Controller
             }
         }
 
+        $kizeoQueue = in_array($request->input('kizeo_origen'), ['vigentes', 'historico'], true)
+            ? $request->input('kizeo_origen')
+            : 'vigentes';
         $kizeoDeliveries = $view === 'kizeo'
             ? EntregaBodega::query()
                 ->with([
@@ -189,6 +193,15 @@ class InventarioBodegaController extends Controller
                     'inventarioAplicacion.ubicacion',
                     'inventarioAplicacion.lineas.variante.producto',
                 ])
+                ->when(
+                    $kizeoQueue === 'historico',
+                    fn ($query) => $query->where('kizeo_form_id', EntregaBodegaSyncService::LEGACY_FORM_ID),
+                    fn ($query) => $query->where(function ($forms) {
+                        $forms->whereIn('kizeo_form_id', EntregaBodegaSyncService::currentFormIds())
+                            ->orWhereNull('kizeo_form_id')
+                            ->orWhere('kizeo_form_id', '');
+                    }),
+                )
                 ->orderByDesc('fecha_pedido')
                 ->orderByDesc('id')
                 ->paginate(40, ['*'], 'kizeo_pagina')
@@ -210,7 +223,8 @@ class InventarioBodegaController extends Controller
             foreach ($kizeoDeliveries as $delivery) {
                 if ($delivery->inventarioAplicacion
                     || $delivery->flujo_inventario !== 'SALIDA'
-                    || ($delivery->estado_fuente ?: 'ACTIVA') !== 'ACTIVA') {
+                    || ($delivery->estado_fuente ?: 'ACTIVA') !== 'ACTIVA'
+                    || EntregaBodegaSyncService::isHistoricalStockForm($delivery->kizeo_form_id)) {
                     continue;
                 }
 
@@ -238,6 +252,14 @@ class InventarioBodegaController extends Controller
                 ->where('flujo_inventario', 'SALIDA')
                 ->where('estado_fuente', 'ACTIVA')
                 ->whereDoesntHave('inventarioAplicacion')
+                ->where(function ($forms) {
+                    $forms->whereIn('kizeo_form_id', EntregaBodegaSyncService::currentFormIds())
+                        ->orWhereNull('kizeo_form_id')
+                        ->orWhere('kizeo_form_id', '');
+                })
+                ->count(),
+            'historical' => EntregaBodega::query()
+                ->where('kizeo_form_id', EntregaBodegaSyncService::LEGACY_FORM_ID)
                 ->count(),
             'returns' => EntregaBodega::query()
                 ->where('flujo_inventario', 'ENTRADA')
@@ -297,6 +319,7 @@ class InventarioBodegaController extends Controller
             'centralKizeoLocation' => $centralKizeoLocation,
             'kizeoCentralStockByVariant' => $kizeoCentralStockByVariant,
             'kizeoBatchEligibleIds' => $kizeoBatchEligibleIds,
+            'kizeoQueue' => $kizeoQueue,
             'kizeoAutoApply' => $this->stock->kizeoAutoApplyState(),
             'kizeoCatalogListId' => config('services.kizeo.inventory_catalog_list_id'),
             'canCreate' => $request->user()->tieneAcceso('inventario_bodega', 'puede_crear'),
@@ -585,6 +608,12 @@ class InventarioBodegaController extends Controller
             }
 
             try {
+                if (EntregaBodegaSyncService::isHistoricalStockForm($delivery->kizeo_form_id)) {
+                    $issues[] = 'KZ-'.($delivery->kizeo_record_number ?: $delivery->kizeo_data_id).': formulario histórico, no se descuenta.';
+
+                    continue;
+                }
+
                 $this->stock->applyKizeoDeliveryFromCentral($delivery, $request->user());
                 $applied++;
             } catch (ValidationException $exception) {

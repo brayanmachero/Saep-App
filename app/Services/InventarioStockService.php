@@ -713,6 +713,12 @@ class InventarioStockService
             ]);
         }
 
+        if (EntregaBodegaSyncService::isHistoricalStockForm($delivery->kizeo_form_id)) {
+            throw ValidationException::withMessages([
+                'entrega' => 'Este comprobante pertenece al formulario histórico de Kizeo (Control de Entrega Bodega). No se descuenta del inventario actual.',
+            ]);
+        }
+
         if (in_array($delivery->estado_fuente, ['ELIMINADA_EN_KIZEO', 'INCOMPLETA', 'REQUIERE_REVISION'], true)) {
             throw ValidationException::withMessages([
                 'entrega' => $delivery->alerta_fuente
