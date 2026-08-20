@@ -275,6 +275,60 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
             return !centerId || !tarifa.centro_costo_id || String(tarifa.centro_costo_id) === String(centerId);
         }
 
+        function clienteFromOperacion(operacion) {
+            const text = normalizeText(operacion);
+            if (!text) return '';
+            if (text.includes('smu') || text.includes('unimarc')) return 'SMU';
+            if (text.includes('walmart') || text === 'wm' || text.startsWith('wm ')) return 'WM';
+            return '';
+        }
+
+        function uniqueTarifaByCode(code, centerId = '', cliente = '') {
+            const clean = String(code || '').trim().toUpperCase();
+            if (!clean) return null;
+
+            let matches = tarifas.filter(t => {
+                if (String(t.codigo || '').trim().toUpperCase() !== clean) return false;
+                return !centerId || !t.centro_costo_id || String(t.centro_costo_id) === String(centerId);
+            });
+
+            if (cliente) {
+                const byClient = matches.filter(t => String(t.cliente || '').toUpperCase() === cliente);
+                if (byClient.length) matches = byClient;
+            }
+
+            const scoped = centerId
+                ? matches.filter(t => String(t.centro_costo_id || '') === String(centerId))
+                : [];
+            if (scoped.length === 1) return scoped[0];
+
+            const general = matches.filter(t => !t.centro_costo_id);
+            if (general.length === 1) return general[0];
+
+            return matches.length === 1 ? matches[0] : null;
+        }
+
+        function currentCliente() {
+            return clienteFromOperacion(document.querySelector('[name="operacion"]')?.value || '');
+        }
+
+        function resolveTypedCode(raw) {
+            const manualCode = String(raw || '').trim().toUpperCase();
+            const auto = uniqueTarifaByCode(manualCode, recordCenterSelect?.value || '', currentCliente());
+
+            if (auto) {
+                tarifaSelect.value = String(auto.id);
+                setFactCodigo(auto.codigo);
+                updateSelected(auto);
+                return auto;
+            }
+
+            tarifaSelect.value = '';
+            setFactCodigo(manualCode);
+            updateSelected(null, manualCode);
+            return null;
+        }
+
         function updateSelected(tarifa = null, manualCode = '') {
             const hasValue = !!tarifa || !!manualCode;
             selectedBox?.classList.toggle('is-empty', !hasValue);
@@ -340,14 +394,19 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
 
         search?.addEventListener('focus', () => renderTarifas(search.value));
         search?.addEventListener('input', () => {
-            const manualCode = search.value.trim().toUpperCase();
-            tarifaSelect.value = '';
-            setFactCodigo(manualCode);
-            updateSelected(null, manualCode);
+            const auto = resolveTypedCode(search.value);
             renderTarifas(search.value);
             tarifaSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            if (auto && document.activeElement !== search) {
+                search.value = tarifaLabel(auto);
+            }
         });
-        search?.addEventListener('blur', () => setTimeout(() => dropdown.style.display = 'none', 150));
+        search?.addEventListener('blur', () => {
+            const auto = resolveTypedCode(search.value);
+            if (auto && search) search.value = tarifaLabel(auto);
+            tarifaSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            setTimeout(() => dropdown.style.display = 'none', 150);
+        });
         clearBtn?.addEventListener('click', () => {
             tarifaSelect.value = '';
             if (search) search.value = '';
@@ -357,9 +416,19 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
             tarifaSelect.dispatchEvent(new Event('change', { bubbles: true }));
         });
         recordCenterSelect?.addEventListener('change', () => {
+            resolveTypedCode(factInput.value || search?.value || '');
+            tarifaSelect.dispatchEvent(new Event('change', { bubbles: true }));
             if (search === document.activeElement) {
                 renderTarifas(search.value);
             }
+        });
+        document.querySelector('[name="operacion"]')?.addEventListener('change', () => {
+            resolveTypedCode(factInput.value || search?.value || '');
+            tarifaSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        document.querySelector('[name="operacion"]')?.addEventListener('input', () => {
+            resolveTypedCode(factInput.value || search?.value || '');
+            tarifaSelect.dispatchEvent(new Event('change', { bubbles: true }));
         });
 
         const initialTarifa = byTarifaId.get(String(tarifaSelect.value || ''));
@@ -367,7 +436,8 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
             updateSelected(initialTarifa);
             setFactCodigo(initialTarifa.codigo);
         } else {
-            updateSelected(null, factInput.value);
+            const auto = resolveTypedCode(factInput.value);
+            if (auto && search) search.value = tarifaLabel(auto);
         }
     }
 

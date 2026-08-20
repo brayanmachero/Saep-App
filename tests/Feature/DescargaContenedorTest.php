@@ -474,6 +474,87 @@ class DescargaContenedorTest extends TestCase
         $this->assertSame('DUPLICADO B', $descargaSeleccionada->tarifa_proceso_snapshot);
     }
 
+    public function test_walmart_operation_resolves_wm_tariff_when_smu_shares_the_fact_code(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Cliente FACT QA');
+        $worker = $this->createTalanaWorker('Trabajador Cliente FACT QA', $centro);
+        $wm = $this->createTarifa('CNTCLIENTE', 75000, 36000, 'CONTENEDOR ESTANDAR WM');
+        DescargaContenedorTarifa::create([
+            'cliente' => 'SMU',
+            'codigo' => 'CNTCLIENTE',
+            'proceso' => 'CONTENEDOR ESTANDAR SMU',
+            'costo_unitario' => 50000,
+            'pago_colaborador' => 25500,
+            'requiere_revision' => false,
+            'activo' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store-bulk'), [
+                'nombre' => 'Carga FACT por cliente QA',
+                'registros_json' => json_encode([[
+                    'operacion' => 'WALMART',
+                    'centro_costo_id' => $centro->id,
+                    'bodega' => 'CD Cliente FACT QA',
+                    'fecha' => '02/07/2026',
+                    'contenedor' => 'CONT-CLIENTE-001',
+                    'fact_codigo' => 'CNTCLIENTE',
+                    'participantes' => [$worker->id],
+                ]]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-CLIENTE-001')->firstOrFail();
+        $this->assertSame($wm->id, $descarga->tarifa_id);
+        $this->assertSame('WM', $descarga->tarifa_cliente_snapshot);
+        $this->assertEquals(36000.0, (float) $descarga->pago_colaborador_snapshot);
+    }
+
+    public function test_bulk_store_skips_existing_container_date_duplicates_when_requested(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Duplicado Carga QA');
+        $tarifa = $this->createTarifa('CNTSKIPDUP', 75000, 36000, 'SKIP DUP QA');
+        $worker = $this->createTalanaWorker('Trabajador Skip Dup QA', $centro);
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store-bulk'), [
+                'nombre' => 'Carga original QA',
+                'registros_json' => json_encode([[
+                    'operacion' => 'Walmart',
+                    'centro_costo_id' => $centro->id,
+                    'bodega' => 'CD Duplicado Carga QA',
+                    'fecha' => '21/07/2026',
+                    'contenedor' => 'GLDU7323259',
+                    'fact_codigo' => $tarifa->codigo,
+                    'participantes' => [$worker->id],
+                ]]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store-bulk'), [
+                'nombre' => 'Carga repetida QA',
+                'omitir_duplicados' => '1',
+                'registros_json' => json_encode([[
+                    'operacion' => 'Walmart',
+                    'centro_costo_id' => $centro->id,
+                    'bodega' => 'CD Duplicado Carga QA',
+                    'fecha' => '21/07/2026',
+                    'contenedor' => 'GLDU7323259',
+                    'fact_codigo' => $tarifa->codigo,
+                    'participantes' => [$worker->id],
+                ]]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(1, DescargaContenedor::where('contenedor', 'GLDU7323259')->count());
+    }
+
     public function test_fact_code_is_resolved_by_selected_center_before_other_tariffs(): void
     {
         $user = $this->createSuperAdminUser();
@@ -1522,6 +1603,155 @@ class DescargaContenedorTest extends TestCase
             ->assertOk()
             ->assertDontSee('Bandeja de revisión')
             ->assertDontSee('Validar registro');
+    }
+
+    public function test_index_exposes_inline_drawer_and_bulk_worker_assignment(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Panel QA');
+        $tarifa = $this->createTarifa('CNTPANEL', 75000, 36000, 'PANEL QA', false, $centro);
+        $worker = $this->createTalanaWorker('Trabajador Panel QA', $centro);
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'CD Panel QA',
+                'fecha' => '2026-08-01',
+                'contenedor' => 'CONT-PANEL-001',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([$worker->id]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.index'))
+            ->assertOk()
+            ->assertSee('Asignar trabajadores')
+            ->assertSee('data-contenedores-drawer', false)
+            ->assertSee('data-select-all', false)
+            ->assertSee('Editar en panel', false);
+    }
+
+    public function test_quick_panel_and_save_update_tariff_and_workers_without_leaving_the_list(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Rapido QA');
+        $tarifa = $this->createTarifa('CNTRAPIDO', 75000, 36000, 'RAPIDO QA', false, $centro);
+        $workerA = $this->createTalanaWorker('Trabajador Rapido A', $centro);
+        $workerB = $this->createTalanaWorker('Trabajador Rapido B', $centro);
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'CD Rapido QA',
+                'fecha' => '2026-08-01',
+                'contenedor' => 'CONT-RAPIDO-001',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-RAPIDO-001')->firstOrFail();
+
+        $this->actingAs($user)
+            ->getJson(route('descarga-contenedores.panel', $descarga))
+            ->assertOk()
+            ->assertJsonPath('can_edit', true)
+            ->assertJsonPath('descarga.contenedor', 'CONT-RAPIDO-001');
+
+        $this->actingAs($user)
+            ->patchJson(route('descarga-contenedores.rapido', $descarga), [
+                'tarifa_id' => $tarifa->id,
+                'fact_codigo' => 'CNTRAPIDO',
+                'participantes_json' => json_encode([
+                    ['id' => $workerA->id, 'porcentaje' => 60],
+                    ['id' => $workerB->id, 'porcentaje' => 40],
+                ]),
+            ])
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('row.participantes_count', 2)
+            ->assertJsonPath('row.fact_codigo', 'CNTRAPIDO');
+
+        $descarga->refresh();
+        $this->assertSame($tarifa->id, $descarga->tarifa_id);
+        $this->assertSame(2, $descarga->participantes()->count());
+        $this->assertEquals(60.0, (float) $descarga->participantes()->where('talana_trabajador_id', $workerA->id)->value('porcentaje_participacion'));
+    }
+
+    public function test_bulk_worker_assignment_applies_the_same_crew_to_selected_containers(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Masivo QA');
+        $tarifa = $this->createTarifa('CNTMASIVO', 75000, 36000, 'MASIVO QA', false, $centro);
+        $workerA = $this->createTalanaWorker('Trabajador Masivo A', $centro);
+        $workerB = $this->createTalanaWorker('Trabajador Masivo B', $centro);
+
+        $ids = [];
+        foreach (['CONT-MASIVO-001', 'CONT-MASIVO-002', 'CONT-MASIVO-003'] as $contenedor) {
+            $this->actingAs($user)
+                ->post(route('descarga-contenedores.store'), [
+                    'operacion' => 'Walmart',
+                    'centro_costo_id' => $centro->id,
+                    'bodega' => 'CD Masivo QA',
+                    'fecha' => '2026-08-01',
+                    'contenedor' => $contenedor,
+                    'tarifa_id' => $tarifa->id,
+                ])
+                ->assertRedirect()
+                ->assertSessionHasNoErrors();
+
+            $ids[] = DescargaContenedor::where('contenedor', $contenedor)->value('id');
+        }
+
+        $this->actingAs($user)
+            ->postJson(route('descarga-contenedores.equipo-masivo'), [
+                'descargas' => $ids,
+                'participantes_json' => json_encode([$workerA->id, $workerB->id]),
+            ])
+            ->assertOk()
+            ->assertJsonPath('updated', 3);
+
+        foreach ($ids as $id) {
+            $descarga = DescargaContenedor::findOrFail($id);
+            $this->assertSame(2, $descarga->participantes()->count());
+            $this->assertEquals(50.0, (float) $descarga->participantes()->where('talana_trabajador_id', $workerA->id)->value('porcentaje_participacion'));
+            $this->assertEquals(50.0, (float) $descarga->participantes()->where('talana_trabajador_id', $workerB->id)->value('porcentaje_participacion'));
+        }
+    }
+
+    public function test_capture_user_cannot_bulk_assign_workers_to_someone_elses_draft(): void
+    {
+        $admin = $this->createSuperAdminUser();
+        $capturador = $this->createContainerModuleUser(false);
+        $centro = $this->createCentroCosto('CD Masivo Permiso QA');
+        $tarifa = $this->createTarifa('CNTMASPERM', 75000, 36000, 'MASIVO PERMISO QA', false, $centro);
+        $worker = $this->createTalanaWorker('Trabajador Masivo Permiso QA', $centro);
+
+        $this->actingAs($admin)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'bodega' => 'CD Masivo Permiso QA',
+                'fecha' => '2026-08-01',
+                'contenedor' => 'CONT-MASPERM-001',
+                'tarifa_id' => $tarifa->id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-MASPERM-001')->firstOrFail();
+
+        $this->actingAs($capturador)
+            ->postJson(route('descarga-contenedores.equipo-masivo'), [
+                'descargas' => [$descarga->id],
+                'participantes_json' => json_encode([$worker->id]),
+            ])
+            ->assertStatus(422);
+
+        $this->assertSame(0, $descarga->fresh()->participantes()->count());
     }
 
     private function createSuperAdminUser(): User

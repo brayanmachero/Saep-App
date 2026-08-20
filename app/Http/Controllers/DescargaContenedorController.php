@@ -112,7 +112,17 @@ class DescargaContenedorController extends Controller
             ? $this->validationQueue()
             : ['ready' => collect(), 'pending' => collect()];
 
-        return view('descarga_contenedores.index', compact('descargas', 'centros', 'stats', 'validationQueue', 'showValidationQueue'));
+        $form = $this->formData();
+
+        return view('descarga_contenedores.index', [
+            'descargas' => $descargas,
+            'centros' => $centros,
+            'stats' => $stats,
+            'validationQueue' => $validationQueue,
+            'showValidationQueue' => $showValidationQueue,
+            'tarifas' => $form['tarifas'],
+            'trabajadores' => $form['trabajadores'],
+        ]);
     }
 
     public function create()
@@ -206,6 +216,124 @@ class DescargaContenedorController extends Controller
         return redirect()
             ->route('descarga-contenedores.show', $descarga)
             ->with('success', 'Descarga actualizada correctamente.');
+    }
+
+    public function quickPanel(DescargaContenedor $descarga)
+    {
+        abort_unless(auth()->user()?->tieneAcceso('descarga_contenedores'), 403);
+
+        $descarga->load(['participantes', 'tarifa.centroCosto', 'centroCosto']);
+
+        return response()->json([
+            'can_edit' => $this->canQuickEdit($descarga),
+            'descarga' => [
+                'id' => $descarga->id,
+                'contenedor' => $descarga->contenedor,
+                'fecha' => optional($descarga->fecha)->format('d/m/Y'),
+                'bodega' => $descarga->bodega ?: ($descarga->centroCosto->nombre ?? ''),
+                'operacion' => $descarga->operacion,
+                'centro_costo_id' => $descarga->centro_costo_id,
+                'tarifa_id' => $descarga->tarifa_id,
+                'fact_codigo' => $descarga->fact_codigo,
+                'participantes' => $descarga->participantes
+                    ->map(fn ($p) => [
+                        'id' => $p->talana_trabajador_id,
+                        'porcentaje' => $p->porcentaje_participacion,
+                        'nombre' => $p->nombre_snapshot,
+                    ])
+                    ->values(),
+            ],
+        ]);
+    }
+
+    public function quickSave(Request $request, DescargaContenedor $descarga)
+    {
+        if (!$this->canQuickEdit($descarga)) {
+            return response()->json(['message' => 'No puedes editar este registro.'], 403);
+        }
+
+        $data = $request->validate([
+            'tarifa_id' => ['nullable', 'exists:descarga_contenedor_tarifas,id'],
+            'fact_codigo' => ['nullable', 'string', 'max:40'],
+            'participantes_json' => ['nullable'],
+        ]);
+
+        DB::transaction(function () use ($request, $descarga, $data) {
+            $update = [
+                'tarifa_id' => $this->nullableInt($data['tarifa_id'] ?? null),
+                'fact_codigo' => $this->cleanUpper($data['fact_codigo'] ?? $descarga->fact_codigo),
+                'operacion' => $descarga->operacion,
+                'centro_costo_id' => $descarga->centro_costo_id,
+            ];
+            $this->applyTarifaSnapshot($update);
+            $descarga->update($update);
+            $descarga->refresh();
+
+            if ($request->exists('participantes_json')) {
+                $this->syncParticipantes($descarga, $this->extractParticipantesFromRequest($request));
+            }
+        });
+
+        return response()->json($this->listRowPayload(
+            $descarga->fresh(['participantes', 'tarifa', 'centroCosto']),
+            'Registro actualizado.'
+        ));
+    }
+
+    public function assignCrewBulk(Request $request)
+    {
+        abort_unless(auth()->user()?->tieneAcceso('descarga_contenedores'), 403);
+
+        $data = $request->validate([
+            'descargas' => ['required', 'array', 'min:1', 'max:50'],
+            'descargas.*' => ['integer', 'exists:descarga_contenedores,id'],
+            'participantes_json' => ['required', 'string'],
+        ]);
+
+        $payload = $this->extractParticipantesFromRequest($request);
+        if ($payload === []) {
+            return response()->json(['message' => 'Selecciona al menos un trabajador.'], 422);
+        }
+
+        $rows = [];
+        $updated = 0;
+        $skipped = 0;
+
+        DB::transaction(function () use ($data, $payload, &$rows, &$updated, &$skipped) {
+            foreach ($data['descargas'] as $id) {
+                $descarga = DescargaContenedor::find($id);
+                if (!$descarga || !$this->canQuickEdit($descarga)) {
+                    $skipped++;
+                    continue;
+                }
+
+                $this->syncParticipantes($descarga, $payload);
+                $updated++;
+                $rows[] = $this->listRowPayload(
+                    $descarga->fresh(['participantes', 'tarifa', 'centroCosto']),
+                    ''
+                )['row'];
+            }
+        });
+
+        if ($updated === 0) {
+            return response()->json([
+                'message' => 'Ningún contenedor pudo actualizarse. Revisa permisos o estado.',
+            ], 422);
+        }
+
+        $message = "Equipo asignado a {$updated} contenedor(es).";
+        if ($skipped > 0) {
+            $message .= " {$skipped} omitido(s).";
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => $message,
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'rows' => $rows,
+        ]);
     }
 
     public function validar(DescargaContenedor $descarga)
@@ -326,7 +454,9 @@ class DescargaContenedorController extends Controller
 
     public function cargaRapida()
     {
-        return view('descarga_contenedores.carga_rapida', $this->formData());
+        return view('descarga_contenedores.carga_rapida', array_merge($this->formData(), [
+            'existingContainerDates' => $this->existingContainerDateKeys(),
+        ]));
     }
 
     public function storeBulk(Request $request)
@@ -345,7 +475,9 @@ class DescargaContenedorController extends Controller
                 ->with('error', 'La carga rápida permite hasta 200 filas por tanda.');
         }
 
-        $resultado = DB::transaction(function () use ($request, $payload) {
+        $omitDuplicates = $request->boolean('omitir_duplicados');
+
+        $resultado = DB::transaction(function () use ($request, $payload, $omitDuplicates) {
             $carga = DescargaContenedorCarga::create([
                 'nombre' => $request->input('nombre') ?: 'Carga rápida ' . now()->format('d/m/Y H:i'),
                 'origen' => 'pegado',
@@ -358,6 +490,8 @@ class DescargaContenedorController extends Controller
 
             $creadas = 0;
             $alertas = 0;
+            $omitidas = 0;
+            $seenKeys = $this->existingContainerDateKeys();
 
             foreach ($payload as $row) {
                 if (!is_array($row) || $this->rowIsEmpty($row)) {
@@ -365,6 +499,12 @@ class DescargaContenedorController extends Controller
                 }
 
                 $data = $this->normalizeBulkRow($row);
+                $duplicateKey = $this->containerDateKey($data['contenedor'] ?? null, $data['fecha'] ?? null);
+                if ($omitDuplicates && $duplicateKey && isset($seenKeys[$duplicateKey])) {
+                    $omitidas++;
+                    continue;
+                }
+
                 $data['carga_id'] = $carga->id;
                 $data['origen'] = 'pegado';
                 $data['estado'] = 'borrador';
@@ -380,6 +520,9 @@ class DescargaContenedorController extends Controller
                     $alertas++;
                 }
                 $creadas++;
+                if ($duplicateKey) {
+                    $seenKeys[$duplicateKey] = true;
+                }
             }
 
             $carga->update([
@@ -387,14 +530,18 @@ class DescargaContenedorController extends Controller
                 'filas_con_alertas' => $alertas,
             ]);
 
-            return [$carga, $creadas, $alertas];
+            return [$carga, $creadas, $alertas, $omitidas];
         });
 
-        [$carga, $creadas, $alertas] = $resultado;
+        [$carga, $creadas, $alertas, $omitidas] = $resultado;
+        $mensaje = "Carga rápida guardada: {$creadas} registros creados, {$alertas} con datos pendientes.";
+        if ($omitidas > 0) {
+            $mensaje .= " {$omitidas} duplicado" . ($omitidas === 1 ? '' : 's') . " omitido" . ($omitidas === 1 ? '' : 's') . '.';
+        }
 
         return redirect()
             ->route('descarga-contenedores.index', ['buscar' => $carga->nombre])
-            ->with('success', "Carga rápida guardada: {$creadas} registros creados, {$alertas} con datos pendientes.");
+            ->with('success', $mensaje);
     }
 
     public function cargas(Request $request)
@@ -1053,6 +1200,51 @@ class DescargaContenedorController extends Controller
         abort_if($descarga->estado === 'liquidado', 403, 'No se puede editar un registro liquidado.');
     }
 
+    private function canQuickEdit(DescargaContenedor $descarga): bool
+    {
+        return (bool) auth()->user()?->puedeEditarDescargaContenedor($descarga)
+            && $descarga->estado !== 'liquidado';
+    }
+
+    private function visibleBlockers(DescargaContenedor $descarga)
+    {
+        $blockers = $descarga->validationBlockers();
+        if ($this->puedeGestionarCostos()) {
+            return $blockers->values();
+        }
+
+        return $blockers
+            ->map(fn ($blocker) => match ($blocker) {
+                'falta pago colaborador' => 'tarifa FACT pendiente',
+                'tarifa pendiente de revisión' => 'tarifa FACT por revisar',
+                default => $blocker,
+            })
+            ->values();
+    }
+
+    private function listRowPayload(DescargaContenedor $descarga, string $message): array
+    {
+        $descarga->loadMissing(['participantes', 'tarifa.centroCosto', 'centroCosto']);
+        $blockers = $descarga->validationBlockers();
+
+        return [
+            'ok' => true,
+            'message' => $message,
+            'row' => [
+                'id' => $descarga->id,
+                'participantes_count' => $descarga->participantes->count(),
+                'fact_codigo' => $descarga->fact_codigo,
+                'tarifa_cliente' => $descarga->tarifa_cliente_snapshot,
+                'tarifa_proceso' => $descarga->tarifa_proceso_snapshot,
+                'pago' => $descarga->pago_colaborador_snapshot,
+                'requiere_revision_tarifa' => (bool) $descarga->requiere_revision_tarifa,
+                'blockers' => $this->visibleBlockers($descarga)->all(),
+                'can_validate' => $descarga->estado === 'borrador' && $blockers->isEmpty(),
+                'estado' => $descarga->estado,
+            ],
+        ];
+    }
+
     private function ensureContainerEvidence(ArchivoAdjunto $archivo, ?DescargaContenedor $descarga = null): void
     {
         abort_unless($archivo->entidad_tipo === 'descarga_contenedor', 404);
@@ -1375,6 +1567,16 @@ class DescargaContenedorController extends Controller
                 ->orderBy('centro_costo_id')
                 ->orderBy('id')
                 ->get();
+
+            $cliente = $this->clienteFromOperacion($data['operacion'] ?? null);
+            if ($cliente) {
+                $porCliente = $tarifasCoincidentes
+                    ->filter(fn (DescargaContenedorTarifa $item) => strtoupper((string) $item->cliente) === $cliente)
+                    ->values();
+                if ($porCliente->isNotEmpty()) {
+                    $tarifasCoincidentes = $porCliente;
+                }
+            }
 
             $centroId = $this->nullableInt($data['centro_costo_id'] ?? null);
             if ($centroId) {
@@ -1732,6 +1934,53 @@ class DescargaContenedorController extends Controller
         $value = preg_replace('/[^0-9.-]/', '', $value);
 
         return $value === '' ? null : (float) $value;
+    }
+
+    private function clienteFromOperacion($operacion): ?string
+    {
+        $value = mb_strtoupper($this->cleanText($operacion) ?? '');
+        if ($value === '') {
+            return null;
+        }
+
+        $value = strtr($value, ['Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U']);
+
+        if (str_contains($value, 'SMU') || str_contains($value, 'UNIMARC')) {
+            return 'SMU';
+        }
+
+        if (str_contains($value, 'WALMART') || $value === 'WM' || str_starts_with($value, 'WM ')) {
+            return 'WM';
+        }
+
+        return null;
+    }
+
+    private function containerDateKey($contenedor, $fecha): ?string
+    {
+        $contenedor = $this->cleanUpper($contenedor);
+        if (!$contenedor || !$fecha) {
+            return null;
+        }
+
+        return $contenedor.'|'.$fecha;
+    }
+
+    private function existingContainerDateKeys(): array
+    {
+        return DescargaContenedor::query()
+            ->whereNotNull('contenedor')
+            ->where('contenedor', '<>', '')
+            ->whereNotNull('fecha')
+            ->get(['contenedor', 'fecha'])
+            ->reduce(function (array $keys, DescargaContenedor $descarga) {
+                $key = $this->containerDateKey($descarga->contenedor, optional($descarga->fecha)->format('Y-m-d'));
+                if ($key) {
+                    $keys[$key] = true;
+                }
+
+                return $keys;
+            }, []);
     }
 
     private function cleanUpper($value): ?string

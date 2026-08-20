@@ -4,7 +4,7 @@
 @php
     $puedeGestionarCostos = auth()->user()->puedeGestionarCostosDescargaContenedores();
     $puedeEditarContenedores = auth()->user()->tieneAcceso('descarga_contenedores', 'puede_editar');
-    $emptyColspan = $puedeGestionarCostos ? 11 : 10;
+    $emptyColspan = ($puedeGestionarCostos ? 11 : 10) + 1;
 @endphp
 <div class="page-container">
     <div class="page-header">
@@ -82,16 +82,14 @@
     </div>
 
     @if($showValidationQueue)
-    <section class="review-queue" aria-label="Bandeja de revisión de contenedores">
-        <div class="review-queue-heading">
+    <details class="review-queue" aria-label="Bandeja de revisión de contenedores">
+        <summary class="review-queue-heading">
             <div>
                 <h3>Bandeja de revisión</h3>
-                <p>Los avisos indican datos faltantes en cada borrador. Usa Completar para ir directamente al campo que requiere atención.</p>
+                <p>{{ $stats['listos_validar'] }} listos · {{ $stats['pendientes_validar'] }} pendientes. Ábrela solo cuando necesites revisar avisos.</p>
             </div>
-            <a href="{{ route('descarga-contenedores.index', ['validacion_estado' => 'listos']) }}" class="btn-secondary">
-                <i class="bi bi-shield-check"></i> Ver listos
-            </a>
-        </div>
+            <span class="btn-secondary">Ver bandeja</span>
+        </summary>
 
         <div class="review-queue-grid">
             <div class="review-column">
@@ -144,19 +142,21 @@
                             <strong>{{ $item->contenedor ?: 'Sin contenedor' }}</strong>
                             <small>{{ $item->fecha?->format('d/m/Y') ?? 'Sin fecha' }} · {{ $item->bodega ?: ($item->centroCosto->nombre ?? 'Sin centro') }}</small>
                             <div class="review-badges">
-                                @foreach($visibleBlockers->take(2) as $blocker)
-                                    <span class="badge warning">{{ ucfirst($blocker) }}</span>
-                                @endforeach
-                                @if($visibleBlockers->count() > 2)
-                                    <span class="badge warning">+{{ $visibleBlockers->count() - 2 }}</span>
-                                @endif
+                                <button type="button" class="pending-compact" data-pending-toggle aria-expanded="false">
+                                    <span class="badge warning">{{ $visibleBlockers->count() }} {{ $visibleBlockers->count() === 1 ? 'pendiente' : 'pendientes' }}</span>
+                                </button>
+                                <div class="pending-details" hidden>
+                                    @foreach($visibleBlockers as $blocker)
+                                        <span class="badge warning">{{ ucfirst($blocker) }}</span>
+                                    @endforeach
+                                    @if($nextAction)
+                                        <p class="review-next-step"><i class="bi bi-arrow-right-circle"></i><span><strong>Siguiente:</strong> {{ $nextAction['detail'] }}</span></p>
+                                    @endif
+                                </div>
                             </div>
-                            @if($nextAction)
-                            <p class="review-next-step"><i class="bi bi-arrow-right-circle"></i><span><strong>Siguiente:</strong> {{ $nextAction['detail'] }}</span></p>
-                            @endif
                         </div>
                         <div class="review-actions">
-                            <a href="{{ route('descarga-contenedores.edit', $item) . ($nextAction['anchor'] ?? '') }}" class="btn-secondary review-complete-btn" title="{{ $nextAction['label'] ?? 'Completar registro' }}"><i class="bi bi-pencil-fill"></i> {{ $nextAction['label'] ?? 'Completar' }}</a>
+                            <button type="button" class="btn-secondary review-complete-btn" data-open-drawer="{{ $item->id }}" data-focus="{{ str_contains($nextAction['anchor'] ?? '', 'participantes') ? 'workers' : 'fact' }}" title="{{ $nextAction['label'] ?? 'Completar registro' }}"><i class="bi bi-pencil-fill"></i> {{ $nextAction['label'] ?? 'Completar' }}</button>
                             <a href="{{ route('descarga-contenedores.show', $item) }}" class="icon-btn" title="Ver detalle"><i class="bi bi-eye-fill"></i></a>
                         </div>
                     </div>
@@ -165,7 +165,7 @@
                 @endforelse
             </div>
         </div>
-    </section>
+    </details>
     @endif
 
     <div class="stats-grid">
@@ -288,6 +288,7 @@
             <table class="data-table">
                 <thead>
                     <tr>
+                        <th style="width:2.2rem"><input type="checkbox" data-select-all title="Seleccionar todos"></th>
                         <th>Fecha</th>
                         <th>Contenedor</th>
                         <th>Bodega</th>
@@ -320,7 +321,12 @@
                             };
                         });
                     @endphp
-                    <tr>
+                    <tr data-descarga-id="{{ $descarga->id }}">
+                        <td>
+                            @if($puedeEditarDescarga && $descarga->estado !== 'liquidado')
+                                <input type="checkbox" class="contenedores-select" value="{{ $descarga->id }}" title="Seleccionar {{ $descarga->contenedor ?: 'contenedor' }}">
+                            @endif
+                        </td>
                         <td>{{ $descarga->fecha?->format('d/m/Y') ?? '—' }}</td>
                         <td>
                             <strong>{{ $descarga->contenedor ?: 'Sin contenedor' }}</strong>
@@ -333,7 +339,7 @@
                             @endif
                         </td>
                         <td>{{ $descarga->equipo_descarga ?: '—' }}</td>
-                        <td>
+                        <td data-cell="fact">
                             <code>{{ $descarga->fact_codigo ?: '—' }}</code>
                             @if($puedeGestionarCostos)
                             @if($descarga->tarifa_cliente_snapshot || $descarga->tarifa_proceso_snapshot)
@@ -344,7 +350,7 @@
                             @endif
                         </td>
                         @if($puedeGestionarCostos)
-                        <td>
+                        <td data-cell="pago">
                             @if($descarga->requiere_revision_tarifa)
                                 <span class="badge warning">Revisar</span>
                             @elseif($descarga->pago_colaborador_snapshot !== null)
@@ -355,26 +361,26 @@
                         </td>
                         @endif
                         <td>{{ $descarga->cajas !== null ? number_format($descarga->cajas, 0, ',', '.') : '—' }}</td>
-                        <td>
+                        <td data-cell="trab">
                             @if($descarga->participantes_count === 0)
                                 <span class="badge warning">Sin equipo</span>
                             @else
                                 {{ $descarga->participantes_count }}
                             @endif
                         </td>
-                        <td>
+                        <td data-cell="pendientes">
                             @if($descarga->estado !== 'borrador')
                                 <span class="badge success">OK</span>
                             @elseif($blockers->isEmpty())
                                 <span class="badge success">Listo</span>
                             @else
-                                <div class="pending-list">
-                                    @foreach($visibleBlockers->take(2) as $blocker)
+                                <button type="button" class="pending-compact" data-pending-toggle aria-expanded="false">
+                                    <span class="badge warning">{{ $visibleBlockers->count() }} {{ $visibleBlockers->count() === 1 ? 'pendiente' : 'pendientes' }}</span>
+                                </button>
+                                <div class="pending-details" hidden>
+                                    @foreach($visibleBlockers as $blocker)
                                         <span class="badge warning">{{ ucfirst($blocker) }}</span>
                                     @endforeach
-                                    @if($visibleBlockers->count() > 2)
-                                        <span class="badge warning">+{{ $visibleBlockers->count() - 2 }}</span>
-                                    @endif
                                 </div>
                             @endif
                         </td>
@@ -383,6 +389,7 @@
                             <a href="{{ route('descarga-contenedores.show', $descarga) }}" class="icon-btn" title="Ver"><i class="bi bi-eye-fill"></i></a>
                             @if($puedeEditarContenedores)
                                 @if($descarga->estado === 'borrador')
+                                    <span data-validate-slot data-action="{{ route('descarga-contenedores.validar', $descarga) }}">
                                     @if($blockers->isEmpty())
                                         <form method="POST" action="{{ route('descarga-contenedores.validar', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Validar este registro de contenedor?')">
                                             @csrf @method('PATCH')
@@ -391,6 +398,7 @@
                                     @else
                                         <button class="icon-btn validation-disabled" title="No se puede validar. Pendiente: {{ $visibleBlockers->implode(', ') }}" disabled><i class="bi bi-check2-circle"></i></button>
                                     @endif
+                                    </span>
                                 @elseif($descarga->estado === 'validado')
                                     @if($puedeGestionarCostos)
                                     <form method="POST" action="{{ route('descarga-contenedores.liquidar', $descarga) }}" style="display:inline" onsubmit="return confirm('¿Marcar este registro como liquidado?')">
@@ -410,7 +418,8 @@
                                 @endif
                             @endif
                             @if($puedeEditarDescarga && $descarga->estado !== 'liquidado')
-                            <a href="{{ route('descarga-contenedores.edit', $descarga) }}" class="icon-btn" title="{{ $puedeEditarContenedores ? 'Editar registro' : 'Completar mi borrador' }}"><i class="bi bi-pencil-fill"></i></a>
+                            <button type="button" class="icon-btn" data-open-drawer="{{ $descarga->id }}" data-focus="workers" title="Asignar trabajadores"><i class="bi bi-people-fill"></i></button>
+                            <button type="button" class="icon-btn" data-open-drawer="{{ $descarga->id }}" title="{{ $puedeEditarContenedores ? 'Editar en panel' : 'Completar mi borrador' }}"><i class="bi bi-pencil-fill"></i></button>
                             @endif
                             @if(auth()->user()->tieneAcceso('descarga_contenedores', 'puede_eliminar'))
                                 @if($descarga->estado !== 'liquidado')
@@ -435,6 +444,7 @@
         @if($descargas->hasPages())
             <div style="padding:1rem 0">{{ $descargas->links() }}</div>
         @endif
+        @include('descarga_contenedores._list_panel')
     </div>
 </div>
 <style>
@@ -504,7 +514,10 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 1rem;
+    list-style: none;
+    cursor: pointer;
 }
+.review-queue-heading::-webkit-details-marker { display: none; }
 .review-queue-heading h3 {
     margin: 0 0 .15rem;
     color: var(--text-main);
@@ -514,6 +527,12 @@
     margin: 0;
     color: var(--text-muted);
     font-size: .82rem;
+}
+.pending-compact {
+    border: 0;
+    background: none;
+    padding: 0;
+    cursor: pointer;
 }
 .review-queue-grid {
     display: grid;

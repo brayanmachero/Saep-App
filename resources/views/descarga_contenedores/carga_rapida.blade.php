@@ -25,10 +25,10 @@
     @include('descarga_contenedores._context_help', [
         'title' => 'Uso de programación',
         'items' => [
-            'Pega la tabla tal como llega por correo o desde Excel; la vista previa permite corregir antes de guardar.',
-            'Cada fila se guarda como borrador para evitar validar información incompleta.',
-            'Participantes base aplica el mismo equipo a todas las filas, útil cuando una cuadrilla descarga varios contenedores.',
-            'Si el FACT viene repetido o no existe, el registro queda marcado para revisión de tarifa.',
+            'Pega la tabla tal como llega por correo o desde Excel; la vista previa corrige FACT, duplicados y centro antes de guardar.',
+            'WALMART se asocia a tarifas WM y SMU a tarifas SMU. Si el código tiene más de un proceso, hay que elegir.',
+            'Por defecto no se vuelven a guardar contenedores que ya existen en la misma fecha.',
+            'Participantes base aplica el mismo equipo a todas las filas. Sin eso, quedan pendientes de cuadrilla.',
         ],
     ])
 
@@ -89,7 +89,7 @@
                         <span>O Observación</span>
                         <span>U FACT.</span>
                     </div>
-                    <p class="helper-text" style="margin-top:.75rem">Si el correo trae encabezados, el sistema mapea por nombre de columna. La vista previa muestra el orden completo del Excel; Año, Mes, Semana, Día y Dato quedan como referencia operativa antes de guardar.</p>
+                    <p class="helper-text" style="margin-top:.75rem">Si el correo trae encabezados, se mapean por nombre (FACT, Contenedor, Fecha…). Año, Mes, Semana, Día y Dato se guardan como referencia y ya no ocupan la vista previa.</p>
                 </div>
             </div>
         </div>
@@ -97,12 +97,18 @@
         <div class="glass-card" id="preview-card" style="display:none">
             <div class="preview-toolbar">
                 <div>
-        <h3 style="margin:0;font-size:1.1rem">Vista previa editable @include('descarga_contenedores._help_icon', ['text' => 'Revisa y corrige datos antes de guardar. Nada se crea hasta presionar Guardar registros.'])</h3>
+        <h3 style="margin:0;font-size:1.1rem">Vista previa editable @include('descarga_contenedores._help_icon', ['text' => 'Revisa FACT, duplicados y equipo antes de guardar. Nada se crea hasta presionar Guardar registros.'])</h3>
                     <p class="helper-text" id="preview-count" style="margin:.2rem 0 0"></p>
                 </div>
-                <button type="submit" class="btn-premium">
-                    <i class="bi bi-save"></i> Guardar registros
-                </button>
+                <div class="preview-toolbar-actions">
+                    <label class="preview-skip-dup">
+                        <input type="checkbox" name="omitir_duplicados" value="1" id="omitir_duplicados" checked>
+                        <span>Omitir duplicados ya cargados</span>
+                    </label>
+                    <button type="submit" class="btn-premium">
+                        <i class="bi bi-save"></i> Guardar registros
+                    </button>
+                </div>
             </div>
 
             <div class="preview-wrap">
@@ -124,11 +130,6 @@
                         <col class="col-number">
                         <col class="col-text">
                         <col class="col-text">
-                        <col class="col-small">
-                        <col class="col-small">
-                        <col class="col-small">
-                        <col class="col-small">
-                        <col class="col-small">
                         <col class="col-fact">
                         <col class="col-workers">
                         <col class="col-action">
@@ -151,11 +152,6 @@
                             <th>Pallets</th>
                             <th>Productos</th>
                             <th>Observación</th>
-                            <th>Año</th>
-                            <th>Mes</th>
-                            <th>Semana</th>
-                            <th>Día</th>
-                            <th>Dato</th>
                             <th>FACT.</th>
                             <th>Trabajadores</th>
                             <th></th>
@@ -182,10 +178,12 @@
 <script type="application/json" id="trabajadores_data">@json($trabajadores)</script>
 <script type="application/json" id="centros_data">@json($centros->map(fn($c) => ['id' => $c->id, 'nombre' => $c->nombre])->values())</script>
 <script type="application/json" id="tarifas_data">@json($tarifasData)</script>
+<script type="application/json" id="existing_container_dates">@json(array_keys($existingContainerDates ?? []))</script>
 <script>
 const workers = JSON.parse(document.getElementById('trabajadores_data').textContent || '[]');
 const centers = JSON.parse(document.getElementById('centros_data').textContent || '[]');
 const tarifas = JSON.parse(document.getElementById('tarifas_data').textContent || '[]');
+const existingContainerDates = new Set(JSON.parse(document.getElementById('existing_container_dates').textContent || '[]'));
 const byWorkerId = new Map(workers.map(w => [String(w.id), w]));
 const byTarifaId = new Map(tarifas.map(t => [String(t.id), t]));
 
@@ -229,8 +227,20 @@ function tarifasByCode(code, centerId = '') {
     });
 }
 
-function uniqueTarifaByCode(code, centerId = '') {
-    const matches = tarifasByCode(code, centerId);
+function clienteFromOperacion(operacion) {
+    const text = normalizeText(operacion);
+    if (!text) return '';
+    if (text.includes('smu') || text.includes('unimarc')) return 'SMU';
+    if (text.includes('walmart') || text === 'wm' || text.startsWith('wm ')) return 'WM';
+    return '';
+}
+
+function uniqueTarifaByCode(code, centerId = '', cliente = '') {
+    let matches = tarifasByCode(code, centerId);
+    if (cliente) {
+        const byClient = matches.filter(t => String(t.cliente || '').toUpperCase() === cliente);
+        if (byClient.length) matches = byClient;
+    }
     const scoped = centerId
         ? matches.filter(t => String(t.centro_costo_id || '') === String(centerId))
         : [];
@@ -403,6 +413,15 @@ function parsePastedTable(text) {
             : parseRowByPosition(row);
 
         item.centro_costo_id = inferCenterId(item.bodega);
+        const tarifa = uniqueTarifaByCode(
+            item.fact_codigo,
+            item.centro_costo_id,
+            clienteFromOperacion(item.operacion)
+        );
+        if (tarifa) {
+            item.tarifa_id = String(tarifa.id);
+            item.fact_codigo = tarifa.codigo;
+        }
         return item;
     });
 }
@@ -626,10 +645,22 @@ function initTarifaPicker(container, tarifaInput, factInput) {
     const selectedText = container.querySelector('[data-fact-selected]');
     const row = container.closest('tr');
     const rowCenterInput = row?.querySelector('[data-key="centro_costo_id"]');
+    const rowOperacionInput = row?.querySelector('[data-key="operacion"]');
+
+    function rowCliente() {
+        return clienteFromOperacion(rowOperacionInput?.value || '');
+    }
 
     function tarifaMatchesRowCenter(tarifa) {
         const centerId = rowCenterInput?.value || '';
-        return !centerId || !tarifa.centro_costo_id || String(tarifa.centro_costo_id) === String(centerId);
+        const cliente = rowCliente();
+        if (centerId && tarifa.centro_costo_id && String(tarifa.centro_costo_id) !== String(centerId)) {
+            return false;
+        }
+        if (cliente && String(tarifa.cliente || '').toUpperCase() !== cliente) {
+            return false;
+        }
+        return true;
     }
 
     function setSelection(tarifa = null, manualCode = '') {
@@ -641,6 +672,7 @@ function initTarifaPicker(container, tarifaInput, factInput) {
             search.title = label;
             selectedText.title = label;
             selectedText.innerHTML = `<strong>${escapeAttr(tarifa.codigo)}</strong> · ${escapeAttr(tarifa.cliente)} · ${escapeAttr(tarifa.centro || 'General')} · ${escapeAttr(tarifa.proceso)}${tarifa.requiere_revision ? ' <span class="badge warning">Revisar</span>' : ''}`;
+            refreshPreviewHealth();
             return;
         }
 
@@ -652,16 +684,24 @@ function initTarifaPicker(container, tarifaInput, factInput) {
             search.title = '';
             selectedText.textContent = 'Sin FACT';
             selectedText.title = 'Sin FACT';
+            refreshPreviewHealth();
             return;
         }
 
-        const matches = tarifasByCode(code, rowCenterInput?.value || '');
+        const auto = uniqueTarifaByCode(code, rowCenterInput?.value || '', rowCliente());
+        if (auto) {
+            setSelection(auto);
+            return;
+        }
+
+        const matches = tarifasByCode(code, rowCenterInput?.value || '').filter(t => !rowCliente() || String(t.cliente || '').toUpperCase() === rowCliente());
         const status = matches.length > 1
             ? `${code}: código repetido, selecciona proceso`
             : `${code}: pendiente de tarifa`;
         search.title = status;
         selectedText.textContent = status;
         selectedText.title = status;
+        refreshPreviewHealth();
     }
 
     function positionDropdown() {
@@ -751,7 +791,7 @@ function initTarifaPicker(container, tarifaInput, factInput) {
         return;
     }
 
-    const uniqueTarifa = uniqueTarifaByCode(factInput.value, rowCenterInput?.value || '');
+    const uniqueTarifa = uniqueTarifaByCode(factInput.value, rowCenterInput?.value || '', rowCliente());
     if (uniqueTarifa) {
         setSelection(uniqueTarifa);
         return;
@@ -768,6 +808,82 @@ function previewInput(key, row, placeholder = '', className = 'mini-input') {
     return `<input class="form-control ${className}" data-key="${escapeAttr(key)}" value="${escapeAttr(value)}" title="${escapeAttr(value)}" placeholder="${escapeAttr(placeholder)}">`;
 }
 
+function hiddenPreview(key, row) {
+    return `<input type="hidden" data-key="${escapeAttr(key)}" value="${escapeAttr(row[key] || '')}">`;
+}
+
+function normalizeDateKey(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+    const dmy = text.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+    if (dmy) return `${dmy[3]}-${String(dmy[2]).padStart(2, '0')}-${String(dmy[1]).padStart(2, '0')}`;
+    return text;
+}
+
+function containerDateKey(contenedor, fecha) {
+    const name = String(contenedor || '').trim().toUpperCase();
+    const date = normalizeDateKey(fecha);
+    if (!name || !date) return '';
+    return `${name}|${date}`;
+}
+
+function refreshPreviewHealth() {
+    const rows = [...document.querySelectorAll('#preview-body tr')];
+    const seen = {};
+    let withTarifa = 0;
+    let pendingFact = 0;
+    let duplicates = 0;
+    let withoutTeam = 0;
+
+    rows.forEach(tr => {
+        const contenedor = tr.querySelector('[data-key="contenedor"]')?.value || '';
+        const fecha = tr.querySelector('[data-key="fecha"]')?.value || '';
+        const tarifaId = tr.querySelector('[data-key="tarifa_id"]')?.value || '';
+        const fact = tr.querySelector('[data-key="fact_codigo"]')?.value || '';
+        const workersCount = (() => {
+            try { return JSON.parse(tr.querySelector('.row-participants')?.value || '[]').length; }
+            catch (e) { return 0; }
+        })();
+        const key = containerDateKey(contenedor, fecha);
+        const isDup = key && (existingContainerDates.has(key) || seen[key]);
+        if (key) seen[key] = (seen[key] || 0) + 1;
+
+        if (tarifaId) withTarifa += 1;
+        else if (fact) pendingFact += 1;
+        if (isDup) duplicates += 1;
+        if (!workersCount) withoutTeam += 1;
+
+        const badge = tr.querySelector('[data-row-status]');
+        tr.classList.toggle('is-duplicate', !!isDup);
+        if (!badge) return;
+        badge.className = 'badge';
+        if (isDup) {
+            badge.classList.add('danger');
+            badge.textContent = 'Duplicado';
+        } else if (tarifaId) {
+            badge.classList.add('success');
+            badge.textContent = 'FACT listo';
+        } else if (fact) {
+            badge.classList.add('warning');
+            badge.textContent = 'Revisar FACT';
+        } else {
+            badge.classList.add('warning');
+            badge.textContent = 'Borrador';
+        }
+    });
+
+    const count = rows.length;
+    const parts = [`${count} fila${count === 1 ? '' : 's'}`];
+    if (withTarifa) parts.push(`${withTarifa} con FACT`);
+    if (pendingFact) parts.push(`${pendingFact} por elegir proceso`);
+    if (duplicates) parts.push(`${duplicates} duplicado${duplicates === 1 ? '' : 's'}`);
+    if (withoutTeam) parts.push(`${withoutTeam} sin equipo`);
+    const el = document.getElementById('preview-count');
+    if (el) el.textContent = count ? parts.join(' · ') : 'Sin filas';
+}
+
 function renderPreview(rows) {
     const body = document.getElementById('preview-body');
     body.innerHTML = '';
@@ -778,7 +894,7 @@ function renderPreview(rows) {
         tr.dataset.index = index;
         tr.innerHTML = `
             <td>
-                <span class="badge warning">Borrador</span>
+                <span class="badge warning" data-row-status>Borrador</span>
                 <input type="hidden" data-key="estado" value="borrador">
             </td>
             <td>${previewInput('operacion', row)}</td>
@@ -799,12 +915,12 @@ function renderPreview(rows) {
             <td>${previewInput('pallets', row, '', 'mini-input number-input')}</td>
             <td>${previewInput('producto', row, '', 'mini-input xwide-input')}</td>
             <td>${previewInput('observacion', row, '', 'mini-input xwide-input')}</td>
-            <td>${previewInput('anio', row, '', 'mini-input small-input')}</td>
-            <td>${previewInput('mes', row, '', 'mini-input small-input')}</td>
-            <td>${previewInput('semana', row, '', 'mini-input small-input')}</td>
-            <td>${previewInput('dia', row, '', 'mini-input small-input')}</td>
-            <td>${previewInput('dato', row, '', 'mini-input small-input')}</td>
             <td>
+                ${hiddenPreview('anio', row)}
+                ${hiddenPreview('mes', row)}
+                ${hiddenPreview('semana', row)}
+                ${hiddenPreview('dia', row)}
+                ${hiddenPreview('dato', row)}
                 <input type="hidden" data-key="tarifa_id" value="${escapeAttr(row.tarifa_id || '')}">
                 <input type="hidden" data-key="fact_codigo" value="${escapeAttr(row.fact_codigo)}">
                 <div class="bulk-fact-picker">
@@ -847,6 +963,7 @@ function renderPreview(rows) {
         const picker = initWorkerPicker(tr.querySelector('.row-worker-picker'), hidden, row.participantes || [], ids => {
             tr.dataset.participantes = JSON.stringify(ids);
             updateWorkerSummary(ids);
+            refreshPreviewHealth();
         });
         updateWorkerSummary(picker.get());
         toggle.addEventListener('click', () => {
@@ -865,17 +982,19 @@ function renderPreview(rows) {
         tr.querySelector('.remove-row').addEventListener('click', () => {
             factDropdown?.remove();
             tr.remove();
-            refreshCount();
+            refreshPreviewHealth();
+        });
+        ['fecha', 'contenedor', 'operacion'].forEach(key => {
+            tr.querySelector(`[data-key="${key}"]`)?.addEventListener('change', refreshPreviewHealth);
         });
     });
 
     document.getElementById('preview-card').style.display = rows.length ? 'block' : 'none';
-    refreshCount();
+    refreshPreviewHealth();
 }
 
 function refreshCount() {
-    const count = document.querySelectorAll('#preview-body tr').length;
-    document.getElementById('preview-count').textContent = count ? `${count} filas listas para guardar` : 'Sin filas';
+    refreshPreviewHealth();
 }
 
 function closeWorkerEditors(except = null) {
@@ -975,6 +1094,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('#preview-body tr').forEach(tr => {
             if (tr._workerPicker) tr._workerPicker.set(ids);
         });
+        refreshPreviewHealth();
         notifyUser('Participantes base aplicados a la vista previa.', 'success');
     });
 
@@ -1047,11 +1167,27 @@ document.addEventListener('DOMContentLoaded', () => {
     border: 1px solid var(--surface-border);
     border-radius: 10px;
 }
+.preview-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+}
+.preview-skip-dup {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    margin: 0;
+    font-size: .8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
 .preview-table {
-    min-width: 2020px;
+    min-width: 1560px;
     table-layout: fixed;
 }
-.preview-table .col-status { width: 74px; }
+.preview-table .col-status { width: 92px; }
 .preview-table .col-short { width: 82px; }
 .preview-table .col-wide { width: 112px; }
 .preview-table .col-date { width: 86px; }
@@ -1076,6 +1212,9 @@ document.addEventListener('DOMContentLoaded', () => {
 }
 .preview-table tbody tr {
     scroll-margin-top: 42px;
+}
+.preview-table tbody tr.is-duplicate {
+    background: rgba(185, 28, 28, .06);
 }
 .preview-table .badge {
     padding: .28rem .45rem;

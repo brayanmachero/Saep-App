@@ -743,6 +743,15 @@
         showToast(@json(session('info')), 'info');
     @endif
 
+    try {
+        const pendingToast = sessionStorage.getItem('saep_pending_toast');
+        if (pendingToast) {
+            sessionStorage.removeItem('saep_pending_toast');
+            const data = JSON.parse(pendingToast);
+            showToast(data.message, data.type || 'success');
+        }
+    } catch (e) {}
+
     // --- Preservar posición de scroll tras acciones (POST → redirect → GET) ---
     (function() {
         if ('scrollRestoration' in history) {
@@ -753,7 +762,13 @@
         const saved = sessionStorage.getItem(key);
         if (saved !== null) {
             sessionStorage.removeItem(key);
-            window.scrollTo(0, parseInt(saved, 10) || 0);
+            const y = parseInt(saved, 10) || 0;
+            const restore = () => window.scrollTo(0, y);
+            restore();
+            requestAnimationFrame(() => {
+                restore();
+                requestAnimationFrame(restore);
+            });
         }
 
         // Guardar scroll antes de enviar cualquier formulario
