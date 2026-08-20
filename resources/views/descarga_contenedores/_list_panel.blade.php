@@ -19,8 +19,8 @@
         ];
         if ($puedeGestionarCostos) {
             $data['costo_unitario'] = $t->costo_unitario;
-            $data['pago_colaborador'] = $t->pago_colaborador;
         }
+        $data['pago_colaborador'] = $t->pago_colaborador;
         return $data;
     })->values();
 @endphp
@@ -247,7 +247,7 @@
         const photos = d.evidencias || [];
         const pago = d.requiere_revision_tarifa
             ? '<span class="badge warning">Revisar tarifa</span>'
-            : (canViewCosts ? dash(d.pago != null ? formatCurrency(d.pago) : '') : '—');
+            : dash(d.pago != null ? formatCurrency(d.pago) : '');
         const percentTotal = workers.reduce((sum, item) => sum + (Number(item.porcentaje) || 0), 0);
         const montoTotal = workers.reduce((sum, item) => sum + (Number(item.monto) || 0), 0);
         const tarifaText = [d.tarifa_cliente, d.tarifa_proceso].filter(Boolean).join(' · ');
@@ -259,7 +259,7 @@
                 ${detailMetric('FACT', `<code>${dash(d.fact_codigo)}</code>`)}
                 ${detailMetric('Cajas', dash(d.cajas != null ? Number(d.cajas).toLocaleString('es-CL') : ''))}
                 ${detailMetric('Equipo', workers.length ? escapeHtml(String(workers.length)) : 'Sin equipo')}
-                ${canViewCosts ? detailMetric('Pago', pago) : ''}
+                ${detailMetric('Pago', pago)}
             </div>
             <div class="contenedores-detail-grid">
                 ${detailCard('Identificación', `
@@ -276,9 +276,9 @@
                 ${detailCard('FACT y tarifa', `
                     <dl class="contenedores-detail-list">
                         ${detailField('Código FACT', `<code>${dash(d.fact_codigo)}</code>`)}
-                        ${canViewCosts ? detailField('Cliente / proceso', dash(tarifaText)) : ''}
+                        ${detailField('Cliente / proceso', dash(tarifaText))}
                         ${canViewCosts ? detailField('Costo unitario', dash(d.costo_unitario != null ? formatCurrency(d.costo_unitario) : '')) : ''}
-                        ${canViewCosts ? detailField('Pago colaboradores', pago) : ''}
+                        ${detailField('Pago colaboradores', pago)}
                         ${detailField('Revisión', d.requiere_revision_tarifa ? '<span class="badge warning">Pendiente</span>' : '<span class="badge success">Asociada</span>')}
                     </dl>
                 `)}
@@ -308,7 +308,7 @@
             ${detailCard('Trabajadores participantes', workers.length ? `
                 <div class="contenedores-detail-table-wrap">
                     <table class="data-table">
-                        <thead><tr><th>Nombre</th><th>RUT</th><th>Cargo</th><th>Centro</th><th>%</th>${canViewCosts ? '<th>Monto</th>' : ''}</tr></thead>
+                        <thead><tr><th>Nombre</th><th>RUT</th><th>Cargo</th><th>Centro</th><th>%</th><th>Monto</th></tr></thead>
                         <tbody>
                             ${workers.map(item => `
                                 <tr>
@@ -317,7 +317,7 @@
                                     <td>${dash(item.cargo)}</td>
                                     <td>${dash(item.centro)}</td>
                                     <td>${item.porcentaje != null ? escapeHtml(Number(item.porcentaje).toFixed(2)) + '%' : '—'}</td>
-                                    ${canViewCosts ? `<td>${item.monto != null ? escapeHtml(formatCurrency(item.monto)) : '—'}</td>` : ''}
+                                    <td>${item.monto != null ? escapeHtml(formatCurrency(item.monto)) : '—'}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -325,7 +325,7 @@
                             <tr>
                                 <th colspan="4" style="text-align:right">Total</th>
                                 <th>${percentTotal.toFixed(2)}%</th>
-                                ${canViewCosts ? `<th>${escapeHtml(formatCurrency(montoTotal))}</th>` : ''}
+                                <th>${escapeHtml(formatCurrency(montoTotal))}</th>
                             </tr>
                         </tfoot>
                     </table>
@@ -809,7 +809,7 @@
             <div class="distribution-summary">
                 <span>Total: <strong data-total>0%</strong></span>
                 <span class="distribution-status" data-total-hint>Debe sumar 100% para validar.</span>
-                ${canViewCosts ? '<span>Pago estimado: <strong data-pago>$0</strong></span>' : ''}
+                <span>Pago estimado: <strong data-pago>$0</strong></span>
                 <button type="button" class="btn-secondary btn-mini" data-equalize>Repartir igual</button>
             </div>
         `;

@@ -232,8 +232,8 @@ class DescargaContenedorTest extends TestCase
         $this->actingAs($capturador)
             ->get(route('descarga-contenedores.edit', $descargaPropia))
             ->assertOk()
-            ->assertDontSee('Pago estimado')
-            ->assertDontSee('"pago_colaborador"', false);
+            ->assertSee('Pago estimado')
+            ->assertDontSee('"costo_unitario"', false);
 
         $this->actingAs($capturador)
             ->put(route('descarga-contenedores.update', $descargaPropia), [
@@ -1336,9 +1336,9 @@ class DescargaContenedorTest extends TestCase
             ->get(route('descarga-contenedores.create'))
             ->assertOk()
             ->assertSee('Tarifa FACT')
-            ->assertDontSee('Pago estimado')
-            ->assertDontSee('"pago_colaborador"', false)
-            ->assertDontSee('Pago $');
+            ->assertSee('Pago estimado')
+            ->assertDontSee('"costo_unitario"', false)
+            ->assertDontSee('$75.000');
 
         $restrictedRoutes = [
             'descarga-contenedores.dotacion',
@@ -1354,7 +1354,7 @@ class DescargaContenedorTest extends TestCase
         }
     }
 
-    public function test_capture_only_user_detail_hides_payment_amounts(): void
+    public function test_capture_only_user_detail_shows_collaborator_pay_but_hides_company_cost(): void
     {
         $admin = $this->createSuperAdminUser();
         $capturador = $this->createContainerModuleUser(false);
@@ -1383,12 +1383,20 @@ class DescargaContenedorTest extends TestCase
             ->assertOk()
             ->assertSee('CONT-CAPTURA-001')
             ->assertSee('100,00%')
+            ->assertSee('Pago colaboradores')
+            ->assertSee('$36.000')
             ->assertDontSee('Costo unitario')
-            ->assertDontSee('Pago colaboradores')
-            ->assertDontSee('Pago colaborador definido')
-            ->assertDontSee('Tarifas relacionadas')
-            ->assertDontSee('Monto')
-            ->assertDontSee('$36.000');
+            ->assertDontSee('$75.000')
+            ->assertDontSee('Tarifas relacionadas');
+
+        $this->actingAs($capturador)
+            ->getJson(route('descarga-contenedores.panel', $descarga))
+            ->assertOk()
+            ->assertJsonPath('can_view_costs', false)
+            ->assertJsonPath('descarga.costo_unitario', null);
+        $this->assertEquals(36000.0, (float) $this->actingAs($capturador)
+            ->getJson(route('descarga-contenedores.panel', $descarga))
+            ->json('descarga.pago'));
     }
 
     public function test_capture_only_user_forms_do_not_receive_price_data(): void
@@ -1406,15 +1414,9 @@ class DescargaContenedorTest extends TestCase
                 ->assertOk()
                 ->assertSee('CNTPRECIOCAP')
                 ->assertDontSee('Costo unitario')
-                ->assertDontSee('Pago estimado')
-                ->assertDontSee('Pago colaborador')
-                ->assertDontSee('Monto')
                 ->assertDontSee('75000')
-                ->assertDontSee('36000')
                 ->assertDontSee('$75.000')
-                ->assertDontSee('$36.000')
-                ->assertDontSee('"costo_unitario"', false)
-                ->assertDontSee('"pago_colaborador"', false);
+                ->assertDontSee('"costo_unitario"', false);
         }
     }
 
@@ -1451,19 +1453,19 @@ class DescargaContenedorTest extends TestCase
             ->assertOk()
             ->assertSee('CONT-OPERATIVO-001')
             ->assertSee('Editar')
+            ->assertSee('Pago colaboradores')
+            ->assertSee('$36.000')
             ->assertDontSee('Costo unitario')
-            ->assertDontSee('Pago colaboradores')
             ->assertDontSee('Tarifas relacionadas')
-            ->assertDontSee('Monto')
-            ->assertDontSee('$36.000');
+            ->assertDontSee('$75.000');
 
         $this->actingAs($operativo)
             ->get(route('descarga-contenedores.edit', $descarga))
             ->assertOk()
             ->assertSee('Tarifa FACT')
-            ->assertDontSee('Pago estimado')
-            ->assertDontSee('"pago_colaborador"', false)
-            ->assertDontSee('Pago $');
+            ->assertSee('Pago estimado')
+            ->assertDontSee('"costo_unitario"', false)
+            ->assertDontSee('$75.000');
 
         foreach ([
             'descarga-contenedores.dotacion',
@@ -1538,11 +1540,11 @@ class DescargaContenedorTest extends TestCase
             ->get(route('descarga-contenedores.show', $descarga))
             ->assertOk()
             ->assertSee('CONT-COORD-GENERICO-001')
+            ->assertSee('Pago colaboradores')
+            ->assertSee('$36.000')
             ->assertDontSee('Costo unitario')
-            ->assertDontSee('Pago colaboradores')
             ->assertDontSee('Tarifas relacionadas')
-            ->assertDontSee('$75.000')
-            ->assertDontSee('$36.000');
+            ->assertDontSee('$75.000');
 
         foreach ([
             'descarga-contenedores.dotacion',

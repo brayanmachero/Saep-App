@@ -5,7 +5,7 @@
     $puedeGestionarCostos = auth()->user()->puedeGestionarCostosDescargaContenedores();
     $puedeGestionarEstadoDescarga = auth()->user()->tieneAcceso('descarga_contenedores', 'puede_editar');
     $puedeEditarDescarga = auth()->user()->puedeEditarDescargaContenedor($descarga);
-    $participantesColspan = $puedeGestionarCostos ? 6 : 5;
+    $participantesColspan = 6;
     $blockers = $descarga->validationBlockers();
     $visibleBlockers = $blockers->map(function ($blocker) use ($puedeGestionarCostos) {
         if ($puedeGestionarCostos) {
@@ -112,9 +112,10 @@
                 <div><dt>Facturación</dt><dd>{{ $descarga->facturacion_mes ?: '—' }}</dd></div>
                 <div><dt>Equipo descarga</dt><dd>{{ $descarga->equipo_descarga ?: '—' }}</dd></div>
                 <div><dt>Código FACT.</dt><dd><code>{{ $descarga->fact_codigo ?: '—' }}</code></dd></div>
-                @if($puedeGestionarCostos)
                 <div><dt>Tarifa</dt><dd>{{ $descarga->tarifa_cliente_snapshot ?: '—' }}{{ $descarga->tarifa_proceso_snapshot ? ' · '.$descarga->tarifa_proceso_snapshot : '' }}</dd></div>
+                @if($puedeGestionarCostos)
                 <div><dt>Costo unitario</dt><dd>{{ $descarga->costo_unitario_snapshot !== null ? '$'.number_format((float) $descarga->costo_unitario_snapshot, 0, ',', '.') : '—' }}</dd></div>
+                @endif
                 <div><dt>Pago colaboradores</dt><dd>
                     @if($descarga->requiere_revision_tarifa)
                         <span class="badge warning">Revisar tarifa</span>
@@ -124,7 +125,6 @@
                         —
                     @endif
                 </dd></div>
-                @endif
             </dl>
         </div>
 
@@ -154,9 +154,7 @@
                         <th>Cargo</th>
                         <th>Centro origen</th>
                         <th>%</th>
-                        @if($puedeGestionarCostos)
                         <th>Monto</th>
-                        @endif
                     </tr>
                 </thead>
                 <tbody>
@@ -167,9 +165,7 @@
                         <td>{{ $participante->cargo_snapshot ?: '—' }}</td>
                         <td>{{ $participante->centro_costo_snapshot ?: '—' }}</td>
                         <td>{{ $participante->porcentaje_participacion !== null ? number_format((float) $participante->porcentaje_participacion, 2, ',', '.') . '%' : '—' }}</td>
-                        @if($puedeGestionarCostos)
                         <td>{{ $participante->monto_calculado !== null ? '$'.number_format((float) $participante->monto_calculado, 0, ',', '.') : '—' }}</td>
-                        @endif
                     </tr>
                     @empty
                     <tr><td colspan="{{ $participantesColspan }}" style="text-align:center;padding:1.5rem;color:var(--text-muted)">Sin trabajadores asociados.</td></tr>
@@ -180,9 +176,7 @@
                     <tr>
                         <th colspan="4" style="text-align:right">Total</th>
                         <th>{{ number_format((float) $descarga->participantes->sum('porcentaje_participacion'), 2, ',', '.') }}%</th>
-                        @if($puedeGestionarCostos)
                         <th>${{ number_format((float) $descarga->participantes->sum('monto_calculado'), 0, ',', '.') }}</th>
-                        @endif
                     </tr>
                 </tfoot>
                 @endif

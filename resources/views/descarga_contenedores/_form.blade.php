@@ -35,8 +35,8 @@
 
         if ($puedeGestionarCostos) {
             $data['costo_unitario'] = $t->costo_unitario;
-            $data['pago_colaborador'] = $t->pago_colaborador;
         }
+        $data['pago_colaborador'] = $t->pago_colaborador;
 
         return $data;
     })->values();
@@ -144,7 +144,7 @@
             <input type="text" name="producto" value="{{ old('producto', $descarga->producto ?? '') }}" class="form-control" placeholder="Productos varios, pastas, aceites...">
         </div>
         <div class="form-group">
-            <label>Tarifa FACT @include('descarga_contenedores._help_icon', ['text' => $puedeGestionarCostos ? 'Código FACT asociado a costo empresa y pago colaborador. Queda congelado en el registro.' : 'Código FACT operativo. Los valores económicos quedan reservados para coordinación.'])</label>
+            <label>Tarifa FACT @include('descarga_contenedores._help_icon', ['text' => $puedeGestionarCostos ? 'Código FACT asociado a costo empresa y pago colaborador. Queda congelado en el registro.' : 'Código FACT operativo. El pago colaborador queda visible; el costo empresa queda reservado para coordinación.'])</label>
             <input type="hidden" name="tarifa_id" id="tarifa_id" value="{{ $selectedTarifaId }}">
             <input type="hidden" name="fact_codigo" id="fact_codigo" value="{{ $selectedFactCodigo }}">
             <div class="tarifa-picker" id="tarifa_picker">
@@ -164,7 +164,7 @@
                 </div>
             </div>
             <small class="muted-hint">
-                {{ $puedeGestionarCostos ? 'Busca por código, cliente, centro o proceso. Si eliges centro de costo, se priorizan tarifas del centro y tarifas generales del cliente.' : 'Busca por código, cliente, centro o proceso. Los valores económicos quedan reservados para coordinación.' }}
+                {{ $puedeGestionarCostos ? 'Busca por código, cliente, centro o proceso. Si eliges centro de costo, se priorizan tarifas del centro y tarifas generales del cliente.' : 'Busca por código, cliente, centro o proceso. El pago colaborador se muestra; el costo empresa queda reservado para coordinación.' }}
             </small>
         </div>
         <div class="form-group">
@@ -448,9 +448,7 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
         <div class="distribution-summary">
             <span>Total: <strong data-total>0%</strong></span>
             <span class="distribution-status" data-total-hint>Debe sumar 100% para validar.</span>
-            @if($puedeGestionarCostos)
             <span>Pago estimado: <strong data-pago>$0</strong></span>
-            @endif
             <button type="button" class="btn-secondary btn-mini" data-equalize>Repartir igual</button>
             <button type="button" class="btn-secondary btn-mini" data-add-filtered>Agregar lista filtrada</button>
         </div>
@@ -551,10 +549,6 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
     }
 
     function pagoTotal() {
-        if (!canViewCosts) {
-            return null;
-        }
-
         const tarifa = currentTarifa();
         if (!tarifa || tarifa.requiere_revision || tarifa.pago_colaborador === null || tarifa.pago_colaborador === undefined) {
             return null;
@@ -620,21 +614,18 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
                     <input type="number" min="0" max="100" step="0.01" value="${porcentaje}">
                     <span>%</span>
                 </label>
-                @if($puedeGestionarCostos)
                 <small class="worker-amount">${monto !== null ? formatCurrency(monto) : 'Monto por revisar'}</small>
-                @endif
                 <button type="button" title="Quitar">&times;</button>
             `;
             tag.querySelector('input').addEventListener('input', event => {
                 entry.porcentaje = parseFloat(event.target.value || '0');
                 selected.set(id, entry);
-                @if($puedeGestionarCostos)
-                if (canViewCosts) {
-                    const updatedPago = pagoTotal();
-                    const updatedMonto = updatedPago !== null ? updatedPago * Number(entry.porcentaje || 0) / 100 : null;
-                    tag.querySelector('.worker-amount').textContent = updatedMonto !== null ? formatCurrency(updatedMonto) : 'Monto por revisar';
+                const updatedPago = pagoTotal();
+                const updatedMonto = updatedPago !== null ? updatedPago * Number(entry.porcentaje || 0) / 100 : null;
+                const amountEl = tag.querySelector('.worker-amount');
+                if (amountEl) {
+                    amountEl.textContent = updatedMonto !== null ? formatCurrency(updatedMonto) : 'Monto por revisar';
                 }
-                @endif
                 sync(false);
             });
             tag.querySelector('button').addEventListener('click', () => {

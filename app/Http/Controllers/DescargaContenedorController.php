@@ -263,7 +263,7 @@ class DescargaContenedorController extends Controller
                 'tarifa_cliente' => $descarga->tarifa_cliente_snapshot,
                 'tarifa_proceso' => $descarga->tarifa_proceso_snapshot,
                 'costo_unitario' => $canViewCosts ? $descarga->costo_unitario_snapshot : null,
-                'pago' => $canViewCosts ? $descarga->pago_colaborador_snapshot : null,
+                'pago' => $descarga->pago_colaborador_snapshot,
                 'requiere_revision_tarifa' => (bool) $descarga->requiere_revision_tarifa,
                 'hora_cita' => $this->formatHoraCorta($descarga->hora_cita),
                 'hora_inicio' => $this->formatHoraCorta($descarga->hora_inicio_descarga),
@@ -288,7 +288,7 @@ class DescargaContenedorController extends Controller
                         'rut' => $p->rut_snapshot,
                         'cargo' => $p->cargo_snapshot,
                         'centro' => $p->centro_costo_snapshot,
-                        'monto' => $canViewCosts ? $p->monto_calculado : null,
+                        'monto' => $p->monto_calculado,
                     ])
                     ->values(),
                 'evidencias' => $descarga->evidencias

@@ -4,7 +4,7 @@
 @php
     $puedeGestionarCostos = auth()->user()->puedeGestionarCostosDescargaContenedores();
     $puedeEditarContenedores = auth()->user()->tieneAcceso('descarga_contenedores', 'puede_editar');
-    $emptyColspan = ($puedeGestionarCostos ? 11 : 10) + 1;
+    $emptyColspan = 12;
 @endphp
 <div class="page-container">
     <div class="page-header">
@@ -294,9 +294,7 @@
                         <th>Bodega</th>
                         <th>Equipo</th>
                         <th>FACT.</th>
-                        @if($puedeGestionarCostos)
                         <th>Pago</th>
-                        @endif
                         <th>Cajas</th>
                         <th>Trab.</th>
                         <th title="Datos que faltan para validar el registro.">Pendientes</th>
@@ -349,7 +347,6 @@
                             @endif
                             @endif
                         </td>
-                        @if($puedeGestionarCostos)
                         <td data-cell="pago">
                             @if($descarga->requiere_revision_tarifa)
                                 <span class="badge warning">Revisar</span>
@@ -359,7 +356,6 @@
                                 —
                             @endif
                         </td>
-                        @endif
                         <td data-cell="cajas">{{ $descarga->cajas !== null ? number_format($descarga->cajas, 0, ',', '.') : '—' }}</td>
                         <td data-cell="trab">
                             @if($descarga->participantes_count === 0)
