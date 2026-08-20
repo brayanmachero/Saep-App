@@ -109,7 +109,7 @@
                                 @csrf @method('PATCH')
                                 <button class="icon-btn validation-ready" title="Validar registro"><i class="bi bi-check2-circle"></i></button>
                             </form>
-                            <a href="{{ route('descarga-contenedores.show', $item) }}" class="icon-btn" title="Ver detalle"><i class="bi bi-eye-fill"></i></a>
+                            <button type="button" class="icon-btn" data-open-detail="{{ $item->id }}" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
                         </div>
                     </div>
                 @empty
@@ -157,7 +157,7 @@
                         </div>
                         <div class="review-actions">
                             <button type="button" class="btn-secondary review-complete-btn" data-open-drawer="{{ $item->id }}" data-focus="{{ str_contains($nextAction['anchor'] ?? '', 'participantes') ? 'workers' : 'fact' }}" title="{{ $nextAction['label'] ?? 'Completar registro' }}"><i class="bi bi-pencil-fill"></i> {{ $nextAction['label'] ?? 'Completar' }}</button>
-                            <a href="{{ route('descarga-contenedores.show', $item) }}" class="icon-btn" title="Ver detalle"><i class="bi bi-eye-fill"></i></a>
+                            <button type="button" class="icon-btn" data-open-detail="{{ $item->id }}" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
                         </div>
                     </div>
                 @empty
@@ -386,7 +386,7 @@
                         </td>
                         <td><span class="{{ $descarga->estadoBadge['class'] }}">{{ $descarga->estadoBadge['label'] }}</span></td>
                         <td style="white-space:nowrap">
-                            <a href="{{ route('descarga-contenedores.show', $descarga) }}" class="icon-btn" title="Ver"><i class="bi bi-eye-fill"></i></a>
+                            <button type="button" class="icon-btn" data-open-detail="{{ $descarga->id }}" title="Ver detalle"><i class="bi bi-eye-fill"></i></button>
                             @if($puedeEditarContenedores)
                                 @if($descarga->estado === 'borrador')
                                     <span data-validate-slot data-action="{{ route('descarga-contenedores.validar', $descarga) }}">

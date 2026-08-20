@@ -22,14 +22,20 @@
 
 <div class="contenedores-drawer-backdrop" data-drawer-backdrop hidden></div>
 <aside class="contenedores-drawer" data-contenedores-drawer aria-hidden="true">
+    <div class="contenedores-drawer-resizer" data-drawer-resizer title="Arrastra para ampliar o reducir"></div>
     <header class="contenedores-drawer-bar">
         <div>
-            <h3 data-drawer-title>Editar contenedor</h3>
+            <h3 data-drawer-title>Contenedor</h3>
             <p data-drawer-meta></p>
+        </div>
+        <div class="contenedores-drawer-tabs" data-drawer-tabs hidden>
+            <button type="button" class="is-active" data-drawer-tab="detail">Detalle</button>
+            <button type="button" data-drawer-tab="edit">Completar</button>
         </div>
         <button type="button" class="icon-btn" data-drawer-close title="Cerrar"><i class="bi bi-x-lg"></i></button>
     </header>
     <div class="contenedores-drawer-body">
+        <section data-drawer-detail></section>
         <section data-drawer-fact>
             <h4>Tarifa FACT</h4>
             <input type="hidden" data-drawer-tarifa-id>
@@ -46,6 +52,8 @@
         </section>
     </div>
     <footer class="contenedores-drawer-footer">
+        <a href="#" class="btn-secondary" data-drawer-page-link>Abrir página</a>
+        <button type="button" class="btn-secondary" data-drawer-to-edit>Completar</button>
         <a href="#" class="btn-secondary" data-drawer-full-edit>Edición completa</a>
         <button type="button" class="btn-premium" data-drawer-save>Guardar</button>
     </footer>
@@ -82,6 +90,11 @@
     const titleEl = drawer.querySelector('[data-drawer-title]');
     const metaEl = drawer.querySelector('[data-drawer-meta]');
     const factSection = drawer.querySelector('[data-drawer-fact]');
+    const workersSection = drawer.querySelector('[data-drawer-workers]');
+    const detailSection = drawer.querySelector('[data-drawer-detail]');
+    const tabsEl = drawer.querySelector('[data-drawer-tabs]');
+    const pageLink = drawer.querySelector('[data-drawer-page-link]');
+    const toEditBtn = drawer.querySelector('[data-drawer-to-edit]');
     const factMount = drawer.querySelector('[data-fact-select]');
     const crewBox = drawer.querySelector('[data-drawer-crew]');
     const tarifaIdInput = drawer.querySelector('[data-drawer-tarifa-id]');
@@ -91,11 +104,15 @@
     const drawerBody = drawer.querySelector('.contenedores-drawer-body');
 
     let mode = 'single';
+    let panelMode = 'detail';
     let currentId = null;
     let currentCenterId = '';
     let currentOperacion = '';
+    let currentCanEdit = false;
     let selectedIds = new Set();
     const portalMenus = [];
+    const WIDTH_KEY = 'saep_contenedores_drawer_width';
+    const MIN_DRAWER = 420;
 
     function escapeHtml(value) {
         return String(value ?? '')
@@ -122,6 +139,136 @@
     function formatCurrency(value) {
         if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return '—';
         return '$' + Math.round(Number(value)).toLocaleString('es-CL');
+    }
+
+    function dash(value) {
+        const text = String(value ?? '').trim();
+        return text === '' ? '—' : escapeHtml(text);
+    }
+
+    function maxDrawerWidth() {
+        return Math.min(window.innerWidth - 24, 1120);
+    }
+
+    function applyDrawerWidth(px) {
+        const width = Math.min(maxDrawerWidth(), Math.max(MIN_DRAWER, Number(px) || 540));
+        drawer.style.width = width + 'px';
+        drawer.classList.toggle('is-wide', width >= 720);
+        try { localStorage.setItem(WIDTH_KEY, String(width)); } catch (e) {}
+        repositionPortals();
+        return width;
+    }
+
+    function detailField(label, value) {
+        return `<div><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`;
+    }
+
+    function renderDetail(d) {
+        const blockers = d.blockers || [];
+        const workers = d.participantes || [];
+        const photos = d.evidencias || [];
+        const pago = d.requiere_revision_tarifa
+            ? '<span class="badge warning">Revisar tarifa</span>'
+            : (canViewCosts ? dash(d.pago != null ? formatCurrency(d.pago) : '') : '—');
+        const percentTotal = workers.reduce((sum, item) => sum + (Number(item.porcentaje) || 0), 0);
+        const montoTotal = workers.reduce((sum, item) => sum + (Number(item.monto) || 0), 0);
+
+        detailSection.innerHTML = `
+            ${blockers.length ? `<div class="contenedores-detail-alerts">${blockers.map(item => `<span class="badge warning">${escapeHtml(capitalize(item))}</span>`).join('')}</div>` : ''}
+            <div class="contenedores-detail-grid">
+                <article>
+                    <h4>Resumen</h4>
+                    <dl class="contenedores-detail-list">
+                        ${detailField('Estado', `<span class="${escapeHtml(d.estado_class || '')}">${dash(d.estado_label)}</span>`)}
+                        ${detailField('Operación', dash(d.operacion))}
+                        ${detailField('Centro', dash(d.centro))}
+                        ${detailField('Bodega', dash(d.bodega))}
+                        ${detailField('Equipo', dash(d.equipo_descarga))}
+                        ${detailField('FACT', `<code>${dash(d.fact_codigo)}</code>`)}
+                        ${canViewCosts ? detailField('Tarifa', dash([d.tarifa_cliente, d.tarifa_proceso].filter(Boolean).join(' · '))) : ''}
+                        ${canViewCosts ? detailField('Pago', pago) : ''}
+                        ${detailField('Supervisor', dash(d.supervisor))}
+                        ${detailField('Encargado', dash(d.supervisor_nombre))}
+                    </dl>
+                </article>
+                <article>
+                    <h4>Operación</h4>
+                    <dl class="contenedores-detail-list">
+                        ${detailField('Cita', dash(d.hora_cita))}
+                        ${detailField('Inicio', dash(d.hora_inicio))}
+                        ${detailField('Término', dash(d.hora_termino))}
+                        ${detailField('Ítems', dash(d.item))}
+                        ${detailField('Cajas', dash(d.cajas != null ? Number(d.cajas).toLocaleString('es-CL') : ''))}
+                        ${detailField('Pallets', dash(d.pallets))}
+                        ${detailField('Producto', dash(d.producto))}
+                        ${detailField('Origen', dash(d.origen ? String(d.origen).charAt(0).toUpperCase() + String(d.origen).slice(1) : ''))}
+                        ${d.validado_por ? detailField('Validado por', dash(d.validado_por + (d.validado_at ? ' · ' + d.validado_at : ''))) : ''}
+                    </dl>
+                </article>
+            </div>
+            <article>
+                <h4>Trabajadores</h4>
+                ${workers.length ? `
+                    <div class="contenedores-detail-table-wrap">
+                        <table class="data-table">
+                            <thead><tr><th>Nombre</th><th>RUT</th><th>Cargo</th><th>Centro</th><th>%</th>${canViewCosts ? '<th>Monto</th>' : ''}</tr></thead>
+                            <tbody>
+                                ${workers.map(item => `
+                                    <tr>
+                                        <td><strong>${dash(item.nombre)}</strong></td>
+                                        <td>${dash(item.rut)}</td>
+                                        <td>${dash(item.cargo)}</td>
+                                        <td>${dash(item.centro)}</td>
+                                        <td>${item.porcentaje != null ? escapeHtml(Number(item.porcentaje).toFixed(2)) + '%' : '—'}</td>
+                                        ${canViewCosts ? `<td>${item.monto != null ? escapeHtml(formatCurrency(item.monto)) : '—'}</td>` : ''}
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="4" style="text-align:right">Total</th>
+                                    <th>${percentTotal.toFixed(2)}%</th>
+                                    ${canViewCosts ? `<th>${escapeHtml(formatCurrency(montoTotal))}</th>` : ''}
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                ` : '<p class="review-empty">Sin trabajadores asociados.</p>'}
+            </article>
+            ${photos.length ? `
+                <article>
+                    <h4>Evidencias</h4>
+                    <div class="contenedores-evidence-grid">
+                        ${photos.map(item => `
+                            <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" class="contenedores-evidence-item">
+                                <img src="${escapeHtml(item.url)}" alt="${escapeHtml(item.nombre || 'Evidencia')}">
+                                <span>${dash(item.nombre)}</span>
+                            </a>
+                        `).join('')}
+                    </div>
+                </article>
+            ` : ''}
+            ${d.observacion ? `<article><h4>Observación</h4><p class="contenedores-detail-note">${escapeHtml(d.observacion)}</p></article>` : ''}
+        `;
+    }
+
+    function setPanelMode(next) {
+        panelMode = next;
+        const isBulk = mode === 'bulk';
+        const isEdit = next === 'edit' || isBulk;
+        detailSection.hidden = isEdit;
+        factSection.hidden = isBulk ? true : !isEdit;
+        workersSection.hidden = !isEdit;
+        tabsEl.hidden = isBulk || !currentCanEdit;
+        tabsEl.querySelectorAll('[data-drawer-tab]').forEach(tab => {
+            tab.classList.toggle('is-active', tab.dataset.drawerTab === (isEdit ? 'edit' : 'detail'));
+        });
+        saveBtn.hidden = !isEdit;
+        fullEdit.hidden = !isEdit || isBulk;
+        toEditBtn.hidden = isEdit || !currentCanEdit;
+        pageLink.hidden = isBulk;
+        if (isEdit && !isBulk) saveBtn.textContent = 'Guardar';
+        if (isBulk) saveBtn.textContent = 'Asignar a seleccionados';
     }
 
     function toast(message, type) {
@@ -688,7 +835,9 @@
         drawer.setAttribute('aria-hidden', 'true');
         backdrop.hidden = true;
         mode = 'single';
+        panelMode = 'detail';
         currentId = null;
+        currentCanEdit = false;
     }
 
     function openDrawerShell(title, meta) {
@@ -697,30 +846,43 @@
         drawer.classList.add('is-open');
         drawer.setAttribute('aria-hidden', 'false');
         backdrop.hidden = false;
+        applyDrawerWidth(Number(localStorage.getItem(WIDTH_KEY) || 540));
+    }
+
+    async function loadPanel(id) {
+        return api(`{{ url('descarga-contenedores') }}/${id}/panel`);
     }
 
     async function openSingle(id, focus) {
         mode = 'single';
         currentId = id;
-        factSection.hidden = false;
-        fullEdit.hidden = false;
-        saveBtn.textContent = 'Guardar';
-        const data = await api(`{{ url('descarga-contenedores') }}/${id}/panel`);
-        if (!data.can_edit) {
-            toast('Este registro no se puede editar desde el listado.', 'warning');
-            return;
-        }
+        const data = await loadPanel(id);
         const d = data.descarga;
+        currentCanEdit = !!data.can_edit;
         currentCenterId = d.centro_costo_id || '';
         currentOperacion = d.operacion || '';
         openDrawerShell(d.contenedor || 'Sin contenedor', [d.fecha, d.bodega, d.operacion].filter(Boolean).join(' · '));
-        fullEdit.href = `{{ url('descarga-contenedores') }}/${id}/edit`;
+        renderDetail(d);
+        pageLink.href = d.show_url || `{{ url('descarga-contenedores') }}/${id}`;
+        fullEdit.href = d.edit_url || `{{ url('descarga-contenedores') }}/${id}/edit`;
         const tarifa = byTarifaId.get(String(d.tarifa_id || '')) || uniqueTarifaByCode(d.fact_codigo, currentCenterId, clienteFromOperacion(currentOperacion));
         setSelectedTarifa(tarifa || null, d.fact_codigo || '');
         initCrewPicker(d.participantes || []);
-        if (focus === 'workers') {
-            drawer.querySelector('[data-drawer-workers]')?.scrollIntoView({ block: 'start' });
+
+        const wantsEdit = focus === 'edit' || focus === 'workers' || focus === 'fact';
+        if (wantsEdit && !currentCanEdit) {
+            toast('Este registro no se puede editar desde el listado.', 'warning');
+            setPanelMode('detail');
+            return;
         }
+        setPanelMode(wantsEdit ? 'edit' : 'detail');
+        if (focus === 'workers') {
+            workersSection?.scrollIntoView({ block: 'start' });
+        }
+    }
+
+    async function openDetail(id) {
+        await openSingle(id, 'detail');
     }
 
     function openBulk() {
@@ -731,11 +893,10 @@
         }
         mode = 'bulk';
         currentId = null;
-        factSection.hidden = true;
-        fullEdit.hidden = true;
-        saveBtn.textContent = 'Asignar a seleccionados';
+        currentCanEdit = true;
         openDrawerShell('Asignación masiva', `${ids.length} contenedor(es) seleccionados`);
         initCrewPicker([]);
+        setPanelMode('edit');
     }
 
     async function saveDrawer() {
@@ -812,8 +973,23 @@
         const opener = event.target.closest('[data-open-drawer]');
         if (opener) {
             event.preventDefault();
-            openSingle(opener.dataset.openDrawer, opener.dataset.focus || '').catch(error => {
+            openSingle(opener.dataset.openDrawer, opener.dataset.focus || 'edit').catch(error => {
                 toast(error.message || 'No se pudo abrir el panel.', 'error');
+            });
+            return;
+        }
+        const detailOpener = event.target.closest('[data-open-detail]');
+        if (detailOpener) {
+            event.preventDefault();
+            openDetail(detailOpener.dataset.openDetail).catch(error => {
+                toast(error.message || 'No se pudo abrir el detalle.', 'error');
+            });
+            return;
+        }
+        const row = event.target.closest('tr[data-descarga-id]');
+        if (row && !event.target.closest('input, button, a, form, label, [data-pending-toggle], .icon-btn')) {
+            openDetail(row.dataset.descargaId).catch(error => {
+                toast(error.message || 'No se pudo abrir el detalle.', 'error');
             });
             return;
         }
@@ -847,6 +1023,15 @@
     backdrop.addEventListener('click', closeDrawer);
     drawer.querySelector('[data-drawer-close]').addEventListener('click', closeDrawer);
     saveBtn.addEventListener('click', saveDrawer);
+    toEditBtn?.addEventListener('click', () => {
+        if (!currentCanEdit) return;
+        setPanelMode('edit');
+    });
+    tabsEl?.addEventListener('click', event => {
+        const tab = event.target.closest('[data-drawer-tab]');
+        if (!tab || !currentCanEdit) return;
+        setPanelMode(tab.dataset.drawerTab);
+    });
     document.querySelector('[data-bulk-open]')?.addEventListener('click', openBulk);
     document.querySelector('[data-bulk-clear]')?.addEventListener('click', clearSelection);
     window.addEventListener('resize', repositionPortals);
@@ -861,6 +1046,36 @@
         }
         if (drawer.classList.contains('is-open')) closeDrawer();
     });
+
+    (function bindResizer() {
+        const resizer = drawer.querySelector('[data-drawer-resizer]');
+        if (!resizer) return;
+        let dragging = false;
+        let startX = 0;
+        let startWidth = 540;
+        resizer.addEventListener('mousedown', event => {
+            event.preventDefault();
+            dragging = true;
+            startX = event.clientX;
+            startWidth = drawer.getBoundingClientRect().width;
+            drawer.style.transition = 'none';
+            document.body.classList.add('is-drawer-resizing');
+        });
+        window.addEventListener('mousemove', event => {
+            if (!dragging) return;
+            applyDrawerWidth(startWidth + (startX - event.clientX));
+        });
+        window.addEventListener('mouseup', () => {
+            if (!dragging) return;
+            dragging = false;
+            drawer.style.transition = '';
+            document.body.classList.remove('is-drawer-resizing');
+        });
+        window.addEventListener('resize', () => {
+            applyDrawerWidth(drawer.getBoundingClientRect().width);
+        });
+        applyDrawerWidth(Number(localStorage.getItem(WIDTH_KEY) || 540));
+    })();
 })();
 </script>
 <style>
@@ -878,20 +1093,40 @@
     z-index: 4001;
     display: flex;
     flex-direction: column;
-    width: min(540px, 100%);
+    width: 540px;
+    max-width: calc(100vw - 12px);
     background: var(--surface-color);
     box-shadow: -16px 0 40px rgba(15, 23, 42, .18);
     transform: translateX(100%);
     transition: transform .2s ease;
 }
 .contenedores-drawer.is-open { transform: translateX(0); }
+.contenedores-drawer-resizer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 3;
+    width: 10px;
+    cursor: col-resize;
+}
+.contenedores-drawer-resizer:hover,
+body.is-drawer-resizing .contenedores-drawer-resizer {
+    background: linear-gradient(90deg, transparent, rgba(114, 80, 202, .18));
+}
+body.is-drawer-resizing {
+    cursor: col-resize;
+    user-select: none;
+}
+body.is-drawer-resizing * { cursor: col-resize !important; }
 .contenedores-drawer-bar,
 .contenedores-drawer-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: .75rem;
-    padding: .9rem 1rem;
+    flex-wrap: wrap;
+    padding: .9rem 1rem .9rem 1.15rem;
     border-bottom: 1px solid var(--surface-border);
 }
 .contenedores-drawer-footer {
@@ -901,6 +1136,83 @@
 }
 .contenedores-drawer-bar h3 { margin: 0; font-size: 1rem; }
 .contenedores-drawer-bar p { margin: .2rem 0 0; color: var(--text-muted); font-size: .78rem; }
+.contenedores-drawer-tabs {
+    display: inline-flex;
+    gap: .2rem;
+    margin-left: auto;
+    padding: .2rem;
+    border-radius: 8px;
+    background: #eef2f7;
+}
+.contenedores-drawer-tabs button {
+    border: 0;
+    background: transparent;
+    padding: .38rem .75rem;
+    border-radius: 6px;
+    color: #53627d;
+    font-size: .78rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.contenedores-drawer-tabs button.is-active {
+    color: #1f2937;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, .1);
+}
+.contenedores-detail-alerts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem;
+    margin-bottom: .2rem;
+}
+.contenedores-detail-grid,
+.contenedores-detail-list {
+    display: grid;
+    gap: .85rem;
+}
+.contenedores-detail-grid { grid-template-columns: 1fr; }
+.contenedores-drawer.is-wide .contenedores-detail-grid { grid-template-columns: 1fr 1fr; }
+.contenedores-detail-list div {
+    display: grid;
+    grid-template-columns: 108px minmax(0, 1fr);
+    gap: .45rem;
+    align-items: start;
+}
+.contenedores-drawer.is-wide .contenedores-detail-list div {
+    grid-template-columns: 124px minmax(0, 1fr);
+}
+.contenedores-detail-list dt { color: var(--text-muted); font-size: .75rem; }
+.contenedores-detail-list dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.contenedores-detail-table-wrap { overflow: auto; }
+.contenedores-detail-note { margin: 0; line-height: 1.5; }
+.contenedores-evidence-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: .65rem;
+}
+.contenedores-evidence-item {
+    display: grid;
+    gap: .35rem;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+}
+.contenedores-evidence-item img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 8px;
+    background: #eef2f7;
+}
+.contenedores-evidence-item span {
+    overflow: hidden;
+    font-size: .75rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+tr[data-descarga-id] { cursor: pointer; }
+tr[data-descarga-id]:hover { background: rgba(114, 80, 202, .04); }
 .contenedores-drawer-body {
     overflow: auto;
     padding: 1rem;

@@ -222,10 +222,23 @@ class DescargaContenedorController extends Controller
     {
         abort_unless(auth()->user()?->tieneAcceso('descarga_contenedores'), 403);
 
-        $descarga->load(['participantes', 'tarifa.centroCosto', 'centroCosto']);
+        $descarga->load([
+            'participantes',
+            'tarifa.centroCosto',
+            'centroCosto',
+            'supervisor',
+            'validadoPor',
+            'liquidadoPor',
+            'evidencias',
+        ]);
+
+        $canEdit = $this->canQuickEdit($descarga);
+        $canViewCosts = $this->puedeGestionarCostos();
+        $badge = $descarga->estadoBadge;
 
         return response()->json([
-            'can_edit' => $this->canQuickEdit($descarga),
+            'can_edit' => $canEdit,
+            'can_view_costs' => $canViewCosts,
             'descarga' => [
                 'id' => $descarga->id,
                 'contenedor' => $descarga->contenedor,
@@ -233,13 +246,53 @@ class DescargaContenedorController extends Controller
                 'bodega' => $descarga->bodega ?: ($descarga->centroCosto->nombre ?? ''),
                 'operacion' => $descarga->operacion,
                 'centro_costo_id' => $descarga->centro_costo_id,
+                'centro' => $descarga->centroCosto->nombre ?? '',
                 'tarifa_id' => $descarga->tarifa_id,
                 'fact_codigo' => $descarga->fact_codigo,
+                'estado' => $descarga->estado,
+                'estado_label' => $badge['label'],
+                'estado_class' => $badge['class'],
+                'validado_por' => $descarga->validadoPor?->nombre_completo ?: ($descarga->validadoPor?->name ?: ''),
+                'validado_at' => optional($descarga->validado_at)->format('d/m/Y H:i'),
+                'liquidado_por' => $descarga->liquidadoPor?->nombre_completo ?: ($descarga->liquidadoPor?->name ?: ''),
+                'liquidado_at' => optional($descarga->liquidado_at)->format('d/m/Y H:i'),
+                'supervisor' => $descarga->supervisor?->nombre_completo ?: '',
+                'supervisor_nombre' => $descarga->supervisor_nombre,
+                'facturacion_mes' => $descarga->facturacion_mes,
+                'equipo_descarga' => $descarga->equipo_descarga,
+                'tarifa_cliente' => $descarga->tarifa_cliente_snapshot,
+                'tarifa_proceso' => $descarga->tarifa_proceso_snapshot,
+                'costo_unitario' => $canViewCosts ? $descarga->costo_unitario_snapshot : null,
+                'pago' => $canViewCosts ? $descarga->pago_colaborador_snapshot : null,
+                'requiere_revision_tarifa' => (bool) $descarga->requiere_revision_tarifa,
+                'hora_cita' => $this->formatHoraCorta($descarga->hora_cita),
+                'hora_inicio' => $this->formatHoraCorta($descarga->hora_inicio_descarga),
+                'hora_termino' => $this->formatHoraCorta($descarga->hora_termino_descarga),
+                'item' => $descarga->item,
+                'cajas' => $descarga->cajas,
+                'pallets' => $descarga->pallets,
+                'producto' => $descarga->producto,
+                'origen' => $descarga->origen,
+                'observacion' => $descarga->observacion,
+                'blockers' => $this->visibleBlockers($descarga)->all(),
+                'show_url' => route('descarga-contenedores.show', $descarga),
+                'edit_url' => route('descarga-contenedores.edit', $descarga),
                 'participantes' => $descarga->participantes
                     ->map(fn ($p) => [
                         'id' => $p->talana_trabajador_id,
                         'porcentaje' => $p->porcentaje_participacion,
                         'nombre' => $p->nombre_snapshot,
+                        'rut' => $p->rut_snapshot,
+                        'cargo' => $p->cargo_snapshot,
+                        'centro' => $p->centro_costo_snapshot,
+                        'monto' => $canViewCosts ? $p->monto_calculado : null,
+                    ])
+                    ->values(),
+                'evidencias' => $descarga->evidencias
+                    ->map(fn ($archivo) => [
+                        'id' => $archivo->id,
+                        'nombre' => $archivo->nombre_original,
+                        'url' => route('descarga-contenedores.evidencias.ver', $archivo),
                     ])
                     ->values(),
             ],
@@ -1906,6 +1959,16 @@ class DescargaContenedorController extends Controller
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function formatHoraCorta($value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        return substr($value, 0, 5);
     }
 
     private function nullableInt($value): ?int
