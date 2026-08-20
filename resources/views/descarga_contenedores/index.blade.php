@@ -327,18 +327,18 @@
                                 <input type="checkbox" class="contenedores-select" value="{{ $descarga->id }}" title="Seleccionar {{ $descarga->contenedor ?: 'contenedor' }}">
                             @endif
                         </td>
-                        <td>{{ $descarga->fecha?->format('d/m/Y') ?? '—' }}</td>
-                        <td>
+                        <td data-cell="fecha">{{ $descarga->fecha?->format('d/m/Y') ?? '—' }}</td>
+                        <td data-cell="contenedor">
                             <strong>{{ $descarga->contenedor ?: 'Sin contenedor' }}</strong>
                             <div style="font-size:.75rem;color:var(--text-muted)">{{ $descarga->operacion ?: 'Sin operación' }}</div>
                         </td>
-                        <td>
+                        <td data-cell="bodega">
                             {{ $descarga->bodega ?: ($descarga->centroCosto->nombre ?? '—') }}
                             @if($descarga->producto)
                                 <div style="font-size:.75rem;color:var(--text-muted)">{{ $descarga->producto }}</div>
                             @endif
                         </td>
-                        <td>{{ $descarga->equipo_descarga ?: '—' }}</td>
+                        <td data-cell="equipo">{{ $descarga->equipo_descarga ?: '—' }}</td>
                         <td data-cell="fact">
                             <code>{{ $descarga->fact_codigo ?: '—' }}</code>
                             @if($puedeGestionarCostos)
@@ -360,7 +360,7 @@
                             @endif
                         </td>
                         @endif
-                        <td>{{ $descarga->cajas !== null ? number_format($descarga->cajas, 0, ',', '.') : '—' }}</td>
+                        <td data-cell="cajas">{{ $descarga->cajas !== null ? number_format($descarga->cajas, 0, ',', '.') : '—' }}</td>
                         <td data-cell="trab">
                             @if($descarga->participantes_count === 0)
                                 <span class="badge warning">Sin equipo</span>

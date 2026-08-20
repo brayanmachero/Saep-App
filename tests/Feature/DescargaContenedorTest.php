@@ -1631,7 +1631,10 @@ class DescargaContenedorTest extends TestCase
             ->assertSee('Asignar trabajadores')
             ->assertSee('data-contenedores-drawer', false)
             ->assertSee('data-select-all', false)
-            ->assertSee('Editar en panel', false);
+            ->assertSee('data-bulk-delete', false)
+            ->assertSee('Editar en panel', false)
+            ->assertSee('Edición completa')
+            ->assertDontSee('Abrir página');
     }
 
     public function test_quick_panel_and_save_update_tariff_and_workers_without_leaving_the_list(): void
@@ -1665,6 +1668,8 @@ class DescargaContenedorTest extends TestCase
             ->patchJson(route('descarga-contenedores.rapido', $descarga), [
                 'tarifa_id' => $tarifa->id,
                 'fact_codigo' => 'CNTRAPIDO',
+                'producto' => 'FREIDORA 7.2',
+                'cajas' => 1044,
                 'participantes_json' => json_encode([
                     ['id' => $workerA->id, 'porcentaje' => 60],
                     ['id' => $workerB->id, 'porcentaje' => 40],
@@ -1673,10 +1678,15 @@ class DescargaContenedorTest extends TestCase
             ->assertOk()
             ->assertJsonPath('ok', true)
             ->assertJsonPath('row.participantes_count', 2)
-            ->assertJsonPath('row.fact_codigo', 'CNTRAPIDO');
+            ->assertJsonPath('row.fact_codigo', 'CNTRAPIDO')
+            ->assertJsonPath('row.producto', 'FREIDORA 7.2')
+            ->assertJsonPath('row.cajas', 1044);
 
         $descarga->refresh();
         $this->assertSame($tarifa->id, $descarga->tarifa_id);
+        $this->assertSame('FREIDORA 7.2', $descarga->producto);
+        $this->assertSame(1044, (int) $descarga->cajas);
+        $this->assertSame('Walmart', $descarga->operacion);
         $this->assertSame(2, $descarga->participantes()->count());
         $this->assertEquals(60.0, (float) $descarga->participantes()->where('talana_trabajador_id', $workerA->id)->value('porcentaje_participacion'));
     }
@@ -1754,6 +1764,72 @@ class DescargaContenedorTest extends TestCase
         $this->assertSame(0, $descarga->fresh()->participantes()->count());
     }
 
+    public function test_admins_and_bosses_can_bulk_delete_containers_but_not_liquidated_ones(): void
+    {
+        $admin = $this->createSuperAdminUser();
+        $jefe = $this->createContainerModuleUser(true, 'JEFE_OPERACIONES', 'Jefe de Operaciones', true);
+        $capturador = $this->createContainerModuleUser(false);
+        $centro = $this->createCentroCosto('CD Eliminar Masivo QA');
+        $tarifa = $this->createTarifa('CNTELIMAS', 75000, 36000, 'ELIMINAR MASIVO QA', false, $centro);
+        $worker = $this->createTalanaWorker('Trabajador Eliminar Masivo QA', $centro);
+
+        $ids = [];
+        foreach (['CONT-ELIM-001', 'CONT-ELIM-002', 'CONT-ELIM-LIQ'] as $contenedor) {
+            $this->actingAs($admin)
+                ->post(route('descarga-contenedores.store'), [
+                    'operacion' => 'Walmart',
+                    'centro_costo_id' => $centro->id,
+                    'bodega' => 'CD Eliminar Masivo QA',
+                    'fecha' => '2026-08-01',
+                    'contenedor' => $contenedor,
+                    'tarifa_id' => $tarifa->id,
+                    'participantes_json' => json_encode([$worker->id]),
+                ])
+                ->assertRedirect()
+                ->assertSessionHasNoErrors();
+
+            $ids[$contenedor] = DescargaContenedor::where('contenedor', $contenedor)->value('id');
+        }
+
+        $liquidado = DescargaContenedor::findOrFail($ids['CONT-ELIM-LIQ']);
+        $this->actingAs($admin)
+            ->patch(route('descarga-contenedores.validar', $liquidado))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+        $this->actingAs($admin)
+            ->patch(route('descarga-contenedores.liquidar', $liquidado))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->actingAs($capturador)
+            ->postJson(route('descarga-contenedores.eliminar-masivo'), [
+                'descargas' => [$ids['CONT-ELIM-001']],
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($jefe)
+            ->get(route('descarga-contenedores.index'))
+            ->assertOk()
+            ->assertSee('data-bulk-delete', false);
+
+        $response = $this->actingAs($jefe)
+            ->postJson(route('descarga-contenedores.eliminar-masivo'), [
+                'descargas' => [$ids['CONT-ELIM-001'], $ids['CONT-ELIM-LIQ']],
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('skipped', 1);
+        $this->assertEqualsCanonicalizing(
+            [(int) $ids['CONT-ELIM-001']],
+            array_map('intval', $response->json('deleted'))
+        );
+
+        $this->assertSoftDeleted('descarga_contenedores', ['id' => $ids['CONT-ELIM-001']]);
+        $this->assertNotSoftDeleted('descarga_contenedores', ['id' => $ids['CONT-ELIM-LIQ']]);
+        $this->assertNotSoftDeleted('descarga_contenedores', ['id' => $ids['CONT-ELIM-002']]);
+    }
+
     private function createSuperAdminUser(): User
     {
         $role = Rol::firstOrCreate(
@@ -1785,7 +1861,7 @@ class DescargaContenedorTest extends TestCase
         return $user;
     }
 
-    private function createContainerModuleUser(bool $puedeEditar, ?string $roleCode = null, ?string $roleName = null): User
+    private function createContainerModuleUser(bool $puedeEditar, ?string $roleCode = null, ?string $roleName = null, bool $puedeEliminar = false): User
     {
         $roleCode ??= 'CONTENEDORES_' . ($puedeEditar ? 'COORDINADOR' : 'CAPTURADOR');
         $roleName ??= $puedeEditar ? 'Coordinador Contenedores' : 'Capturador Contenedores';
@@ -1801,7 +1877,7 @@ class DescargaContenedorTest extends TestCase
                 'puede_ver' => true,
                 'puede_crear' => true,
                 'puede_editar' => $puedeEditar,
-                'puede_eliminar' => false,
+                'puede_eliminar' => $puedeEliminar,
             ],
         ]);
 

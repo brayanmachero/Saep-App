@@ -1,7 +1,12 @@
 @php
     $puedeGestionarCostos = auth()->user()->puedeGestionarCostosDescargaContenedores();
+    $puedeEliminarContenedores = auth()->user()->tieneAcceso('descarga_contenedores', 'puede_eliminar');
     $tarifas = $tarifas ?? collect();
     $trabajadores = $trabajadores ?? collect();
+    $centrosPicker = ($centros ?? collect())->map(fn ($c) => [
+        'id' => $c->id,
+        'nombre' => $c->nombre,
+    ])->values();
     $tarifasPickerData = $tarifas->map(function ($t) use ($puedeGestionarCostos) {
         $data = [
             'id' => $t->id,
@@ -36,6 +41,35 @@
     </header>
     <div class="contenedores-drawer-body">
         <section data-drawer-detail></section>
+        <section data-drawer-fields hidden>
+            <h4>Datos del registro</h4>
+            <div class="contenedores-edit-grid">
+                <label>Fecha<input type="date" class="form-control" data-field="fecha"></label>
+                <label>Operación<input type="text" class="form-control" data-field="operacion" placeholder="Walmart, SMU..."></label>
+                <label>Centro de costo
+                    <select class="form-control" data-field="centro_costo_id">
+                        <option value="">Sin asociar</option>
+                    </select>
+                </label>
+                <label>Bodega / CD<input type="text" class="form-control" data-field="bodega"></label>
+                <label>Facturación / mes<input type="text" class="form-control" data-field="facturacion_mes"></label>
+                <label>Contenedor<input type="text" class="form-control" data-field="contenedor"></label>
+                <label>Equipo descarga<input type="text" class="form-control" data-field="equipo_descarga"></label>
+                <label>Supervisor / encargado<input type="text" class="form-control" data-field="supervisor_nombre"></label>
+                <label>Hora cita<input type="time" class="form-control" data-field="hora_cita"></label>
+                <label>Inicio descarga<input type="time" class="form-control" data-field="hora_inicio"></label>
+                <label>Término descarga<input type="time" class="form-control" data-field="hora_termino"></label>
+                <label>Ítems<input type="number" min="0" class="form-control" data-field="item"></label>
+                <label>Cajas<input type="number" min="0" class="form-control" data-field="cajas"></label>
+                <label>Pallets<input type="number" min="0" step="0.01" class="form-control" data-field="pallets"></label>
+                <label class="is-full">Producto<input type="text" class="form-control" data-field="producto"></label>
+                <label class="is-full">Observación<textarea class="form-control" rows="3" data-field="observacion"></textarea></label>
+                <label class="is-full">Evidencia fotográfica
+                    <input type="file" class="form-control" accept="image/jpeg,image/png,image/webp" multiple data-field="evidencias">
+                    <small class="muted-hint">Las fotos se agregan al registro. JPG, PNG o WebP; máximo 8 de 8 MB.</small>
+                </label>
+            </div>
+        </section>
         <section data-drawer-fact>
             <h4>Tarifa FACT</h4>
             <input type="hidden" data-drawer-tarifa-id>
@@ -52,30 +86,38 @@
         </section>
     </div>
     <footer class="contenedores-drawer-footer">
-        <a href="#" class="btn-secondary" data-drawer-page-link>Abrir página</a>
-        <button type="button" class="btn-secondary" data-drawer-to-edit>Completar</button>
-        <a href="#" class="btn-secondary" data-drawer-full-edit>Edición completa</a>
+        <div class="contenedores-drawer-footer-actions">
+            <button type="button" class="btn-secondary" data-drawer-to-edit>Edición completa</button>
+            <button type="button" class="btn-secondary contenedores-btn-danger" data-drawer-delete hidden>Eliminar</button>
+        </div>
         <button type="button" class="btn-premium" data-drawer-save>Guardar</button>
     </footer>
 </aside>
 
 <div class="contenedores-bulk-bar" data-bulk-bar hidden>
     <strong data-bulk-count>0 seleccionados</strong>
-    <span>Los mismos trabajadores se asignan a todos los contenedores marcados.</span>
+    <span>Las acciones se aplican a los contenedores marcados, sin salir del listado.</span>
     <button type="button" class="btn-premium" data-bulk-open>
         <i class="bi bi-people-fill"></i> Asignar trabajadores
     </button>
+    @if($puedeEliminarContenedores)
+    <button type="button" class="btn-secondary contenedores-btn-danger" data-bulk-delete>
+        <i class="bi bi-trash-fill"></i> Eliminar
+    </button>
+    @endif
     <button type="button" class="btn-secondary" data-bulk-clear>Limpiar selección</button>
 </div>
 
 <script type="application/json" id="contenedores_trabajadores_data">@json($trabajadores)</script>
 <script type="application/json" id="contenedores_tarifas_data">@json($tarifasPickerData)</script>
+<script type="application/json" id="contenedores_centros_data">@json($centrosPicker)</script>
 <script>
 (function () {
     const canViewCosts = @json($puedeGestionarCostos);
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const workers = JSON.parse(document.getElementById('contenedores_trabajadores_data')?.textContent || '[]');
     const tarifas = JSON.parse(document.getElementById('contenedores_tarifas_data')?.textContent || '[]');
+    const centros = JSON.parse(document.getElementById('contenedores_centros_data')?.textContent || '[]');
     const byWorkerId = new Map(workers.map(w => [String(w.id), w]));
     const byTarifaId = new Map(tarifas.map(t => [String(t.id), t]));
 
@@ -90,18 +132,37 @@
     const titleEl = drawer.querySelector('[data-drawer-title]');
     const metaEl = drawer.querySelector('[data-drawer-meta]');
     const factSection = drawer.querySelector('[data-drawer-fact]');
+    const fieldsSection = drawer.querySelector('[data-drawer-fields]');
     const workersSection = drawer.querySelector('[data-drawer-workers]');
     const detailSection = drawer.querySelector('[data-drawer-detail]');
     const tabsEl = drawer.querySelector('[data-drawer-tabs]');
-    const pageLink = drawer.querySelector('[data-drawer-page-link]');
     const toEditBtn = drawer.querySelector('[data-drawer-to-edit]');
+    const deleteBtn = drawer.querySelector('[data-drawer-delete]');
     const factMount = drawer.querySelector('[data-fact-select]');
     const crewBox = drawer.querySelector('[data-drawer-crew]');
     const tarifaIdInput = drawer.querySelector('[data-drawer-tarifa-id]');
     const factInput = drawer.querySelector('[data-drawer-fact-codigo]');
     const saveBtn = drawer.querySelector('[data-drawer-save]');
-    const fullEdit = drawer.querySelector('[data-drawer-full-edit]');
     const drawerBody = drawer.querySelector('.contenedores-drawer-body');
+    const fieldEls = {
+        fecha: drawer.querySelector('[data-field="fecha"]'),
+        operacion: drawer.querySelector('[data-field="operacion"]'),
+        centro_costo_id: drawer.querySelector('[data-field="centro_costo_id"]'),
+        bodega: drawer.querySelector('[data-field="bodega"]'),
+        facturacion_mes: drawer.querySelector('[data-field="facturacion_mes"]'),
+        contenedor: drawer.querySelector('[data-field="contenedor"]'),
+        equipo_descarga: drawer.querySelector('[data-field="equipo_descarga"]'),
+        supervisor_nombre: drawer.querySelector('[data-field="supervisor_nombre"]'),
+        hora_cita: drawer.querySelector('[data-field="hora_cita"]'),
+        hora_inicio: drawer.querySelector('[data-field="hora_inicio"]'),
+        hora_termino: drawer.querySelector('[data-field="hora_termino"]'),
+        item: drawer.querySelector('[data-field="item"]'),
+        cajas: drawer.querySelector('[data-field="cajas"]'),
+        pallets: drawer.querySelector('[data-field="pallets"]'),
+        producto: drawer.querySelector('[data-field="producto"]'),
+        observacion: drawer.querySelector('[data-field="observacion"]'),
+        evidencias: drawer.querySelector('[data-field="evidencias"]'),
+    };
 
     let mode = 'single';
     let panelMode = 'detail';
@@ -109,6 +170,7 @@
     let currentCenterId = '';
     let currentOperacion = '';
     let currentCanEdit = false;
+    let currentCanDelete = false;
     let selectedIds = new Set();
     const portalMenus = [];
     const WIDTH_KEY = 'saep_contenedores_drawer_width';
@@ -257,6 +319,7 @@
         const isBulk = mode === 'bulk';
         const isEdit = next === 'edit' || isBulk;
         detailSection.hidden = isEdit;
+        fieldsSection.hidden = isBulk || !isEdit;
         factSection.hidden = isBulk ? true : !isEdit;
         workersSection.hidden = !isEdit;
         tabsEl.hidden = isBulk || !currentCanEdit;
@@ -264,11 +327,69 @@
             tab.classList.toggle('is-active', tab.dataset.drawerTab === (isEdit ? 'edit' : 'detail'));
         });
         saveBtn.hidden = !isEdit;
-        fullEdit.hidden = !isEdit || isBulk;
         toEditBtn.hidden = isEdit || !currentCanEdit;
-        pageLink.hidden = isBulk;
+        if (deleteBtn) deleteBtn.hidden = isBulk || !currentCanDelete;
         if (isEdit && !isBulk) saveBtn.textContent = 'Guardar';
         if (isBulk) saveBtn.textContent = 'Asignar a seleccionados';
+    }
+
+    function fillCenterSelect(selectedId) {
+        const select = fieldEls.centro_costo_id;
+        if (!select) return;
+        const current = String(selectedId || '');
+        const options = [{ id: '', nombre: 'Sin asociar' }, ...centros];
+        if (current && !options.some(item => String(item.id) === current)) {
+            options.push({ id: current, nombre: 'Centro actual' });
+        }
+        select.innerHTML = options.map(item => (
+            `<option value="${escapeHtml(item.id)}"${String(item.id) === current ? ' selected' : ''}>${escapeHtml(item.nombre)}</option>`
+        )).join('');
+        select.value = current;
+    }
+
+    function fillFields(d) {
+        fillCenterSelect(d.centro_costo_id || '');
+        fieldEls.fecha.value = d.fecha_iso || '';
+        fieldEls.operacion.value = d.operacion || '';
+        fieldEls.bodega.value = d.bodega || '';
+        fieldEls.facturacion_mes.value = d.facturacion_mes || '';
+        fieldEls.contenedor.value = d.contenedor || '';
+        fieldEls.equipo_descarga.value = d.equipo_descarga || '';
+        fieldEls.supervisor_nombre.value = d.supervisor_nombre || '';
+        fieldEls.hora_cita.value = d.hora_cita || '';
+        fieldEls.hora_inicio.value = d.hora_inicio || '';
+        fieldEls.hora_termino.value = d.hora_termino || '';
+        fieldEls.item.value = d.item ?? '';
+        fieldEls.cajas.value = d.cajas ?? '';
+        fieldEls.pallets.value = d.pallets ?? '';
+        fieldEls.producto.value = d.producto || '';
+        fieldEls.observacion.value = d.observacion || '';
+        if (fieldEls.evidencias) fieldEls.evidencias.value = '';
+        currentCenterId = d.centro_costo_id || '';
+        currentOperacion = d.operacion || '';
+    }
+
+    function appendRecordForm(form) {
+        form.append('fecha', fieldEls.fecha.value || '');
+        form.append('operacion', fieldEls.operacion.value || '');
+        form.append('centro_costo_id', fieldEls.centro_costo_id.value || '');
+        form.append('bodega', fieldEls.bodega.value || '');
+        form.append('facturacion_mes', fieldEls.facturacion_mes.value || '');
+        form.append('contenedor', fieldEls.contenedor.value || '');
+        form.append('equipo_descarga', fieldEls.equipo_descarga.value || '');
+        form.append('supervisor_nombre', fieldEls.supervisor_nombre.value || '');
+        form.append('hora_cita', fieldEls.hora_cita.value || '');
+        form.append('hora_inicio_descarga', fieldEls.hora_inicio.value || '');
+        form.append('hora_termino_descarga', fieldEls.hora_termino.value || '');
+        form.append('item', fieldEls.item.value || '');
+        form.append('cajas', fieldEls.cajas.value || '');
+        form.append('pallets', fieldEls.pallets.value || '');
+        form.append('producto', fieldEls.producto.value || '');
+        form.append('observacion', fieldEls.observacion.value || '');
+        form.append('tarifa_id', tarifaIdInput.value || '');
+        form.append('fact_codigo', factInput.value || '');
+        form.append('participantes_json', JSON.stringify(crewPayload()));
+        [...(fieldEls.evidencias?.files || [])].forEach(file => form.append('evidencias[]', file));
     }
 
     function toast(message, type) {
@@ -794,6 +915,22 @@
         }
         const pendingCell = tr.querySelector('[data-cell="pendientes"]');
         if (pendingCell) pendingCell.innerHTML = pendingHtml(row);
+        const fechaCell = tr.querySelector('[data-cell="fecha"]');
+        if (fechaCell && row.fecha !== undefined) fechaCell.textContent = row.fecha || '—';
+        const contenedorCell = tr.querySelector('[data-cell="contenedor"]');
+        if (contenedorCell && (row.contenedor !== undefined || row.operacion !== undefined)) {
+            contenedorCell.innerHTML = `<strong>${escapeHtml(row.contenedor || 'Sin contenedor')}</strong><div style="font-size:.75rem;color:var(--text-muted)">${escapeHtml(row.operacion || 'Sin operación')}</div>`;
+        }
+        const bodegaCell = tr.querySelector('[data-cell="bodega"]');
+        if (bodegaCell && (row.bodega !== undefined || row.producto !== undefined)) {
+            bodegaCell.innerHTML = `${escapeHtml(row.bodega || '—')}${row.producto ? `<div style="font-size:.75rem;color:var(--text-muted)">${escapeHtml(row.producto)}</div>` : ''}`;
+        }
+        const equipoCell = tr.querySelector('[data-cell="equipo"]');
+        if (equipoCell && row.equipo_descarga !== undefined) equipoCell.textContent = row.equipo_descarga || '—';
+        const cajasCell = tr.querySelector('[data-cell="cajas"]');
+        if (cajasCell && row.cajas !== undefined) {
+            cajasCell.textContent = row.cajas == null || row.cajas === '' ? '—' : Number(row.cajas).toLocaleString('es-CL');
+        }
 
         const validateSlot = tr.querySelector('[data-validate-slot]');
         if (validateSlot && row.estado === 'borrador') {
@@ -813,15 +950,16 @@
     }
 
     async function api(url, options = {}) {
-        const res = await fetch(url, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': csrf,
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            ...options,
-        });
+        const headers = {
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': csrf,
+            'X-Requested-With': 'XMLHttpRequest',
+            ...(options.headers || {}),
+        };
+        if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+            headers['Content-Type'] = 'application/json';
+        }
+        const res = await fetch(url, { ...options, headers });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
             throw new Error(data.message || 'No se pudo guardar.');
@@ -838,6 +976,7 @@
         panelMode = 'detail';
         currentId = null;
         currentCanEdit = false;
+        currentCanDelete = false;
     }
 
     function openDrawerShell(title, meta) {
@@ -859,12 +998,12 @@
         const data = await loadPanel(id);
         const d = data.descarga;
         currentCanEdit = !!data.can_edit;
+        currentCanDelete = !!(d.can_delete);
         currentCenterId = d.centro_costo_id || '';
         currentOperacion = d.operacion || '';
         openDrawerShell(d.contenedor || 'Sin contenedor', [d.fecha, d.bodega, d.operacion].filter(Boolean).join(' · '));
         renderDetail(d);
-        pageLink.href = d.show_url || `{{ url('descarga-contenedores') }}/${id}`;
-        fullEdit.href = d.edit_url || `{{ url('descarga-contenedores') }}/${id}/edit`;
+        fillFields(d);
         const tarifa = byTarifaId.get(String(d.tarifa_id || '')) || uniqueTarifaByCode(d.fact_codigo, currentCenterId, clienteFromOperacion(currentOperacion));
         setSelectedTarifa(tarifa || null, d.fact_codigo || '');
         initCrewPicker(d.participantes || []);
@@ -894,6 +1033,7 @@
         mode = 'bulk';
         currentId = null;
         currentCanEdit = true;
+        currentCanDelete = false;
         openDrawerShell('Asignación masiva', `${ids.length} contenedor(es) seleccionados`);
         initCrewPicker([]);
         setPanelMode('edit');
@@ -920,20 +1060,62 @@
 
             const data = await api(`{{ url('descarga-contenedores') }}/${currentId}/rapido`, {
                 method: 'PATCH',
-                body: JSON.stringify({
-                    tarifa_id: tarifaIdInput.value || null,
-                    fact_codigo: factInput.value || '',
-                    participantes_json: JSON.stringify(payload),
-                }),
+                body: (() => {
+                    const form = new FormData();
+                    appendRecordForm(form);
+                    return form;
+                })(),
             });
             if (data.row) applyRow(data.row);
             toast(data.message || 'Registro actualizado.');
-            closeDrawer();
+            const refreshed = await loadPanel(currentId);
+            const d = refreshed.descarga;
+            currentCanEdit = !!refreshed.can_edit;
+            currentCanDelete = !!(d.can_delete);
+            titleEl.textContent = d.contenedor || 'Sin contenedor';
+            metaEl.textContent = [d.fecha, d.bodega, d.operacion].filter(Boolean).join(' · ');
+            renderDetail(d);
+            fillFields(d);
+            const tarifa = byTarifaId.get(String(d.tarifa_id || '')) || uniqueTarifaByCode(d.fact_codigo, currentCenterId, clienteFromOperacion(currentOperacion));
+            setSelectedTarifa(tarifa || null, d.fact_codigo || '');
+            initCrewPicker(d.participantes || []);
+            setPanelMode(panelMode || 'edit');
         } catch (error) {
             toast(error.message || 'No se pudo guardar.', 'error');
         } finally {
             saveBtn.disabled = false;
         }
+    }
+
+    function removeRows(ids) {
+        ids.forEach(id => {
+            document.querySelector(`tr[data-descarga-id="${id}"]`)?.remove();
+            selectedIds.delete(Number(id));
+        });
+        if (currentId && ids.map(Number).includes(Number(currentId))) {
+            closeDrawer();
+        }
+        syncSelection();
+    }
+
+    async function deleteSelected(ids) {
+        const list = [...ids].map(Number).filter(Boolean);
+        if (!list.length) {
+            toast('Selecciona al menos un contenedor.', 'warning');
+            return;
+        }
+        const label = list.length === 1
+            ? '¿Eliminar este contenedor? Los liquidados no se pueden borrar.'
+            : `¿Eliminar ${list.length} contenedores? Los liquidados quedan bloqueados.`;
+        if (!window.confirm(label)) return;
+
+        const data = await api(@json(route('descarga-contenedores.eliminar-masivo')), {
+            method: 'POST',
+            body: JSON.stringify({ descargas: list }),
+        });
+        removeRows(data.deleted || list);
+        toast(data.message || 'Contenedores eliminados.');
+        if (mode === 'bulk') closeDrawer();
     }
 
     function selectedCheckboxes() {
@@ -1034,6 +1216,19 @@
     });
     document.querySelector('[data-bulk-open]')?.addEventListener('click', openBulk);
     document.querySelector('[data-bulk-clear]')?.addEventListener('click', clearSelection);
+    document.querySelector('[data-bulk-delete]')?.addEventListener('click', () => {
+        deleteSelected(selectedIds).catch(error => toast(error.message || 'No se pudo eliminar.', 'error'));
+    });
+    deleteBtn?.addEventListener('click', () => {
+        if (!currentId || !currentCanDelete) return;
+        deleteSelected([currentId]).catch(error => toast(error.message || 'No se pudo eliminar.', 'error'));
+    });
+    fieldEls.operacion?.addEventListener('input', () => {
+        currentOperacion = fieldEls.operacion.value || '';
+    });
+    fieldEls.centro_costo_id?.addEventListener('change', () => {
+        currentCenterId = fieldEls.centro_costo_id.value || '';
+    });
     window.addEventListener('resize', repositionPortals);
     drawerBody.addEventListener('scroll', repositionPortals);
     document.addEventListener('keydown', event => {
@@ -1133,6 +1328,45 @@ body.is-drawer-resizing * { cursor: col-resize !important; }
     border-bottom: 0;
     border-top: 1px solid var(--surface-border);
     margin-top: auto;
+}
+.contenedores-drawer-footer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    align-items: center;
+}
+.contenedores-btn-danger {
+    color: #dc2626;
+    border-color: #fecaca;
+}
+.contenedores-btn-danger:hover {
+    color: #b91c1c;
+    border-color: #f87171;
+    background: #fef2f2;
+}
+.contenedores-edit-grid {
+    display: grid;
+    gap: .7rem;
+    grid-template-columns: 1fr;
+}
+.contenedores-drawer.is-wide .contenedores-edit-grid {
+    grid-template-columns: 1fr 1fr;
+}
+.contenedores-edit-grid .is-full { grid-column: 1 / -1; }
+.contenedores-edit-grid label {
+    display: grid;
+    gap: .28rem;
+    min-width: 0;
+    color: #53627d;
+    font-size: .72rem;
+    font-weight: 800;
+    letter-spacing: .035em;
+    text-transform: uppercase;
+}
+.contenedores-edit-grid .form-control {
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
 }
 .contenedores-drawer-bar h3 { margin: 0; font-size: 1rem; }
 .contenedores-drawer-bar p { margin: .2rem 0 0; color: var(--text-muted); font-size: .78rem; }

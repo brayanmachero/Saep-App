@@ -274,6 +274,9 @@ class DescargaContenedorController extends Controller
                 'producto' => $descarga->producto,
                 'origen' => $descarga->origen,
                 'observacion' => $descarga->observacion,
+                'fecha_iso' => optional($descarga->fecha)->format('Y-m-d'),
+                'can_delete' => auth()->user()?->tieneAcceso('descarga_contenedores', 'puede_eliminar')
+                    && $descarga->estado !== 'liquidado',
                 'blockers' => $this->visibleBlockers($descarga)->all(),
                 'show_url' => route('descarga-contenedores.show', $descarga),
                 'edit_url' => route('descarga-contenedores.edit', $descarga),
@@ -305,32 +308,31 @@ class DescargaContenedorController extends Controller
             return response()->json(['message' => 'No puedes editar este registro.'], 403);
         }
 
-        $data = $request->validate([
-            'tarifa_id' => ['nullable', 'exists:descarga_contenedor_tarifas,id'],
-            'fact_codigo' => ['nullable', 'string', 'max:40'],
-            'participantes_json' => ['nullable'],
-        ]);
+        $data = $this->validatedData($request);
+        foreach (['operacion', 'centro_costo_id', 'tarifa_id', 'fact_codigo'] as $field) {
+            if (!array_key_exists($field, $data)) {
+                $data[$field] = $descarga->{$field};
+            }
+        }
 
         DB::transaction(function () use ($request, $descarga, $data) {
-            $update = [
-                'tarifa_id' => $this->nullableInt($data['tarifa_id'] ?? null),
-                'fact_codigo' => $this->cleanUpper($data['fact_codigo'] ?? $descarga->fact_codigo),
-                'operacion' => $descarga->operacion,
-                'centro_costo_id' => $descarga->centro_costo_id,
-            ];
-            $this->applyTarifaSnapshot($update);
-            $descarga->update($update);
+            if (!$descarga->supervisor_id) {
+                $this->stampSupervisorFromLogin($data);
+            }
+
+            $this->applyTarifaSnapshot($data);
+            $descarga->update($data);
             $descarga->refresh();
 
             if ($request->exists('participantes_json')) {
                 $this->syncParticipantes($descarga, $this->extractParticipantesFromRequest($request));
             }
+            $this->storeEvidencias($descarga, $request);
         });
 
-        return response()->json($this->listRowPayload(
-            $descarga->fresh(['participantes', 'tarifa', 'centroCosto']),
-            'Registro actualizado.'
-        ));
+        $fresh = $descarga->fresh(['participantes', 'tarifa', 'centroCosto', 'evidencias', 'supervisor']);
+
+        return response()->json($this->listRowPayload($fresh, 'Registro actualizado.'));
     }
 
     public function assignCrewBulk(Request $request)
@@ -386,6 +388,52 @@ class DescargaContenedorController extends Controller
             'updated' => $updated,
             'skipped' => $skipped,
             'rows' => $rows,
+        ]);
+    }
+
+    public function destroyBulk(Request $request)
+    {
+        abort_unless(auth()->user()?->tieneAcceso('descarga_contenedores', 'puede_eliminar'), 403);
+
+        $data = $request->validate([
+            'descargas' => ['required', 'array', 'min:1', 'max:50'],
+            'descargas.*' => ['integer', 'exists:descarga_contenedores,id'],
+        ]);
+
+        $deleted = [];
+        $skipped = 0;
+
+        DB::transaction(function () use ($data, &$deleted, &$skipped) {
+            foreach ($data['descargas'] as $id) {
+                $descarga = DescargaContenedor::find($id);
+                if (!$descarga || $descarga->estado === 'liquidado') {
+                    $skipped++;
+                    continue;
+                }
+
+                $descarga->delete();
+                $deleted[] = (int) $id;
+            }
+        });
+
+        if ($deleted === []) {
+            return response()->json([
+                'message' => 'Ningún contenedor pudo eliminarse. Los liquidados quedan bloqueados.',
+            ], 422);
+        }
+
+        $message = count($deleted) === 1
+            ? 'Contenedor eliminado.'
+            : count($deleted).' contenedores eliminados.';
+        if ($skipped > 0) {
+            $message .= " {$skipped} omitido(s) por estado o permiso.";
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => $message,
+            'deleted' => $deleted,
+            'skipped' => $skipped,
         ]);
     }
 
@@ -1294,6 +1342,13 @@ class DescargaContenedorController extends Controller
                 'blockers' => $this->visibleBlockers($descarga)->all(),
                 'can_validate' => $descarga->estado === 'borrador' && $blockers->isEmpty(),
                 'estado' => $descarga->estado,
+                'fecha' => optional($descarga->fecha)->format('d/m/Y'),
+                'contenedor' => $descarga->contenedor,
+                'operacion' => $descarga->operacion,
+                'bodega' => $descarga->bodega ?: ($descarga->centroCosto->nombre ?? ''),
+                'producto' => $descarga->producto,
+                'equipo_descarga' => $descarga->equipo_descarga,
+                'cajas' => $descarga->cajas,
             ],
         ];
     }

@@ -250,6 +250,9 @@ Route::middleware('auth')->group(function () {
             ->middleware('modulo:descarga_contenedores,puede_crear');
         Route::post('descarga-contenedores/equipo-masivo', [DescargaContenedorController::class, 'assignCrewBulk'])
             ->name('descarga-contenedores.equipo-masivo');
+        Route::post('descarga-contenedores/eliminar-masivo', [DescargaContenedorController::class, 'destroyBulk'])
+            ->name('descarga-contenedores.eliminar-masivo')
+            ->middleware('modulo:descarga_contenedores,puede_eliminar');
         Route::get('descarga-contenedores/{descarga}/panel', [DescargaContenedorController::class, 'quickPanel'])
             ->name('descarga-contenedores.panel');
         Route::patch('descarga-contenedores/{descarga}/rapido', [DescargaContenedorController::class, 'quickSave'])
