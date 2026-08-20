@@ -20,15 +20,6 @@
     })->values();
 @endphp
 
-<div class="contenedores-bulk-bar" data-bulk-bar hidden>
-    <strong data-bulk-count>0 seleccionados</strong>
-    <span>Los mismos trabajadores se asignan a todos los contenedores marcados.</span>
-    <button type="button" class="btn-premium" data-bulk-open>
-        <i class="bi bi-people-fill"></i> Asignar trabajadores
-    </button>
-    <button type="button" class="btn-secondary" data-bulk-clear>Limpiar selección</button>
-</div>
-
 <div class="contenedores-drawer-backdrop" data-drawer-backdrop hidden></div>
 <aside class="contenedores-drawer" data-contenedores-drawer aria-hidden="true">
     <header class="contenedores-drawer-bar">
@@ -80,7 +71,9 @@
     const drawer = document.querySelector('[data-contenedores-drawer]');
     const backdrop = document.querySelector('[data-drawer-backdrop]');
     const bulkBar = document.querySelector('[data-bulk-bar]');
-    if (!drawer) return;
+    if (!drawer || !backdrop) return;
+
+    document.body.append(backdrop, drawer);
 
     const titleEl = drawer.querySelector('[data-drawer-title]');
     const metaEl = drawer.querySelector('[data-drawer-meta]');
@@ -623,7 +616,7 @@
 .contenedores-drawer-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 80;
+    z-index: 4000;
     background: rgba(15, 23, 42, .35);
 }
 .contenedores-drawer {
@@ -631,7 +624,7 @@
     top: 0;
     right: 0;
     bottom: 0;
-    z-index: 81;
+    z-index: 4001;
     display: flex;
     flex-direction: column;
     width: min(540px, 100%);
