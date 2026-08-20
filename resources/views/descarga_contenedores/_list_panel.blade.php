@@ -41,7 +41,7 @@
     </header>
     <div class="contenedores-drawer-body">
         <section data-drawer-detail></section>
-        <section data-drawer-fields hidden>
+        <section class="contenedores-detail-card" data-drawer-fields hidden>
             <h4>Datos del registro</h4>
             <div class="contenedores-edit-grid">
                 <label>Fecha<input type="date" class="form-control" data-field="fecha"></label>
@@ -74,7 +74,7 @@
                 </label>
             </div>
         </section>
-        <section data-drawer-fact>
+        <section class="contenedores-detail-card" data-drawer-fact>
             <h4>Tarifa FACT</h4>
             <input type="hidden" data-drawer-tarifa-id>
             <input type="hidden" data-drawer-fact-codigo>
@@ -84,7 +84,7 @@
             </div>
             <small class="muted-hint">Buscador con dependencias: cliente según operación y tarifas del centro. Si el código es único, se asocia solo.</small>
         </section>
-        <section data-drawer-workers>
+        <section class="contenedores-detail-card" data-drawer-workers>
             <h4>Trabajadores</h4>
             <div class="worker-picker compact" data-drawer-crew></div>
         </section>
@@ -233,6 +233,14 @@
         return `<div><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`;
     }
 
+    function detailCard(title, body, extraClass = '') {
+        return `<article class="contenedores-detail-card ${extraClass}"><h4>${escapeHtml(title)}</h4>${body}</article>`;
+    }
+
+    function detailMetric(label, value) {
+        return `<div class="contenedores-detail-metric"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`;
+    }
+
     function renderDetail(d) {
         const blockers = d.blockers || [];
         const workers = d.participantes || [];
@@ -242,27 +250,39 @@
             : (canViewCosts ? dash(d.pago != null ? formatCurrency(d.pago) : '') : '—');
         const percentTotal = workers.reduce((sum, item) => sum + (Number(item.porcentaje) || 0), 0);
         const montoTotal = workers.reduce((sum, item) => sum + (Number(item.monto) || 0), 0);
+        const tarifaText = [d.tarifa_cliente, d.tarifa_proceso].filter(Boolean).join(' · ');
 
         detailSection.innerHTML = `
             ${blockers.length ? `<div class="contenedores-detail-alerts">${blockers.map(item => `<span class="badge warning">${escapeHtml(capitalize(item))}</span>`).join('')}</div>` : ''}
+            <div class="contenedores-detail-metrics">
+                ${detailMetric('Estado', `<span class="${escapeHtml(d.estado_class || '')}">${dash(d.estado_label)}</span>`)}
+                ${detailMetric('FACT', `<code>${dash(d.fact_codigo)}</code>`)}
+                ${detailMetric('Cajas', dash(d.cajas != null ? Number(d.cajas).toLocaleString('es-CL') : ''))}
+                ${detailMetric('Equipo', workers.length ? escapeHtml(String(workers.length)) : 'Sin equipo')}
+                ${canViewCosts ? detailMetric('Pago', pago) : ''}
+            </div>
             <div class="contenedores-detail-grid">
-                <article>
-                    <h4>Resumen</h4>
+                ${detailCard('Identificación', `
                     <dl class="contenedores-detail-list">
-                        ${detailField('Estado', `<span class="${escapeHtml(d.estado_class || '')}">${dash(d.estado_label)}</span>`)}
+                        ${detailField('Fecha', dash(d.fecha))}
+                        ${detailField('Contenedor', dash(d.contenedor))}
                         ${detailField('Operación', dash(d.operacion))}
                         ${detailField('Centro', dash(d.centro))}
-                        ${detailField('Bodega', dash(d.bodega))}
-                        ${detailField('Equipo', dash(d.equipo_descarga))}
-                        ${detailField('FACT', `<code>${dash(d.fact_codigo)}</code>`)}
-                        ${canViewCosts ? detailField('Tarifa', dash([d.tarifa_cliente, d.tarifa_proceso].filter(Boolean).join(' · '))) : ''}
-                        ${canViewCosts ? detailField('Pago', pago) : ''}
-                        ${detailField('Supervisor', dash(d.supervisor))}
-                        ${detailField('Encargado', dash(d.supervisor_nombre))}
+                        ${detailField('Bodega / CD', dash(d.bodega))}
+                        ${detailField('Facturación', dash(d.facturacion_mes))}
+                        ${detailField('Equipo descarga', dash(d.equipo_descarga))}
                     </dl>
-                </article>
-                <article>
-                    <h4>Operación</h4>
+                `)}
+                ${detailCard('FACT y tarifa', `
+                    <dl class="contenedores-detail-list">
+                        ${detailField('Código FACT', `<code>${dash(d.fact_codigo)}</code>`)}
+                        ${canViewCosts ? detailField('Cliente / proceso', dash(tarifaText)) : ''}
+                        ${canViewCosts ? detailField('Costo unitario', dash(d.costo_unitario != null ? formatCurrency(d.costo_unitario) : '')) : ''}
+                        ${canViewCosts ? detailField('Pago colaboradores', pago) : ''}
+                        ${detailField('Revisión', d.requiere_revision_tarifa ? '<span class="badge warning">Pendiente</span>' : '<span class="badge success">Asociada</span>')}
+                    </dl>
+                `)}
+                ${detailCard('Datos operativos', `
                     <dl class="contenedores-detail-list">
                         ${detailField('Cita', dash(d.hora_cita))}
                         ${detailField('Inicio', dash(d.hora_inicio))}
@@ -272,53 +292,56 @@
                         ${detailField('Pallets', dash(d.pallets))}
                         ${detailField('Producto', dash(d.producto))}
                         ${detailField('Origen', dash(d.origen ? String(d.origen).charAt(0).toUpperCase() + String(d.origen).slice(1) : ''))}
-                        ${d.validado_por ? detailField('Validado por', dash(d.validado_por + (d.validado_at ? ' · ' + d.validado_at : ''))) : ''}
                     </dl>
-                </article>
+                `)}
+                ${detailCard('Trazabilidad', `
+                    <dl class="contenedores-detail-list">
+                        ${detailField('Supervisor sistema', dash(d.supervisor))}
+                        ${detailField('Encargado', dash(d.supervisor_nombre))}
+                        ${detailField('Validado por', dash(d.validado_por))}
+                        ${detailField('Fecha validación', dash(d.validado_at))}
+                        ${canViewCosts ? detailField('Liquidado por', dash(d.liquidado_por)) : ''}
+                        ${canViewCosts ? detailField('Fecha liquidación', dash(d.liquidado_at)) : ''}
+                    </dl>
+                `)}
             </div>
-            <article>
-                <h4>Trabajadores</h4>
-                ${workers.length ? `
-                    <div class="contenedores-detail-table-wrap">
-                        <table class="data-table">
-                            <thead><tr><th>Nombre</th><th>RUT</th><th>Cargo</th><th>Centro</th><th>%</th>${canViewCosts ? '<th>Monto</th>' : ''}</tr></thead>
-                            <tbody>
-                                ${workers.map(item => `
-                                    <tr>
-                                        <td><strong>${dash(item.nombre)}</strong></td>
-                                        <td>${dash(item.rut)}</td>
-                                        <td>${dash(item.cargo)}</td>
-                                        <td>${dash(item.centro)}</td>
-                                        <td>${item.porcentaje != null ? escapeHtml(Number(item.porcentaje).toFixed(2)) + '%' : '—'}</td>
-                                        ${canViewCosts ? `<td>${item.monto != null ? escapeHtml(formatCurrency(item.monto)) : '—'}</td>` : ''}
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                            <tfoot>
+            ${detailCard('Trabajadores participantes', workers.length ? `
+                <div class="contenedores-detail-table-wrap">
+                    <table class="data-table">
+                        <thead><tr><th>Nombre</th><th>RUT</th><th>Cargo</th><th>Centro</th><th>%</th>${canViewCosts ? '<th>Monto</th>' : ''}</tr></thead>
+                        <tbody>
+                            ${workers.map(item => `
                                 <tr>
-                                    <th colspan="4" style="text-align:right">Total</th>
-                                    <th>${percentTotal.toFixed(2)}%</th>
-                                    ${canViewCosts ? `<th>${escapeHtml(formatCurrency(montoTotal))}</th>` : ''}
+                                    <td><strong>${dash(item.nombre)}</strong></td>
+                                    <td>${dash(item.rut)}</td>
+                                    <td>${dash(item.cargo)}</td>
+                                    <td>${dash(item.centro)}</td>
+                                    <td>${item.porcentaje != null ? escapeHtml(Number(item.porcentaje).toFixed(2)) + '%' : '—'}</td>
+                                    ${canViewCosts ? `<td>${item.monto != null ? escapeHtml(formatCurrency(item.monto)) : '—'}</td>` : ''}
                                 </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                ` : '<p class="review-empty">Sin trabajadores asociados.</p>'}
-            </article>
-            ${photos.length ? `
-                <article>
-                    <h4>Evidencias</h4>
-                    <div class="contenedores-evidence-grid">
-                        ${photos.map(item => `
-                            <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" class="contenedores-evidence-item">
-                                <img src="${escapeHtml(item.url)}" alt="${escapeHtml(item.nombre || 'Evidencia')}">
-                                <span>${dash(item.nombre)}</span>
-                            </a>
-                        `).join('')}
-                    </div>
-                </article>
-            ` : ''}
-            ${d.observacion ? `<article><h4>Observación</h4><p class="contenedores-detail-note">${escapeHtml(d.observacion)}</p></article>` : ''}
+                            `).join('')}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="4" style="text-align:right">Total</th>
+                                <th>${percentTotal.toFixed(2)}%</th>
+                                ${canViewCosts ? `<th>${escapeHtml(formatCurrency(montoTotal))}</th>` : ''}
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            ` : '<p class="contenedores-detail-empty">Sin trabajadores asociados.</p>', 'is-full')}
+            ${detailCard('Evidencia fotográfica', photos.length ? `
+                <div class="contenedores-evidence-grid">
+                    ${photos.map(item => `
+                        <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" class="contenedores-evidence-item">
+                            <img src="${escapeHtml(item.url)}" alt="${escapeHtml(item.nombre || 'Evidencia')}">
+                            <span>${dash(item.nombre)}</span>
+                        </a>
+                    `).join('')}
+                </div>
+            ` : '<p class="contenedores-detail-empty">Sin evidencias fotográficas.</p>', 'is-full')}
+            ${detailCard('Observación', `<p class="contenedores-detail-note">${d.observacion ? escapeHtml(d.observacion) : 'Sin observación.'}</p>`, 'is-full')}
         `;
     }
 
@@ -1498,32 +1521,100 @@ body.is-drawer-resizing * { cursor: col-resize !important; }
     background: #fff;
     box-shadow: 0 1px 4px rgba(15, 23, 42, .1);
 }
+.contenedores-drawer-body {
+    overflow: auto;
+    padding: 1rem;
+    display: grid;
+    gap: .9rem;
+    background: #f5f7fb;
+}
+[data-drawer-detail] {
+    display: grid;
+    gap: .85rem;
+}
+.contenedores-drawer [hidden] { display: none !important; }
 .contenedores-detail-alerts {
     display: flex;
     flex-wrap: wrap;
     gap: .3rem;
-    margin-bottom: .2rem;
 }
-.contenedores-detail-grid,
-.contenedores-detail-list {
+.contenedores-detail-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: .65rem;
+}
+.contenedores-detail-metric {
+    min-width: 0;
+    padding: .7rem .8rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 12px;
+    background: linear-gradient(180deg, #fff, #f8fafc);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, .04);
+}
+.contenedores-detail-metric span {
+    display: block;
+    color: var(--text-muted);
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+.contenedores-detail-metric strong {
+    display: block;
+    margin-top: .28rem;
+    font-size: .95rem;
+    overflow-wrap: anywhere;
+}
+.contenedores-detail-grid {
     display: grid;
     gap: .85rem;
+    grid-template-columns: 1fr;
 }
-.contenedores-detail-grid { grid-template-columns: 1fr; }
-.contenedores-drawer.is-wide .contenedores-detail-grid { grid-template-columns: 1fr 1fr; }
+.contenedores-drawer.is-wide .contenedores-detail-grid {
+    grid-template-columns: 1fr 1fr;
+}
+.contenedores-detail-card {
+    min-width: 0;
+    padding: .9rem 1rem 1rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 14px;
+    background: var(--surface-color, #fff);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, .05);
+}
+.contenedores-detail-card.is-full { grid-column: 1 / -1; }
+.contenedores-detail-card h4 {
+    margin: 0 0 .75rem;
+    padding-bottom: .5rem;
+    border-bottom: 1px solid var(--surface-border);
+    color: var(--text-muted);
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+.contenedores-detail-list {
+    display: grid;
+    gap: .7rem;
+    margin: 0;
+}
 .contenedores-detail-list div {
     display: grid;
-    grid-template-columns: 108px minmax(0, 1fr);
+    grid-template-columns: 118px minmax(0, 1fr);
     gap: .45rem;
     align-items: start;
 }
 .contenedores-drawer.is-wide .contenedores-detail-list div {
-    grid-template-columns: 124px minmax(0, 1fr);
+    grid-template-columns: 136px minmax(0, 1fr);
 }
 .contenedores-detail-list dt { color: var(--text-muted); font-size: .75rem; }
 .contenedores-detail-list dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .contenedores-detail-table-wrap { overflow: auto; }
-.contenedores-detail-note { margin: 0; line-height: 1.5; }
+.contenedores-detail-note { margin: 0; line-height: 1.55; }
+.contenedores-detail-empty {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: .85rem;
+}
 .contenedores-evidence-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -1552,12 +1643,6 @@ body.is-drawer-resizing * { cursor: col-resize !important; }
 }
 tr[data-descarga-id] { cursor: pointer; }
 tr[data-descarga-id]:hover { background: rgba(114, 80, 202, .04); }
-.contenedores-drawer-body {
-    overflow: auto;
-    padding: 1rem;
-    display: grid;
-    gap: 1.1rem;
-}
 .contenedores-drawer-body h4 {
     margin: 0 0 .45rem;
     font-size: .82rem;
