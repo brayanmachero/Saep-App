@@ -232,6 +232,80 @@ class InventarioBodegaStockTest extends TestCase
         ]);
     }
 
+    public function test_draft_stocktake_can_be_deleted_without_touching_kardex(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'GUIA_DESPACHO',
+            'numero_documento' => 'GD-DEL-1',
+            'fecha_documento' => null,
+            'fecha_recepcion' => '2026-08-01',
+            'observacion' => null,
+        ], [['variante_id' => $variant->id, 'cantidad' => 8, 'costo_unitario' => null]], $user);
+
+        $conteo = $service->createStocktake([
+            'ubicacion_id' => $origin->id,
+            'fecha_corte' => '2026-08-05',
+            'observacion' => 'Conteo de prueba',
+            'incluir_sin_stock' => false,
+        ], $user);
+        $line = $conteo->lineas()->firstOrFail();
+        $service->saveStocktake($conteo, [$line->id => ['cantidad_fisica' => 6, 'observacion' => 'Prueba']]);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->delete(route('inventario-bodega.conteos.destroy', $conteo))
+            ->assertRedirect(route('inventario-bodega.index', ['vista' => 'conteos']))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('inventario_conteos', ['id' => $conteo->id]);
+        $this->assertDatabaseMissing('inventario_conteo_lineas', ['conteo_id' => $conteo->id]);
+        $this->assertSame(8.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseMissing('inventario_movimientos', [
+            'referencia_tipo' => InventarioConteo::class,
+            'referencia_id' => $conteo->id,
+        ]);
+    }
+
+    public function test_approved_stocktake_cannot_be_deleted(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'GUIA_DESPACHO',
+            'numero_documento' => 'GD-DEL-2',
+            'fecha_documento' => null,
+            'fecha_recepcion' => '2026-08-01',
+            'observacion' => null,
+        ], [['variante_id' => $variant->id, 'cantidad' => 8, 'costo_unitario' => null]], $user);
+
+        $conteo = $service->createStocktake([
+            'ubicacion_id' => $origin->id,
+            'fecha_corte' => '2026-08-05',
+            'observacion' => 'Conteo real',
+            'incluir_sin_stock' => false,
+        ], $user);
+        $line = $conteo->lineas()->firstOrFail();
+        $service->saveStocktake($conteo, [$line->id => ['cantidad_fisica' => 6, 'observacion' => 'Diferencia']]);
+        $conteo = InventarioConteo::query()->with('lineas')->findOrFail($conteo->id);
+        $service->approveStocktake($conteo, $user);
+
+        try {
+            $service->deleteStocktake($conteo->fresh());
+            $this->fail('Un conteo aprobado no debe eliminarse.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('conteo', $exception->errors());
+        }
+
+        $this->assertDatabaseHas('inventario_conteos', ['id' => $conteo->id, 'estado' => 'APROBADO']);
+        $this->assertSame(6.0, $service->stockActual($origin->id, $variant->id));
+    }
+
     public function test_kizeo_delivery_is_applied_once_and_reversed_without_erasing_history(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContext();
@@ -1142,6 +1216,8 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertStringContainsString('Costo_Referencia', $view);
         $this->assertStringContainsString('Cargar desde compra', $view);
         $this->assertStringContainsString('Cargar desde conteo', $view);
+        $this->assertStringContainsString('conteos.destroy', $view);
+        $this->assertStringContainsString('Eliminar conteo de prueba', $view);
         $this->assertStringContainsString('Desglose por talla', $view);
         $this->assertStringContainsString('product-variant-editor', $view);
         $this->assertStringContainsString('data-variants=', $view);

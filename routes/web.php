@@ -574,6 +574,9 @@ Route::middleware('auth')->group(function () {
           Route::post('conteos/{conteo}/aprobar', [InventarioBodegaController::class, 'approveStocktake'])
               ->middleware('modulo:inventario_bodega,puede_editar')
               ->name('conteos.aprobar');
+          Route::delete('conteos/{conteo}', [InventarioBodegaController::class, 'destroyStocktake'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('conteos.destroy');
           Route::post('entregas-kizeo/auto-aplicar', [InventarioBodegaController::class, 'toggleKizeoAutoApply'])
               ->middleware('modulo:inventario_bodega,puede_editar')
               ->name('entregas-kizeo.auto-aplicar');

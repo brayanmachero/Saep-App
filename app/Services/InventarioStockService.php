@@ -472,6 +472,31 @@ class InventarioStockService
         });
     }
 
+    public function deleteStocktake(InventarioConteo $conteo): void
+    {
+        if ($conteo->estado === 'APROBADO' || ! $conteo->puedeEliminarse()) {
+            throw ValidationException::withMessages([
+                'conteo' => 'No se puede eliminar un conteo aprobado: ya dejó ajustes en el kardex.',
+            ]);
+        }
+
+        $hasAdjustments = InventarioMovimiento::query()
+            ->where('referencia_tipo', InventarioConteo::class)
+            ->where('referencia_id', $conteo->id)
+            ->exists();
+
+        if ($hasAdjustments) {
+            throw ValidationException::withMessages([
+                'conteo' => 'Este conteo ya tiene ajustes en el kardex y no se puede eliminar.',
+            ]);
+        }
+
+        DB::transaction(function () use ($conteo) {
+            $conteo->lineas()->delete();
+            $conteo->delete();
+        });
+    }
+
     /** Suggests the inventory variants used by an individual Kizeo delivery. */
     public function suggestedKizeoVariants(EntregaBodega $delivery, Collection $variants): array
     {

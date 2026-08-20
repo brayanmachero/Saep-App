@@ -32,4 +32,9 @@ class InventarioConteo extends Model
     {
         return $this->hasMany(InventarioConteoLinea::class, 'conteo_id')->with(['producto', 'variante']);
     }
+
+    public function puedeEliminarse(): bool
+    {
+        return $this->estado !== 'APROBADO';
+    }
 }

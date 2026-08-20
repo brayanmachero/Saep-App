@@ -556,6 +556,15 @@ class InventarioBodegaController extends Controller
             ->with('success', "Conteo {$conteo->codigo} aprobado. Las diferencias se registraron como ajustes trazables.");
     }
 
+    public function destroyStocktake(InventarioConteo $conteo): RedirectResponse
+    {
+        $codigo = $conteo->codigo;
+        $this->stock->deleteStocktake($conteo);
+
+        return redirect()->route('inventario-bodega.index', ['vista' => 'conteos'])
+            ->with('success', "Conteo {$codigo} eliminado. No se modificó el kardex.");
+    }
+
     public function toggleKizeoAutoApply(Request $request): RedirectResponse
     {
         $data = $request->validate([
