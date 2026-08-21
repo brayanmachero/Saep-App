@@ -1734,6 +1734,29 @@ class DescargaContenedorTest extends TestCase
             ->assertDontSee('Abrir página');
     }
 
+    public function test_index_can_show_more_records_per_page(): void
+    {
+        $user = $this->createSuperAdminUser();
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.index'))
+            ->assertOk()
+            ->assertSee('20 por página')
+            ->assertSee('50 por página')
+            ->assertSee('100 por página')
+            ->assertSee('200 por página');
+
+        $response = $this->actingAs($user)
+            ->get(route('descarga-contenedores.index', ['per_page' => 100]));
+
+        $response->assertOk();
+        $this->assertSame(100, $response->viewData('descargas')->perPage());
+
+        $fallback = $this->actingAs($user)
+            ->get(route('descarga-contenedores.index', ['per_page' => 999]));
+        $this->assertSame(20, $fallback->viewData('descargas')->perPage());
+    }
+
     public function test_quick_panel_and_save_update_tariff_and_workers_without_leaving_the_list(): void
     {
         $user = $this->createSuperAdminUser();

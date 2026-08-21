@@ -1278,6 +1278,12 @@
         removeRows(data.deleted || list);
         toast(data.message || 'Contenedores eliminados.');
         if (mode === 'bulk') closeDrawer();
+        const params = new URLSearchParams(window.location.search);
+        if (!document.querySelector('tr[data-descarga-id]')) {
+            params.delete('page');
+        }
+        const query = params.toString();
+        window.location.href = window.location.pathname + (query ? `?${query}` : '');
     }
 
     function selectedCheckboxes() {

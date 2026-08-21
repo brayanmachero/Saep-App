@@ -225,9 +225,17 @@
                 <label style="font-size:.75rem;color:var(--text-muted)">Hasta</label>
                 <input type="date" name="fecha_hasta" value="{{ request('fecha_hasta') }}" class="form-control">
             </div>
+            <div>
+                <label style="font-size:.75rem;color:var(--text-muted)">Mostrar</label>
+                <select name="per_page" class="form-control" onchange="this.form.submit()">
+                    @foreach([20, 50, 100, 200] as $size)
+                        <option value="{{ $size }}" @selected((int) $perPage === $size)>{{ $size }} por página</option>
+                    @endforeach
+                </select>
+            </div>
             <button type="submit" class="btn-premium" style="height:fit-content"><i class="bi bi-search"></i> Filtrar</button>
             @if(request()->hasAny(['buscar','centro_costo_id','estado','validacion_estado','tarifa_estado','equipo_estado','fecha_desde','fecha_hasta']))
-                <a href="{{ route('descarga-contenedores.index') }}" class="btn-secondary" style="height:fit-content"><i class="bi bi-x-lg"></i> Limpiar</a>
+                <a href="{{ route('descarga-contenedores.index', (int) $perPage === 20 ? [] : ['per_page' => $perPage]) }}" class="btn-secondary" style="height:fit-content"><i class="bi bi-x-lg"></i> Limpiar</a>
             @endif
         </form>
     </div>

@@ -85,10 +85,11 @@ class DescargaContenedorController extends Controller
             $query->whereDate('fecha', '<=', $request->input('fecha_hasta'));
         }
 
+        $perPage = $this->listPerPage($request);
         $descargas = $query->orderByRaw('fecha IS NULL')
             ->orderByDesc('fecha')
             ->orderByDesc('id')
-            ->paginate(20)
+            ->paginate($perPage)
             ->withQueryString();
 
         $centros = $this->centrosOperacion();
@@ -120,6 +121,7 @@ class DescargaContenedorController extends Controller
             'showValidationQueue' => $showValidationQueue,
             'tarifas' => $form['tarifas'],
             'trabajadores' => $form['trabajadores'],
+            'perPage' => $perPage,
         ]);
     }
 
@@ -1272,6 +1274,14 @@ class DescargaContenedorController extends Controller
     {
         abort_unless(auth()->user()?->puedeEditarDescargaContenedor($descarga), 403);
         abort_if($descarga->estado === 'liquidado', 403, 'No se puede editar un registro liquidado.');
+    }
+
+    private function listPerPage(Request $request): int
+    {
+        $allowed = [20, 50, 100, 200];
+        $value = (int) $request->input('per_page', 20);
+
+        return in_array($value, $allowed, true) ? $value : 20;
     }
 
     private function redirectToListPanel(DescargaContenedor $descarga, string $mode = 'detail')
