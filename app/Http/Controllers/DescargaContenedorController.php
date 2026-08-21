@@ -315,9 +315,13 @@ class DescargaContenedorController extends Controller
         abort_unless(auth()->user()?->tieneAcceso('descarga_contenedores'), 403);
 
         $data = $request->validate([
-            'descargas' => ['required', 'array', 'min:1', 'max:50'],
+            'descargas' => ['required', 'array', 'min:1', 'max:200'],
             'descargas.*' => ['integer', 'exists:descarga_contenedores,id'],
             'participantes_json' => ['required', 'string'],
+        ], [
+            'descargas.max' => 'Puedes seleccionar hasta 200 contenedores por tanda.',
+            'descargas.min' => 'Selecciona al menos un contenedor.',
+            'descargas.required' => 'Selecciona al menos un contenedor.',
         ]);
 
         $payload = $this->extractParticipantesFromRequest($request);
@@ -371,8 +375,12 @@ class DescargaContenedorController extends Controller
         abort_unless(auth()->user()?->tieneAcceso('descarga_contenedores', 'puede_eliminar'), 403);
 
         $data = $request->validate([
-            'descargas' => ['required', 'array', 'min:1', 'max:50'],
+            'descargas' => ['required', 'array', 'min:1', 'max:200'],
             'descargas.*' => ['integer', 'exists:descarga_contenedores,id'],
+        ], [
+            'descargas.max' => 'Puedes seleccionar hasta 200 contenedores por tanda.',
+            'descargas.min' => 'Selecciona al menos un contenedor.',
+            'descargas.required' => 'Selecciona al menos un contenedor.',
         ]);
 
         $deleted = [];

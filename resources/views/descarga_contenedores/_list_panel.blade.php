@@ -1120,7 +1120,11 @@
         const res = await fetch(url, { ...options, headers });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-            throw new Error(data.message || 'No se pudo guardar.');
+            const errors = data.errors ? Object.values(data.errors).flat().filter(Boolean) : [];
+            const message = data.message && !String(data.message).startsWith('validation.')
+                ? data.message
+                : (errors[0] || 'No se pudo guardar.');
+            throw new Error(message);
         }
         return data;
     }

@@ -1950,6 +1950,28 @@ class DescargaContenedorTest extends TestCase
         $this->assertNotSoftDeleted('descarga_contenedores', ['id' => $ids['CONT-ELIM-002']]);
     }
 
+    public function test_bulk_actions_accept_up_to_200_records_and_explain_the_limit(): void
+    {
+        $user = $this->createSuperAdminUser();
+
+        $this->actingAs($user)
+            ->postJson(route('descarga-contenedores.eliminar-masivo'), [
+                'descargas' => range(1, 201),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('descargas')
+            ->assertJsonFragment(['Puedes seleccionar hasta 200 contenedores por tanda.']);
+
+        $this->actingAs($user)
+            ->postJson(route('descarga-contenedores.equipo-masivo'), [
+                'descargas' => range(1, 201),
+                'participantes_json' => json_encode([1]),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('descargas')
+            ->assertJsonFragment(['Puedes seleccionar hasta 200 contenedores por tanda.']);
+    }
+
     private function createSuperAdminUser(): User
     {
         $role = Rol::firstOrCreate(
