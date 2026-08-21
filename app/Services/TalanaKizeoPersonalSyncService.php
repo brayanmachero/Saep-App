@@ -304,7 +304,7 @@ class TalanaKizeoPersonalSyncService
     private function mappedPropertyIds(array $propertyIds): array
     {
         $aliases = [
-            'cdd' => ['cdd', 'centro', 'centro de costo', 'centro de costos', 'centro de distribucion', 'cd d'],
+            'cdd' => ['cd', 'cdd', 'centro', 'centro de costo', 'centro de costos', 'centro de distribucion', 'cd d'],
             'nombres' => ['nombres', 'nombre', 'primer nombre', 'nombres trabajador'],
             'apellido' => ['apellido', 'apellidos', 'apellido paterno'],
             'nombre_completo' => ['nombre completo', 'nombrecompleto'],

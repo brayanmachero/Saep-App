@@ -168,7 +168,7 @@ class TalanaKizeoPersonalSyncTest extends TestCase
     {
         $definition = [
             'properties_definition' => [
-                'cdd' => ['id' => 'property-cdd', 'display_name' => 'CDD'],
+                'cdd' => ['id' => 'property-cdd', 'display_name' => 'CD'],
                 'nombres' => ['id' => 'property-nombres', 'display_name' => 'Nombres'],
                 'apellido' => ['id' => 'property-apellido', 'display_name' => 'Apellido'],
                 'nombre' => ['id' => 'property-completo', 'display_name' => 'Nombre completo'],
