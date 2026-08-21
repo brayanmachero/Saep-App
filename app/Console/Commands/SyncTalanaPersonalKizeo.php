@@ -9,7 +9,7 @@ class SyncTalanaPersonalKizeo extends Command
 {
     protected $signature = 'kizeo:sync-personal-talana
                             {--dry-run : Muestra los cambios sin escribir en Kizeo}
-                            {--limit=600 : Máximo de altas, cambios o bajas por ejecución}';
+                            {--limit=250 : Máximo de altas, cambios o bajas por ejecución}';
 
     protected $description = 'Publica el personal vigente de Talana en la lista avanzada Kizeo de trabajadores por CDD y quita a quienes ya no están vigentes.';
 

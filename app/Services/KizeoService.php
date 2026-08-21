@@ -813,22 +813,37 @@ class KizeoService
     private function mutateV4(string $method, string $endpoint, array $payload, string $listId): array
     {
         $baseV4 = 'https://www.kizeoforms.com/rest/public/v4';
-        $request = Http::withHeaders(['Authorization' => $this->token])->timeout(30);
-        $response = match ($method) {
-            'POST' => $request->post("{$baseV4}/{$endpoint}", $payload),
-            'PATCH' => $request->patch("{$baseV4}/{$endpoint}", $payload),
-            'DELETE' => $request->delete("{$baseV4}/{$endpoint}"),
-            default => throw new \InvalidArgumentException("Método Kizeo v4 no soportado: {$method}"),
-        };
+        $attempt = 0;
+        $maxAttempts = 6;
 
-        if ($response->failed()) {
-            throw new \RuntimeException("Kizeo API v4 error [{$response->status()}]: {$response->body()}");
+        while (true) {
+            $attempt++;
+            $request = Http::withHeaders(['Authorization' => $this->token])->timeout(30);
+            $response = match ($method) {
+                'POST' => $request->post("{$baseV4}/{$endpoint}", $payload),
+                'PATCH' => $request->patch("{$baseV4}/{$endpoint}", $payload),
+                'DELETE' => $request->delete("{$baseV4}/{$endpoint}"),
+                default => throw new \InvalidArgumentException("Método Kizeo v4 no soportado: {$method}"),
+            };
+
+            if ($response->status() === 429 && $attempt < $maxAttempts) {
+                $wait = 45;
+                if (preg_match('/try again in (\d+)/i', $response->body(), $match)) {
+                    $wait = max(5, min(90, (int) $match[1] + 3));
+                }
+                sleep($wait);
+                continue;
+            }
+
+            if ($response->failed()) {
+                throw new \RuntimeException("Kizeo API v4 error [{$response->status()}]: {$response->body()}");
+            }
+
+            Cache::forget("kizeo_list_items_{$listId}");
+            Cache::forget("kizeo_list_def_{$listId}");
+
+            return is_array($response->json()) ? $response->json() : [];
         }
-
-        Cache::forget("kizeo_list_items_{$listId}");
-        Cache::forget("kizeo_list_def_{$listId}");
-
-        return is_array($response->json()) ? $response->json() : [];
     }
 
     /**

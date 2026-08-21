@@ -33,7 +33,7 @@ class TalanaKizeoPersonalSyncService
     /**
      * @return array{listId:string,total:int,created:int,updated:int,unchanged:int,removed:int,errors:array<int, string>,orphans:array<int, string>,deferred:int,dryRun:bool}
      */
-    public function synchronize(bool $dryRun = false, int $limit = 600): array
+    public function synchronize(bool $dryRun = false, int $limit = 250): array
     {
         $listId = trim((string) config('services.kizeo.personal_cdd_list_id'));
         if ($listId === '') {
