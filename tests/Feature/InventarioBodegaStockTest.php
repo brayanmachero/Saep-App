@@ -8,6 +8,7 @@ use App\Models\InventarioConteo;
 use App\Models\InventarioCentroCosto;
 use App\Models\InventarioCoordinador;
 use App\Models\InventarioEntregaKizeoAplicacion;
+use App\Models\InventarioKizeoCatalogItem;
 use App\Models\InventarioImportacionMovimiento;
 use App\Models\InventarioMovimiento;
 use App\Models\InventarioUbicacion;
@@ -1410,6 +1411,7 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertSame(1, $summary['created']);
         $this->assertSame(1, $summary['updated']);
         $this->assertSame(0, $summary['unchanged']);
+        $this->assertSame(0, $summary['removed']);
         $this->assertSame([], $summary['errors']);
         $this->assertSame(['Producto que ya no está en SAEP T-NA'], $summary['orphans']);
         $this->assertDatabaseHas('inventario_kizeo_catalog_items', ['variante_id' => $existingVariant->id, 'kizeo_item_id' => 'remote-casco-m']);
@@ -1434,7 +1436,105 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('SAEP publica el catálogo en Kizeo')
             ->assertSee('EPP AVANZADA (500434)')
             ->assertSee('Sincronizar ahora')
+            ->assertSee('se quitarán los productos inhabilitados')
+            ->assertSee('Producto vigente')
             ->assertSee(route('inventario-bodega.catalogo.kizeo.sincronizar'), false);
+    }
+
+    public function test_inactive_products_remain_in_catalog_but_leave_new_movement_options(): void
+    {
+        [$user] = $this->inventoryContext();
+        $variant = InventarioVariante::query()->where('talla', 'M')->firstOrFail();
+        $variant->producto->update(['activo' => false]);
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'catalogo', 'producto_estado' => 'inactivos']))
+            ->assertOk()
+            ->assertSee('Casco de seguridad')
+            ->assertSee('Inactivo');
+
+        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'movimientos']))
+            ->assertOk()
+            ->assertSee('Necesitas ubicaciones y articulos activos para registrar movimientos.')
+            ->assertDontSee('Casco de seguridad');
+    }
+
+    public function test_inactive_saep_products_are_removed_from_kizeo_and_can_be_republished(): void
+    {
+        [$user] = $this->inventoryContext();
+        $variant = InventarioVariante::query()->where('talla', 'M')->firstOrFail();
+        $product = $variant->producto;
+        InventarioKizeoCatalogItem::query()->create([
+            'variante_id' => $variant->id,
+            'kizeo_list_id' => '500434',
+            'kizeo_item_id' => 'remote-casco-m',
+            'source_hash' => 'hash-casco',
+            'sincronizado_en' => now(),
+        ]);
+        $product->update(['activo' => false]);
+        config(['services.kizeo.inventory_catalog_list_id' => '500434', 'services.kizeo.token' => 'kizeo-test-token']);
+
+        $definition = [
+            'properties_definition' => [
+                'type' => ['id' => 'property-type', 'display_name' => 'Tipo'],
+                'category' => ['id' => 'property-category', 'display_name' => 'Categoria'],
+                'subcategory' => ['id' => 'property-subcategory', 'display_name' => 'Sub Categoria'],
+                'format' => ['id' => 'property-format', 'display_name' => 'Formato'],
+            ],
+        ];
+        $items = [[
+            'id' => 'remote-casco-m',
+            'label' => 'Casco de seguridad T-M',
+            'properties' => [
+                'property-type' => 'EPP',
+                'property-category' => 'Proteccion',
+                'property-subcategory' => 'Casco de seguridad',
+                'property-format' => 'Unidad',
+            ],
+        ]];
+
+        $deleted = false;
+        Http::fake(function (HttpRequest $request) use ($definition, $items, &$deleted) {
+            if ($request->method() === 'GET' && str_ends_with($request->url(), '/definition')) {
+                return Http::response($definition);
+            }
+            if ($request->method() === 'GET' && str_contains($request->url(), '/items')) {
+                return Http::response($deleted ? [] : $items);
+            }
+            if ($request->method() === 'DELETE' && str_ends_with($request->url(), '/remote-casco-m')) {
+                $deleted = true;
+
+                return Http::response(['status' => 'ok']);
+            }
+            if ($request->method() === 'POST' && str_ends_with($request->url(), '/items')) {
+                return Http::response(['id' => 'remote-casco-m-new'], 201);
+            }
+
+            return Http::response(['message' => 'Ruta de prueba no esperada'], 404);
+        });
+
+        $removed = app(InventarioKizeoCatalogSyncService::class)->synchronize();
+
+        $this->assertSame(0, $removed['created']);
+        $this->assertSame(1, $removed['removed']);
+        $this->assertSame([], $removed['errors']);
+        $this->assertDatabaseMissing('inventario_kizeo_catalog_items', ['variante_id' => $variant->id]);
+        Http::assertSent(fn (HttpRequest $request) => $request->method() === 'DELETE' && str_ends_with($request->url(), '/lists/500434/items/remote-casco-m'));
+
+        $product->update(['activo' => true]);
+        Cache::flush();
+        $republished = app(InventarioKizeoCatalogSyncService::class)->synchronize();
+
+        $this->assertSame(1, $republished['created']);
+        $this->assertSame(0, $republished['removed']);
+        $this->assertSame([], $republished['errors']);
+        $this->assertDatabaseHas('inventario_kizeo_catalog_items', [
+            'variante_id' => $variant->id,
+            'kizeo_item_id' => 'remote-casco-m-new',
+        ]);
     }
 
     public function test_manual_movement_and_transfer_are_reversed_without_deleting_history(): void

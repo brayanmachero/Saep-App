@@ -11,19 +11,19 @@ class SyncInventarioCatalogoKizeo extends Command
                             {--dry-run : Muestra los cambios sin escribir en Kizeo}
                             {--limit=80 : Máximo de altas o cambios por ejecución}';
 
-    protected $description = 'Publica las variantes activas del catálogo SAEP en la lista avanzada EPP de Kizeo.';
+    protected $description = 'Publica las variantes activas del catálogo SAEP en la lista avanzada EPP de Kizeo y quita las inactivas.';
 
     public function handle(InventarioKizeoCatalogSyncService $sync): int
     {
         $summary = $sync->synchronize((bool) $this->option('dry-run'), max(1, (int) $this->option('limit')));
         $mode = $summary['dryRun'] ? 'Vista previa' : 'Sincronización';
 
-        $this->info("{$mode} Kizeo lista {$summary['listId']}: {$summary['created']} por crear, {$summary['updated']} por actualizar, {$summary['unchanged']} sin cambios.");
+        $this->info("{$mode} Kizeo lista {$summary['listId']}: {$summary['created']} por crear, {$summary['updated']} por actualizar, {$summary['removed']} inactivos por quitar, {$summary['unchanged']} sin cambios.");
         if ($summary['deferred'] > 0) {
             $this->warn("{$summary['deferred']} cambio(s) quedaron para la siguiente ejecución por el límite operativo.");
         }
         if ($summary['orphans'] !== []) {
-            $this->warn(count($summary['orphans']).' ítem(s) de Kizeo no existen como variante activa en SAEP y no fueron eliminados.');
+            $this->warn(count($summary['orphans']).' ítem(s) de Kizeo no están mapeados desde SAEP y no fueron eliminados.');
         }
         foreach (array_slice($summary['errors'], 0, 10) as $error) {
             $this->error($error);

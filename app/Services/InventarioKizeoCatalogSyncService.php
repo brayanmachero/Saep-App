@@ -12,6 +12,8 @@ use Illuminate\Support\Str;
  * Esta integración es estrictamente unidireccional: Kizeo recibe la
  * información operativa de los productos y sus tallas, pero nunca modifica
  * precio, stock, mínimos ni ningún dato del catálogo de SAEP.
+ * Los productos inactivos de SAEP se quitan de las opciones futuras de Kizeo
+ * y pueden reactivarse después; el kardex de SAEP no se borra.
  */
 class InventarioKizeoCatalogSyncService
 {
@@ -22,7 +24,7 @@ class InventarioKizeoCatalogSyncService
     /**
      * Calcula las acciones necesarias sin escribir en Kizeo ni en SAEP.
      *
-     * @return array{listId:string,total:int,created:int,updated:int,unchanged:int,errors:array<int, string>,orphans:array<int, string>,deferred:int,dryRun:bool}
+     * @return array{listId:string,total:int,created:int,updated:int,unchanged:int,removed:int,errors:array<int, string>,orphans:array<int, string>,deferred:int,dryRun:bool}
      */
     public function preview(): array
     {
@@ -30,11 +32,12 @@ class InventarioKizeoCatalogSyncService
     }
 
     /**
-     * Crea y actualiza los ítems que SAEP administra en Kizeo.
-     * Los ítems remotos que no provengan de SAEP se informan como huérfanos;
-     * jamás se eliminan automáticamente.
+     * Crea y actualiza los ítems activos que SAEP administra en Kizeo.
+     * Las variantes inactivas que SAEP ya había publicado se quitan de la lista.
+     * Los ítems remotos que nunca vinieron de SAEP se informan como huérfanos
+     * y no se tocan.
      *
-     * @return array{listId:string,total:int,created:int,updated:int,unchanged:int,errors:array<int, string>,orphans:array<int, string>,deferred:int,dryRun:bool}
+     * @return array{listId:string,total:int,created:int,updated:int,unchanged:int,removed:int,errors:array<int, string>,orphans:array<int, string>,deferred:int,dryRun:bool}
      */
     public function synchronize(bool $dryRun = false, int $limit = 80): array
     {
@@ -71,6 +74,7 @@ class InventarioKizeoCatalogSyncService
             'created' => 0,
             'updated' => 0,
             'unchanged' => 0,
+            'removed' => 0,
             'errors' => [],
             'orphans' => [],
             'deferred' => 0,
@@ -162,6 +166,8 @@ class InventarioKizeoCatalogSyncService
             }
         }
 
+        $this->removeInactivePublishedItems($listId, $claimedRemoteIds, $summary, $dryRun, $limit, $writes);
+
         $summary['orphans'] = $remoteItems
             ->filter(fn (array $item) => ! in_array((string) ($item['id'] ?? ''), $claimedRemoteIds, true))
             ->pluck('label')
@@ -170,6 +176,63 @@ class InventarioKizeoCatalogSyncService
             ->all();
 
         return $summary;
+    }
+
+    /**
+     * @param array<int, string> $claimedRemoteIds
+     * @param array{removed:int,errors:array<int,string>,deferred:int} $summary
+     */
+    private function removeInactivePublishedItems(
+        string $listId,
+        array &$claimedRemoteIds,
+        array &$summary,
+        bool $dryRun,
+        int $limit,
+        int &$writes
+    ): void {
+        $inactiveMappings = InventarioKizeoCatalogItem::query()
+            ->with('variante.producto')
+            ->where('kizeo_list_id', $listId)
+            ->where(function ($query) {
+                $query->whereDoesntHave('variante')
+                    ->orWhereHas('variante', function ($variants) {
+                        $variants->where('activo', false)
+                            ->orWhereHas('producto', fn ($products) => $products->where('activo', false));
+                    });
+            })
+            ->get();
+
+        foreach ($inactiveMappings as $mapping) {
+            $remoteId = trim((string) $mapping->kizeo_item_id);
+            $label = trim(($mapping->variante?->producto?->nombre ?: 'Ítem inactivo').' · '.($mapping->variante?->talla ?: ''));
+
+            if (! $dryRun && $writes >= max(1, $limit)) {
+                $summary['deferred']++;
+                continue;
+            }
+
+            try {
+                if (! $dryRun) {
+                    if ($remoteId !== '') {
+                        try {
+                            $this->kizeo->deleteListItem($listId, $remoteId);
+                        } catch (\RuntimeException $exception) {
+                            if (! str_contains($exception->getMessage(), 'Kizeo API v4 error [404]')) {
+                                throw $exception;
+                            }
+                        }
+                    }
+                    $mapping->delete();
+                    $writes++;
+                }
+                if ($remoteId !== '') {
+                    $claimedRemoteIds[] = $remoteId;
+                }
+                $summary['removed']++;
+            } catch (\Throwable $exception) {
+                $summary['errors'][] = trim($label.': '.Str::limit($exception->getMessage(), 260, '…'));
+            }
+        }
     }
 
     /** @return array<string, string> */

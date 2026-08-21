@@ -802,8 +802,8 @@ class KizeoService
     /**
      * Elimina un ítem de una lista avanzada.
      *
-     * La sincronización del catálogo no llama este método en automático; se
-     * expone para una futura limpieza explícita y auditada.
+     * La sincronización del catálogo lo usa para quitar productos inactivos
+     * de SAEP de las opciones futuras, sin borrar historial ni comprobantes.
      */
     public function deleteListItem(string $listId, string $itemId): void
     {

@@ -72,6 +72,9 @@ class InventarioBodegaController extends Controller
             ->get();
 
         $productSearch = trim((string) $request->input('producto_buscar'));
+        $productStatus = in_array($request->input('producto_estado'), ['activos', 'inactivos'], true)
+            ? $request->input('producto_estado')
+            : '';
         $editingProductId = $request->integer('producto_editar') ?: null;
         $adjustingVariantId = $request->integer('variante_ajustar') ?: null;
         $products = InventarioProducto::query()
@@ -81,6 +84,8 @@ class InventarioBodegaController extends Controller
                     ->orWhere('codigo', 'like', '%'.$productSearch.'%')
                     ->orWhere('categoria', 'like', '%'.$productSearch.'%');
             }))
+            ->when($productStatus !== '', fn ($query) => $query->where('activo', $productStatus === 'activos'))
+            ->orderByDesc('activo')
             ->orderBy('nombre')
             ->paginate(30, ['*'], 'productos_pagina')
             ->withQueryString();
@@ -276,6 +281,7 @@ class InventarioBodegaController extends Controller
             'search' => $search,
             'summaryFilters' => $summaryFilters,
             'productSearch' => $productSearch,
+            'productStatus' => $productStatus,
             'editingProductId' => $editingProductId,
             'adjustingVariantId' => $adjustingVariantId,
             'locations' => $locations,
@@ -383,10 +389,18 @@ class InventarioBodegaController extends Controller
 
     public function updateProduct(Request $request, InventarioProducto $producto): RedirectResponse
     {
+        $wasActive = (bool) $producto->activo;
         $data = $this->productData($request, false);
         $this->stock->updateProduct($producto, $data);
+        $isActive = (bool) $producto->fresh()->activo;
+        $message = 'Producto actualizado. Las variantes existentes y su historial se conservan.';
+        if ($wasActive && ! $isActive) {
+            $message .= ' Quedó inhabilitado: sincroniza el catálogo con Kizeo para que deje de aparecer en entregas nuevas. Puedes reactivarlo más adelante.';
+        } elseif (! $wasActive && $isActive) {
+            $message .= ' Quedó vigente de nuevo: sincroniza el catálogo con Kizeo para que vuelva a las opciones de entrega.';
+        }
 
-        return back()->with('success', 'Producto actualizado. Las variantes existentes y su historial se conservan.');
+        return back()->with('success', $message);
     }
 
     public function storeReceipt(Request $request): RedirectResponse
@@ -445,6 +459,10 @@ class InventarioBodegaController extends Controller
 
         if ($request->filled('producto_buscar')) {
             $catalogQuery['producto_buscar'] = trim((string) $request->input('producto_buscar'));
+        }
+
+        if (in_array($request->input('producto_estado'), ['activos', 'inactivos'], true)) {
+            $catalogQuery['producto_estado'] = $request->input('producto_estado');
         }
 
         return redirect()->route('inventario-bodega.index', $catalogQuery)
@@ -683,14 +701,14 @@ class InventarioBodegaController extends Controller
                 ->with('error', 'No se pudo publicar el catálogo en Kizeo. El catálogo SAEP no fue modificado. Revisa la conexión o inténtalo nuevamente.');
         }
 
-        $message = "Kizeo actualizado desde SAEP: {$summary['created']} creados, {$summary['updated']} actualizados y {$summary['unchanged']} sin cambios.";
+        $message = "Kizeo actualizado desde SAEP: {$summary['created']} creados, {$summary['updated']} actualizados, {$summary['removed']} inactivos quitados y {$summary['unchanged']} sin cambios.";
         $response = redirect()->route('inventario-bodega.index', ['vista' => 'catalogo'])->with('success', $message);
         $notices = [];
         if ($summary['deferred'] > 0) {
             $notices[] = "{$summary['deferred']} cambio(s) quedarán para la siguiente sincronización automática.";
         }
         if ($summary['orphans'] !== []) {
-            $notices[] = count($summary['orphans']).' ítem(s) existentes en Kizeo no están activos en SAEP; se conservaron sin eliminar.';
+            $notices[] = count($summary['orphans']).' ítem(s) de Kizeo no están mapeados desde SAEP; se conservaron sin eliminar.';
         }
         if ($summary['errors'] !== []) {
             $notices[] = count($summary['errors']).' variante(s) no se publicaron. '.implode(' · ', array_slice($summary['errors'], 0, 2));
