@@ -76,6 +76,8 @@ return [
         'cphs_form_id'                   => env('KIZEO_CPHS_FORM_ID'),
         'cphs_sharepoint_folder'         => env('KIZEO_CPHS_SHAREPOINT_FOLDER', 'Reuniones CPHS'),
         'personal_vigente_list_id'       => env('KIZEO_PERSONAL_VIGENTE_LIST_ID'),
+        // Lista avanzada Trabajadores por CDD. Talana manda; Kizeo solo recibe.
+        'personal_cdd_list_id'           => env('KIZEO_PERSONAL_CDD_LIST_ID', '501626'),
     ],
 
     'google' => [

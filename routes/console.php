@@ -24,6 +24,16 @@ Schedule::command('kizeo:sync-entregas-bodega')->everyThirtyMinutes()->withoutOv
 Schedule::command('kizeo:sync-catalogo-inventario')->everyThirtyMinutes()->withoutOverlapping()
     ->skip(fn () => ! config('services.kizeo.inventory_catalog_list_id'));
 
+// Talana manda el personal vigente a la lista avanzada Kizeo 501626 (CDD).
+// Tras el sync de Talana (06:00), al mediodía y al cierre del día.
+foreach (['06:20', '13:00', '20:00'] as $horaPersonalKizeo) {
+    Schedule::command('kizeo:sync-personal-talana')
+        ->dailyAt($horaPersonalKizeo)
+        ->timezone('America/Santiago')
+        ->withoutOverlapping()
+        ->skip(fn () => ! config('services.kizeo.personal_cdd_list_id') || ! config('services.kizeo.token'));
+}
+
 // Sincronizar seguimiento de charlas desde Kizeo (cada 6 horas)
 Schedule::command('kizeo:sync-charla-tracking')->everySixHours()->withoutOverlapping();
 
