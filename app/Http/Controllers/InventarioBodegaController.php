@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\EntregaBodega;
+use App\Models\Configuracion;
 use App\Models\InventarioCentroCosto;
 use App\Models\InventarioConteo;
 use App\Models\InventarioCoordinador;
@@ -72,6 +73,10 @@ class InventarioBodegaController extends Controller
             ->latest('ocurrido_en')
             ->limit(20)
             ->get();
+
+        $summaryAnalytics = $view === 'resumen'
+            ? $this->summaryAnalytics($selectedLocation, $summaryFilters, $balances)
+            : null;
 
         $productSearch = trim((string) $request->input('producto_buscar'));
         $productStatus = in_array($request->input('producto_estado'), ['activos', 'inactivos'], true)
@@ -325,6 +330,7 @@ class InventarioBodegaController extends Controller
             'balances' => $balances,
             'critical' => $critical,
             'movements' => $movements,
+            'summaryAnalytics' => $summaryAnalytics,
             'products' => $products,
             'ingresos' => InventarioIngreso::query()
                 ->with(['ubicacion', 'proveedor', 'items.producto', 'items.variante', 'reversadoPor', 'registradoPor'])
@@ -1174,6 +1180,106 @@ class InventarioBodegaController extends Controller
         }
 
         return $balances->values();
+    }
+
+    /**
+     * Resume la operación desde la fecha de inicio acordada para el tablero.
+     * El saldo actual conserva todo el kardex, pero los gráficos no mezclan la
+     * carga histórica previa con la operación que Bodega comienza a controlar.
+     *
+     * @param array{search: string, stock_status: ?string, category: ?string, subcategory: ?string, provider_id: ?int, applied: bool} $filters
+     * @return array{start: Carbon, end: Carbon, entries: float, exits: float, net: float, movements: int, active_days: int, catalog_total: int, catalog_active: int, catalog_inactive: int, daily: array<int, array{date: string, entries: float, exits: float, net: float, movements: int}>, types: array<int, array{code: string, label: string, entries: float, exits: float, net: float}>}
+     */
+    private function summaryAnalytics(?int $selectedLocation, array $filters, Collection $balances): array
+    {
+        $start = $this->inventoryReportingStart();
+        $end = now()->endOfDay();
+        $variantIds = $balances->pluck('id')->filter()->values()->all();
+
+        $query = InventarioMovimiento::query()
+            ->whereBetween('ocurrido_en', [$start, $end])
+            ->when($selectedLocation, fn (Builder $query) => $query->where('ubicacion_id', $selectedLocation))
+            ->when($filters['applied'], fn (Builder $query) => $query->whereIn('variante_id', $variantIds));
+
+        $dailyRows = (clone $query)
+            ->selectRaw('DATE(ocurrido_en) as fecha')
+            ->selectRaw('SUM(CASE WHEN cantidad > 0 THEN cantidad ELSE 0 END) as entradas')
+            ->selectRaw('SUM(CASE WHEN cantidad < 0 THEN ABS(cantidad) ELSE 0 END) as salidas')
+            ->selectRaw('SUM(cantidad) as neto')
+            ->selectRaw('COUNT(*) as movimientos')
+            ->groupBy(DB::raw('DATE(ocurrido_en)'))
+            ->orderBy('fecha')
+            ->get()
+            ->keyBy('fecha');
+
+        $daily = [];
+        for ($date = $start->copy()->startOfDay(); $date->lte($end); $date->addDay()) {
+            $row = $dailyRows->get($date->toDateString());
+            $daily[] = [
+                'date' => $date->toDateString(),
+                'entries' => (float) ($row->entradas ?? 0),
+                'exits' => (float) ($row->salidas ?? 0),
+                'net' => (float) ($row->neto ?? 0),
+                'movements' => (int) ($row->movimientos ?? 0),
+            ];
+        }
+
+        $typeRows = (clone $query)
+            ->select('tipo')
+            ->selectRaw('SUM(CASE WHEN cantidad > 0 THEN cantidad ELSE 0 END) as entradas')
+            ->selectRaw('SUM(CASE WHEN cantidad < 0 THEN ABS(cantidad) ELSE 0 END) as salidas')
+            ->selectRaw('SUM(cantidad) as neto')
+            ->groupBy('tipo')
+            ->orderByRaw('SUM(ABS(cantidad)) DESC')
+            ->limit(6)
+            ->get();
+
+        $types = $typeRows->map(fn ($row) => [
+            'code' => (string) $row->tipo,
+            'label' => InventarioMovimiento::TIPOS[$row->tipo] ?? Str::headline((string) $row->tipo),
+            'entries' => (float) $row->entradas,
+            'exits' => (float) $row->salidas,
+            'net' => (float) $row->neto,
+        ])->values()->all();
+
+        $catalogStatus = InventarioVariante::query()
+            ->join('inventario_productos as productos_catalogo', 'productos_catalogo.id', '=', 'inventario_variantes.producto_id')
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('SUM(CASE WHEN inventario_variantes.activo = 1 AND productos_catalogo.activo = 1 THEN 1 ELSE 0 END) as activos')
+            ->first();
+        $catalogTotal = (int) ($catalogStatus?->total ?? 0);
+        $catalogActive = (int) ($catalogStatus?->activos ?? 0);
+
+        return [
+            'start' => $start,
+            'end' => $end,
+            'entries' => (float) collect($daily)->sum('entries'),
+            'exits' => (float) collect($daily)->sum('exits'),
+            'net' => (float) collect($daily)->sum('net'),
+            'movements' => (int) collect($daily)->sum('movements'),
+            'active_days' => collect($daily)->filter(fn (array $day) => $day['movements'] > 0)->count(),
+            'catalog_total' => $catalogTotal,
+            'catalog_active' => $catalogActive,
+            'catalog_inactive' => max(0, $catalogTotal - $catalogActive),
+            'daily' => $daily,
+            'types' => $types,
+        ];
+    }
+
+    private function inventoryReportingStart(): Carbon
+    {
+        $today = now()->startOfDay();
+
+        if (! Schema::hasTable('configuraciones')) {
+            return $today;
+        }
+
+        $value = trim((string) Configuracion::get('inventario_resumen_trazabilidad_desde', ''));
+        $configuredStart = $this->kizeoDateInput($value);
+
+        return $configuredStart && $configuredStart->lte($today)
+            ? $configuredStart
+            : $today;
     }
 
     private function operationalCoordinatorData(Request $request, ?InventarioCoordinador $coordinator = null): array

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\InventarioBodegaController;
 use App\Http\Middleware\VerificarConsentimientoDatos;
+use App\Models\Configuracion;
 use App\Models\EntregaBodega;
 use App\Models\InventarioCentroCosto;
 use App\Models\InventarioConteo;
@@ -662,6 +663,83 @@ class InventarioBodegaStockTest extends TestCase
         }
         $this->assertSame('LENTE-SEG', $rows[1][0]);
         $this->assertNull($rows[2][0]);
+    }
+
+    public function test_summary_operational_traceability_excludes_movements_before_its_start_date(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+        $this->ensureConfiguracionesTable();
+        Configuracion::create([
+            'clave' => 'inventario_resumen_trazabilidad_desde',
+            'valor' => now()->toDateString(),
+            'tipo' => 'DATE',
+            'categoria' => 'inventario',
+            'descripcion' => 'Inicio de prueba',
+            'editable' => false,
+        ]);
+
+        $service = app(InventarioStockService::class);
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'FACTURA',
+            'numero_documento' => 'F-TRAZABILIDAD',
+            'fecha_documento' => now()->toDateString(),
+            'fecha_recepcion' => now()->toDateString(),
+            'observacion' => 'Ingreso operacional',
+        ], [[
+            'variante_id' => $variant->id,
+            'cantidad' => 10,
+            'costo_unitario' => null,
+        ]], $user);
+        $service->registerManualMovement([
+            'tipo' => 'ENTREGA_EPP',
+            'ubicacion_id' => $origin->id,
+            'variante_id' => $variant->id,
+            'cantidad' => 3,
+            'ocurrido_en' => now()->format('Y-m-d H:i:s'),
+            'destinatario_nombre' => 'Persona de prueba',
+            'destinatario_rut' => null,
+            'centro_costo' => null,
+            'documento_tipo' => null,
+            'documento_numero' => null,
+            'costo_unitario' => null,
+            'observacion' => 'Salida operacional',
+        ], $user);
+        InventarioMovimiento::create([
+            'codigo' => 'MOV-HISTORICO-TRAZA',
+            'tipo' => 'STOCK_INICIAL',
+            'origen' => 'IMPORTACION',
+            'ubicacion_id' => $origin->id,
+            'producto_id' => $variant->producto_id,
+            'variante_id' => $variant->id,
+            'cantidad' => 99,
+            'ocurrido_en' => now()->subDay()->endOfDay(),
+            'registrado_por' => $user->id,
+            'registrado_por_nombre' => $user->name,
+        ]);
+
+        $request = Request::create('/inventario-bodega', 'GET', ['vista' => 'resumen']);
+        $request->setUserResolver(fn () => $user);
+        $data = (new InventarioBodegaController($service))->index($request)->getData();
+
+        $this->assertSame(10.0, $data['summaryAnalytics']['entries']);
+        $this->assertSame(3.0, $data['summaryAnalytics']['exits']);
+        $this->assertSame(7.0, $data['summaryAnalytics']['net']);
+        $this->assertSame(2, $data['summaryAnalytics']['movements']);
+        $this->assertSame(now()->toDateString(), $data['summaryAnalytics']['daily'][0]['date']);
+        $this->assertSame(1, $data['summaryAnalytics']['catalog_total']);
+        $this->assertSame(1, $data['summaryAnalytics']['catalog_active']);
+        $this->assertSame(0, $data['summaryAnalytics']['catalog_inactive']);
+
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'resumen']))
+            ->assertOk()
+            ->assertSee('Trazabilidad operativa')
+            ->assertSee('Flujo diario')
+            ->assertSee('Estado del catálogo')
+            ->assertSee('Por tipo de movimiento');
     }
 
     public function test_catalog_import_sets_stock_by_location_without_confusing_it_with_stock_minimum(): void

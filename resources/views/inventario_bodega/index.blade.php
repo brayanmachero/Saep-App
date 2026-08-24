@@ -130,6 +130,38 @@
             <article class="inventory-kpi accent-green"><span>Ubicaciones activas</span><strong>{{ $activeLocations->count() }}</strong><small>Bodegas y despacho</small></article>
         </section>
 
+        <section class="inventory-traceability" aria-labelledby="inventory-traceability-title">
+            <div class="inventory-traceability-banner">
+                <div>
+                    <span class="inventory-traceability-kicker"><i class="bi bi-graph-up-arrow"></i>Trazabilidad operativa</span>
+                    <h2 id="inventory-traceability-title">Entradas y salidas desde {{ $summaryAnalytics['start']->format('d/m/Y') }}</h2>
+                    <p>El saldo mantiene todo el kardex. Estos indicadores comienzan desde la fecha acordada para no distorsionar la lectura con cargas históricas previas.</p>
+                </div>
+                <span class="inventory-traceability-period">Inicio<br><strong>{{ $summaryAnalytics['start']->format('d/m/Y') }}</strong></span>
+            </div>
+
+            <div class="inventory-analytics-kpis">
+                <article class="inventory-analytics-kpi is-entry"><span>Entradas</span><strong>+{{ rtrim(rtrim(number_format($summaryAnalytics['entries'], 3, ',', '.'), '0'), ',') }}</strong><small>Unidades incorporadas</small></article>
+                <article class="inventory-analytics-kpi is-exit"><span>Salidas</span><strong>-{{ rtrim(rtrim(number_format($summaryAnalytics['exits'], 3, ',', '.'), '0'), ',') }}</strong><small>Unidades descontadas</small></article>
+                <article class="inventory-analytics-kpi is-net"><span>Saldo operativo</span><strong class="{{ $summaryAnalytics['net'] < 0 ? 'text-danger' : 'text-success' }}">{{ $summaryAnalytics['net'] > 0 ? '+' : '' }}{{ rtrim(rtrim(number_format($summaryAnalytics['net'], 3, ',', '.'), '0'), ',') }}</strong><small>Entradas menos salidas</small></article>
+                <article class="inventory-analytics-kpi is-catalog"><span>Estado del catálogo</span><strong>{{ number_format($summaryAnalytics['catalog_total']) }} ítems</strong><small><b>{{ number_format($summaryAnalytics['catalog_active']) }} activos</b> · {{ number_format($summaryAnalytics['catalog_inactive']) }} inactivos</small><div class="inventory-catalog-state-bar" aria-label="{{ $summaryAnalytics['catalog_active'] }} ítems activos y {{ $summaryAnalytics['catalog_inactive'] }} inactivos"><span style="width: {{ $summaryAnalytics['catalog_total'] > 0 ? round(($summaryAnalytics['catalog_active'] / $summaryAnalytics['catalog_total']) * 100, 2) : 0 }}%"></span></div></article>
+            </div>
+
+            <div class="inventory-analytics-grid">
+                <article class="inventory-analytics-card inventory-analytics-card-main">
+                    <div class="inventory-analytics-card-heading">
+                        <div><h3>Flujo diario</h3><p>Las barras verdes suman entradas; las rojas muestran salidas bajo cero.</p></div>
+                        <span><i class="bi bi-calendar3"></i>{{ $summaryAnalytics['start']->format('d/m') }} — {{ $summaryAnalytics['end']->format('d/m') }}</span>
+                    </div>
+                    <div class="inventory-chart-wrap"><canvas id="inventory-daily-flow-chart" aria-label="Gráfico de entradas y salidas diarias"></canvas></div>
+                </article>
+                <article class="inventory-analytics-card">
+                    <div class="inventory-analytics-card-heading"><div><h3>Por tipo de movimiento</h3><p>Identifica qué operación explica el cambio.</p></div></div>
+                    <div class="inventory-chart-wrap inventory-chart-wrap-types"><canvas id="inventory-movement-type-chart" aria-label="Gráfico de movimientos por tipo"></canvas></div>
+                </article>
+            </div>
+        </section>
+
         <section class="inventory-section">
             <div class="inventory-section-title">
                 <div><h2>Stock disponible</h2><p>Saldo resultante de todos los ingresos, salidas, traslados y ajustes aprobados.</p></div>
@@ -817,6 +849,7 @@
     .inventory-filter-section { padding:.72rem .85rem; }.inventory-filter-grid { display:grid; grid-template-columns:minmax(185px,.75fr) minmax(240px,1.25fr) auto auto; gap:.55rem; align-items:end; }.inventory-filter-grid label { margin:0; min-width:0; }
     .inventory-filter-grid label, .inventory-form label { color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-filter-grid .form-control, .inventory-filter-grid .form-select, .inventory-form .form-control, .inventory-form .form-select { margin-top:.28rem; min-height:2.42rem; font-size:.88rem; letter-spacing:0; text-transform:none; }
     .inventory-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.65rem; margin-bottom:.85rem; }.inventory-kpi { border:1px solid #e1e6f1; background:#fff; border-radius:.65rem; padding:.72rem .85rem; border-left-width:4px; }.inventory-kpi span { display:block; color:#64748b; font-size:.69rem; font-weight:800; text-transform:uppercase; }.inventory-kpi strong { display:block; font-size:1.35rem; line-height:1.15; margin:.2rem 0; }.inventory-kpi small { color:#7a879f; font-size:.72rem; }.accent-purple { border-left-color:#8757ec; }.accent-blue { border-left-color:#2563eb; }.accent-red { border-left-color:#e33c42; }.accent-green { border-left-color:#1aa364; }.accent-orange { border-left-color:#f0642c; }
+    .inventory-traceability { display:grid; gap:.7rem; margin-bottom:.85rem; }.inventory-traceability-banner { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; padding:.9rem 1rem; background:linear-gradient(105deg,#f4f8ff,#f8fbff); border:1px solid #d9e5f8; border-left:4px solid #2563eb; border-radius:.65rem; }.inventory-traceability-kicker { display:block; color:#4063a7; font-size:.68rem; font-weight:800; letter-spacing:.055em; text-transform:uppercase; }.inventory-traceability-kicker i { margin-right:.38rem; }.inventory-traceability-banner h2 { margin:.18rem 0 .2rem; color:#22345a; font-size:1rem; font-weight:800; }.inventory-traceability-banner p { max-width:72rem; margin:0; color:#60708c; font-size:.79rem; line-height:1.45; }.inventory-traceability-period { flex:0 0 auto; padding:.48rem .62rem; color:#667895; background:rgba(255,255,255,.75); border:1px solid #dce7f7; border-radius:.46rem; font-size:.67rem; font-weight:800; letter-spacing:.04em; text-align:right; text-transform:uppercase; }.inventory-traceability-period strong { display:block; margin-top:.13rem; color:#294d91; font-size:.82rem; letter-spacing:0; }.inventory-analytics-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.65rem; }.inventory-analytics-kpi { padding:.72rem .85rem; background:#fff; border:1px solid #e1e6f1; border-left:4px solid #7b8aa5; border-radius:.62rem; }.inventory-analytics-kpi span { display:block; color:#64748b; font-size:.68rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-analytics-kpi strong { display:block; margin:.18rem 0; color:#1f2a44; font-size:1.22rem; line-height:1.15; }.inventory-analytics-kpi small { color:#7a879f; font-size:.72rem; }.inventory-analytics-kpi small b { color:#087245; }.inventory-analytics-kpi.is-entry { border-left-color:#159a6c; }.inventory-analytics-kpi.is-exit { border-left-color:#d84545; }.inventory-analytics-kpi.is-net { border-left-color:#2563eb; }.inventory-analytics-kpi.is-catalog { border-left-color:#708099; }.inventory-catalog-state-bar { height:.32rem; overflow:hidden; margin-top:.48rem; background:#e8edf3; border-radius:999px; }.inventory-catalog-state-bar span { display:block; height:100%; min-width:0; background:#159a6c; border-radius:inherit; }.inventory-analytics-grid { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(17rem,.9fr); gap:.7rem; }.inventory-analytics-card { min-width:0; padding:.9rem; background:#fff; border:1px solid #e1e6f1; border-radius:.65rem; box-shadow:0 .32rem .9rem rgba(29,41,67,.035); }.inventory-analytics-card-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; margin-bottom:.65rem; }.inventory-analytics-card-heading h3 { margin:0 0 .16rem; color:#283652; font-size:.9rem; font-weight:800; }.inventory-analytics-card-heading p { margin:0; color:#718096; font-size:.75rem; line-height:1.4; }.inventory-analytics-card-heading > span { flex:0 0 auto; color:#667895; font-size:.71rem; font-weight:750; white-space:nowrap; }.inventory-analytics-card-heading > span i { margin-right:.3rem; }.inventory-chart-wrap { position:relative; height:17rem; }.inventory-chart-wrap-types { height:17rem; }
     .inventory-section-title { justify-content:space-between; gap:1rem; margin-bottom:.8rem; }.inventory-section-title h2 { font-size:1rem; margin:0 0 .18rem; font-weight:800; }.inventory-section-title p { color:#6b778d; font-size:.82rem; margin:0; }.inventory-count { color:#596780; font-size:.78rem; white-space:nowrap; }.inventory-link { color:#351178; text-decoration:none; font-weight:800; font-size:.82rem; display:inline-flex; align-items:center; gap:.4rem; white-space:nowrap; }
     .inventory-table-wrap { overflow:auto; }.inventory-table { width:100%; min-width:700px; border-collapse:collapse; font-size:.82rem; }.inventory-table th { color:#667085; font-size:.68rem; font-weight:800; letter-spacing:.045em; text-transform:uppercase; padding:.58rem .55rem; border-bottom:1px solid #dfe5ef; white-space:nowrap; }.inventory-table td { padding:.68rem .55rem; border-bottom:1px solid #edf0f5; vertical-align:middle; }.inventory-table tbody tr:last-child td { border-bottom:0; }.inventory-table td small { display:block; margin-top:.12rem; color:#748198; font-size:.73rem; }.inventory-table-compact td { padding:.5rem .55rem; }.inventory-code { color:#45308b; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.74rem; font-weight:750; }.inventory-status { display:inline-flex; padding:.24rem .5rem; border-radius:999px; font-size:.7rem; font-weight:800; white-space:nowrap; }.inventory-status.is-ok { background:#e7f8ef; color:#087245; }.inventory-status.is-critical { background:#fff0de; color:#b85d00; }.inventory-status.is-empty { background:#eef1f5; color:#637083; }.inventory-status.is-review { background:#eee8ff; color:#5632b5; }.inventory-empty { text-align:center; padding:2rem!important; color:#7a879b; }.inventory-empty-copy { color:#718096; font-size:.85rem; margin:0; }
     .inventory-workspace { display:grid; grid-template-columns:minmax(0,1fr) minmax(250px,290px); align-items:start; gap:1.15rem; margin-bottom:1.25rem; }.inventory-workspace .inventory-section { margin:0; }.inventory-side-note { align-self:start; display:grid; gap:.45rem; padding:1.1rem 1rem; background:#f5f3ff; border-left:3px solid #8757ec; border-radius:.55rem; color:#4a3b76; font-size:.82rem; }.inventory-side-note i { font-size:1.1rem; color:#5d37b5; }.inventory-side-note strong { color:#251352; }.inventory-side-note span { max-width:31ch; line-height:1.45; }
@@ -971,10 +1004,98 @@
     .inventory-catalog-sync > div { min-width:0; }.inventory-catalog-sync strong,.inventory-catalog-sync span { display:block; }.inventory-catalog-sync > div > strong { color:#30215f; font-size:.83rem; }.inventory-catalog-sync > div > strong i { margin-right:.32rem; }.inventory-catalog-sync span { margin-top:.16rem; color:#635483; font-size:.77rem; line-height:1.42; }.inventory-catalog-sync span strong { display:inline; color:inherit; font-size:inherit; }.inventory-catalog-sync form { flex:0 0 auto; }
     .dark-mode .inventory-catalog-sync { color:#ddd6fe; background:rgba(135,87,236,.12); border-color:rgba(167,139,250,.25); }.dark-mode .inventory-catalog-sync > div > strong { color:#f8fafc; }.dark-mode .inventory-catalog-sync span { color:#d8cff7; }
     @container (max-width: 760px) { .inventory-catalog-sync { align-items:stretch; flex-direction:column; }.inventory-catalog-sync .inventory-btn { width:100%; } }
+    .dark-mode .inventory-traceability-banner { background:rgba(30,64,175,.16); border-color:#35599a; }.dark-mode .inventory-traceability-banner h2 { color:#dbeafe; }.dark-mode .inventory-traceability-banner p,.dark-mode .inventory-traceability-period { color:#bfdbfe; }.dark-mode .inventory-traceability-period { background:rgba(15,23,42,.45); border-color:#35599a; }.dark-mode .inventory-traceability-period strong { color:#dbeafe; }.dark-mode .inventory-analytics-kpi,.dark-mode .inventory-analytics-card { background:#1f2937; border-color:#374151; box-shadow:none; }.dark-mode .inventory-analytics-kpi strong,.dark-mode .inventory-analytics-card-heading h3 { color:#f3f5fb; }.dark-mode .inventory-analytics-kpi span,.dark-mode .inventory-analytics-kpi small,.dark-mode .inventory-analytics-card-heading p,.dark-mode .inventory-analytics-card-heading > span { color:#aeb9cc; }
+    @container (max-width: 1050px) { .inventory-analytics-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }.inventory-analytics-grid { grid-template-columns:1fr; } }
+    @container (max-width: 760px) { .inventory-traceability-banner,.inventory-analytics-card-heading { flex-direction:column; }.inventory-traceability-period { text-align:left; }.inventory-chart-wrap { height:15rem; } }
+    @container (max-width: 440px) { .inventory-analytics-kpis { grid-template-columns:1fr; } }
 </style>
+
+@if($vista === 'resumen')
+    <script src="{{ asset('vendor/chartjs/chart.umd.js') }}"></script>
+@endif
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    @if($vista === 'resumen')
+    var inventorySummaryAnalytics = @json($summaryAnalytics);
+    var dailyFlowCanvas = document.getElementById('inventory-daily-flow-chart');
+    var movementTypeCanvas = document.getElementById('inventory-movement-type-chart');
+    var inventoryChartDarkMode = document.body.classList.contains('dark-mode');
+    var inventoryChartText = inventoryChartDarkMode ? '#cbd5e1' : '#64748b';
+    var inventoryChartGrid = inventoryChartDarkMode ? 'rgba(203,213,225,.16)' : 'rgba(100,116,139,.16)';
+    var inventoryNumber = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 3 });
+    var inventoryDateLabel = function (date) {
+        var parts = String(date).split('-');
+        return parts.length === 3 ? parts[2] + '/' + parts[1] : date;
+    };
+    var inventorySigned = function (value) {
+        var number = Number(value || 0);
+        return (number > 0 ? '+' : '') + inventoryNumber.format(number);
+    };
+    var inventoryChartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: { boxWidth: 10, boxHeight: 10, color: inventoryChartText, font: { size: 11, weight: '600' }, padding: 14 },
+            },
+            tooltip: {
+                callbacks: {
+                    label: function (context) { return context.dataset.label + ': ' + inventorySigned(context.parsed.y); },
+                },
+            },
+        },
+        scales: {
+            x: { grid: { display: false }, ticks: { color: inventoryChartText, font: { size: 10 } } },
+            y: {
+                grid: { color: inventoryChartGrid },
+                border: { display: false },
+                ticks: { color: inventoryChartText, font: { size: 10 }, callback: function (value) { return inventorySigned(value); } },
+            },
+        },
+    };
+    if (window.Chart && dailyFlowCanvas) {
+        new Chart(dailyFlowCanvas, {
+            type: 'bar',
+            data: {
+                labels: inventorySummaryAnalytics.daily.map(function (day) { return inventoryDateLabel(day.date); }),
+                datasets: [
+                    { label: 'Entradas', data: inventorySummaryAnalytics.daily.map(function (day) { return Number(day.entries || 0); }), backgroundColor: '#159a6c', borderRadius: 4, borderSkipped: false, maxBarThickness: 36 },
+                    { label: 'Salidas', data: inventorySummaryAnalytics.daily.map(function (day) { return -Math.abs(Number(day.exits || 0)); }), backgroundColor: '#d84545', borderRadius: 4, borderSkipped: false, maxBarThickness: 36 },
+                ],
+            },
+            options: inventoryChartOptions,
+        });
+    }
+    if (window.Chart && movementTypeCanvas) {
+        new Chart(movementTypeCanvas, {
+            type: 'bar',
+            data: {
+                labels: inventorySummaryAnalytics.types.map(function (type) { return type.label; }),
+                datasets: [
+                    { label: 'Entradas', data: inventorySummaryAnalytics.types.map(function (type) { return Number(type.entries || 0); }), backgroundColor: '#159a6c', borderRadius: 4, borderSkipped: false, maxBarThickness: 26 },
+                    { label: 'Salidas', data: inventorySummaryAnalytics.types.map(function (type) { return -Math.abs(Number(type.exits || 0)); }), backgroundColor: '#d84545', borderRadius: 4, borderSkipped: false, maxBarThickness: 26 },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: inventoryChartOptions.plugins.legend,
+                    tooltip: { callbacks: { label: function (context) { return context.dataset.label + ': ' + inventorySigned(context.parsed.x); } } },
+                },
+                scales: {
+                    y: { grid: { display: false }, border: { display: false }, ticks: { color: inventoryChartText, font: { size: 10 } } },
+                    x: { grid: { color: inventoryChartGrid }, border: { display: false }, ticks: { color: inventoryChartText, font: { size: 10 }, callback: function (value) { return inventorySigned(value); } } },
+                },
+            },
+        });
+    }
+    @endif
+
     var lines = document.getElementById('receipt-lines');
     var template = document.getElementById('receipt-line-template');
     var addButton = document.querySelector('.inventory-add-line');
