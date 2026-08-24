@@ -58,6 +58,9 @@ class InventarioBodegaController extends Controller
         $summaryFilters = $this->summaryFilters($request);
         $search = $summaryFilters['search'];
         $balances = $this->filterSummaryBalances($this->stock->balances($selectedLocation), $summaryFilters);
+        $summaryPeriod = $view === 'resumen'
+            ? $this->summaryOperationalPeriod($request)
+            : null;
 
         $critical = $balances->filter(function (InventarioVariante $variant) {
             $minimum = $variant->stock_minimo ?? $variant->producto->stock_minimo;
@@ -70,12 +73,13 @@ class InventarioBodegaController extends Controller
             ->withCount('reversos')
             ->when($selectedLocation, fn ($query) => $query->where('ubicacion_id', $selectedLocation))
             ->when($view === 'resumen' && $summaryFilters['applied'], fn ($query) => $query->whereIn('variante_id', $balances->pluck('id')))
+            ->when($summaryPeriod, fn (Builder $query) => $this->applySummaryOperationalPeriod($query, $summaryPeriod))
             ->latest('ocurrido_en')
             ->limit(20)
             ->get();
 
         $summaryAnalytics = $view === 'resumen'
-            ? $this->summaryAnalytics($selectedLocation, $summaryFilters, $balances)
+            ? $this->summaryAnalytics($selectedLocation, $summaryFilters, $balances, $summaryPeriod)
             : null;
 
         $productSearch = trim((string) $request->input('producto_buscar'));
@@ -299,6 +303,7 @@ class InventarioBodegaController extends Controller
             'selectedLocation' => $selectedLocation,
             'search' => $search,
             'summaryFilters' => $summaryFilters,
+            'summaryPeriod' => $summaryPeriod,
             'productSearch' => $productSearch,
             'productStatus' => $productStatus,
             'editingProductId' => $editingProductId,
@@ -1111,6 +1116,89 @@ class InventarioBodegaController extends Controller
         }
     }
 
+    /**
+     * Período de lectura para los gráficos operativos del resumen.
+     * El catálogo y el saldo actual no se retrotraen: muestran el estado actual.
+     *
+     * @return array{period: string, label: string, from: Carbon, to: Carbon, requested_from: Carbon, requested_to: Carbon, tracking_start: Carbon, has_data_range: bool}
+     */
+    private function summaryOperationalPeriod(Request $request): array
+    {
+        $period = (string) $request->input('resumen_periodo', 'hoy');
+        $allowedPeriods = ['hoy', 'ayer', 'semana', 'mes_actual', 'mes_anterior', 'personalizado', 'inicio'];
+        $period = in_array($period, $allowedPeriods, true) ? $period : 'hoy';
+        $today = now()->startOfDay();
+        $trackingStart = $this->inventoryReportingStart();
+        $requestedFrom = $today->copy();
+        $requestedTo = $today->copy();
+        $label = 'Hoy';
+
+        switch ($period) {
+            case 'ayer':
+                $requestedFrom = $today->copy()->subDay();
+                $requestedTo = $requestedFrom->copy();
+                $label = 'Ayer';
+                break;
+            case 'semana':
+                $requestedFrom = $today->copy()->startOfWeek();
+                $label = 'Esta semana';
+                break;
+            case 'mes_actual':
+                $requestedFrom = $today->copy()->startOfMonth();
+                $label = 'Este mes';
+                break;
+            case 'mes_anterior':
+                $requestedFrom = $today->copy()->subMonthNoOverflow()->startOfMonth();
+                $requestedTo = $requestedFrom->copy()->endOfMonth();
+                $label = 'Mes anterior';
+                break;
+            case 'personalizado':
+                $requestedFrom = $this->kizeoDateInput($request->input('resumen_desde')) ?? $today->copy();
+                $requestedTo = $this->kizeoDateInput($request->input('resumen_hasta')) ?? $requestedFrom->copy();
+                if ($requestedFrom->gt($requestedTo)) {
+                    [$requestedFrom, $requestedTo] = [$requestedTo, $requestedFrom];
+                }
+                $label = 'Período personalizado';
+                break;
+            case 'inicio':
+                $requestedFrom = $trackingStart->copy();
+                $label = 'Desde el inicio';
+                break;
+        }
+
+        $now = now()->endOfDay();
+        if ($requestedTo->gt($now)) {
+            $requestedTo = $now;
+        }
+        $hasDataRange = $requestedTo->gte($trackingStart);
+        $from = $requestedFrom->lt($trackingStart) ? $trackingStart->copy() : $requestedFrom->copy();
+
+        if ($period !== 'hoy' && $period !== 'inicio') {
+            $label .= ' · '.$requestedFrom->format('d/m/Y').($requestedFrom->isSameDay($requestedTo) ? '' : ' al '.$requestedTo->format('d/m/Y'));
+        }
+
+        return [
+            'period' => $period,
+            'label' => $label,
+            'from' => $from->startOfDay(),
+            'to' => $requestedTo->endOfDay(),
+            'requested_from' => $requestedFrom->startOfDay(),
+            'requested_to' => $requestedTo->endOfDay(),
+            'tracking_start' => $trackingStart,
+            'has_data_range' => $hasDataRange,
+        ];
+    }
+
+    /** @param array{from: Carbon, to: Carbon, has_data_range: bool} $period */
+    private function applySummaryOperationalPeriod(Builder $query, array $period): Builder
+    {
+        if (! $period['has_data_range']) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereBetween('ocurrido_en', [$period['from'], $period['to']]);
+    }
+
     private function summaryFilters(Request $request): array
     {
         $stockStatus = trim((string) $request->input('estado_stock'));
@@ -1188,18 +1276,19 @@ class InventarioBodegaController extends Controller
      * carga histórica previa con la operación que Bodega comienza a controlar.
      *
      * @param array{search: string, stock_status: ?string, category: ?string, subcategory: ?string, provider_id: ?int, applied: bool} $filters
+     * @param array{from: Carbon, to: Carbon, has_data_range: bool} $period
      * @return array{start: Carbon, end: Carbon, entries: float, exits: float, net: float, movements: int, active_days: int, catalog_total: int, catalog_active: int, catalog_inactive: int, daily: array<int, array{date: string, entries: float, exits: float, net: float, movements: int}>, types: array<int, array{code: string, label: string, entries: float, exits: float, net: float}>}
      */
-    private function summaryAnalytics(?int $selectedLocation, array $filters, Collection $balances): array
+    private function summaryAnalytics(?int $selectedLocation, array $filters, Collection $balances, array $period): array
     {
-        $start = $this->inventoryReportingStart();
-        $end = now()->endOfDay();
+        $start = $period['from']->copy();
+        $end = $period['to']->copy();
         $variantIds = $balances->pluck('id')->filter()->values()->all();
 
         $query = InventarioMovimiento::query()
-            ->whereBetween('ocurrido_en', [$start, $end])
             ->when($selectedLocation, fn (Builder $query) => $query->where('ubicacion_id', $selectedLocation))
             ->when($filters['applied'], fn (Builder $query) => $query->whereIn('variante_id', $variantIds));
+        $this->applySummaryOperationalPeriod($query, $period);
 
         $dailyRows = (clone $query)
             ->selectRaw('DATE(ocurrido_en) as fecha')
@@ -1213,15 +1302,17 @@ class InventarioBodegaController extends Controller
             ->keyBy('fecha');
 
         $daily = [];
-        for ($date = $start->copy()->startOfDay(); $date->lte($end); $date->addDay()) {
-            $row = $dailyRows->get($date->toDateString());
-            $daily[] = [
-                'date' => $date->toDateString(),
-                'entries' => (float) ($row->entradas ?? 0),
-                'exits' => (float) ($row->salidas ?? 0),
-                'net' => (float) ($row->neto ?? 0),
-                'movements' => (int) ($row->movimientos ?? 0),
-            ];
+        if ($period['has_data_range']) {
+            for ($date = $start->copy()->startOfDay(); $date->lte($end); $date->addDay()) {
+                $row = $dailyRows->get($date->toDateString());
+                $daily[] = [
+                    'date' => $date->toDateString(),
+                    'entries' => (float) ($row->entradas ?? 0),
+                    'exits' => (float) ($row->salidas ?? 0),
+                    'net' => (float) ($row->neto ?? 0),
+                    'movements' => (int) ($row->movimientos ?? 0),
+                ];
+            }
         }
 
         $typeRows = (clone $query)

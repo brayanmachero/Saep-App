@@ -602,8 +602,8 @@ class InventarioBodegaStockTest extends TestCase
             'proveedor_id' => $provider->id,
             'tipo_documento' => 'FACTURA',
             'numero_documento' => 'F-RESUMEN-1',
-            'fecha_documento' => '2026-08-13',
-            'fecha_recepcion' => '2026-08-13',
+            'fecha_documento' => now()->toDateString(),
+            'fecha_recepcion' => now()->toDateString(),
             'observacion' => null,
         ], [[
             'variante_id' => $variant->id,
@@ -731,6 +731,17 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertSame(1, $data['summaryAnalytics']['catalog_total']);
         $this->assertSame(1, $data['summaryAnalytics']['catalog_active']);
         $this->assertSame(0, $data['summaryAnalytics']['catalog_inactive']);
+
+        $yesterdayRequest = Request::create('/inventario-bodega', 'GET', [
+            'vista' => 'resumen',
+            'resumen_periodo' => 'ayer',
+        ]);
+        $yesterdayRequest->setUserResolver(fn () => $user);
+        $yesterday = (new InventarioBodegaController($service))->index($yesterdayRequest)->getData();
+        $this->assertSame('ayer', $yesterday['summaryPeriod']['period']);
+        $this->assertFalse($yesterday['summaryPeriod']['has_data_range']);
+        $this->assertSame(0, $yesterday['summaryAnalytics']['movements']);
+        $this->assertEmpty($yesterday['movements']);
 
         $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
