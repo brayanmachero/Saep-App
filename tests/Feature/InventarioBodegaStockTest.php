@@ -29,8 +29,11 @@ use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -794,6 +797,18 @@ class InventarioBodegaStockTest extends TestCase
             'registrado_por' => $user->id,
             'registrado_por_nombre' => $user->name,
         ]);
+        InventarioMovimiento::create([
+            'codigo' => 'MOV-DETALLE-KIZEO',
+            'tipo' => 'ENTREGA_EPP',
+            'origen' => 'KIZEO_EPP',
+            'ubicacion_id' => $origin->id,
+            'producto_id' => $variant->producto_id,
+            'variante_id' => $variant->id,
+            'cantidad' => -1,
+            'documento_numero' => 'KZ-DETALLE-1',
+            'ocurrido_en' => now(),
+            'registrado_por_nombre' => 'Kizeo automático',
+        ]);
 
         $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
@@ -807,7 +822,152 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('6')
             ->assertSee('Sin stock')
             ->assertSee('Crítico')
-            ->assertSee($user->name);
+            ->assertSee($user->name)
+            ->assertSee('Kizeo')
+            ->assertSee('KZ-DETALLE-1')
+            ->assertDontSee('La variante seleccionada no tiene stock.');
+    }
+
+    public function test_operational_rebase_replaces_legacy_history_and_preserves_current_kizeo_and_receipts(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+        $this->ensureConfiguracionesTable();
+        Storage::fake('local');
+
+        $legacyReceipt = $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'FACTURA',
+            'numero_documento' => 'F-LEGACY',
+            'fecha_documento' => '2026-08-23',
+            'fecha_recepcion' => '2026-08-23',
+            'observacion' => 'Ingreso anterior al inicio oficial.',
+        ], [['variante_id' => $variant->id, 'cantidad' => 5, 'costo_unitario' => null]], $user);
+        DB::table('inventario_ingresos')->where('id', $legacyReceipt->id)
+            ->update(['created_at' => '2026-08-23 16:00:00', 'updated_at' => '2026-08-23 16:00:00']);
+        DB::table('inventario_movimientos')
+            ->where('referencia_tipo', InventarioIngreso::class)
+            ->where('referencia_id', $legacyReceipt->id)
+            ->update(['ocurrido_en' => '2026-08-23 16:00:00', 'created_at' => '2026-08-23 16:00:00', 'updated_at' => '2026-08-23 16:00:00']);
+        InventarioMovimiento::create([
+            'codigo' => 'MOV-LEGACY-STOCK',
+            'tipo' => 'STOCK_INICIAL',
+            'origen' => 'IMPORTACION_CATALOGO',
+            'ubicacion_id' => $origin->id,
+            'producto_id' => $variant->producto_id,
+            'variante_id' => $variant->id,
+            'cantidad' => 2,
+            'ocurrido_en' => '2026-08-14 15:00:00',
+            'created_at' => '2026-08-14 15:00:00',
+            'updated_at' => '2026-08-14 15:00:00',
+        ]);
+        $importMovement = InventarioMovimiento::create([
+            'codigo' => 'MOV-NOMINA-AJUSTE',
+            'tipo' => 'AJUSTE_POSITIVO',
+            'origen' => 'IMPORTACION_CATALOGO',
+            'ubicacion_id' => $origin->id,
+            'producto_id' => $variant->producto_id,
+            'variante_id' => $variant->id,
+            'cantidad' => 3,
+            'ocurrido_en' => '2026-08-24 12:22:31',
+            'registrado_por' => $user->id,
+            'registrado_por_nombre' => $user->name,
+            'created_at' => '2026-08-24 12:22:31',
+            'updated_at' => '2026-08-24 12:22:31',
+        ]);
+        DB::table('inventario_movimientos')->where('id', $importMovement->id)
+            ->update(['created_at' => '2026-08-24 12:22:31', 'updated_at' => '2026-08-24 12:22:31']);
+        $this->assertDatabaseHas('inventario_movimientos', ['id' => $importMovement->id, 'created_at' => '2026-08-24 12:22:31']);
+        $kizeoMovement = InventarioMovimiento::create([
+            'codigo' => 'MOV-KIZEO-VIGENTE',
+            'tipo' => 'ENTREGA_EPP',
+            'origen' => 'KIZEO_EPP',
+            'ubicacion_id' => $origin->id,
+            'producto_id' => $variant->producto_id,
+            'variante_id' => $variant->id,
+            'cantidad' => -2,
+            'documento_numero' => 'KZ-100',
+            'ocurrido_en' => '2026-08-24 15:00:00',
+            'created_at' => '2026-08-24 15:00:00',
+            'updated_at' => '2026-08-24 15:00:00',
+        ]);
+        DB::table('inventario_movimientos')->where('id', $kizeoMovement->id)
+            ->update(['created_at' => '2026-08-24 15:00:00', 'updated_at' => '2026-08-24 15:00:00']);
+        $todayReceipt = $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'FACTURA',
+            'numero_documento' => 'F-HOY',
+            'fecha_documento' => '2026-08-24',
+            'fecha_recepcion' => '2026-08-24',
+            'observacion' => 'Ingreso del inicio oficial.',
+        ], [['variante_id' => $variant->id, 'cantidad' => 3, 'costo_unitario' => null]], $user);
+        DB::table('inventario_ingresos')->where('id', $todayReceipt->id)
+            ->update(['created_at' => '2026-08-24 16:04:16', 'updated_at' => '2026-08-24 16:04:16']);
+        DB::table('inventario_movimientos')
+            ->where('referencia_tipo', InventarioIngreso::class)
+            ->where('referencia_id', $todayReceipt->id)
+            ->update(['ocurrido_en' => '2026-08-24 00:00:00', 'created_at' => '2026-08-24 16:04:16', 'updated_at' => '2026-08-24 16:04:16']);
+
+        $exitCode = Artisan::call('inventario:reiniciar-trazabilidad', [
+            '--fecha' => '2026-08-24',
+            '--importado-desde' => '2026-08-24 12:22:31',
+            '--importado-hasta' => '2026-08-24 12:22:34',
+            '--aplicar' => true,
+        ]);
+        $this->assertSame(0, $exitCode, Artisan::output());
+
+        $this->assertDatabaseMissing('inventario_ingresos', ['id' => $legacyReceipt->id]);
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'tipo' => 'STOCK_INICIAL',
+            'origen' => 'NOMINA_INICIAL',
+            'documento_numero' => 'NOMINA-STOCK-20260824',
+            'variante_id' => $variant->id,
+            'cantidad' => 10,
+            'ocurrido_en' => '2026-08-24 00:00:00',
+        ]);
+        $this->assertDatabaseHas('inventario_movimientos', ['id' => $kizeoMovement->id, 'origen' => 'KIZEO_EPP']);
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'referencia_tipo' => InventarioIngreso::class,
+            'referencia_id' => $todayReceipt->id,
+            'ocurrido_en' => '2026-08-24 16:04:16',
+        ]);
+        $this->assertSame(11.0, $service->stockActual($origin->id, $variant->id));
+    }
+
+    public function test_kizeo_queue_filters_deliveries_by_the_article_reported_in_kizeo(): void
+    {
+        [$user, , , $variant] = $this->inventoryContextWithCentralStock(5);
+        $otherProduct = app(InventarioStockService::class)->createProduct([
+            'codigo' => 'GUANTE-TERMICO',
+            'nombre' => 'Guante térmico',
+            'tipo' => 'EPP',
+            'categoria' => 'Protección',
+            'unidad_medida' => 'Unidad',
+            'stock_minimo' => 0,
+            'tallas' => 'L',
+            'activo' => true,
+        ], $user);
+        $otherVariant = $otherProduct->variantes()->firstOrFail();
+
+        $matching = $this->newKizeoDelivery('kizeo-filter-article-matching', $variant, 1, now());
+        $matching->update(['nombre' => 'Entrega casco por código']);
+        $matching->items()->update(['articulo' => $variant->producto->codigo]);
+        $other = $this->newKizeoDelivery('kizeo-filter-article-other', $otherVariant, 1, now());
+        $other->update(['nombre' => 'Entrega de guante']);
+
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', [
+                'vista' => 'kizeo',
+                'kizeo_articulo' => $variant->producto->codigo,
+            ]))
+            ->assertOk()
+            ->assertSee('Artículo entregado')
+            ->assertSee('Entrega casco por código')
+            ->assertDontSee('Entrega de guante')
+            ->assertSee('1 entrega sincronizada en SAEP');
     }
 
     public function test_catalog_import_sets_stock_by_location_without_confusing_it_with_stock_minimum(): void

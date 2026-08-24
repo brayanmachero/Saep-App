@@ -109,6 +109,9 @@ class InventarioStockService
     public function registerReceipt(array $data, array $items, User $user): InventarioIngreso
     {
         return DB::transaction(function () use ($data, $items, $user) {
+            // La fecha de recepción es el dato documental; el kardex debe reflejar
+            // cuándo Bodega registró realmente la operación para ordenar el día.
+            $registeredAt = now();
             $ingreso = InventarioIngreso::create([
                 'codigo' => $this->code('ING'),
                 'ubicacion_id' => $data['ubicacion_id'],
@@ -146,7 +149,7 @@ class InventarioStockService
                     'documento_tipo' => $ingreso->tipo_documento,
                     'documento_numero' => $ingreso->numero_documento,
                     'observacion' => $ingreso->observacion,
-                    'ocurrido_en' => Carbon::parse($ingreso->fecha_recepcion)->startOfDay(),
+                    'ocurrido_en' => $registeredAt,
                 ], $user);
 
                 $this->syncReferenceCost(

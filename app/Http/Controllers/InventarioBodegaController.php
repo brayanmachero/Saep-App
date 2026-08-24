@@ -203,9 +203,13 @@ class InventarioBodegaController extends Controller
             ? $request->input('kizeo_origen')
             : 'vigentes';
         $kizeoPeriod = $this->kizeoDeliveryPeriod($request);
+        $kizeoArticle = trim((string) $request->input('kizeo_articulo', ''));
         $kizeoPeriodQuery = $view === 'kizeo'
             ? $this->applyKizeoDeliveryPeriod(EntregaBodega::query(), $kizeoPeriod)
             : null;
+        if ($kizeoPeriodQuery && $kizeoArticle !== '') {
+            $kizeoPeriodQuery = $this->applyKizeoDeliveryArticleFilter($kizeoPeriodQuery, $kizeoArticle);
+        }
         $kizeoQueueCounts = ['vigentes' => 0, 'historico' => 0];
         if ($kizeoPeriodQuery) {
             $kizeoQueueCounts['vigentes'] = $this->currentKizeoDeliveryForms(clone $kizeoPeriodQuery)->count();
@@ -353,6 +357,7 @@ class InventarioBodegaController extends Controller
             'kizeoQueue' => $kizeoQueue,
             'kizeoQueueCounts' => $kizeoQueueCounts,
             'kizeoPeriod' => $kizeoPeriod,
+            'kizeoArticle' => $kizeoArticle,
             'kizeoLastSyncedAt' => $kizeoLastSyncedAt,
             'kizeoAutoApply' => $this->stock->kizeoAutoApplyState(),
             'kizeoCatalogListId' => config('services.kizeo.inventory_catalog_list_id'),
@@ -387,6 +392,7 @@ class InventarioBodegaController extends Controller
         $variants->each(function (InventarioVariante $productVariant) use ($stockByVariant): void {
             $productVariant->setAttribute('stock_actual', (float) ($stockByVariant[$productVariant->id] ?? 0));
         });
+        $selectedVariant = $variants->firstWhere('id', $variante->id) ?? $variante;
 
         $movements = InventarioMovimiento::query()
             ->with(['ubicacion', 'variante', 'registradoPor'])
@@ -400,7 +406,7 @@ class InventarioBodegaController extends Controller
         return view('inventario_bodega.partials.stock-detail', [
             'product' => $product,
             'variants' => $variants,
-            'selectedVariant' => $variante,
+            'selectedVariant' => $selectedVariant,
             'movements' => $movements,
             'location' => $locationId ? InventarioUbicacion::query()->find($locationId) : null,
         ]);
@@ -1134,6 +1140,20 @@ class InventarioBodegaController extends Controller
                         ->whereNull('fecha_pedido')
                         ->whereBetween('kizeo_created_at', [$fromDate, $toDate]);
                 });
+        });
+    }
+
+    /** Limita la cola a comprobantes cuyo artículo informado coincide con la búsqueda. */
+    private function applyKizeoDeliveryArticleFilter(Builder $query, string $article): Builder
+    {
+        $article = trim($article);
+
+        if ($article === '') {
+            return $query;
+        }
+
+        return $query->whereHas('items', function (Builder $items) use ($article) {
+            $items->where('articulo', 'like', '%'.$article.'%');
         });
     }
 

@@ -70,21 +70,33 @@
     </div>
     <div class="inventory-detail-table-wrap">
         <table class="inventory-detail-table">
-            <thead><tr><th>Fecha</th><th>Tipo</th><th>Usuario</th><th class="text-end">Cantidad</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Origen</th><th>Usuario</th><th class="text-end">Cantidad</th></tr></thead>
             <tbody>
             @forelse($movements as $movement)
                 @php
                     $isReversed = $movement->reversos_count > 0;
                     $user = $movement->registrado_por_nombre ?: ($movement->registradoPor?->nombre_completo ?? $movement->registradoPor?->name ?? 'No disponible');
+                    $isKizeo = in_array($movement->origen, ['KIZEO_EPP', 'REVERSO_KIZEO_EPP'], true);
+                    $source = match ($movement->origen) {
+                        'KIZEO_EPP' => 'Kizeo',
+                        'REVERSO_KIZEO_EPP' => 'Reverso Kizeo',
+                        'IMPORTACION_CATALOGO' => 'Importación de stock',
+                        'INGRESO_BODEGA' => 'Ingreso de bodega',
+                        'CONTEO_FISICO' => 'Conteo físico',
+                        'AJUSTE_STOCK_TALLA' => 'Ajuste de stock',
+                        'MANUAL' => 'Movimiento manual',
+                        default => str_replace('_', ' ', strtolower((string) $movement->origen)),
+                    };
                 @endphp
                 <tr>
                     <td>{{ optional($movement->ocurrido_en)->format('d/m/Y H:i') }}<small>{{ $movement->ubicacion?->nombre ?: 'Sin ubicación' }} · {{ $movement->variante?->talla ?: 'ESTANDAR' }}</small></td>
                     <td><span class="inventory-status {{ $isReversed ? 'is-empty' : ($movement->tipo === 'REVERSO' ? 'is-review' : 'is-ok') }}">{{ $isReversed ? 'Anulado' : (\App\Models\InventarioMovimiento::TIPOS[$movement->tipo] ?? str_replace('_', ' ', $movement->tipo)) }}</span></td>
+                    <td><span class="inventory-status {{ $isKizeo ? 'is-review' : 'is-empty' }}">{{ $source }}</span>@if($isKizeo && $movement->documento_numero)<small>{{ $movement->documento_numero }}</small>@endif</td>
                     <td>{{ $user }}</td>
                     <td class="text-end {{ $movement->cantidad < 0 ? 'text-danger' : 'text-success' }}"><strong>{{ $movement->cantidad > 0 ? '+' : '' }}{{ rtrim(rtrim(number_format((float) $movement->cantidad, 3, ',', '.'), '0'), ',') }}</strong></td>
                 </tr>
             @empty
-                <tr><td colspan="4" class="inventory-empty">No hay movimientos de este producto para la ubicación seleccionada.</td></tr>
+                <tr><td colspan="5" class="inventory-empty">No hay movimientos de este producto para la ubicación seleccionada.</td></tr>
             @endforelse
             </tbody>
         </table>
