@@ -13,7 +13,7 @@ return new class extends Migration
             ['clave' => 'inventario_resumen_trazabilidad_desde'],
             [
                 'valor' => $now->toDateString(),
-                'tipo' => 'DATE',
+                'tipo' => 'TEXT',
                 'categoria' => 'inventario',
                 'descripcion' => 'Fecha de inicio para los gráficos operativos del resumen de inventario. El saldo conserva todo el kardex, pero el tablero no mezcla la carga histórica anterior.',
                 'editable' => false,
