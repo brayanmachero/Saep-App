@@ -20,6 +20,7 @@ use App\Services\InventarioOperationalMasterService;
 use App\Services\InventarioStockService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -191,6 +192,7 @@ class InventarioBodegaController extends Controller
         $kizeoQueue = in_array($request->input('kizeo_origen'), ['vigentes', 'historico'], true)
             ? $request->input('kizeo_origen')
             : 'vigentes';
+        $kizeoPeriod = $this->kizeoDeliveryPeriod($request);
         $kizeoDeliveries = $view === 'kizeo'
             ? EntregaBodega::query()
                 ->with([
@@ -207,9 +209,25 @@ class InventarioBodegaController extends Controller
                             ->orWhere('kizeo_form_id', '');
                     }),
                 )
+                ->when($kizeoPeriod['from'] && $kizeoPeriod['to'], function ($query) use ($kizeoPeriod) {
+                    $fromDate = $kizeoPeriod['from']->copy()->startOfDay();
+                    $toDate = $kizeoPeriod['to']->copy()->endOfDay();
+
+                    $query->where(function ($deliveries) use ($fromDate, $toDate, $kizeoPeriod) {
+                        $deliveries->whereBetween('fecha_pedido', [$fromDate, $toDate])
+                            ->orWhere(function ($withoutRequestDate) use ($kizeoPeriod) {
+                                $withoutRequestDate
+                                    ->whereNull('fecha_pedido')
+                                    ->whereBetween('kizeo_created_at', [
+                                        $kizeoPeriod['from']->copy()->startOfDay(),
+                                        $kizeoPeriod['to']->copy()->endOfDay(),
+                                    ]);
+                            });
+                    });
+                })
                 ->orderByDesc('fecha_pedido')
                 ->orderByDesc('id')
-                ->paginate(40, ['*'], 'kizeo_pagina')
+                ->paginate(20, ['*'], 'kizeo_pagina')
                 ->withQueryString()
             : collect();
         $kizeoSuggestions = [];
@@ -241,39 +259,45 @@ class InventarioBodegaController extends Controller
                 }
             }
         }
-        $kizeoApplications = InventarioEntregaKizeoAplicacion::query()
-            ->with('entrega')
-            ->get();
-        $applicationReviewIds = $kizeoApplications
-            ->filter(fn (InventarioEntregaKizeoAplicacion $application) => $application->estado === 'APLICADA'
-                && $application->entrega?->kizeo_updated_at
-                && (! $application->fuente_actualizada_en || $application->entrega->kizeo_updated_at->gt($application->fuente_actualizada_en)))
-            ->pluck('entrega_bodega_id');
-        $sourceAlertIds = EntregaBodega::query()
-            ->whereIn('estado_fuente', ['REQUIERE_REVISION', 'ELIMINADA_EN_KIZEO', 'INCOMPLETA'])
-            ->pluck('id');
-        $kizeoStats = [
-            'pending' => EntregaBodega::query()
-                ->where('flujo_inventario', 'SALIDA')
-                ->where('estado_fuente', 'ACTIVA')
-                ->whereDoesntHave('inventarioAplicacion')
-                ->where(function ($forms) {
-                    $forms->whereIn('kizeo_form_id', EntregaBodegaSyncService::currentFormIds())
-                        ->orWhereNull('kizeo_form_id')
-                        ->orWhere('kizeo_form_id', '');
-                })
-                ->count(),
-            'historical' => EntregaBodega::query()
-                ->where('kizeo_form_id', EntregaBodegaSyncService::LEGACY_FORM_ID)
-                ->count(),
-            'returns' => EntregaBodega::query()
-                ->where('flujo_inventario', 'ENTRADA')
-                ->where('estado_fuente', 'ACTIVA')
-                ->whereDoesntHave('inventarioAplicacion')
-                ->count(),
-            'applied' => $kizeoApplications->where('estado', 'APLICADA')->count(),
-            'review' => $applicationReviewIds->merge($sourceAlertIds)->unique()->count(),
-        ];
+        $kizeoStats = ['pending' => 0, 'historical' => 0, 'returns' => 0, 'applied' => 0, 'review' => 0];
+        $kizeoLastSyncedAt = null;
+        if ($view === 'kizeo') {
+            $kizeoApplications = InventarioEntregaKizeoAplicacion::query()
+                ->with('entrega')
+                ->get();
+            $applicationReviewIds = $kizeoApplications
+                ->filter(fn (InventarioEntregaKizeoAplicacion $application) => $application->estado === 'APLICADA'
+                    && $application->entrega?->kizeo_updated_at
+                    && (! $application->fuente_actualizada_en || $application->entrega->kizeo_updated_at->gt($application->fuente_actualizada_en)))
+                ->pluck('entrega_bodega_id');
+            $sourceAlertIds = EntregaBodega::query()
+                ->whereIn('estado_fuente', ['REQUIERE_REVISION', 'ELIMINADA_EN_KIZEO', 'INCOMPLETA'])
+                ->pluck('id');
+            $kizeoStats = [
+                'pending' => EntregaBodega::query()
+                    ->where('flujo_inventario', 'SALIDA')
+                    ->where('estado_fuente', 'ACTIVA')
+                    ->whereDoesntHave('inventarioAplicacion')
+                    ->where(function ($forms) {
+                        $forms->whereIn('kizeo_form_id', EntregaBodegaSyncService::currentFormIds())
+                            ->orWhereNull('kizeo_form_id')
+                            ->orWhere('kizeo_form_id', '');
+                    })
+                    ->count(),
+                'historical' => EntregaBodega::query()
+                    ->where('kizeo_form_id', EntregaBodegaSyncService::LEGACY_FORM_ID)
+                    ->count(),
+                'returns' => EntregaBodega::query()
+                    ->where('flujo_inventario', 'ENTRADA')
+                    ->where('estado_fuente', 'ACTIVA')
+                    ->whereDoesntHave('inventarioAplicacion')
+                    ->count(),
+                'applied' => $kizeoApplications->where('estado', 'APLICADA')->count(),
+                'review' => $applicationReviewIds->merge($sourceAlertIds)->unique()->count(),
+            ];
+            $lastSync = EntregaBodega::query()->max('synced_at');
+            $kizeoLastSyncedAt = $lastSync ? Carbon::parse($lastSync) : null;
+        }
 
         return view('inventario_bodega.index', [
             'vista' => $view,
@@ -326,6 +350,8 @@ class InventarioBodegaController extends Controller
             'kizeoCentralStockByVariant' => $kizeoCentralStockByVariant,
             'kizeoBatchEligibleIds' => $kizeoBatchEligibleIds,
             'kizeoQueue' => $kizeoQueue,
+            'kizeoPeriod' => $kizeoPeriod,
+            'kizeoLastSyncedAt' => $kizeoLastSyncedAt,
             'kizeoAutoApply' => $this->stock->kizeoAutoApplyState(),
             'kizeoCatalogListId' => config('services.kizeo.inventory_catalog_list_id'),
             'canCreate' => $request->user()->tieneAcceso('inventario_bodega', 'puede_crear'),
@@ -966,6 +992,91 @@ class InventarioBodegaController extends Controller
         (new Xlsx($spreadsheet))->save($path);
 
         return response()->download($path, 'stock_inventario.xlsx')->deleteFileAfterSend(true);
+    }
+
+    private function kizeoDeliveryPeriod(Request $request): array
+    {
+        $period = (string) $request->input('kizeo_periodo', 'hoy');
+        $allowedPeriods = [
+            'hoy',
+            'ayer',
+            'antes_ayer',
+            'semana',
+            'mes_actual',
+            'mes_anterior',
+            'personalizado',
+            'todo',
+        ];
+        $period = in_array($period, $allowedPeriods, true) ? $period : 'hoy';
+        $today = now()->startOfDay();
+        $from = $today->copy();
+        $to = $today->copy();
+        $label = 'Hoy';
+
+        switch ($period) {
+            case 'ayer':
+                $from = $today->copy()->subDay();
+                $to = $from->copy();
+                $label = 'Ayer';
+                break;
+            case 'antes_ayer':
+                $from = $today->copy()->subDays(2);
+                $to = $from->copy();
+                $label = 'Antes de ayer';
+                break;
+            case 'semana':
+                $from = $today->copy()->startOfWeek();
+                $to = $today->copy();
+                $label = 'Esta semana';
+                break;
+            case 'mes_actual':
+                $from = $today->copy()->startOfMonth();
+                $to = $today->copy();
+                $label = 'Este mes';
+                break;
+            case 'mes_anterior':
+                $from = $today->copy()->subMonthNoOverflow()->startOfMonth();
+                $to = $from->copy()->endOfMonth();
+                $label = 'Mes anterior';
+                break;
+            case 'personalizado':
+                $from = $this->kizeoDateInput($request->input('kizeo_desde')) ?? $today->copy();
+                $to = $this->kizeoDateInput($request->input('kizeo_hasta')) ?? $from->copy();
+                if ($from->gt($to)) {
+                    [$from, $to] = [$to, $from];
+                }
+                $label = 'Periodo personalizado';
+                break;
+            case 'todo':
+                $from = null;
+                $to = null;
+                $label = 'Todo el historial';
+                break;
+        }
+
+        if ($from && $to && $period !== 'hoy' && $period !== 'personalizado') {
+            $label .= ' · '.$from->format('d/m/Y').($from->isSameDay($to) ? '' : ' al '.$to->format('d/m/Y'));
+        }
+        if ($period === 'personalizado') {
+            $label .= ' · '.$from->format('d/m/Y').($from->isSameDay($to) ? '' : ' al '.$to->format('d/m/Y'));
+        }
+
+        return compact('period', 'from', 'to', 'label');
+    }
+
+    private function kizeoDateInput(mixed $value): ?Carbon
+    {
+        if (! is_string($value) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return null;
+        }
+
+        try {
+            $date = Carbon::createFromFormat('!Y-m-d', $value);
+
+            return $date->format('Y-m-d') === $value ? $date->startOfDay() : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function summaryFilters(Request $request): array

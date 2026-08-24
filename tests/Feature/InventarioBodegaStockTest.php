@@ -2,31 +2,37 @@
 
 namespace Tests\Feature;
 
-use App\Models\EntregaBodega;
 use App\Http\Controllers\InventarioBodegaController;
-use App\Models\InventarioConteo;
+use App\Http\Middleware\VerificarConsentimientoDatos;
+use App\Models\EntregaBodega;
 use App\Models\InventarioCentroCosto;
+use App\Models\InventarioConteo;
 use App\Models\InventarioCoordinador;
 use App\Models\InventarioEntregaKizeoAplicacion;
-use App\Models\InventarioKizeoCatalogItem;
 use App\Models\InventarioImportacionMovimiento;
+use App\Models\InventarioIngreso;
+use App\Models\InventarioKizeoCatalogItem;
 use App\Models\InventarioMovimiento;
+use App\Models\InventarioProducto;
+use App\Models\InventarioProveedor;
 use App\Models\InventarioUbicacion;
 use App\Models\InventarioVariante;
 use App\Models\Rol;
 use App\Models\User;
-use App\Services\InventarioStockService;
-use App\Services\InventarioOperationalMasterService;
+use App\Services\EntregaBodegaSyncService;
 use App\Services\InventarioKizeoCatalogSyncService;
-use Illuminate\Http\Client\Request as HttpRequest;
+use App\Services\InventarioOperationalMasterService;
+use App\Services\InventarioStockService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Client\Request as HttpRequest;
+use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
@@ -89,17 +95,17 @@ class InventarioBodegaStockTest extends TestCase
             $table->timestamps();
         });
 
-        $migration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_07_120000_create_inventario_bodega_tables.php';
+        $migration = require dirname(__DIR__, 2).'/database/migrations/2026_08_07_120000_create_inventario_bodega_tables.php';
         $migration->up();
-        $receiptReversalMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_13_150000_add_reversal_fields_to_inventario_ingresos.php';
+        $receiptReversalMigration = require dirname(__DIR__, 2).'/database/migrations/2026_08_13_150000_add_reversal_fields_to_inventario_ingresos.php';
         $receiptReversalMigration->up();
-        $operationalMastersMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_13_190000_add_operational_masters_to_inventario.php';
+        $operationalMastersMigration = require dirname(__DIR__, 2).'/database/migrations/2026_08_13_190000_add_operational_masters_to_inventario.php';
         $operationalMastersMigration->up();
-        $referenceCostMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_14_150000_add_reference_cost_history_to_inventario.php';
+        $referenceCostMigration = require dirname(__DIR__, 2).'/database/migrations/2026_08_14_150000_add_reference_cost_history_to_inventario.php';
         $referenceCostMigration->up();
-        $kizeoCatalogMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_18_170000_create_inventario_kizeo_catalog_items_table.php';
+        $kizeoCatalogMigration = require dirname(__DIR__, 2).'/database/migrations/2026_08_18_170000_create_inventario_kizeo_catalog_items_table.php';
         $kizeoCatalogMigration->up();
-        $movementImportMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_18_200000_create_inventario_importacion_movimientos_table.php';
+        $movementImportMigration = require dirname(__DIR__, 2).'/database/migrations/2026_08_18_200000_create_inventario_importacion_movimientos_table.php';
         $movementImportMigration->up();
         Cache::flush();
 
@@ -138,7 +144,7 @@ class InventarioBodegaStockTest extends TestCase
             $table->unique(['entrega_bodega_id', 'linea']);
         });
 
-        $kizeoMigration = require dirname(__DIR__, 2) . '/database/migrations/2026_08_07_123000_create_inventario_entrega_kizeo_tables.php';
+        $kizeoMigration = require dirname(__DIR__, 2).'/database/migrations/2026_08_07_123000_create_inventario_entrega_kizeo_tables.php';
         $kizeoMigration->up();
     }
 
@@ -256,7 +262,7 @@ class InventarioBodegaStockTest extends TestCase
         $line = $conteo->lineas()->firstOrFail();
         $service->saveStocktake($conteo, [$line->id => ['cantidad_fisica' => 6, 'observacion' => 'Prueba']]);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->delete(route('inventario-bodega.conteos.destroy', $conteo))
             ->assertRedirect(route('inventario-bodega.index', ['vista' => 'conteos']))
@@ -418,7 +424,7 @@ class InventarioBodegaStockTest extends TestCase
         ]);
         $second->items()->create(['linea' => 1, 'articulo' => 'Casco de seguridad', 'talla' => 'M', 'cantidad' => 3]);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->post(route('inventario-bodega.entregas-kizeo.aplicar-masivo'), ['entregas' => [$first->id, $second->id]])
             ->assertRedirect(route('inventario-bodega.index', ['vista' => 'kizeo']))
@@ -446,9 +452,9 @@ class InventarioBodegaStockTest extends TestCase
             $this->assertArrayHasKey('entrega', $exception->errors());
         }
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
-            ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo', 'kizeo_periodo' => 'todo']))
             ->assertOk()
             ->assertSee('Aplicación masiva desde Sede Central SAEP')
             ->assertSee('inventory-kizeo-batch-form', false);
@@ -499,13 +505,13 @@ class InventarioBodegaStockTest extends TestCase
         $mappings = $service->suggestedKizeoLineMappings($delivery->load('items'));
         $this->assertSame($variant->id, $mappings[$item->id]['variante_id']);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
-            ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo', 'kizeo_periodo' => 'todo']))
             ->assertOk()
             ->assertSee('name="entregas[]" value="'.$delivery->id.'" data-kizeo-batch-checkbox', false);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->post(route('inventario-bodega.entregas-kizeo.aplicar-masivo'), ['entregas' => [$delivery->id]])
             ->assertRedirect(route('inventario-bodega.index', ['vista' => 'kizeo']))
@@ -517,8 +523,8 @@ class InventarioBodegaStockTest extends TestCase
     public function test_epp_roster_import_starts_at_zero_and_can_be_loaded_later(): void
     {
         [$user, $origin] = $this->inventoryContext();
-        $path = tempnam(sys_get_temp_dir(), 'epp-roster-') . '.xlsx';
-        $sheet = (new Spreadsheet())->getActiveSheet();
+        $path = tempnam(sys_get_temp_dir(), 'epp-roster-').'.xlsx';
+        $sheet = (new Spreadsheet)->getActiveSheet();
         $sheet->fromArray([
             ['Tipo', 'Categoria', 'Sub Categoria', 'Item', 'Formato'],
             ['Epp', 'Botas de Agua', 'Botas RAC', 'Botas de agua Negra RAC T-39', 'Unidad'],
@@ -528,14 +534,14 @@ class InventarioBodegaStockTest extends TestCase
         (new Xlsx($sheet->getParent()))->save($path);
 
         try {
-            $file = new \Illuminate\Http\UploadedFile($path, 'Epp.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+            $file = new UploadedFile($path, 'Epp.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
             $result = app(InventarioStockService::class)->importProducts($file, $user);
             $repeat = app(InventarioStockService::class)->importProducts($file, $user);
         } finally {
             @unlink($path);
         }
 
-        $boots = \App\Models\InventarioProducto::query()->where('nombre', 'Botas de agua Negra RAC')->firstOrFail();
+        $boots = InventarioProducto::query()->where('nombre', 'Botas de agua Negra RAC')->firstOrFail();
         $this->assertSame(2, $result['created']);
         $this->assertSame(0, $result['updated']);
         $this->assertSame(3, $result['variantsCreated']);
@@ -587,9 +593,9 @@ class InventarioBodegaStockTest extends TestCase
             'activo' => true,
         ], $user);
         $variant = $product->variantes()->firstOrFail();
-        $provider = \App\Models\InventarioProveedor::create(['nombre' => 'Proveedor de lentes', 'activo' => true]);
-        $availableProvider = \App\Models\InventarioProveedor::create(['nombre' => 'Proveedor disponible sin ingresos', 'activo' => true]);
-        $inactiveProvider = \App\Models\InventarioProveedor::create(['nombre' => 'Proveedor inactivo', 'activo' => false]);
+        $provider = InventarioProveedor::create(['nombre' => 'Proveedor de lentes', 'activo' => true]);
+        $availableProvider = InventarioProveedor::create(['nombre' => 'Proveedor disponible sin ingresos', 'activo' => true]);
+        $inactiveProvider = InventarioProveedor::create(['nombre' => 'Proveedor inactivo', 'activo' => false]);
         $service->registerReceipt([
             'ubicacion_id' => $origin->id,
             'proveedor_id' => $provider->id,
@@ -626,7 +632,7 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertTrue($data['summaryProviders']->contains('id', $availableProvider->id));
         $this->assertFalse($data['summaryProviders']->contains('id', $inactiveProvider->id));
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->get(route('inventario-bodega.index', ['vista' => 'resumen']))
             ->assertOk()
@@ -634,7 +640,7 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('Proveedor disponible sin ingresos')
             ->assertDontSee('Proveedor inactivo');
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->get(route('inventario-bodega.index', ['vista' => 'ingresos']))
             ->assertOk()
@@ -650,7 +656,7 @@ class InventarioBodegaStockTest extends TestCase
         ]));
         $path = $export->getFile()->getPathname();
         try {
-            $rows = \PhpOffice\PhpSpreadsheet\IOFactory::load($path)->getActiveSheet()->rangeToArray('A1:K3', null, true, true, false);
+            $rows = IOFactory::load($path)->getActiveSheet()->rangeToArray('A1:K3', null, true, true, false);
         } finally {
             @unlink($path);
         }
@@ -661,12 +667,12 @@ class InventarioBodegaStockTest extends TestCase
     public function test_catalog_import_sets_stock_by_location_without_confusing_it_with_stock_minimum(): void
     {
         [$user, $origin] = $this->inventoryContext();
-        $path = tempnam(sys_get_temp_dir(), 'catalog-stock-') . '.xlsx';
+        $path = tempnam(sys_get_temp_dir(), 'catalog-stock-').'.xlsx';
         $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Stock_Critico', 'Ubicacion_Codigo', 'Stock_Inicial'];
         $row = ['PARKA-AZUL', 'Parka termica azul', 'EPP', 'Ropa', 'Parkas', 'Unidad', 'M', 5, $origin->codigo, 30];
 
         try {
-            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet = (new Spreadsheet)->getActiveSheet();
             $sheet->fromArray([$headers, $row]);
             (new Xlsx($sheet->getParent()))->save($path);
             $file = new UploadedFile($path, 'catalogo.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
@@ -675,7 +681,7 @@ class InventarioBodegaStockTest extends TestCase
             $repeat = $service->importProducts($file, $user);
 
             $row[9] = 18;
-            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet = (new Spreadsheet)->getActiveSheet();
             $sheet->fromArray([$headers, $row]);
             (new Xlsx($sheet->getParent()))->save($path);
             $adjusted = $service->importProducts(new UploadedFile($path, 'catalogo.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true), $user);
@@ -683,7 +689,7 @@ class InventarioBodegaStockTest extends TestCase
             @unlink($path);
         }
 
-        $product = \App\Models\InventarioProducto::query()->where('codigo', 'PARKA-AZUL')->firstOrFail();
+        $product = InventarioProducto::query()->where('codigo', 'PARKA-AZUL')->firstOrFail();
         $variant = $product->variantes()->where('talla', 'M')->firstOrFail();
 
         $this->assertSame(1, $result['stocksSet']);
@@ -712,7 +718,7 @@ class InventarioBodegaStockTest extends TestCase
             'codigo' => InventarioStockService::KIZEO_ORIGIN_LOCATION_CODE,
             'nombre' => 'Sede Central SAEP',
         ]);
-        $path = tempnam(sys_get_temp_dir(), 'catalog-status-') . '.xlsx';
+        $path = tempnam(sys_get_temp_dir(), 'catalog-status-').'.xlsx';
         $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia', 'Stock_Critico', 'Ubicacion_Codigo', 'Stock_Inicial', 'Estado'];
         $rows = [
             ['', 'Botín nuevo de prueba', 'EPP', 'Calzado', 'Botines', 'Unidad', '35', null, 2, '', 4, 'Inhabilitado'],
@@ -721,7 +727,7 @@ class InventarioBodegaStockTest extends TestCase
         ];
 
         try {
-            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet = (new Spreadsheet)->getActiveSheet();
             $sheet->fromArray([$headers, ...$rows]);
             (new Xlsx($sheet->getParent()))->save($path);
             $result = app(InventarioStockService::class)->importProducts(
@@ -732,8 +738,8 @@ class InventarioBodegaStockTest extends TestCase
             @unlink($path);
         }
 
-        $botin = \App\Models\InventarioProducto::query()->where('nombre', 'Botín nuevo de prueba')->firstOrFail();
-        $casco = \App\Models\InventarioProducto::query()->where('nombre', 'Casco nuevo inhabilitado')->firstOrFail();
+        $botin = InventarioProducto::query()->where('nombre', 'Botín nuevo de prueba')->firstOrFail();
+        $casco = InventarioProducto::query()->where('nombre', 'Casco nuevo inhabilitado')->firstOrFail();
         $botin35 = $botin->variantes()->where('talla', '35')->firstOrFail();
         $botin36 = $botin->variantes()->where('talla', '36')->firstOrFail();
         $cascoVariant = $casco->variantes()->where('talla', 'ESTANDAR')->firstOrFail();
@@ -760,7 +766,7 @@ class InventarioBodegaStockTest extends TestCase
         $path = $response->getFile()->getPathname();
 
         try {
-            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+            $spreadsheet = IOFactory::load($path);
             $headers = $spreadsheet->getSheetByName('Productos')->rangeToArray('A1:L1', null, true, true, false)[0];
             $instructions = $spreadsheet->getSheetByName('Instrucciones')->rangeToArray('A1:A9', null, true, true, false);
         } finally {
@@ -776,12 +782,12 @@ class InventarioBodegaStockTest extends TestCase
     public function test_catalog_import_and_export_preserve_accents_and_enye(): void
     {
         [$user, $origin] = $this->inventoryContext();
-        $path = tempnam(sys_get_temp_dir(), 'catalog-unicode-') . '.xlsx';
+        $path = tempnam(sys_get_temp_dir(), 'catalog-unicode-').'.xlsx';
         $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Stock_Critico', 'Ubicacion_Codigo', 'Stock_Inicial', 'Estado'];
         $row = ['EPP-NANDU', 'Botín Ñandú Ágil', 'EPP', 'Calzado', 'Botines', 'Unidad', '42', 1, $origin->codigo, 3, 'Activo'];
 
         try {
-            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet = (new Spreadsheet)->getActiveSheet();
             $sheet->fromArray([$headers, $row]);
             (new Xlsx($sheet->getParent()))->save($path);
             app(InventarioStockService::class)->importProducts(
@@ -792,7 +798,7 @@ class InventarioBodegaStockTest extends TestCase
             @unlink($path);
         }
 
-        $product = \App\Models\InventarioProducto::query()->where('codigo', 'EPP-NANDU')->firstOrFail();
+        $product = InventarioProducto::query()->where('codigo', 'EPP-NANDU')->firstOrFail();
         $this->assertSame('Botín Ñandú Ágil', $product->nombre);
 
         $response = (new InventarioBodegaController(app(InventarioStockService::class)))->exportBalances(Request::create('/inventario-bodega/exportar', 'GET', [
@@ -802,7 +808,7 @@ class InventarioBodegaStockTest extends TestCase
         $exportPath = $response->getFile()->getPathname();
 
         try {
-            $rows = \PhpOffice\PhpSpreadsheet\IOFactory::load($exportPath)->getActiveSheet()->toArray(null, true, true, false);
+            $rows = IOFactory::load($exportPath)->getActiveSheet()->toArray(null, true, true, false);
         } finally {
             @unlink($exportPath);
         }
@@ -813,25 +819,25 @@ class InventarioBodegaStockTest extends TestCase
     public function test_catalog_import_preserves_reference_cost_history_by_size(): void
     {
         [$user] = $this->inventoryContext();
-        $path = tempnam(sys_get_temp_dir(), 'catalog-cost-') . '.xlsx';
+        $path = tempnam(sys_get_temp_dir(), 'catalog-cost-').'.xlsx';
         $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia'];
         $row = ['GUANTE-COSTO', 'Guante con costo', 'EPP', 'Guantes', 'Nitrilo', 'Unidad', 'M', 1250];
 
         try {
-            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet = (new Spreadsheet)->getActiveSheet();
             $sheet->fromArray([$headers, $row]);
             (new Xlsx($sheet->getParent()))->save($path);
             $service = app(InventarioStockService::class);
             $first = $service->importProducts(new UploadedFile($path, 'catalogo.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true), $user);
 
             $row[7] = 1475;
-            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet = (new Spreadsheet)->getActiveSheet();
             $sheet->fromArray([$headers, $row]);
             (new Xlsx($sheet->getParent()))->save($path);
             $second = $service->importProducts(new UploadedFile($path, 'catalogo.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true), $user);
 
             $row[7] = 0;
-            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet = (new Spreadsheet)->getActiveSheet();
             $sheet->fromArray([$headers, $row]);
             (new Xlsx($sheet->getParent()))->save($path);
             $unknown = $service->importProducts(new UploadedFile($path, 'catalogo.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true), $user);
@@ -859,12 +865,12 @@ class InventarioBodegaStockTest extends TestCase
     public function test_catalog_import_keeps_excel_prices_with_thousands_separator(): void
     {
         [$user] = $this->inventoryContext();
-        $path = tempnam(sys_get_temp_dir(), 'catalog-price-format-') . '.xlsx';
+        $path = tempnam(sys_get_temp_dir(), 'catalog-price-format-').'.xlsx';
         $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia'];
         $row = ['BOTIN-PRECIO', 'Botín con precio', 'EPP', 'Calzado', 'Botines', 'Unidad', '40', 41590];
 
         try {
-            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet = (new Spreadsheet)->getActiveSheet();
             $sheet->fromArray([$headers, $row]);
             $sheet->getStyle('H2')->getNumberFormat()->setFormatCode('#,##0');
             $this->assertSame('41,590', $sheet->toArray(null, true, true, false)[1][7]);
@@ -959,7 +965,7 @@ class InventarioBodegaStockTest extends TestCase
     {
         [$user, $origin, , $variant] = $this->inventoryContext();
 
-        $response = $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $response = $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->post(route('inventario-bodega.stock-talla.store'), [
                 'ubicacion_id' => $origin->id,
@@ -972,8 +978,8 @@ class InventarioBodegaStockTest extends TestCase
 
         $location = (string) $response->headers->get('Location');
         $this->assertStringContainsString('vista=catalogo', $location);
-        $this->assertStringContainsString('ubicacion_id=' . $origin->id, $location);
-        $this->assertStringContainsString('producto_editar=' . $variant->producto_id, $location);
+        $this->assertStringContainsString('ubicacion_id='.$origin->id, $location);
+        $this->assertStringContainsString('producto_editar='.$variant->producto_id, $location);
         $this->assertStringContainsString('productos_pagina=2', $location);
         $this->assertStringContainsString('producto_buscar=casco', $location);
     }
@@ -981,8 +987,8 @@ class InventarioBodegaStockTest extends TestCase
     public function test_operational_masters_import_and_fill_a_manual_movement_from_center_and_coordinator(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContext();
-        $path = tempnam(sys_get_temp_dir(), 'inventory-masters-') . '.xlsx';
-        $spreadsheet = new Spreadsheet();
+        $path = tempnam(sys_get_temp_dir(), 'inventory-masters-').'.xlsx';
+        $spreadsheet = new Spreadsheet;
         $coordinators = $spreadsheet->getActiveSheet();
         $coordinators->setTitle('Maestro_Coordinador');
         $coordinators->fromArray([
@@ -1019,7 +1025,7 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertNull($unlinked->coordinador_id);
         $this->assertSame('Nombre no incluido', $unlinked->coordinador_nombre_origen);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->post(route('inventario-bodega.movimientos.store'), [
                 'tipo' => 'AJUSTE_POSITIVO',
@@ -1062,7 +1068,7 @@ class InventarioBodegaStockTest extends TestCase
             'activo' => true,
         ]);
 
-        $mastersResponse = $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $mastersResponse = $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->get(route('inventario-bodega.index', ['vista' => 'maestros']));
 
@@ -1076,7 +1082,7 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('Centro Bodega Norte')
             ->assertSee('Andrea Operaciones');
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->put(route('inventario-bodega.maestros.coordinadores.update', $coordinator), [
                 'nombre' => 'Andrea Operaciones Actualizada',
@@ -1092,7 +1098,7 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertFalse($coordinator->activo);
         $this->assertSame($coordinator->id, $center->fresh()->coordinador_id);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->put(route('inventario-bodega.maestros.centros.update', $center), [
                 'numero_maestro' => 17,
@@ -1110,7 +1116,7 @@ class InventarioBodegaStockTest extends TestCase
             'activo' => false,
         ]);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->post(route('inventario-bodega.maestros.coordinadores.store'), [
                 'nombre' => 'Bruno Nuevo',
@@ -1130,7 +1136,7 @@ class InventarioBodegaStockTest extends TestCase
     {
         [$user, $origin, , $variant] = $this->inventoryContext();
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->post(route('inventario-bodega.movimientos.store'), [
                 'tipo' => 'AJUSTE_POSITIVO',
@@ -1155,8 +1161,8 @@ class InventarioBodegaStockTest extends TestCase
     {
         [$user, $origin, , $variant] = $this->inventoryContext();
         $variant->load('producto');
-        $path = tempnam(sys_get_temp_dir(), 'receipt-import-') . '.xlsx';
-        $spreadsheet = new Spreadsheet();
+        $path = tempnam(sys_get_temp_dir(), 'receipt-import-').'.xlsx';
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->fromArray([
             ['Referencia_Ingreso', 'Ubicacion_Codigo', 'Proveedor', 'Proveedor_Rut', 'Tipo_Documento', 'Numero_Documento', 'Fecha_Documento', 'Fecha_Recepcion', 'Codigo_Producto', 'Talla', 'Cantidad', 'Costo_Unitario', 'Observacion'],
@@ -1166,7 +1172,7 @@ class InventarioBodegaStockTest extends TestCase
         (new Xlsx($spreadsheet))->save($path);
 
         try {
-            $file = new \Illuminate\Http\UploadedFile($path, 'ingresos.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+            $file = new UploadedFile($path, 'ingresos.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
             $result = app(InventarioStockService::class)->importReceipts($file, $user);
         } finally {
             @unlink($path);
@@ -1180,7 +1186,7 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertDatabaseHas('inventario_ingresos', ['numero_documento' => 'F-IMPORT-1']);
         $this->assertDatabaseHas('inventario_movimientos', ['variante_id' => $variant->id, 'costo_unitario' => 41590]);
 
-        $receipt = \App\Models\InventarioIngreso::query()->where('numero_documento', 'F-IMPORT-1')->firstOrFail();
+        $receipt = InventarioIngreso::query()->where('numero_documento', 'F-IMPORT-1')->firstOrFail();
         $service->reverseReceipt($receipt, 'Ingreso importado de prueba.', $user);
 
         $this->assertSame(0.0, $service->stockActual($origin->id, $variant->id));
@@ -1189,7 +1195,7 @@ class InventarioBodegaStockTest extends TestCase
 
     public function test_csv_upload_validation_accepts_a_browser_plain_text_csv(): void
     {
-        $path = tempnam(sys_get_temp_dir(), 'receipt-import-') . '.csv';
+        $path = tempnam(sys_get_temp_dir(), 'receipt-import-').'.csv';
         file_put_contents($path, "Referencia_Ingreso,Ubicacion_Codigo\nQA-1,BOD-1\n");
 
         try {
@@ -1234,8 +1240,8 @@ class InventarioBodegaStockTest extends TestCase
             'activo' => true,
         ]);
 
-        $path = tempnam(sys_get_temp_dir(), 'movement-import-') . '.xlsx';
-        $spreadsheet = new Spreadsheet();
+        $path = tempnam(sys_get_temp_dir(), 'movement-import-').'.xlsx';
+        $spreadsheet = new Spreadsheet;
         $spreadsheet->getActiveSheet()->fromArray([
             ['Referencia_Movimiento', 'Tipo', 'Ubicacion_Origen_Codigo', 'Ubicacion_Destino_Codigo', 'Codigo_Producto', 'Talla', 'Cantidad', 'Fecha_Hora', 'Centro_Costo', 'Coordinador', 'Destinatario', 'RUT_Destinatario', 'Tipo_Documento', 'Numero_Documento', 'Costo_Unitario', 'Observacion'],
             ['MOV-IMP-001', 'ENTREGA_EPP', $origin->codigo, '', $variant->producto->codigo, $variant->talla, 2, '18/08/2026 09:30', 108, '', '', '', 'ACTA', 'ACTA-001', '', 'Entrega importada'],
@@ -1303,7 +1309,7 @@ class InventarioBodegaStockTest extends TestCase
         $path = $response->getFile()->getPathname();
 
         try {
-            $rows = \PhpOffice\PhpSpreadsheet\IOFactory::load($path)->getActiveSheet()->rangeToArray('A1:L2', null, true, true, false);
+            $rows = IOFactory::load($path)->getActiveSheet()->rangeToArray('A1:L2', null, true, true, false);
         } finally {
             @unlink($path);
         }
@@ -1316,7 +1322,7 @@ class InventarioBodegaStockTest extends TestCase
 
     public function test_catalog_explains_how_to_load_stock_after_import(): void
     {
-        $view = file_get_contents(dirname(__DIR__, 2) . '/resources/views/inventario_bodega/index.blade.php');
+        $view = file_get_contents(dirname(__DIR__, 2).'/resources/views/inventario_bodega/index.blade.php');
 
         $this->assertStringContainsString('El catálogo puede incluir stock, costo y estado por talla.', $view);
         $this->assertStringContainsString('Costo_Referencia', $view);
@@ -1392,9 +1398,9 @@ class InventarioBodegaStockTest extends TestCase
         ]);
         $insufficient->items()->create(['linea' => 1, 'articulo' => 'Casco de seguridad', 'talla' => 'M', 'cantidad' => 4]);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
-            ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo', 'kizeo_periodo' => 'todo']))
             ->assertOk()
             ->assertSee('No descontada')
             ->assertSee('Salida descontada')
@@ -1414,7 +1420,7 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('<details class="inventory-delivery-card">', false)
             ->assertDontSee('<details class="inventory-delivery-card" open', false);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->get(route('inventario-bodega.index', [
                 'vista' => 'catalogo',
@@ -1431,7 +1437,7 @@ class InventarioBodegaStockTest extends TestCase
     {
         [$user] = $this->inventoryContext();
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->get(route('inventario-bodega.index', ['vista' => 'ingresos']))
             ->assertOk()
@@ -1440,11 +1446,63 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('return selectableOptions(nativeSelect).length > 5;', false)
             ->assertSee("root.querySelectorAll('select.form-select')", false);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->get(route('inventario-bodega.index', ['vista' => 'movimientos']))
             ->assertOk()
             ->assertSee('name="variante_id" class="form-select" required data-inventory-search-select', false);
+    }
+
+    public function test_kizeo_queue_defaults_to_today_and_allows_period_and_custom_range_filters(): void
+    {
+        [$user, , , $variant] = $this->inventoryContextWithCentralStock(5);
+        $today = now()->startOfDay();
+        $todayDelivery = $this->newKizeoDelivery('kizeo-filter-today', $variant, 1, now());
+        $todayDelivery->update([
+            'nombre' => 'Entrega sincronizada hoy',
+            'fecha_pedido' => $today->toDateString(),
+            'synced_at' => now(),
+        ]);
+        $yesterdayDelivery = $this->newKizeoDelivery('kizeo-filter-yesterday', $variant, 1, now()->subDay());
+        $yesterdayDelivery->update([
+            'nombre' => 'Entrega sincronizada ayer',
+            'fecha_pedido' => $today->copy()->subDay()->toDateString(),
+        ]);
+        $previousDelivery = $this->newKizeoDelivery('kizeo-filter-before-yesterday', $variant, 1, now()->subDays(2));
+        $previousDelivery->update([
+            'nombre' => 'Entrega sincronizada antes de ayer',
+            'fecha_pedido' => $today->copy()->subDays(2)->toDateString(),
+        ]);
+
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->assertOk()
+            ->assertSee('Entrega sincronizada hoy')
+            ->assertDontSee('Entrega sincronizada ayer')
+            ->assertSee('Periodo')
+            ->assertSee('Antes de ayer')
+            ->assertSee('Todo el historial');
+
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo', 'kizeo_periodo' => 'ayer']))
+            ->assertOk()
+            ->assertSee('Entrega sincronizada ayer')
+            ->assertDontSee('Entrega sincronizada hoy');
+
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', [
+                'vista' => 'kizeo',
+                'kizeo_periodo' => 'personalizado',
+                'kizeo_desde' => $today->copy()->subDays(2)->toDateString(),
+                'kizeo_hasta' => $today->copy()->subDay()->toDateString(),
+            ]))
+            ->assertOk()
+            ->assertSee('Entrega sincronizada ayer')
+            ->assertSee('Entrega sincronizada antes de ayer')
+            ->assertDontSee('Entrega sincronizada hoy');
     }
 
     public function test_saep_catalog_sync_updates_and_creates_advanced_kizeo_list_items_without_deleting_orphans(): void
@@ -1535,7 +1593,7 @@ class InventarioBodegaStockTest extends TestCase
         [$user] = $this->inventoryContext();
         config(['services.kizeo.inventory_catalog_list_id' => '500434']);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->get(route('inventario-bodega.index', ['vista' => 'catalogo']))
             ->assertOk()
@@ -1553,14 +1611,14 @@ class InventarioBodegaStockTest extends TestCase
         $variant = InventarioVariante::query()->where('talla', 'M')->firstOrFail();
         $variant->producto->update(['activo' => false]);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->get(route('inventario-bodega.index', ['vista' => 'catalogo', 'producto_estado' => 'inactivos']))
             ->assertOk()
             ->assertSee('Casco de seguridad')
             ->assertSee('Inactivo');
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->get(route('inventario-bodega.index', ['vista' => 'movimientos']))
             ->assertOk()
@@ -1780,7 +1838,7 @@ class InventarioBodegaStockTest extends TestCase
         $pending = $this->newKizeoDelivery('kizeo-auto-queue', $variant, 2, now()->subDays(3));
         $this->ensureConfiguracionesTable();
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->post(route('inventario-bodega.entregas-kizeo.auto-aplicar'), ['activo' => 1])
             ->assertRedirect(route('inventario-bodega.index', ['vista' => 'kizeo']))
@@ -1791,7 +1849,7 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertSame(10.0, app(InventarioStockService::class)->stockActual($origin->id, $variant->id));
         $this->assertNotNull($pending->fresh());
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
             ->assertOk()
@@ -1804,7 +1862,7 @@ class InventarioBodegaStockTest extends TestCase
         [$user, $origin, , $variant] = $this->inventoryContextWithCentralStock(5);
         $service = app(InventarioStockService::class);
         $legacy = EntregaBodega::create([
-            'kizeo_form_id' => \App\Services\EntregaBodegaSyncService::LEGACY_FORM_ID,
+            'kizeo_form_id' => EntregaBodegaSyncService::LEGACY_FORM_ID,
             'kizeo_data_id' => 'kizeo-legacy-947762',
             'kizeo_record_number' => 947,
             'origen_formulario' => 'Control de Entrega Bodega',
@@ -1827,7 +1885,7 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertSame(5.0, $service->stockActual($origin->id, $variant->id));
         $this->assertDatabaseCount('inventario_entrega_kizeo_aplicaciones', 0);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->from(route('inventario-bodega.index', ['vista' => 'kizeo']))
             ->post(route('inventario-bodega.entregas-kizeo.aplicar-masivo'), ['entregas' => [$legacy->id]])
@@ -1838,7 +1896,7 @@ class InventarioBodegaStockTest extends TestCase
 
         $live = $this->newKizeoDelivery('kizeo-live-queue', $variant, 1, now());
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
             ->assertOk()
@@ -1846,9 +1904,9 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee($live->nombre)
             ->assertDontSee('>'.$legacy->nombre.'<', false);
 
-        $this->withoutMiddleware(\App\Http\Middleware\VerificarConsentimientoDatos::class)
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
-            ->get(route('inventario-bodega.index', ['vista' => 'kizeo', 'kizeo_origen' => 'historico']))
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo', 'kizeo_origen' => 'historico', 'kizeo_periodo' => 'todo']))
             ->assertOk()
             ->assertSee($legacy->nombre)
             ->assertSee('Histórico · no descuenta')
