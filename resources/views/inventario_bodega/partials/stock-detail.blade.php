@@ -4,6 +4,10 @@
     $activeVariants = $variants->where('activo', true)->count();
     $selectedMinimum = (float) ($selectedVariant->stock_minimo ?? $product->stock_minimo);
     $selectedStock = (float) $selectedVariant->stock_actual;
+    $selectedCriticalThreshold = $selectedMinimum > 0 ? min(3, max(1, (int) floor($selectedMinimum / 4))) : 0;
+    $selectedOutOfStock = $selectedStock <= 0;
+    $selectedCriticalStock = ! $selectedOutOfStock && $selectedMinimum > 0 && $selectedStock <= $selectedCriticalThreshold;
+    $selectedNeedsReplenishment = ! $selectedOutOfStock && ! $selectedCriticalStock && $selectedMinimum > 0 && $selectedStock <= $selectedMinimum;
 @endphp
 
 <div class="inventory-detail-heading">
@@ -37,21 +41,25 @@
                 @php
                     $minimum = (float) ($productVariant->stock_minimo ?? $product->stock_minimo);
                     $actual = (float) $productVariant->stock_actual;
-                    $isCritical = $minimum > 0 && $actual <= $minimum;
-                    $status = ! $productVariant->activo ? 'Inactiva' : ($isCritical ? 'Reponer' : ($actual > 0 ? 'Disponible' : 'Sin stock'));
+                    $criticalThreshold = $minimum > 0 ? min(3, max(1, (int) floor($minimum / 4))) : 0;
+                    $isOutOfStock = $actual <= 0;
+                    $isCriticalStock = ! $isOutOfStock && $minimum > 0 && $actual <= $criticalThreshold;
+                    $needsReplenishment = ! $isOutOfStock && ! $isCriticalStock && $minimum > 0 && $actual <= $minimum;
+                    $status = ! $productVariant->activo ? 'Inactiva' : ($isOutOfStock ? 'Sin stock' : ($isCriticalStock ? 'Crítico' : ($needsReplenishment ? 'Reponer' : 'Disponible')));
+                    $statusClass = ! $productVariant->activo ? 'is-empty' : ($isOutOfStock ? 'is-out-of-stock' : ($isCriticalStock ? 'is-stock-critical' : ($needsReplenishment ? 'is-critical' : 'is-ok')));
                 @endphp
                 <tr class="{{ $productVariant->is($selectedVariant) ? 'is-selected' : '' }}">
                     <td><strong>{{ $productVariant->talla ?: 'ESTANDAR' }}</strong>@if($productVariant->descripcion)<small>{{ $productVariant->descripcion }}</small>@endif</td>
                     <td class="text-end">{{ rtrim(rtrim(number_format($minimum, 3, ',', '.'), '0'), ',') }}</td>
                     <td class="text-end"><strong>{{ rtrim(rtrim(number_format($actual, 3, ',', '.'), '0'), ',') }}</strong></td>
-                    <td><span class="inventory-status {{ ! $productVariant->activo ? 'is-empty' : ($isCritical ? 'is-critical' : ($actual > 0 ? 'is-ok' : 'is-empty')) }}">{{ $status }}</span></td>
+                    <td><span class="inventory-status {{ $statusClass }}">{{ $status }}</span></td>
                 </tr>
             @endforeach
             </tbody>
         </table>
     </div>
-    @if($selectedMinimum > 0 && $selectedStock <= $selectedMinimum)
-        <div class="inventory-detail-warning"><i class="bi bi-exclamation-triangle"></i><div><strong>La variante seleccionada requiere reposición.</strong><span>Su saldo es {{ rtrim(rtrim(number_format($selectedStock, 3, ',', '.'), '0'), ',') }} y el mínimo definido es {{ rtrim(rtrim(number_format($selectedMinimum, 3, ',', '.'), '0'), ',') }}.</span></div></div>
+    @if($selectedOutOfStock || $selectedCriticalStock || $selectedNeedsReplenishment)
+        <div class="inventory-detail-warning"><i class="bi bi-exclamation-triangle"></i><div><strong>{{ $selectedOutOfStock ? 'La variante seleccionada no tiene stock.' : ($selectedCriticalStock ? 'La variante seleccionada tiene stock crítico.' : 'La variante seleccionada requiere reposición.') }}</strong><span>Su saldo es {{ rtrim(rtrim(number_format($selectedStock, 3, ',', '.'), '0'), ',') }} y el mínimo definido es {{ rtrim(rtrim(number_format($selectedMinimum, 3, ',', '.'), '0'), ',') }}.</span></div></div>
     @endif
 </section>
 

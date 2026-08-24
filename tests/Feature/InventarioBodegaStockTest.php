@@ -763,6 +763,13 @@ class InventarioBodegaStockTest extends TestCase
             'stock_minimo' => 2,
             'activo' => true,
         ]);
+        $criticalVariant = InventarioVariante::create([
+            'producto_id' => $variant->producto_id,
+            'codigo' => 'CASCO-PRUEBA-S',
+            'talla' => 'S',
+            'stock_minimo' => 12,
+            'activo' => true,
+        ]);
         InventarioMovimiento::create([
             'codigo' => 'MOV-DETALLE-1',
             'tipo' => 'STOCK_INICIAL',
@@ -771,6 +778,18 @@ class InventarioBodegaStockTest extends TestCase
             'producto_id' => $variant->producto_id,
             'variante_id' => $variant->id,
             'cantidad' => 6,
+            'ocurrido_en' => now(),
+            'registrado_por' => $user->id,
+            'registrado_por_nombre' => $user->name,
+        ]);
+        InventarioMovimiento::create([
+            'codigo' => 'MOV-DETALLE-2',
+            'tipo' => 'STOCK_INICIAL',
+            'origen' => 'PRUEBA',
+            'ubicacion_id' => $origin->id,
+            'producto_id' => $variant->producto_id,
+            'variante_id' => $criticalVariant->id,
+            'cantidad' => 3,
             'ocurrido_en' => now(),
             'registrado_por' => $user->id,
             'registrado_por_nombre' => $user->name,
@@ -784,7 +803,10 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('Bodega Principal')
             ->assertSee($variant->talla)
             ->assertSee($otherVariant->talla)
+            ->assertSee($criticalVariant->talla)
             ->assertSee('6')
+            ->assertSee('Sin stock')
+            ->assertSee('Crítico')
             ->assertSee($user->name);
     }
 
