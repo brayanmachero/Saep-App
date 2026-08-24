@@ -361,6 +361,51 @@ class InventarioBodegaController extends Controller
         ]);
     }
 
+    /**
+     * Devuelve el detalle consultable de una variante del resumen sin cargar
+     * de antemano todos los movimientos de cada producto del catálogo.
+     */
+    public function stockDetail(Request $request, InventarioVariante $variante)
+    {
+        $data = $request->validate([
+            'ubicacion_id' => ['nullable', 'integer', 'exists:inventario_ubicaciones,id'],
+        ]);
+        $locationId = $data['ubicacion_id'] ?? null;
+        $variante->load('producto.variantes');
+
+        abort_unless($variante->activo && $variante->producto?->activo, 404);
+
+        $product = $variante->producto;
+        $variants = $product->variantes;
+        $stockByVariant = InventarioMovimiento::query()
+            ->selectRaw('variante_id, SUM(cantidad) as stock_actual')
+            ->whereIn('variante_id', $variants->pluck('id'))
+            ->when($locationId, fn (Builder $query) => $query->where('ubicacion_id', $locationId))
+            ->groupBy('variante_id')
+            ->pluck('stock_actual', 'variante_id');
+
+        $variants->each(function (InventarioVariante $productVariant) use ($stockByVariant): void {
+            $productVariant->setAttribute('stock_actual', (float) ($stockByVariant[$productVariant->id] ?? 0));
+        });
+
+        $movements = InventarioMovimiento::query()
+            ->with(['ubicacion', 'variante', 'registradoPor'])
+            ->withCount('reversos')
+            ->where('producto_id', $product->id)
+            ->when($locationId, fn (Builder $query) => $query->where('ubicacion_id', $locationId))
+            ->latest('ocurrido_en')
+            ->limit(12)
+            ->get();
+
+        return view('inventario_bodega.partials.stock-detail', [
+            'product' => $product,
+            'variants' => $variants,
+            'selectedVariant' => $variante,
+            'movements' => $movements,
+            'location' => $locationId ? InventarioUbicacion::query()->find($locationId) : null,
+        ]);
+    }
+
     public function storeLocation(Request $request): RedirectResponse
     {
         $data = $request->validate([

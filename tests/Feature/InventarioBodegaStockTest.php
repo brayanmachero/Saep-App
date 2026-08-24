@@ -753,6 +753,41 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('Por tipo de movimiento');
     }
 
+    public function test_stock_detail_loads_product_variants_balances_and_recent_responsible_movements(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+        $otherVariant = InventarioVariante::create([
+            'producto_id' => $variant->producto_id,
+            'codigo' => 'CASCO-PRUEBA-L',
+            'talla' => 'L',
+            'stock_minimo' => 2,
+            'activo' => true,
+        ]);
+        InventarioMovimiento::create([
+            'codigo' => 'MOV-DETALLE-1',
+            'tipo' => 'STOCK_INICIAL',
+            'origen' => 'PRUEBA',
+            'ubicacion_id' => $origin->id,
+            'producto_id' => $variant->producto_id,
+            'variante_id' => $variant->id,
+            'cantidad' => 6,
+            'ocurrido_en' => now(),
+            'registrado_por' => $user->id,
+            'registrado_por_nombre' => $user->name,
+        ]);
+
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.stock.detalle', ['variante' => $variant, 'ubicacion_id' => $origin->id]))
+            ->assertOk()
+            ->assertSee('Detalle de stock')
+            ->assertSee('Bodega Principal')
+            ->assertSee($variant->talla)
+            ->assertSee($otherVariant->talla)
+            ->assertSee('6')
+            ->assertSee($user->name);
+    }
+
     public function test_catalog_import_sets_stock_by_location_without_confusing_it_with_stock_minimum(): void
     {
         [$user, $origin] = $this->inventoryContext();

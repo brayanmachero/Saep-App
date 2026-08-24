@@ -503,6 +503,7 @@ Route::middleware('auth')->group(function () {
       // --- BODEGA: INVENTARIO Y CONTEOS FISICOS ---
       Route::middleware('modulo:inventario_bodega')->prefix('inventario-bodega')->name('inventario-bodega.')->group(function () {
           Route::get('/', [InventarioBodegaController::class, 'index'])->name('index');
+          Route::get('stock/{variante}/detalle', [InventarioBodegaController::class, 'stockDetail'])->name('stock.detalle');
           Route::get('exportar', [InventarioBodegaController::class, 'exportBalances'])->name('export');
           Route::get('plantilla-productos', [InventarioBodegaController::class, 'productTemplate'])
               ->middleware('modulo:inventario_bodega,puede_crear')

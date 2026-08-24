@@ -233,13 +233,17 @@
                 <div><h2>Stock disponible</h2><p>Saldo resultante de todos los ingresos, salidas, traslados y ajustes aprobados.</p></div>
                 <span class="inventory-count">{{ $balances->count() }} variantes</span>
             </div>
+            <div class="inventory-stock-table-tools">
+                <label class="inventory-stock-search"><i class="bi bi-search" aria-hidden="true"></i><span>Buscar en este stock</span><input type="search" class="form-control" placeholder="Código, artículo, talla, categoría o estado" data-stock-table-search aria-label="Buscar en el stock disponible"></label>
+                <span class="inventory-stock-search-count" data-stock-table-count>{{ $balances->count() }} {{ $balances->count() === 1 ? 'resultado' : 'resultados' }}</span>
+            </div>
             <div class="inventory-table-wrap">
                 <table class="inventory-table">
                     <thead><tr><th>Codigo</th><th>Articulo</th><th>Talla</th><th>Categoria</th><th>Minimo</th><th class="text-end">Stock actual</th><th>Estado</th></tr></thead>
                     <tbody>
                     @forelse($balances as $variant)
                         @php $minimum = (float) ($variant->stock_minimo ?? $variant->producto->stock_minimo); $actual = (float) $variant->stock_actual; @endphp
-                        <tr>
+                        <tr class="inventory-stock-row" tabindex="0" role="button" aria-label="Ver detalle de {{ $variant->producto->nombre }}, talla {{ $variant->talla }}" data-stock-table-row data-inventory-stock-detail-url="{{ route('inventario-bodega.stock.detalle', ['variante' => $variant, 'ubicacion_id' => $selectedLocation]) }}">
                             <td><span class="inventory-code">{{ $variant->producto->codigo }}</span></td>
                             <td><strong>{{ $variant->producto->nombre }}</strong><small>{{ $variant->producto->tipo ?: 'Sin tipo' }}</small></td>
                             <td>{{ $variant->talla }}</td>
@@ -887,6 +891,7 @@
 
     <div class="inventory-detail-backdrop" data-inventory-detail-close hidden></div>
     <aside class="inventory-detail-drawer" aria-hidden="true" aria-label="Detalle de inventario" data-inventory-detail-drawer>
+        <div class="inventory-detail-drawer-resizer" data-inventory-detail-resizer title="Arrastra para ajustar el ancho" aria-hidden="true"></div>
         <div class="inventory-detail-drawer-bar"><span>Detalle</span><button type="button" class="btn btn-light inventory-icon-btn" data-inventory-detail-close aria-label="Cerrar detalle"><i class="bi bi-x-lg"></i></button></div>
         <div class="inventory-detail-drawer-content" data-inventory-detail-content></div>
     </aside>
@@ -1075,6 +1080,8 @@
     @container (max-width: 1050px) { .inventory-analytics-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }.inventory-analytics-grid { grid-template-columns:1fr; } }
     @container (max-width: 760px) { .inventory-traceability-banner,.inventory-analytics-card-heading { flex-direction:column; }.inventory-traceability-period { text-align:left; }.inventory-chart-wrap { height:15rem; } }
     @container (max-width: 440px) { .inventory-analytics-kpis { grid-template-columns:1fr; } }
+    .inventory-stock-table-tools { display:flex; align-items:center; justify-content:space-between; gap:.8rem; margin:-.1rem 0 .75rem; }.inventory-stock-search { position:relative; display:flex; align-items:center; min-width:min(100%,34rem); margin:0; }.inventory-stock-search i { position:absolute; left:.72rem; z-index:1; color:#718096; font-size:.86rem; }.inventory-stock-search span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }.inventory-stock-search .form-control { min-height:2.38rem; padding-left:2.12rem; border-color:#d5deeb; font-size:.83rem; }.inventory-stock-search-count { color:#667895; font-size:.75rem; font-weight:750; white-space:nowrap; }.inventory-stock-row { cursor:pointer; transition:background-color .14s ease, box-shadow .14s ease; }.inventory-stock-row:hover { background:#f7f9fd; }.inventory-stock-row:focus { outline:0; background:#f2f6ff; box-shadow:inset 3px 0 0 #4969b4; }.inventory-detail-drawer { width:min(100%,var(--inventory-detail-drawer-width,35rem)); max-width:55rem; }.inventory-detail-drawer-resizer { position:absolute; z-index:3; top:0; bottom:0; left:-.42rem; width:.84rem; cursor:col-resize; touch-action:none; }.inventory-detail-drawer-resizer::after { content:''; position:absolute; top:50%; left:50%; width:.22rem; height:3.4rem; transform:translate(-50%,-50%); background:#c6d0df; border:1px solid #aab7ca; border-radius:999px; opacity:0; transition:opacity .15s ease; }.inventory-detail-drawer:hover .inventory-detail-drawer-resizer::after,.inventory-detail-drawer-resizer:active::after { opacity:1; }.inventory-detail-loading { min-height:16rem; display:grid; place-items:center; gap:.65rem; color:#64748b; text-align:center; font-size:.84rem; }.inventory-detail-loading i { color:#7250ca; font-size:1.35rem; }.inventory-detail-table-wrap { overflow:auto; }.inventory-detail-section-title > div small { display:block; margin-top:.14rem; color:#718096; font-size:.7rem; font-weight:600; }.inventory-product-stock-table .is-selected td { background:#f2efff; }.inventory-product-stock-table .is-selected td:first-child { box-shadow:inset 3px 0 0 #7250ca; }.inventory-detail-drawer.is-resizing { transition:none; user-select:none; }.inventory-detail-open { overflow:hidden; }.dark-mode .inventory-stock-search .form-control { color:#e5edf9; background:#111827; border-color:#475569; }.dark-mode .inventory-stock-search i,.dark-mode .inventory-stock-search-count,.dark-mode .inventory-detail-section-title > div small { color:#aeb9cc; }.dark-mode .inventory-stock-row:hover { background:rgba(148,163,184,.09); }.dark-mode .inventory-stock-row:focus { background:rgba(59,130,246,.13); box-shadow:inset 3px 0 0 #93c5fd; }.dark-mode .inventory-detail-drawer-resizer::after { background:#5b6780; border-color:#748198; }.dark-mode .inventory-product-stock-table .is-selected td { background:rgba(135,87,236,.15); }.dark-mode .inventory-detail-loading { color:#aeb9cc; }.dark-mode .inventory-detail-loading i { color:#c4b5fd; }
+    @container (max-width: 640px) { .inventory-stock-table-tools { align-items:stretch; flex-direction:column; }.inventory-stock-search { min-width:0; width:100%; }.inventory-stock-search-count { text-align:right; }.inventory-detail-drawer { width:100%; }.inventory-detail-drawer-resizer { display:none; } }
 </style>
 
 @if($vista === 'resumen')
@@ -1755,6 +1762,33 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     function openInventoryDetail(trigger) {
         if (!detailDrawer || !detailContent) return;
+        detailLastTrigger = trigger;
+        detailDrawer.setAttribute('aria-hidden', 'false');
+        if (detailBackdrop) detailBackdrop.hidden = false;
+        document.body.classList.add('inventory-detail-open');
+        var closeButton = detailDrawer.querySelector('[data-inventory-detail-close]');
+        if (closeButton) closeButton.focus();
+
+        if (trigger.dataset.inventoryStockDetailUrl) {
+            detailContent.innerHTML = '<div class="inventory-detail-loading"><i class="bi bi-arrow-repeat"></i><span>Cargando detalle de stock…</span></div>';
+            fetch(trigger.dataset.inventoryStockDetailUrl, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' },
+                credentials: 'same-origin'
+            }).then(function (response) {
+                if (!response.ok) throw new Error('No se pudo cargar el detalle.');
+                return response.text();
+            }).then(function (html) {
+                if (detailDrawer.getAttribute('aria-hidden') === 'false' && detailLastTrigger === trigger) {
+                    detailContent.innerHTML = html;
+                }
+            }).catch(function () {
+                if (detailDrawer.getAttribute('aria-hidden') === 'false' && detailLastTrigger === trigger) {
+                    detailContent.innerHTML = '<div class="inventory-detail-loading"><i class="bi bi-exclamation-circle"></i><span>No se pudo cargar este detalle. Intenta nuevamente.</span></div>';
+                }
+            });
+            return;
+        }
+
         var template = document.getElementById(trigger.dataset.inventoryDetailTrigger);
         if (!template) return;
         var detail = template.cloneNode(true);
@@ -1762,15 +1796,20 @@ document.addEventListener('DOMContentLoaded', function () {
         detail.removeAttribute('id');
         detail.removeAttribute('data-inventory-detail-template');
         detailContent.replaceChildren(detail);
-        detailLastTrigger = trigger;
-        detailDrawer.setAttribute('aria-hidden', 'false');
-        if (detailBackdrop) detailBackdrop.hidden = false;
-        document.body.classList.add('inventory-detail-open');
-        var closeButton = detailDrawer.querySelector('[data-inventory-detail-close]');
-        if (closeButton) closeButton.focus();
     }
     document.querySelectorAll('[data-inventory-detail-trigger]').forEach(function (trigger) {
         trigger.addEventListener('click', function () { openInventoryDetail(trigger); });
+    });
+    document.querySelectorAll('[data-inventory-stock-detail-url]').forEach(function (row) {
+        row.addEventListener('click', function (event) {
+            if (event.target.closest('a, button, input, select, textarea, label')) return;
+            openInventoryDetail(row);
+        });
+        row.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            openInventoryDetail(row);
+        });
     });
     document.querySelectorAll('[data-inventory-detail-close]').forEach(function (trigger) {
         trigger.addEventListener('click', closeInventoryDetail);
@@ -1778,6 +1817,53 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') closeInventoryDetail();
     });
+    var detailResizer = document.querySelector('[data-inventory-detail-resizer]');
+    var resizingInventoryDetail = false;
+    function resizeInventoryDetail(event) {
+        if (!resizingInventoryDetail || !detailDrawer) return;
+        var maxWidth = Math.min(Math.round(window.innerWidth * .86), 880);
+        var nextWidth = Math.max(360, Math.min(maxWidth, window.innerWidth - event.clientX));
+        detailDrawer.style.setProperty('--inventory-detail-drawer-width', nextWidth + 'px');
+    }
+    function stopResizingInventoryDetail(event) {
+        if (!resizingInventoryDetail) return;
+        resizingInventoryDetail = false;
+        detailDrawer.classList.remove('is-resizing');
+        document.body.classList.remove('inventory-detail-resizing');
+        if (event && detailResizer && detailResizer.hasPointerCapture(event.pointerId)) detailResizer.releasePointerCapture(event.pointerId);
+    }
+    if (detailResizer) {
+        detailResizer.addEventListener('pointerdown', function (event) {
+            if ((event.pointerType === 'mouse' && event.button !== 0) || window.innerWidth <= 640) return;
+            event.preventDefault();
+            resizingInventoryDetail = true;
+            detailDrawer.classList.add('is-resizing');
+            document.body.classList.add('inventory-detail-resizing');
+            detailResizer.setPointerCapture(event.pointerId);
+            resizeInventoryDetail(event);
+        });
+        detailResizer.addEventListener('pointermove', resizeInventoryDetail);
+        detailResizer.addEventListener('pointerup', stopResizingInventoryDetail);
+        detailResizer.addEventListener('pointercancel', stopResizingInventoryDetail);
+    }
+    var stockTableSearch = document.querySelector('[data-stock-table-search]');
+    var stockTableRows = Array.prototype.slice.call(document.querySelectorAll('[data-stock-table-row]'));
+    var stockTableCount = document.querySelector('[data-stock-table-count]');
+    function normalizeStockTableSearch(value) {
+        return (value || '').toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ñ/g, 'n');
+    }
+    function filterStockTable() {
+        if (!stockTableSearch) return;
+        var term = normalizeStockTableSearch(stockTableSearch.value.trim());
+        var visible = 0;
+        stockTableRows.forEach(function (row) {
+            var matches = !term || normalizeStockTableSearch(row.textContent).indexOf(term) !== -1;
+            row.hidden = !matches;
+            if (matches) visible++;
+        });
+        if (stockTableCount) stockTableCount.textContent = visible + (visible === 1 ? ' resultado' : ' resultados');
+    }
+    if (stockTableSearch) stockTableSearch.addEventListener('input', filterStockTable);
     var masterDrawer = document.querySelector('[data-inventory-master-drawer]');
     function closeInventoryMaster() {
         if (!masterDrawer) return;
