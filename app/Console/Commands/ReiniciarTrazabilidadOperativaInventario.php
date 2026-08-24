@@ -227,6 +227,9 @@ class ReiniciarTrazabilidadOperativaInventario extends Command
             ->selectRaw('ubicacion_id, variante_id, SUM(cantidad) as cantidad')
             ->groupBy('ubicacion_id', 'variante_id')
             ->get()
+            // Una fila sin movimientos y una suma exacta de cero representan el mismo saldo operativo.
+            // La nómina inicial no persiste filas en cero, por lo que se excluyen de la comparación.
+            ->filter(fn (object $row) => abs((float) $row->cantidad) > 0.0005)
             ->mapWithKeys(fn (object $row) => [$row->ubicacion_id.'-'.$row->variante_id => number_format((float) $row->cantidad, 3, '.', '')])
             ->sortKeys()
             ->all();
