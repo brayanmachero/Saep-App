@@ -771,15 +771,28 @@ class KizeoService
     {
         $baseV4 = 'https://www.kizeoforms.com/rest/public/v4';
 
-        $response = Http::withHeaders(['Authorization' => $this->token])
-            ->timeout($timeout)
-            ->get("{$baseV4}/{$endpoint}", $query);
+        for ($attempt = 1; $attempt <= 6; $attempt++) {
+            $response = Http::withHeaders(['Authorization' => $this->token])
+                ->timeout($timeout)
+                ->get("{$baseV4}/{$endpoint}", $query);
 
-        if ($response->failed()) {
-            throw new \Exception("Kizeo API v4 error [{$response->status()}]: {$response->body()}");
+            if ($response->status() === 429 && $attempt < 6) {
+                $wait = 45;
+                if (preg_match('/try again in (\d+)/i', $response->body(), $match)) {
+                    $wait = max(5, min(90, (int) $match[1] + 3));
+                }
+                sleep($wait);
+                continue;
+            }
+
+            if ($response->failed()) {
+                throw new \Exception("Kizeo API v4 error [{$response->status()}]: {$response->body()}");
+            }
+
+            return is_array($response->json()) ? $response->json() : [];
         }
 
-        return $response->json();
+        throw new \RuntimeException('Kizeo API v4 no respondió después de los reintentos permitidos.');
     }
 
     /**
