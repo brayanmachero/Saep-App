@@ -199,13 +199,7 @@ class InventarioBodegaController extends Controller
             : null;
         $kizeoQueueCounts = ['vigentes' => 0, 'historico' => 0];
         if ($kizeoPeriodQuery) {
-            $kizeoQueueCounts['vigentes'] = (clone $kizeoPeriodQuery)
-                ->where(function ($forms) {
-                    $forms->whereIn('kizeo_form_id', EntregaBodegaSyncService::currentFormIds())
-                        ->orWhereNull('kizeo_form_id')
-                        ->orWhere('kizeo_form_id', '');
-                })
-                ->count();
+            $kizeoQueueCounts['vigentes'] = $this->currentKizeoDeliveryForms(clone $kizeoPeriodQuery)->count();
             $kizeoQueueCounts['historico'] = (clone $kizeoPeriodQuery)
                 ->where('kizeo_form_id', EntregaBodegaSyncService::LEGACY_FORM_ID)
                 ->count();
@@ -220,11 +214,7 @@ class InventarioBodegaController extends Controller
                 ->when(
                     $kizeoQueue === 'historico',
                     fn ($query) => $query->where('kizeo_form_id', EntregaBodegaSyncService::LEGACY_FORM_ID),
-                    fn ($query) => $query->where(function ($forms) {
-                        $forms->whereIn('kizeo_form_id', EntregaBodegaSyncService::currentFormIds())
-                            ->orWhereNull('kizeo_form_id')
-                            ->orWhere('kizeo_form_id', '');
-                    }),
+                    fn ($query) => $this->currentKizeoDeliveryForms($query),
                 )
                 ->orderByDesc('fecha_pedido')
                 ->orderByDesc('id')
@@ -271,30 +261,29 @@ class InventarioBodegaController extends Controller
                     && $application->entrega?->kizeo_updated_at
                     && (! $application->fuente_actualizada_en || $application->entrega->kizeo_updated_at->gt($application->fuente_actualizada_en)))
                 ->pluck('entrega_bodega_id');
-            $sourceAlertIds = EntregaBodega::query()
-                ->whereIn('estado_fuente', ['REQUIERE_REVISION', 'ELIMINADA_EN_KIZEO', 'INCOMPLETA'])
-                ->pluck('id');
             $kizeoStats = [
-                'pending' => EntregaBodega::query()
+                'pending' => $this->currentKizeoDeliveryForms(clone $kizeoPeriodQuery)
                     ->where('flujo_inventario', 'SALIDA')
                     ->where('estado_fuente', 'ACTIVA')
                     ->whereDoesntHave('inventarioAplicacion')
-                    ->where(function ($forms) {
-                        $forms->whereIn('kizeo_form_id', EntregaBodegaSyncService::currentFormIds())
-                            ->orWhereNull('kizeo_form_id')
-                            ->orWhere('kizeo_form_id', '');
-                    })
                     ->count(),
-                'historical' => EntregaBodega::query()
+                'historical' => (clone $kizeoPeriodQuery)
                     ->where('kizeo_form_id', EntregaBodegaSyncService::LEGACY_FORM_ID)
                     ->count(),
-                'returns' => EntregaBodega::query()
+                'returns' => $this->currentKizeoDeliveryForms(clone $kizeoPeriodQuery)
                     ->where('flujo_inventario', 'ENTRADA')
                     ->where('estado_fuente', 'ACTIVA')
                     ->whereDoesntHave('inventarioAplicacion')
                     ->count(),
-                'applied' => $kizeoApplications->where('estado', 'APLICADA')->count(),
-                'review' => $applicationReviewIds->merge($sourceAlertIds)->unique()->count(),
+                'applied' => $this->currentKizeoDeliveryForms(clone $kizeoPeriodQuery)
+                    ->whereHas('inventarioAplicacion', fn (Builder $query) => $query->where('estado', 'APLICADA'))
+                    ->count(),
+                'review' => $this->currentKizeoDeliveryForms(clone $kizeoPeriodQuery)
+                    ->where(function (Builder $query) use ($applicationReviewIds) {
+                        $query->whereIn('estado_fuente', ['REQUIERE_REVISION', 'ELIMINADA_EN_KIZEO', 'INCOMPLETA'])
+                            ->orWhereIn('id', $applicationReviewIds);
+                    })
+                    ->count(),
             ];
             $lastSync = EntregaBodega::query()->max('synced_at');
             $kizeoLastSyncedAt = $lastSync ? Carbon::parse($lastSync) : null;
@@ -1089,6 +1078,15 @@ class InventarioBodegaController extends Controller
                         ->whereNull('fecha_pedido')
                         ->whereBetween('kizeo_created_at', [$fromDate, $toDate]);
                 });
+        });
+    }
+
+    private function currentKizeoDeliveryForms(Builder $query): Builder
+    {
+        return $query->where(function (Builder $forms) {
+            $forms->whereIn('kizeo_form_id', EntregaBodegaSyncService::currentFormIds())
+                ->orWhereNull('kizeo_form_id')
+                ->orWhere('kizeo_form_id', '');
         });
     }
 

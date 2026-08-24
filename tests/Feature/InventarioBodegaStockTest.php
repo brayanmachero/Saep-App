@@ -1473,6 +1473,12 @@ class InventarioBodegaStockTest extends TestCase
             'nombre' => 'Entrega sincronizada antes de ayer',
             'fecha_pedido' => $today->copy()->subDays(2)->toDateString(),
         ]);
+        $reviewDelivery = $this->newKizeoDelivery('kizeo-filter-review', $variant, 1, now()->subDays(3));
+        $reviewDelivery->update([
+            'nombre' => 'Entrega fuera del período que requiere revisión',
+            'fecha_pedido' => $today->copy()->subDays(3)->toDateString(),
+            'estado_fuente' => 'INCOMPLETA',
+        ]);
 
         $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
@@ -1482,6 +1488,7 @@ class InventarioBodegaStockTest extends TestCase
             ->assertDontSee('Entrega sincronizada ayer')
             ->assertSee('Periodo')
             ->assertSee('Vigentes (1)')
+            ->assertSee('<article class="inventory-kpi accent-red"><span>Requieren revision</span><strong>0</strong>', false)
             ->assertSee('Antes de ayer')
             ->assertSee('Todo el historial');
 
@@ -1506,6 +1513,13 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('Entrega sincronizada antes de ayer')
             ->assertSee('Vigentes (2)')
             ->assertDontSee('Entrega sincronizada hoy');
+
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo', 'kizeo_periodo' => 'todo']))
+            ->assertOk()
+            ->assertSee('Entrega fuera del período que requiere revisión')
+            ->assertSee('<article class="inventory-kpi accent-red"><span>Requieren revision</span><strong>1</strong>', false);
     }
 
     public function test_saep_catalog_sync_updates_and_creates_advanced_kizeo_list_items_without_deleting_orphans(): void
