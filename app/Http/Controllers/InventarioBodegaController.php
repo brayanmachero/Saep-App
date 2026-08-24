@@ -18,6 +18,7 @@ use App\Services\EntregaBodegaSyncService;
 use App\Services\InventarioKizeoCatalogSyncService;
 use App\Services\InventarioOperationalMasterService;
 use App\Services\InventarioStockService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -193,8 +194,24 @@ class InventarioBodegaController extends Controller
             ? $request->input('kizeo_origen')
             : 'vigentes';
         $kizeoPeriod = $this->kizeoDeliveryPeriod($request);
-        $kizeoDeliveries = $view === 'kizeo'
-            ? EntregaBodega::query()
+        $kizeoPeriodQuery = $view === 'kizeo'
+            ? $this->applyKizeoDeliveryPeriod(EntregaBodega::query(), $kizeoPeriod)
+            : null;
+        $kizeoQueueCounts = ['vigentes' => 0, 'historico' => 0];
+        if ($kizeoPeriodQuery) {
+            $kizeoQueueCounts['vigentes'] = (clone $kizeoPeriodQuery)
+                ->where(function ($forms) {
+                    $forms->whereIn('kizeo_form_id', EntregaBodegaSyncService::currentFormIds())
+                        ->orWhereNull('kizeo_form_id')
+                        ->orWhere('kizeo_form_id', '');
+                })
+                ->count();
+            $kizeoQueueCounts['historico'] = (clone $kizeoPeriodQuery)
+                ->where('kizeo_form_id', EntregaBodegaSyncService::LEGACY_FORM_ID)
+                ->count();
+        }
+        $kizeoDeliveries = $kizeoPeriodQuery
+            ? $kizeoPeriodQuery
                 ->with([
                     'items',
                     'inventarioAplicacion.ubicacion',
@@ -209,22 +226,6 @@ class InventarioBodegaController extends Controller
                             ->orWhere('kizeo_form_id', '');
                     }),
                 )
-                ->when($kizeoPeriod['from'] && $kizeoPeriod['to'], function ($query) use ($kizeoPeriod) {
-                    $fromDate = $kizeoPeriod['from']->copy()->startOfDay();
-                    $toDate = $kizeoPeriod['to']->copy()->endOfDay();
-
-                    $query->where(function ($deliveries) use ($fromDate, $toDate, $kizeoPeriod) {
-                        $deliveries->whereBetween('fecha_pedido', [$fromDate, $toDate])
-                            ->orWhere(function ($withoutRequestDate) use ($kizeoPeriod) {
-                                $withoutRequestDate
-                                    ->whereNull('fecha_pedido')
-                                    ->whereBetween('kizeo_created_at', [
-                                        $kizeoPeriod['from']->copy()->startOfDay(),
-                                        $kizeoPeriod['to']->copy()->endOfDay(),
-                                    ]);
-                            });
-                    });
-                })
                 ->orderByDesc('fecha_pedido')
                 ->orderByDesc('id')
                 ->paginate(20, ['*'], 'kizeo_pagina')
@@ -350,6 +351,7 @@ class InventarioBodegaController extends Controller
             'kizeoCentralStockByVariant' => $kizeoCentralStockByVariant,
             'kizeoBatchEligibleIds' => $kizeoBatchEligibleIds,
             'kizeoQueue' => $kizeoQueue,
+            'kizeoQueueCounts' => $kizeoQueueCounts,
             'kizeoPeriod' => $kizeoPeriod,
             'kizeoLastSyncedAt' => $kizeoLastSyncedAt,
             'kizeoAutoApply' => $this->stock->kizeoAutoApplyState(),
@@ -1062,6 +1064,32 @@ class InventarioBodegaController extends Controller
         }
 
         return compact('period', 'from', 'to', 'label');
+    }
+
+    /**
+     * Restringe los comprobantes Kizeo al mismo período elegido en la interfaz.
+     * Cuando una fuente histórica no trae fecha de pedido, se usa la fecha de
+     * creación en Kizeo para no ocultarla ni contarla dos veces.
+     *
+     * @param  array{from: ?Carbon, to: ?Carbon}  $period
+     */
+    private function applyKizeoDeliveryPeriod(Builder $query, array $period): Builder
+    {
+        if (! $period['from'] || ! $period['to']) {
+            return $query;
+        }
+
+        $fromDate = $period['from']->copy()->startOfDay();
+        $toDate = $period['to']->copy()->endOfDay();
+
+        return $query->where(function (Builder $deliveries) use ($fromDate, $toDate) {
+            $deliveries->whereBetween('fecha_pedido', [$fromDate, $toDate])
+                ->orWhere(function (Builder $withoutRequestDate) use ($fromDate, $toDate) {
+                    $withoutRequestDate
+                        ->whereNull('fecha_pedido')
+                        ->whereBetween('kizeo_created_at', [$fromDate, $toDate]);
+                });
+        });
     }
 
     private function kizeoDateInput(mixed $value): ?Carbon

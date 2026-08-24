@@ -424,8 +424,8 @@
         @endif
 
         <nav class="inventory-kizeo-origin" aria-label="Origen de las entregas Kizeo">
-            <a href="{{ route('inventario-bodega.index', array_merge($kizeoFilterQuery, ['kizeo_origen' => 'vigentes'])) }}" class="inventory-kizeo-origin-link {{ ($kizeoQueue ?? 'vigentes') === 'vigentes' ? 'active' : '' }}">Vigentes</a>
-            <a href="{{ route('inventario-bodega.index', array_merge($kizeoFilterQuery, ['kizeo_origen' => 'historico'])) }}" class="inventory-kizeo-origin-link {{ ($kizeoQueue ?? 'vigentes') === 'historico' ? 'active' : '' }}">Histórico · no descuenta ({{ number_format($kizeoStats['historical']) }})</a>
+            <a href="{{ route('inventario-bodega.index', array_merge($kizeoFilterQuery, ['kizeo_origen' => 'vigentes'])) }}" class="inventory-kizeo-origin-link {{ ($kizeoQueue ?? 'vigentes') === 'vigentes' ? 'active' : '' }}">Vigentes ({{ number_format($kizeoQueueCounts['vigentes']) }})</a>
+            <a href="{{ route('inventario-bodega.index', array_merge($kizeoFilterQuery, ['kizeo_origen' => 'historico'])) }}" class="inventory-kizeo-origin-link {{ ($kizeoQueue ?? 'vigentes') === 'historico' ? 'active' : '' }}">Histórico · no descuenta ({{ number_format($kizeoQueueCounts['historico']) }})</a>
         </nav>
 
         <section class="inventory-kizeo-queue">

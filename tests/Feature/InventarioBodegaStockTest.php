@@ -1481,6 +1481,7 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('Entrega sincronizada hoy')
             ->assertDontSee('Entrega sincronizada ayer')
             ->assertSee('Periodo')
+            ->assertSee('Vigentes (1)')
             ->assertSee('Antes de ayer')
             ->assertSee('Todo el historial');
 
@@ -1489,6 +1490,7 @@ class InventarioBodegaStockTest extends TestCase
             ->get(route('inventario-bodega.index', ['vista' => 'kizeo', 'kizeo_periodo' => 'ayer']))
             ->assertOk()
             ->assertSee('Entrega sincronizada ayer')
+            ->assertSee('Vigentes (1)')
             ->assertDontSee('Entrega sincronizada hoy');
 
         $this->withoutMiddleware(VerificarConsentimientoDatos::class)
@@ -1502,6 +1504,7 @@ class InventarioBodegaStockTest extends TestCase
             ->assertOk()
             ->assertSee('Entrega sincronizada ayer')
             ->assertSee('Entrega sincronizada antes de ayer')
+            ->assertSee('Vigentes (2)')
             ->assertDontSee('Entrega sincronizada hoy');
     }
 
