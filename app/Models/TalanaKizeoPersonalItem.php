@@ -10,8 +10,11 @@ class TalanaKizeoPersonalItem extends Model
 
     protected $fillable = [
         'rut', 'kizeo_list_id', 'kizeo_item_id', 'source_hash',
-        'sincronizado_en', 'ultimo_error',
+        'sincronizado_en', 'ultimo_error', 'proximo_intento_en',
     ];
 
-    protected $casts = ['sincronizado_en' => 'datetime'];
+    protected $casts = [
+        'sincronizado_en' => 'datetime',
+        'proximo_intento_en' => 'datetime',
+    ];
 }

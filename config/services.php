@@ -78,6 +78,9 @@ return [
         'personal_vigente_list_id'       => env('KIZEO_PERSONAL_VIGENTE_LIST_ID'),
         // Lista avanzada Trabajadores por CDD. Talana manda; Kizeo solo recibe.
         'personal_cdd_list_id'           => env('KIZEO_PERSONAL_CDD_LIST_ID', '501626'),
+        // Guardas para impedir bajas si la fuente Talana llegó incompleta o antigua.
+        'personal_cdd_minimum_count'     => env('KIZEO_PERSONAL_CDD_MINIMUM_COUNT', 1500),
+        'personal_cdd_max_source_age_minutes' => env('KIZEO_PERSONAL_CDD_MAX_SOURCE_AGE_MINUTES', 480),
     ],
 
     'google' => [

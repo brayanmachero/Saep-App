@@ -790,13 +790,47 @@ class KizeoService
      */
     public function createListItem(string $listId, array $payload): array
     {
-        return $this->mutateV4('POST', "lists/{$listId}/items", ['items' => [$payload]], $listId);
+        return $this->createListItems($listId, [$payload]);
+    }
+
+    /**
+     * Crea varios ítems en una sola solicitud. Kizeo espera que el cuerpo
+     * contenga una colección bajo la clave `items`.
+     *
+     * @param array<int, array{label:string,properties:array<string,string>}> $payloads
+     */
+    public function createListItems(string $listId, array $payloads): array
+    {
+        if ($payloads === []) {
+            return [];
+        }
+
+        return $this->mutateV4('POST', "lists/{$listId}/items", ['items' => array_values($payloads)], $listId);
     }
 
     /** Actualiza parcialmente un ítem de una lista avanzada. */
     public function updateListItem(string $listId, string $itemId, array $payload): array
     {
         return $this->mutateV4('PATCH', "lists/{$listId}/items/{$itemId}", $payload, $listId);
+    }
+
+    /**
+     * Actualiza varios ítems de una lista avanzada. La API v4 admite hasta
+     * 500 ítems por solicitud y requiere el identificador dentro de cada fila.
+     *
+     * @param array<int, array{item_id:string,label:string,properties:array<string,string>}> $items
+     */
+    public function updateListItems(string $listId, array $items): array
+    {
+        if ($items === []) {
+            return [];
+        }
+
+        if (count($items) > 500) {
+            throw new \InvalidArgumentException('Kizeo admite como máximo 500 ítems por actualización masiva.');
+        }
+
+        return $this->mutateV4('PATCH', "lists/{$listId}/items", ['items' => array_values($items)], $listId);
     }
 
     /**

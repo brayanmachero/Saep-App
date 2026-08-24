@@ -64,8 +64,15 @@ class TalanaKizeoPersonalSyncTest extends TestCase
 
         $migration = require dirname(__DIR__, 2).'/database/migrations/2026_08_21_200000_create_talana_kizeo_personal_items_table.php';
         $migration->up();
+        $retryMigration = require dirname(__DIR__, 2).'/database/migrations/2026_08_24_120000_add_retry_window_to_talana_kizeo_personal_items_table.php';
+        $retryMigration->up();
         Cache::flush();
-        config(['services.kizeo.personal_cdd_list_id' => '501626', 'services.kizeo.token' => 'kizeo-test-token']);
+        config([
+            'services.kizeo.personal_cdd_list_id' => '501626',
+            'services.kizeo.token' => 'kizeo-test-token',
+            'services.kizeo.personal_cdd_minimum_count' => 0,
+            'services.kizeo.personal_cdd_max_source_age_minutes' => 0,
+        ]);
     }
 
     public function test_active_talana_worker_is_published_to_kizeo_with_cdd_boss_and_rut_label(): void
@@ -140,6 +147,67 @@ class TalanaKizeoPersonalSyncTest extends TestCase
         Http::assertNotSent(fn (HttpRequest $request) => $request->method() === 'POST');
     }
 
+    public function test_current_contract_is_published_even_when_the_person_table_has_no_matching_talana_id(): void
+    {
+        TalanaContrato::create([
+            'talana_id' => 200,
+            'persona_talana_id' => 999999,
+            'persona_nombre' => 'Camila Andrea Perez Soto',
+            'persona_rut' => '17222333-4',
+            'persona_email' => 'camila@saep.cl',
+            'desde' => now('America/Santiago')->subMonth()->toDateString(),
+            'hasta' => null,
+            'finiquitado' => false,
+            'centro_costo_nombre' => 'CCU RENCA',
+            'cargo_nombre' => 'OPERADORA',
+        ]);
+        $this->fakeKizeoList();
+
+        $summary = app(TalanaKizeoPersonalSyncService::class)->synchronize();
+
+        $this->assertSame(1, $summary['total']);
+        $this->assertSame(1, $summary['created']);
+        Http::assertSent(fn (HttpRequest $request) => $request->method() === 'POST'
+            && ($request['items'][0]['label'] ?? null) === '17222333-4');
+    }
+
+    public function test_duplicate_remote_rut_is_mapped_without_creating_a_third_item(): void
+    {
+        $this->seedVigenteWorker();
+        $this->fakeKizeoList(existing: [
+            ['id' => 'remote-a', 'label' => '16149512-3', 'properties' => []],
+            ['id' => 'remote-b', 'label' => '16149512-3', 'properties' => []],
+        ]);
+
+        $summary = app(TalanaKizeoPersonalSyncService::class)->synchronize();
+
+        $this->assertSame(1, $summary['total']);
+        $this->assertSame(1, $summary['duplicates']);
+        Http::assertNotSent(fn (HttpRequest $request) => $request->method() === 'POST');
+        Http::assertSent(fn (HttpRequest $request) => $request->method() === 'PATCH'
+            && str_ends_with($request->url(), '/lists/501626/items')
+            && ($request['items'][0]['item_id'] ?? null) === 'remote-a');
+    }
+
+    public function test_reconciliation_removes_duplicate_and_stale_ruts_only_after_the_source_is_validated(): void
+    {
+        $this->seedVigenteWorker();
+        $this->fakeKizeoList(existing: [
+            ['id' => 'remote-a', 'label' => '16149512-3', 'properties' => []],
+            ['id' => 'remote-b', 'label' => '16149512-3', 'properties' => []],
+            ['id' => 'remote-stale', 'label' => '19111111-1', 'properties' => []],
+        ]);
+
+        $summary = app(TalanaKizeoPersonalSyncService::class)->synchronize(false, 250, true);
+
+        $this->assertSame([], $summary['errors']);
+        $this->assertSame(1, $summary['stale']);
+        Http::assertSent(fn (HttpRequest $request) => $request->method() === 'DELETE'
+            && str_ends_with($request->url(), '/lists/501626/items/remote-b'));
+        Http::assertSent(fn (HttpRequest $request) => $request->method() === 'DELETE'
+            && str_ends_with($request->url(), '/lists/501626/items/remote-stale'));
+    }
+
     private function seedVigenteWorker(): void
     {
         TalanaPersona::create([
@@ -178,7 +246,7 @@ class TalanaKizeoPersonalSyncTest extends TestCase
             ],
         ];
 
-        Http::fake(function (HttpRequest $request) use ($definition, $existing, &$deleted) {
+        Http::fake(function (HttpRequest $request) use ($definition, &$existing, &$deleted) {
             if ($request->method() === 'GET' && str_ends_with($request->url(), '/definition')) {
                 return Http::response($definition);
             }
@@ -186,7 +254,21 @@ class TalanaKizeoPersonalSyncTest extends TestCase
                 return Http::response($deleted ? [] : $existing);
             }
             if ($request->method() === 'POST' && str_ends_with($request->url(), '/items')) {
-                return Http::response(['id' => 'remote-jessica'], 201);
+                $created = [];
+                foreach ($request['items'] as $index => $payload) {
+                    $item = [
+                        'id' => $index === 0 ? 'remote-jessica' : 'remote-'.$index,
+                        'label' => $payload['label'],
+                        'properties' => $payload['properties'],
+                    ];
+                    $existing[] = $item;
+                    $created[] = $item;
+                }
+
+                return Http::response(['items' => $created], 201);
+            }
+            if ($request->method() === 'PATCH' && (str_ends_with($request->url(), '/items') || str_contains($request->url(), '/items/'))) {
+                return Http::response(['status' => 'ok']);
             }
             if ($request->method() === 'DELETE' && str_contains($request->url(), '/items/')) {
                 $deleted = true;
