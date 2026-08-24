@@ -886,6 +886,22 @@
     .inventory-editor, .inventory-inline-editor { padding:1rem; }
     .inventory-list-row { gap:1rem; }
 
+    /* El selector de período y Aplicar nunca comparten ni invaden el mismo espacio. */
+    .inventory-kizeo-period-panel { grid-template-columns:minmax(0,1fr) minmax(19rem,26rem); align-items:end; }
+    .inventory-kizeo-period-form { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; justify-content:stretch; min-width:0; width:100%; }
+    .inventory-kizeo-period-form > label { width:auto; min-width:0; }
+    .inventory-kizeo-period-form .inventory-btn { grid-column:2; grid-row:1; justify-self:end; min-width:max-content; white-space:nowrap; }
+    .inventory-kizeo-custom-range.is-visible { grid-column:1 / -1; grid-row:2; }
+    @container (max-width: 1120px) {
+        .inventory-kizeo-period-panel { grid-template-columns:1fr; align-items:stretch; }
+        .inventory-kizeo-period-form { max-width:26rem; }
+    }
+    @container (max-width: 600px) {
+        .inventory-kizeo-period-form { grid-template-columns:1fr; max-width:none; }
+        .inventory-kizeo-period-form .inventory-btn { grid-column:1; grid-row:auto; justify-self:stretch; width:100%; }
+        .inventory-kizeo-custom-range.is-visible { grid-column:1; grid-row:auto; }
+    }
+
     .dark-mode .inventory-page .form-control, .dark-mode .inventory-page .form-select { color:#e5edf9; background:#111827; border-color:#475569; }
     .dark-mode .inventory-page .form-control::placeholder { color:#8090a7; }
     .dark-mode .inventory-page .form-control:focus, .dark-mode .inventory-page .form-select:focus { color:#f8fafc; background:#0f172a; border-color:#a78bfa; box-shadow:0 0 0 .16rem rgba(167,139,250,.18); }
