@@ -24,8 +24,20 @@ Schedule::command('kizeo:sync-entregas-bodega')->everyThirtyMinutes()->withoutOv
 Schedule::command('kizeo:sync-catalogo-inventario')->everyThirtyMinutes()->withoutOverlapping()
     ->skip(fn () => ! config('services.kizeo.inventory_catalog_list_id'));
 
-// Talana manda el personal vigente a la lista avanzada Kizeo 501626 (CDD).
-// Tras el sync de Talana (06:00), al mediodía y al cierre del día.
+// Actualizar el padrón de personas/contratos antes de cada publicación de
+// trabajadores hacia Kizeo. Los cortes de 12:35 y 19:35 omiten las marcas de
+// asistencia, por lo que mantienen el padrón fresco sin repetir la parte
+// costosa del sync diario completo.
+foreach (['12:35', '19:35'] as $horaTalanaPersonal) {
+    Schedule::command('talana:sync-db --solo-contratos')
+        ->dailyAt($horaTalanaPersonal)
+        ->timezone('America/Santiago')
+        ->withoutOverlapping()
+        ->skip(fn () => ! config('services.talana.token'));
+}
+
+// Talana manda el personal vigente a la lista avanzada Kizeo 501626 (CDD)
+// después de cada corte local de Talana.
 foreach (['06:20', '13:00', '20:00'] as $horaPersonalKizeo) {
     Schedule::command('kizeo:sync-personal-talana')
         ->dailyAt($horaPersonalKizeo)
