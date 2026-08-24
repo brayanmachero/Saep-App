@@ -900,6 +900,9 @@ class InventarioStockService
             $skipped = 0;
             $createdProducts = [];
             $updatedProducts = [];
+            $touchedProductIds = [];
+            $touchedVariantIds = [];
+            $centralStockRows = 0;
 
             foreach ($rows as $row) {
                 $values = array_combine($headers, array_pad($row, count($headers), null));
@@ -919,8 +922,13 @@ class InventarioStockService
                 }
                 $talla = Str::upper($talla ?: 'ESTANDAR');
 
-                $locationCode = $this->importText($values['ubicacion_codigo'] ?? $values['ubicacion'] ?? null);
+                $sourceLocation = $this->importText($values['ubicacion_codigo'] ?? $values['ubicacion'] ?? null);
+                $isAllLocationsLabel = $this->isAllLocationsLabel($sourceLocation);
                 $stockRaw = $this->importText($values['stock_inicial'] ?? $values['stock_actual'] ?? $values['stock'] ?? null);
+                $usesCentralDefault = $sourceLocation === '' && $stockRaw !== '';
+                $locationCode = ($isAllLocationsLabel || $usesCentralDefault)
+                    ? self::KIZEO_ORIGIN_LOCATION_CODE
+                    : $sourceLocation;
                 $costRaw = $this->importText(
                     $values['costo_referencia']
                         ?? $values['precio_referencia']
@@ -933,7 +941,7 @@ class InventarioStockService
                 if ($costRaw !== '' && ($referenceCost === null || $referenceCost < 0)) {
                     throw ValidationException::withMessages(['archivo' => "El Costo_Referencia de '{$nombre}' debe ser un número igual o mayor que cero."]);
                 }
-                $hasInitialStock = $locationCode !== '' || $stockRaw !== '';
+                $hasInitialStock = $stockRaw !== '';
                 $location = null;
                 $initialStock = null;
                 if ($hasInitialStock) {
@@ -956,6 +964,9 @@ class InventarioStockService
                     if (! $location) {
                         throw ValidationException::withMessages(['archivo' => "No existe una ubicacion activa con codigo '{$locationCode}' para '{$nombre}'."]);
                     }
+                    $centralStockRows += ($isAllLocationsLabel || $usesCentralDefault) ? 1 : 0;
+                } elseif ($locationCode !== '' && ! $isAllLocationsLabel) {
+                    throw ValidationException::withMessages(['archivo' => "El producto '{$nombre}' tiene Ubicacion_Codigo '{$locationCode}' pero no informa Stock_Inicial."]);
                 }
 
                 $codigo = $this->importText($values['codigo'] ?? null);
@@ -963,6 +974,7 @@ class InventarioStockService
                     ? InventarioProducto::query()->where('codigo', $codigo)->first()
                     : InventarioProducto::query()->whereRaw('LOWER(nombre) = ?', [Str::lower($nombre)])->first();
                 $codigo = $codigo ?: ($product?->codigo ?: $this->availableProductCode(Str::upper(Str::slug($nombre, '-'))));
+                $variantActive = $this->importVariantStatus($values['estado'] ?? $values['activo'] ?? null, $nombre, $talla);
 
                 $attributes = [
                     'nombre' => $nombre,
@@ -971,7 +983,9 @@ class InventarioStockService
                     'subcategoria' => $this->nullable($values['subcategoria'] ?? $values['sub_categoria'] ?? null),
                     'unidad_medida' => $this->nullable($values['formato'] ?? $values['unidad_medida'] ?? null) ?: 'Unidad',
                     'stock_minimo' => $this->decimal($values['stock_critico'] ?? $values['stock_minimo'] ?? 0),
-                    'activo' => true,
+                    // The source status belongs to the item/size. The product state is
+                    // reconciled after every imported size has been saved.
+                    'activo' => $product?->activo ?? $variantActive,
                     'creado_por' => $user->id,
                 ];
 
@@ -992,10 +1006,12 @@ class InventarioStockService
                 $variant->fill([
                     'codigo' => $variant->exists ? $variant->codigo : $this->availableVariantCode($product->codigo, $talla),
                     'descripcion' => $this->nullable($values['descripcion_variante'] ?? null),
-                    'activo' => true,
+                    'activo' => $variantActive,
                 ]);
                 $variant->save();
                 $variantsCreated += $isNewVariant ? 1 : 0;
+                $touchedProductIds[$product->id] = true;
+                $touchedVariantIds[$variant->id] = true;
                 $costsUpdated += $this->syncReferenceCost($variant, $referenceCost, $user, 'IMPORTACION_CATALOGO') ? 1 : 0;
 
                 if ($location && $initialStock !== null) {
@@ -1028,7 +1044,23 @@ class InventarioStockService
                 }
             }
 
-            return compact('created', 'updated', 'variantsCreated', 'stocksSet', 'costsUpdated', 'skipped');
+            foreach (array_keys($touchedProductIds) as $productId) {
+                $product = InventarioProducto::query()->find($productId);
+                if (! $product) {
+                    continue;
+                }
+
+                $hasActiveVariant = $product->variantes()->where('activo', true)->exists();
+                if ((bool) $product->activo !== $hasActiveVariant) {
+                    $product->update(['activo' => $hasActiveVariant]);
+                }
+            }
+
+            $variantsInactive = $touchedVariantIds === []
+                ? 0
+                : InventarioVariante::query()->whereKey(array_keys($touchedVariantIds))->where('activo', false)->count();
+
+            return compact('created', 'updated', 'variantsCreated', 'stocksSet', 'costsUpdated', 'variantsInactive', 'centralStockRows', 'skipped');
         });
     }
 
@@ -1517,6 +1549,38 @@ class InventarioStockService
     private function normalizeHeader(mixed $header): string
     {
         return Str::of((string) $header)->ascii()->lower()->replace([' ', '-', '.'], '_')->replaceMatches('/_+/', '_')->trim('_')->toString();
+    }
+
+    private function isAllLocationsLabel(string $location): bool
+    {
+        $normalized = Str::of($location)
+            ->ascii()
+            ->lower()
+            ->replace([' ', '-', '_'], '')
+            ->toString();
+
+        return in_array($normalized, ['todaslasubicaciones', 'todaubicacion', 'todas'], true);
+    }
+
+    private function importVariantStatus(mixed $value, string $productName, string $size): bool
+    {
+        $status = Str::of($this->importText($value))
+            ->ascii()
+            ->lower()
+            ->replace([' ', '-', '_'], '')
+            ->toString();
+
+        if ($status === '' || in_array($status, ['activo', 'active', 'habilitado', 'habilitada', 'si', 'yes', 'true', '1'], true)) {
+            return true;
+        }
+
+        if (in_array($status, ['inactivo', 'inactiva', 'inactive', 'inhabilitado', 'inhabilitada', 'deshabilitado', 'deshabilitada', 'no', 'false', '0'], true)) {
+            return false;
+        }
+
+        throw ValidationException::withMessages([
+            'archivo' => "El Estado de '{$productName}' talla '{$size}' debe ser Activo/Habilitado o Inactivo/Inhabilitado.",
+        ]);
     }
 
     private function importText(mixed $value): string

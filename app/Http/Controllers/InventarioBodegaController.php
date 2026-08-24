@@ -685,9 +685,15 @@ class InventarioBodegaController extends Controller
         $costMessage = $result['costsUpdated'] > 0
             ? " {$result['costsUpdated']} costo(s) de referencia fueron actualizados y registrados en su historial."
             : '';
+        $statusMessage = $result['variantsInactive'] > 0
+            ? " {$result['variantsInactive']} talla(s) quedaron inhabilitadas segun la columna Estado."
+            : '';
+        $centralStockMessage = $result['centralStockRows'] > 0
+            ? " {$result['centralStockRows']} saldo(s) sin ubicación específica fueron cargados en Sede Central SAEP."
+            : '';
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'catalogo'])
-            ->with('success', "Importacion finalizada: {$result['created']} productos creados, {$result['updated']} actualizados, {$result['variantsCreated']} variantes creadas y {$result['skipped']} filas omitidas.".$stockMessage.$costMessage);
+            ->with('success', "Importacion finalizada: {$result['created']} productos creados, {$result['updated']} actualizados, {$result['variantsCreated']} variantes creadas y {$result['skipped']} filas omitidas.".$stockMessage.$costMessage.$statusMessage.$centralStockMessage);
     }
 
     public function syncCatalogToKizeo(): RedirectResponse
@@ -790,16 +796,16 @@ class InventarioBodegaController extends Controller
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Productos');
-        $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia', 'Stock_Critico', 'Ubicacion_Codigo', 'Stock_Inicial'];
+        $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia', 'Stock_Critico', 'Ubicacion_Codigo', 'Stock_Inicial', 'Estado'];
         $sheet->fromArray($headers, null, 'A1');
-        $sheet->getStyle('A1:K1')->applyFromArray([
+        $sheet->getStyle('A1:L1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF2D0B64']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ]);
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:K1');
-        foreach (range('A', 'K') as $column) {
+        $sheet->setAutoFilter('A1:L1');
+        foreach (range('A', 'L') as $column) {
             $sheet->getColumnDimension($column)->setWidth($column === 'B' ? 34 : 20);
         }
         $sheet->getStyle('H2:H5000')->getNumberFormat()->setFormatCode('#,##0.00');
@@ -810,14 +816,16 @@ class InventarioBodegaController extends Controller
             ['Plantilla de catalogo e inventario inicial'],
             ['Stock_Critico es el minimo que activa una alerta; no representa existencias.'],
             ['Costo_Referencia es el último costo conocido de esa talla. Ingresa solo el número (por ejemplo, 41590); Excel puede mostrarlo con separador de miles. Puedes usar Precio, Precio_Referencia, Costo o Costo_Unitario como alias. Cero o vacío significa sin información y no borra un costo ya registrado.'],
-            ['Para cargar existencias, informa Ubicacion_Codigo (codigo de una ubicacion activa) y Stock_Inicial.'],
+            ['Estado se aplica a cada talla: deja vacío o usa Activo/Habilitado para dejarla disponible; usa Inactivo/Inhabilitado para conservarla en catálogo, pero impedir que se seleccione en nuevos movimientos.'],
+            ['Codigo es opcional para un producto nuevo: SAEP lo genera automáticamente desde el nombre. Para cada talla también genera su código propio.'],
+            ['Para cargar existencias, informa Ubicacion_Codigo (codigo de una ubicacion activa) y Stock_Inicial. Si recibes “Todas las ubicaciones” o dejas la ubicación vacía con Stock_Inicial, SAEP carga ese saldo en SAEP-CENTRAL (Sede Central SAEP).'],
             ['Cada fila corresponde a un producto, talla y ubicacion. El Stock_Inicial fija el saldo de esa talla en esa ubicacion y deja un movimiento trazable.'],
             ['Si vuelves a importar la misma fila con el mismo saldo, no se duplica stock. Si cambias el saldo, se crea un ajuste trazable.'],
-            ['Deja Ubicacion_Codigo y Stock_Inicial vacios si solo quieres cargar o actualizar el catalogo.'],
+            ['Deja Stock_Inicial vacío si solo quieres cargar o actualizar el catálogo.'],
         ], null, 'A1');
         $instructions->getColumnDimension('A')->setWidth(120);
         $instructions->getStyle('A1')->getFont()->setBold(true);
-        $instructions->getStyle('A1:A7')->getAlignment()->setWrapText(true);
+        $instructions->getStyle('A1:A9')->getAlignment()->setWrapText(true);
 
         $path = storage_path('app/plantilla_catalogo_inventario_'.now()->format('YmdHis').'.xlsx');
         (new Xlsx($spreadsheet))->save($path);

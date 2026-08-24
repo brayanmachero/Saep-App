@@ -705,6 +705,111 @@ class InventarioBodegaStockTest extends TestCase
         ]);
     }
 
+    public function test_catalog_import_generates_codes_and_applies_status_per_variant(): void
+    {
+        [$user, $origin] = $this->inventoryContext();
+        $origin->update([
+            'codigo' => InventarioStockService::KIZEO_ORIGIN_LOCATION_CODE,
+            'nombre' => 'Sede Central SAEP',
+        ]);
+        $path = tempnam(sys_get_temp_dir(), 'catalog-status-') . '.xlsx';
+        $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia', 'Stock_Critico', 'Ubicacion_Codigo', 'Stock_Inicial', 'Estado'];
+        $rows = [
+            ['', 'Botín nuevo de prueba', 'EPP', 'Calzado', 'Botines', 'Unidad', '35', null, 2, '', 4, 'Inhabilitado'],
+            ['', 'Botín nuevo de prueba', 'EPP', 'Calzado', 'Botines', 'Unidad', '36', null, 2, 'Todas las ubicaciones', 3, 'Activo'],
+            ['', 'Casco nuevo inhabilitado', 'EPP', 'Cascos', 'Seguridad', 'Unidad', 'ESTANDAR', null, 1, 'Todas las ubicaciones', null, 'Inhabilitado'],
+        ];
+
+        try {
+            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet->fromArray([$headers, ...$rows]);
+            (new Xlsx($sheet->getParent()))->save($path);
+            $result = app(InventarioStockService::class)->importProducts(
+                new UploadedFile($path, 'catalogo.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true),
+                $user,
+            );
+        } finally {
+            @unlink($path);
+        }
+
+        $botin = \App\Models\InventarioProducto::query()->where('nombre', 'Botín nuevo de prueba')->firstOrFail();
+        $casco = \App\Models\InventarioProducto::query()->where('nombre', 'Casco nuevo inhabilitado')->firstOrFail();
+        $botin35 = $botin->variantes()->where('talla', '35')->firstOrFail();
+        $botin36 = $botin->variantes()->where('talla', '36')->firstOrFail();
+        $cascoVariant = $casco->variantes()->where('talla', 'ESTANDAR')->firstOrFail();
+
+        $this->assertSame(2, $result['created']);
+        $this->assertSame(3, $result['variantsCreated']);
+        $this->assertSame(2, $result['stocksSet']);
+        $this->assertSame(2, $result['variantsInactive']);
+        $this->assertSame(2, $result['centralStockRows']);
+        $this->assertNotSame('', $botin->codigo);
+        $this->assertSame($botin->codigo.'-35', $botin35->codigo);
+        $this->assertFalse((bool) $botin35->activo);
+        $this->assertTrue((bool) $botin36->activo);
+        $this->assertTrue((bool) $botin->fresh()->activo);
+        $this->assertFalse((bool) $cascoVariant->activo);
+        $this->assertFalse((bool) $casco->fresh()->activo);
+        $this->assertSame(4.0, app(InventarioStockService::class)->stockActual($origin->id, $botin35->id));
+        $this->assertSame(3.0, app(InventarioStockService::class)->stockActual($origin->id, $botin36->id));
+    }
+
+    public function test_catalog_template_includes_status_and_documents_automatic_codes(): void
+    {
+        $response = (new InventarioBodegaController(app(InventarioStockService::class)))->productTemplate();
+        $path = $response->getFile()->getPathname();
+
+        try {
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+            $headers = $spreadsheet->getSheetByName('Productos')->rangeToArray('A1:L1', null, true, true, false)[0];
+            $instructions = $spreadsheet->getSheetByName('Instrucciones')->rangeToArray('A1:A9', null, true, true, false);
+        } finally {
+            @unlink($path);
+        }
+
+        $this->assertSame(['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia', 'Stock_Critico', 'Ubicacion_Codigo', 'Stock_Inicial', 'Estado'], $headers);
+        $this->assertStringContainsString('Codigo es opcional', $instructions[4][0]);
+        $this->assertStringContainsString('Inactivo/Inhabilitado', $instructions[3][0]);
+        $this->assertStringContainsString('SAEP-CENTRAL', $instructions[5][0]);
+    }
+
+    public function test_catalog_import_and_export_preserve_accents_and_enye(): void
+    {
+        [$user, $origin] = $this->inventoryContext();
+        $path = tempnam(sys_get_temp_dir(), 'catalog-unicode-') . '.xlsx';
+        $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Stock_Critico', 'Ubicacion_Codigo', 'Stock_Inicial', 'Estado'];
+        $row = ['EPP-NANDU', 'Botín Ñandú Ágil', 'EPP', 'Calzado', 'Botines', 'Unidad', '42', 1, $origin->codigo, 3, 'Activo'];
+
+        try {
+            $sheet = (new Spreadsheet())->getActiveSheet();
+            $sheet->fromArray([$headers, $row]);
+            (new Xlsx($sheet->getParent()))->save($path);
+            app(InventarioStockService::class)->importProducts(
+                new UploadedFile($path, 'catalogo.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true),
+                $user,
+            );
+        } finally {
+            @unlink($path);
+        }
+
+        $product = \App\Models\InventarioProducto::query()->where('codigo', 'EPP-NANDU')->firstOrFail();
+        $this->assertSame('Botín Ñandú Ágil', $product->nombre);
+
+        $response = (new InventarioBodegaController(app(InventarioStockService::class)))->exportBalances(Request::create('/inventario-bodega/exportar', 'GET', [
+            'ubicacion_id' => $origin->id,
+            'buscar' => 'EPP-NANDU',
+        ]));
+        $exportPath = $response->getFile()->getPathname();
+
+        try {
+            $rows = \PhpOffice\PhpSpreadsheet\IOFactory::load($exportPath)->getActiveSheet()->toArray(null, true, true, false);
+        } finally {
+            @unlink($exportPath);
+        }
+
+        $this->assertSame('Botín Ñandú Ágil', $rows[1][1]);
+    }
+
     public function test_catalog_import_preserves_reference_cost_history_by_size(): void
     {
         [$user] = $this->inventoryContext();
@@ -1213,8 +1318,9 @@ class InventarioBodegaStockTest extends TestCase
     {
         $view = file_get_contents(dirname(__DIR__, 2) . '/resources/views/inventario_bodega/index.blade.php');
 
-        $this->assertStringContainsString('El catálogo puede incluir stock y costo de referencia.', $view);
+        $this->assertStringContainsString('El catálogo puede incluir stock, costo y estado por talla.', $view);
         $this->assertStringContainsString('Costo_Referencia', $view);
+        $this->assertStringContainsString('Inactivo/Inhabilitado', $view);
         $this->assertStringContainsString('Cargar desde compra', $view);
         $this->assertStringContainsString('Cargar desde conteo', $view);
         $this->assertStringContainsString('conteos.destroy', $view);
