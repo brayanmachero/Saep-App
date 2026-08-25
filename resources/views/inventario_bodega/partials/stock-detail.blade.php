@@ -65,7 +65,7 @@
 
 <section class="inventory-detail-lines">
     <div class="inventory-detail-section-title">
-        <div><h3>Movimientos recientes</h3><small>Últimos {{ $movements->count() }} movimiento(s) en {{ $scope }}</small></div>
+        <div><h3>Movimientos recientes</h3><small>Últimos {{ $movements->count() }} movimiento(s) de la talla {{ $selectedVariant->talla ?: 'ESTANDAR' }} en {{ $scope }}</small></div>
         <strong>Trazabilidad</strong>
     </div>
     <div class="inventory-detail-table-wrap">
@@ -96,7 +96,7 @@
                     <td class="text-end {{ $movement->cantidad < 0 ? 'text-danger' : 'text-success' }}"><strong>{{ $movement->cantidad > 0 ? '+' : '' }}{{ rtrim(rtrim(number_format((float) $movement->cantidad, 3, ',', '.'), '0'), ',') }}</strong></td>
                 </tr>
             @empty
-                <tr><td colspan="5" class="inventory-empty">No hay movimientos de este producto para la ubicación seleccionada.</td></tr>
+                <tr><td colspan="5" class="inventory-empty">No hay movimientos de esta talla para la ubicación seleccionada.</td></tr>
             @endforelse
             </tbody>
         </table>

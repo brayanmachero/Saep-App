@@ -795,7 +795,7 @@ class InventarioBodegaStockTest extends TestCase
             'cantidad' => 3,
             'ocurrido_en' => now(),
             'registrado_por' => $user->id,
-            'registrado_por_nombre' => $user->name,
+            'registrado_por_nombre' => 'Usuario de otra talla',
         ]);
         InventarioMovimiento::create([
             'codigo' => 'MOV-DETALLE-KIZEO',
@@ -825,6 +825,7 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee($user->name)
             ->assertSee('Kizeo')
             ->assertSee('KZ-DETALLE-1')
+            ->assertDontSee('Usuario de otra talla')
             ->assertDontSee('La variante seleccionada no tiene stock.');
     }
 
