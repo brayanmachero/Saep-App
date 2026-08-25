@@ -328,8 +328,7 @@
                                 </label>
                                 <label>Cantidad<input name="items[__INDEX__][cantidad]" type="number" min="0.001" step="0.001" class="form-control" required></label>
                                 <label class="inventory-receipt-cost">Costo unitario
-                                    <input name="items[__INDEX__][costo_unitario]" type="number" min="0" step="0.01" class="form-control" placeholder="Se carga al seleccionar" data-receipt-unit-cost>
-                                    <small data-receipt-cost-hint>Se precarga el costo de referencia; puedes modificarlo para esta compra.</small>
+                                    <input name="items[__INDEX__][costo_unitario]" type="number" min="0" step="0.01" class="form-control" placeholder="Se carga al seleccionar" title="Se precarga el costo de referencia y puedes modificarlo para esta compra." data-receipt-unit-cost>
                                 </label>
                                 <button type="button" class="btn btn-light inventory-icon-btn inventory-remove-line" title="Quitar articulo"><i class="bi bi-trash3"></i></button>
                             </div>
@@ -1231,7 +1230,6 @@ document.addEventListener('DOMContentLoaded', function () {
     function prefillReceiptReferenceCost(line) {
         var variantSelect = line.querySelector('[data-receipt-variant-select]');
         var costInput = line.querySelector('[data-receipt-unit-cost]');
-        var hint = line.querySelector('[data-receipt-cost-hint]');
         if (!variantSelect || !costInput) return;
 
         function applyReferenceCost() {
@@ -1240,13 +1238,13 @@ document.addEventListener('DOMContentLoaded', function () {
             if (Number.isFinite(referenceCost) && referenceCost > 0) {
                 costInput.value = referenceCost.toFixed(2);
                 costInput.placeholder = 'Costo de referencia';
-                if (hint) hint.textContent = 'Costo de referencia precargado. Modifícalo si esta compra tuvo otro valor.';
+                costInput.title = 'Costo de referencia precargado. Modifícalo si esta compra tuvo otro valor.';
                 return;
             }
 
             costInput.value = '';
             costInput.placeholder = 'Sin referencia';
-            if (hint) hint.textContent = 'No hay costo de referencia. Ingresa el valor de esta compra si lo conoces.';
+            costInput.title = 'No hay costo de referencia. Ingresa el valor de esta compra si lo conoces.';
         }
 
         variantSelect.addEventListener('change', applyReferenceCost);

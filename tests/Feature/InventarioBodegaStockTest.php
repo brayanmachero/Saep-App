@@ -1683,7 +1683,7 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertStringContainsString('InventarioMovimiento::TIPOS_DOCUMENTO', $view);
         $this->assertStringContainsString('data-reference-cost', $view);
         $this->assertStringContainsString('prefillReceiptReferenceCost', $view);
-        $this->assertStringContainsString('Costo de referencia precargado', $view);
+        $this->assertStringContainsString('title="Se precarga el costo de referencia', $view);
     }
 
     public function test_kizeo_queue_is_collapsed_and_displays_whether_stock_was_discounted(): void
