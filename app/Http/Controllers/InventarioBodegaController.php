@@ -522,6 +522,34 @@ class InventarioBodegaController extends Controller
         return back()->with('success', $message);
     }
 
+    public function updateVariantStatus(Request $request, InventarioVariante $variante): RedirectResponse
+    {
+        $data = $request->validate([
+            'activo' => ['nullable', 'boolean'],
+        ]);
+        $wasActive = (bool) $variante->activo;
+        $wasProductActive = (bool) $variante->producto()->value('activo');
+        $shouldBeActive = (bool) ($data['activo'] ?? false);
+
+        $this->stock->setVariantActive($variante, $shouldBeActive);
+        $variante->refresh()->load('producto');
+
+        $message = $shouldBeActive
+            ? "Talla {$variante->talla} reactivada. Su saldo e historial se conservan."
+            : "Talla {$variante->talla} inhabilitada. Su saldo e historial se conservan.";
+
+        if ($wasProductActive !== (bool) $variante->producto->activo) {
+            $message .= $variante->producto->activo
+                ? ' El producto también volvió a quedar vigente.'
+                : ' Era la última talla vigente, por lo que el producto quedó inactivo.';
+        } elseif ($wasActive === $shouldBeActive) {
+            $message = "La talla {$variante->talla} ya estaba ".($shouldBeActive ? 'vigente.' : 'inhabilitada.');
+        }
+
+        return redirect()->route('inventario-bodega.index', $this->catalogEditorQuery($request, $variante->producto_id))
+            ->with('success', $message.' Sincroniza con Kizeo para reflejar el cambio en entregas nuevas.');
+    }
+
     public function storeReceipt(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -566,25 +594,7 @@ class InventarioBodegaController extends Controller
         $variant = InventarioVariante::query()->findOrFail($data['variante_id']);
         $stock = $this->stock->setVariantStock($data, $request->user());
 
-        $catalogQuery = [
-            'vista' => 'catalogo',
-            'ubicacion_id' => $data['ubicacion_id'],
-            'producto_editar' => $variant->producto_id,
-        ];
-
-        if ($request->filled('productos_pagina')) {
-            $catalogQuery['productos_pagina'] = max(1, $request->integer('productos_pagina'));
-        }
-
-        if ($request->filled('producto_buscar')) {
-            $catalogQuery['producto_buscar'] = trim((string) $request->input('producto_buscar'));
-        }
-
-        if (in_array($request->input('producto_estado'), ['activos', 'inactivos'], true)) {
-            $catalogQuery['producto_estado'] = $request->input('producto_estado');
-        }
-
-        return redirect()->route('inventario-bodega.index', $catalogQuery)
+        return redirect()->route('inventario-bodega.index', $this->catalogEditorQuery($request, $variant->producto_id, $data['ubicacion_id']))
             ->with('success', 'Saldo de la talla actualizado a '.rtrim(rtrim(number_format($stock, 3, ',', '.'), '0'), ',').'. El ajuste quedo registrado en el kardex.');
     }
 
@@ -1567,6 +1577,32 @@ class InventarioBodegaController extends Controller
         $data['activo'] = $request->boolean('activo');
 
         return $data;
+    }
+
+    private function catalogEditorQuery(Request $request, int $productId, ?int $locationId = null): array
+    {
+        $catalogQuery = [
+            'vista' => 'catalogo',
+            'producto_editar' => $productId,
+        ];
+
+        if ($locationId ?? $request->integer('ubicacion_id')) {
+            $catalogQuery['ubicacion_id'] = $locationId ?? $request->integer('ubicacion_id');
+        }
+
+        if ($request->filled('productos_pagina')) {
+            $catalogQuery['productos_pagina'] = max(1, $request->integer('productos_pagina'));
+        }
+
+        if ($request->filled('producto_buscar')) {
+            $catalogQuery['producto_buscar'] = trim((string) $request->input('producto_buscar'));
+        }
+
+        if (in_array($request->input('producto_estado'), ['activos', 'inactivos'], true)) {
+            $catalogQuery['producto_estado'] = $request->input('producto_estado');
+        }
+
+        return $catalogQuery;
     }
 
     private function productData(Request $request, bool $withCode): array

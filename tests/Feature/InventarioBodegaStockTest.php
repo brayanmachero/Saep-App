@@ -1966,6 +1966,7 @@ class InventarioBodegaStockTest extends TestCase
         [$user] = $this->inventoryContext();
         $variant = InventarioVariante::query()->where('talla', 'M')->firstOrFail();
         $variant->producto->update(['activo' => false]);
+        $this->assertDatabaseHas('inventario_productos', ['id' => $variant->producto_id, 'activo' => false]);
 
         $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
@@ -1987,6 +1988,7 @@ class InventarioBodegaStockTest extends TestCase
         [$user] = $this->inventoryContext();
         $variant = InventarioVariante::query()->where('talla', 'M')->firstOrFail();
         $product = $variant->producto;
+        $variant->update(['activo' => false]);
         $product->update(['activo' => false]);
 
         $this->withoutMiddleware(VerificarConsentimientoDatos::class)
@@ -1995,11 +1997,44 @@ class InventarioBodegaStockTest extends TestCase
             ->assertOk()
             ->assertSee('Busca y selecciona productos activos o inactivos')
             ->assertSee($product->codigo.' - Casco de seguridad · Inactivo')
-            ->assertSee('data-active="0"', false);
+            ->assertSee('data-active="0"', false)
+            ->assertSee('data-variant-status-action-base', false)
+            ->assertSee('Talla vigente');
 
         $this->withoutMiddleware(VerificarConsentimientoDatos::class)
             ->actingAs($user)
             ->from(route('inventario-bodega.index', ['vista' => 'catalogo']))
+            ->patch(route('inventario-bodega.variantes.estado.update', $variant), [
+                'activo' => '1',
+            ])
+            ->assertRedirect(route('inventario-bodega.index', ['vista' => 'catalogo', 'producto_editar' => $product->id]));
+
+        $this->assertDatabaseHas('inventario_productos', ['id' => $product->id, 'activo' => true]);
+        $this->assertDatabaseHas('inventario_variantes', ['id' => $variant->id, 'activo' => true]);
+    }
+
+    public function test_variant_status_is_independent_and_product_updates_do_not_reactivate_it(): void
+    {
+        [$user, , , $variant] = $this->inventoryContext();
+        $product = $variant->producto;
+        $otherVariant = InventarioVariante::query()->create([
+            'producto_id' => $product->id,
+            'codigo' => $product->codigo.'-L',
+            'talla' => 'L',
+            'activo' => true,
+        ]);
+
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->patch(route('inventario-bodega.variantes.estado.update', $variant), ['activo' => '0'])
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('inventario_variantes', ['id' => $variant->id, 'activo' => false]);
+        $this->assertDatabaseHas('inventario_variantes', ['id' => $otherVariant->id, 'activo' => true]);
+        $this->assertDatabaseHas('inventario_productos', ['id' => $product->id, 'activo' => true]);
+
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
             ->put(route('inventario-bodega.productos.update', $product), [
                 'nombre' => $product->nombre,
                 'tipo' => $product->tipo,
@@ -2007,12 +2042,13 @@ class InventarioBodegaStockTest extends TestCase
                 'subcategoria' => $product->subcategoria,
                 'unidad_medida' => $product->unidad_medida,
                 'stock_minimo' => $product->stock_minimo,
-                'tallas' => 'M',
+                'tallas' => 'M, L',
                 'activo' => '1',
             ])
-            ->assertRedirect(route('inventario-bodega.index', ['vista' => 'catalogo']));
+            ->assertSessionHas('success');
 
-        $this->assertDatabaseHas('inventario_productos', ['id' => $product->id, 'activo' => true]);
+        $this->assertDatabaseHas('inventario_variantes', ['id' => $variant->id, 'activo' => false]);
+        $this->assertDatabaseHas('inventario_variantes', ['id' => $otherVariant->id, 'activo' => true]);
     }
 
     public function test_inactive_saep_products_are_removed_from_kizeo_and_can_be_republished(): void

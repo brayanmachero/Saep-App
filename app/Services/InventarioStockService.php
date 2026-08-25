@@ -80,6 +80,32 @@ class InventarioStockService
         $this->syncProductVariants($product, $data['tallas'] ?? null);
     }
 
+    /**
+     * Activa o inhabilita una talla sin alterar las otras variantes ni su
+     * kardex. Un producto solo puede quedar vigente si conserva al menos una
+     * talla vigente.
+     */
+    public function setVariantActive(InventarioVariante $variant, bool $active): void
+    {
+        DB::transaction(function () use ($variant, $active): void {
+            $variant = InventarioVariante::query()
+                ->with('producto')
+                ->lockForUpdate()
+                ->findOrFail($variant->id);
+
+            $variant->update(['activo' => $active]);
+
+            $product = $variant->producto;
+            $hasActiveVariant = $product->variantes()
+                ->where('activo', true)
+                ->exists();
+
+            if ((bool) $product->activo !== $hasActiveVariant) {
+                $product->update(['activo' => $hasActiveVariant]);
+            }
+        });
+    }
+
     public function balances(?int $ubicacionId = null): Collection
     {
         $movementQuery = DB::table('inventario_movimientos')
@@ -1491,14 +1517,10 @@ class InventarioStockService
         }
 
         foreach ($values as $size) {
-            $variant = $product->variantes()->firstOrCreate(
+            $product->variantes()->firstOrCreate(
                 ['talla' => $size],
                 ['codigo' => $this->availableVariantCode($product->codigo, $size), 'activo' => true],
             );
-
-            if (! $variant->activo) {
-                $variant->update(['activo' => true]);
-            }
         }
     }
 

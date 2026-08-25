@@ -877,7 +877,7 @@
                                 <button class="btn btn-light inventory-btn" type="submit" disabled data-editor-submit><i class="bi bi-save2"></i>Guardar cambios</button>
                             </form>
                             @if($activeLocations->isNotEmpty())
-                                <section id="product-variant-editor" class="inventory-variant-editor" data-action="{{ route('inventario-bodega.stock-talla.store') }}" data-csrf="{{ csrf_token() }}" data-stocks="{{ $variantStocksByLocation->toJson() }}" data-product-page="{{ $products->currentPage() }}" data-product-search="{{ $productSearch }}" data-product-status="{{ $productStatus }}" data-highlight-variant="{{ $adjustingVariantId ?: '' }}" hidden>
+                                <section id="product-variant-editor" class="inventory-variant-editor" data-action="{{ route('inventario-bodega.stock-talla.store') }}" data-variant-status-action-base="{{ url('inventario-bodega/variantes') }}" data-csrf="{{ csrf_token() }}" data-stocks="{{ $variantStocksByLocation->toJson() }}" data-product-page="{{ $products->currentPage() }}" data-product-search="{{ $productSearch }}" data-product-status="{{ $productStatus }}" data-highlight-variant="{{ $adjustingVariantId ?: '' }}" hidden>
                                     <div class="inventory-variant-editor-heading">
                                         <div><h3>Desglose por talla</h3><p id="product-variant-editor-copy">Selecciona un producto y una ubicación para editar solo la talla que corresponda.</p></div>
                                         <label>Ubicación para los saldos<select id="product-variant-location" class="form-select"><option value="">Selecciona una ubicación</option>@foreach($activeLocations as $location)<option value="{{ $location->id }}" @selected($selectedLocation === $location->id)>{{ $location->nombre }}</option>@endforeach</select></label>
@@ -1094,6 +1094,7 @@
     .inventory-import-master-form { display:grid; grid-template-columns:minmax(220px,1fr) auto; gap:.65rem; align-items:end; margin-top:.8rem; }.inventory-import-master-form label { display:grid; gap:.28rem; min-width:0; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-import-master-form .form-control { min-height:2.42rem; font-size:.88rem; letter-spacing:0; text-transform:none; }
     @container (max-width: 760px) { .inventory-import-receipt-form,.inventory-import-master-form { grid-template-columns:1fr; }.inventory-import-receipt-form .inventory-btn,.inventory-import-master-form .inventory-btn { width:100%; }.inventory-receipt-reverse[open] { min-width:min(22rem, calc(100vw - 3rem)); } }
     .inventory-product-management { display:grid; gap:.85rem; margin-top:1rem; padding:1rem; background:#f5f3ff; border:1px solid #ded5ff; border-radius:.6rem; }.inventory-product-management .inventory-product-general { margin:0; padding:0; background:transparent; border:0; }.inventory-product-management .inventory-variant-editor { margin:0; padding:1rem 0 0; background:transparent; border:0; border-top:1px solid #ded5ff; border-radius:0; }.inventory-variant-editor { display:grid; gap:.85rem; }.inventory-variant-editor-heading { display:grid; grid-template-columns:minmax(0,1fr) minmax(230px,340px); gap:1rem; align-items:end; }.inventory-variant-editor h3 { margin:0; color:#2e1a68; font-size:1rem; font-weight:800; }.inventory-variant-editor p { margin:.22rem 0 0; color:#665b84; font-size:.81rem; line-height:1.45; }.inventory-variant-editor-heading > label { display:grid; gap:.28rem; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-variant-editor-rows { display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:.7rem; }.inventory-variant-card { display:grid; gap:.72rem; padding:.85rem; background:#fff; border:1px solid #ded5ff; border-radius:.55rem; box-shadow:0 .18rem .65rem rgba(53,36,112,.06); }.inventory-variant-card.is-inactive { opacity:.72; }.inventory-variant-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:.65rem; }.inventory-variant-card-header strong { display:block; color:#21114f; font-size:.95rem; }.inventory-variant-card-header small { display:block; max-width:24ch; margin-top:.12rem; color:#718096; font-size:.7rem; overflow-wrap:anywhere; }.inventory-variant-card-stock { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:.5rem; padding:.65rem; background:#f8fafc; border-radius:.45rem; }.inventory-variant-card-stock span { display:block; color:#748198; font-size:.68rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-variant-card-stock strong { display:block; margin-top:.12rem; color:#17213a; font-size:1.05rem; }.inventory-variant-card label { display:grid; gap:.28rem; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-variant-card .inventory-btn { width:100%; }.dark-mode .inventory-product-management { background:rgba(135,87,236,.12); border-color:rgba(167,139,250,.25); }.dark-mode .inventory-product-management .inventory-variant-editor { border-color:#4c3e77; }.dark-mode .inventory-variant-card { background:#141b2b; border-color:#4c3e77; box-shadow:none; }.dark-mode .inventory-variant-card-header strong,.dark-mode .inventory-variant-card-stock strong { color:#f3f5fb; }.dark-mode .inventory-variant-card-stock { background:#111827; }.dark-mode .inventory-variant-editor h3 { color:#e7ddff; }.dark-mode .inventory-variant-editor p { color:#d8cff7; }
+    .inventory-variant-state-form { display:flex; align-items:center; justify-content:flex-end; min-height:1.7rem; }.inventory-variant-state-switch { display:inline-flex!important; align-items:center; gap:.45rem; color:#4b556b!important; font-size:.7rem!important; font-weight:800!important; letter-spacing:.02em!important; text-transform:none!important; cursor:pointer; }.inventory-variant-state-toggle { position:relative; width:2.2rem; height:1.25rem; margin:0; appearance:none; -webkit-appearance:none; border:1px solid #cbd5e1; border-radius:999px; background:#cbd5e1; cursor:pointer; transition:background .16s ease,border-color .16s ease; }.inventory-variant-state-toggle::before { position:absolute; top:50%; left:.14rem; width:.88rem; height:.88rem; border-radius:50%; background:#fff; box-shadow:0 .05rem .18rem rgba(15,23,42,.25); content:""; transform:translateY(-50%); transition:transform .16s ease; }.inventory-variant-state-toggle:checked { border-color:#169b6b; background:#169b6b; }.inventory-variant-state-toggle:checked::before { transform:translate(0.94rem,-50%); }.inventory-variant-state-toggle:focus-visible { outline:3px solid rgba(114,80,202,.28); outline-offset:2px; }.inventory-variant-stock-adjustment { display:grid; gap:.72rem; }.dark-mode .inventory-variant-state-switch { color:#cbd5e1!important; }.dark-mode .inventory-variant-state-toggle { border-color:#4b5563; background:#4b5563; }.dark-mode .inventory-variant-state-toggle:checked { border-color:#34d399; background:#167a57; }
     .inventory-variant-card.is-target { border-color:#6f49c7; box-shadow:0 0 0 .2rem rgba(111,73,199,.14),0 .22rem .75rem rgba(53,36,112,.1); }.dark-mode .inventory-variant-card.is-target { border-color:#b9a4f5; box-shadow:0 0 0 .2rem rgba(185,164,245,.16); }
     @container (max-width: 700px) { .inventory-variant-editor-heading { grid-template-columns:1fr; }.inventory-variant-editor-rows { grid-template-columns:1fr; } }
     .inventory-movement-receipt-actions { grid-template-columns:minmax(0,1fr) auto; align-items:end; margin-bottom:1rem; background:#f6f4ff; }.inventory-movement-receipt-actions h3 { margin:0; font-size:.92rem; font-weight:800; }.inventory-movement-receipt-actions p { margin:.22rem 0 0; color:#665b84; font-size:.8rem; line-height:1.45; }.inventory-movement-receipt-actions .inventory-import-actions { justify-content:flex-end; }.inventory-receipt-reverse-trigger { white-space:nowrap; }.dark-mode .inventory-movement-receipt-actions { background:rgba(135,87,236,.12); }.dark-mode .inventory-movement-receipt-actions p { color:#d8cff7; }
@@ -1315,7 +1316,7 @@ document.addEventListener('DOMContentLoaded', function () {
         variants.forEach(function (variant) {
             var stock = Number(locationStocks[String(variant.id)] || 0);
             var isHighlightedVariant = highlightedVariantId && String(variant.id) === String(highlightedVariantId);
-            var card = inventoryElement('form', 'inventory-variant-card' + (variant.activo ? '' : ' is-inactive') + (isHighlightedVariant ? ' is-target' : ''));
+            var card = inventoryElement('section', 'inventory-variant-card' + (variant.activo ? '' : ' is-inactive') + (isHighlightedVariant ? ' is-target' : ''));
             card.id = 'inventory-variant-' + variant.id;
             var header = inventoryElement('div', 'inventory-variant-card-header');
             var title = inventoryElement('div');
@@ -1323,6 +1324,37 @@ document.addEventListener('DOMContentLoaded', function () {
             title.append(inventoryElement('strong', null, titleText), inventoryElement('small', null, variant.codigo || 'Sin código de variante'));
             header.appendChild(title);
             header.appendChild(inventoryElement('span', 'inventory-status ' + (variant.activo ? 'is-ok' : 'is-empty'), variant.activo ? 'Activa' : 'Inactiva'));
+
+            var statusForm = document.createElement('form');
+            statusForm.method = 'POST';
+            statusForm.action = productVariantPanel.dataset.variantStatusActionBase + '/' + variant.id + '/estado';
+            statusForm.className = 'inventory-variant-state-form';
+            var statusToggle = document.createElement('input');
+            statusToggle.type = 'checkbox';
+            statusToggle.name = 'activo';
+            statusToggle.value = '1';
+            statusToggle.checked = Boolean(variant.activo);
+            statusToggle.className = 'inventory-variant-state-toggle';
+            statusToggle.setAttribute('role', 'switch');
+            statusToggle.setAttribute('aria-label', titleText + ' vigente');
+            var statusLabel = inventoryElement('label', 'inventory-variant-state-switch');
+            statusLabel.append(statusToggle, inventoryElement('span', null, 'Talla vigente'));
+            statusForm.append(
+                inventoryHiddenInput('_token', productVariantPanel.dataset.csrf),
+                inventoryHiddenInput('_method', 'PATCH'),
+                inventoryHiddenInput('productos_pagina', productVariantPanel.dataset.productPage || '1'),
+                inventoryHiddenInput('producto_buscar', productVariantPanel.dataset.productSearch || ''),
+                inventoryHiddenInput('producto_estado', productVariantPanel.dataset.productStatus || ''),
+                statusLabel
+            );
+            statusToggle.addEventListener('change', function () {
+                var action = statusToggle.checked ? 'reactivar' : 'inhabilitar';
+                if (!window.confirm('¿Deseas ' + action + ' ' + titleText + '? Su saldo e historial se conservarán. Luego sincroniza con Kizeo para actualizar las opciones de entrega.')) {
+                    statusToggle.checked = !statusToggle.checked;
+                    return;
+                }
+                statusForm.submit();
+            });
 
             var stockSummary = inventoryElement('div', 'inventory-variant-card-stock');
             var current = inventoryElement('div');
@@ -1360,21 +1392,22 @@ document.addEventListener('DOMContentLoaded', function () {
             button.disabled = !locationId || !variant.activo;
             button.append(inventoryElement('i', 'bi bi-save2'), document.createTextNode('Guardar ' + titleText));
 
-            card.method = 'POST';
-            card.action = productVariantPanel.dataset.action;
-            card.append(
+            var stockForm = document.createElement('form');
+            stockForm.method = 'POST';
+            stockForm.action = productVariantPanel.dataset.action;
+            stockForm.className = 'inventory-variant-stock-adjustment';
+            stockForm.append(
                 inventoryHiddenInput('_token', productVariantPanel.dataset.csrf),
                 inventoryHiddenInput('ubicacion_id', locationId),
                 inventoryHiddenInput('variante_id', variant.id),
                 inventoryHiddenInput('productos_pagina', productVariantPanel.dataset.productPage || '1'),
                 inventoryHiddenInput('producto_buscar', productVariantPanel.dataset.productSearch || ''),
                 inventoryHiddenInput('producto_estado', productVariantPanel.dataset.productStatus || ''),
-                header,
-                stockSummary,
                 inventoryLabel('Nuevo saldo', finalStock),
                 inventoryLabel('Motivo del ajuste', reason),
                 button
             );
+            card.append(header, statusForm, stockSummary, stockForm);
             productVariantRows.appendChild(card);
             if (isHighlightedVariant && !didFocusHighlightedVariant) {
                 didFocusHighlightedVariant = true;
