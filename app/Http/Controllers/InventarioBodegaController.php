@@ -227,7 +227,7 @@ class InventarioBodegaController extends Controller
                 ->count();
         }
         $kizeoDeliveries = $kizeoPeriodQuery
-            ? $kizeoPeriodQuery
+            ? (clone $kizeoPeriodQuery)
                 ->with([
                     'items',
                     'inventarioAplicacion.ubicacion',
