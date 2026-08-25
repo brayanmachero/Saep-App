@@ -28,7 +28,15 @@ final class ContratacionSharePointPaths
 
     private static function carpetaPostulante(string $root, PostulanteContratacion $postulante): string
     {
-        return trim($root, '/').'/'.$postulante->rut.' - '.$postulante->nombre;
+        // La carpeta física es única por RUT. Se conserva el nombre de la
+        // primera postulación para que un cambio de mayúsculas, segundo
+        // apellido o correo no cree otra carpeta de SharePoint.
+        $nombreCarpeta = PostulanteContratacion::query()
+            ->where('rut', $postulante->rut)
+            ->oldest('created_at')
+            ->value('nombre') ?: $postulante->nombre;
+
+        return trim($root, '/').'/'.$postulante->rut.' - '.$nombreCarpeta;
     }
 
     private static function fichaNombre(PostulanteContratacion $postulante): string

@@ -188,7 +188,7 @@ class ContratacionController extends Controller
         $graphConfig = config('services.microsoft_graph');
         $site        = $graphConfig['contratacion_site']   ?? 'RRH';
         $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
-        $destino ??= $postulante->es_repostulacion && ! $postulante->es_vigente ? 'historial' : 'vigente';
+        $destino ??= ! $postulante->es_vigente ? 'historial' : 'vigente';
 
         $intentoPrev = ContratacionSyncLog::where('postulante_id', $postulante->id)
             ->where('accion', ContratacionSyncLog::ACCION_SUBIDA_FICHA)
@@ -606,7 +606,7 @@ class ContratacionController extends Controller
         $graphConfig = config('services.microsoft_graph');
         $site        = $graphConfig['contratacion_site']   ?? 'RRH';
         $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
-        $destino     = $postulante->es_repostulacion && ! $postulante->es_vigente ? 'historial' : 'vigente';
+        $destino     = ! $postulante->es_vigente ? 'historial' : 'vigente';
 
         $intentoPrev = ContratacionSyncLog::where('postulante_id', $postulante->id)
             ->where('accion', ContratacionSyncLog::ACCION_RESINCRONIZACION)

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Controllers\ContratacionController;
 use App\Models\PostulanteContratacion;
 use App\Services\OneDriveService;
+use App\Support\ContratacionSharePointPaths;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Http\Request;
@@ -47,7 +48,7 @@ class ContratacionRepostulacionTest extends TestCase
                 'avatar' => null,
             ],
         ])->post(route('contratacion-publico.store'), [
-            'nombre' => 'Juan Guillermo Sandoval Guerra',
+            'nombre' => 'Juan Guillermo Sandoval Guerra Actualizado',
             'rut' => '18.527.794-1',
             'consentimiento_datos' => '1',
             'carnet_frontal' => UploadedFile::fake()->create('carnet-frontal.pdf', 10, 'application/pdf'),
@@ -66,6 +67,10 @@ class ContratacionRepostulacionTest extends TestCase
         $this->assertSame('18.527.794-1', $repostulacion->rut);
         $this->assertSame('aprobado', $previous->fresh()->estado);
         $this->assertFalse($previous->fresh()->es_vigente);
+        $this->assertStringContainsString(
+            '/18.527.794-1 - Juan Guillermo Sandoval Guerra/',
+            ContratacionSharePointPaths::vigente('Postulantes Documents', $repostulacion),
+        );
     }
 
     public function test_approving_a_reapplication_makes_only_that_version_current(): void

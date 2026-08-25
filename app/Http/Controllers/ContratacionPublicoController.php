@@ -441,7 +441,7 @@ class ContratacionPublicoController extends Controller
         $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
 
         $oneDrive = app(OneDriveService::class);
-        $destino ??= $postulante->es_repostulacion && ! $postulante->es_vigente ? 'historial' : 'vigente';
+        $destino ??= ! $postulante->es_vigente ? 'historial' : 'vigente';
 
         // Registro inicial de sincronización (visible al admin)
         $intentoPrev = ContratacionSyncLog::where('postulante_id', $postulante->id)
