@@ -46,6 +46,27 @@
         </div>
     </div>
 
+    @if($postulante->es_repostulacion)
+    <div class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1.5rem;border-left:4px solid #7c3aed;background:#faf5ff;">
+        <div style="display:flex;gap:.7rem;align-items:flex-start;">
+            <i class="bi bi-arrow-repeat" style="color:#7c3aed;font-size:1.1rem;"></i>
+            <div>
+                <strong style="color:#4c1d95;">Repostulación con documentación nueva</strong>
+                <div style="font-size:.84rem;color:#5b21b6;margin-top:.2rem;">
+                    @if($postulante->es_vigente)
+                        Esta versión ya es la documentación vigente para contratación.
+                    @else
+                        Esta versión permanece en Historial de SharePoint hasta que RRHH la apruebe. La documentación vigente anterior no se modifica.
+                    @endif
+                    @if($postulante->postulacionAnterior)
+                        <a href="{{ route('contratacion.show', $postulante->postulacionAnterior) }}" style="font-weight:700;color:#5b21b6;">Ver postulación anterior {{ $postulante->postulacionAnterior->folio }}</a>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
     <div style="display:grid;grid-template-columns:1fr 340px;gap:1.5rem;align-items:start;">
 
         <!-- Columna izquierda: datos + documentos -->
@@ -87,6 +108,22 @@
                     </div>
                 </div>
             </div>
+
+            @if($versiones->count() > 1)
+            <div class="glass-card" style="padding:1.25rem;margin-bottom:1.5rem;">
+                <h5 style="font-size:.9rem;font-weight:700;margin:0 0 .85rem;color:var(--text-main);display:flex;align-items:center;gap:.5rem;">
+                    <i class="bi bi-clock-history" style="color:#7c3aed;"></i> Historial de postulaciones
+                </h5>
+                <div style="display:grid;gap:.55rem;">
+                    @foreach($versiones as $version)
+                    <a href="{{ route('contratacion.show', $version) }}" style="display:flex;justify-content:space-between;align-items:center;gap:.75rem;padding:.65rem .75rem;border:1px solid {{ $version->is($postulante) ? '#c4b5fd' : 'var(--border)' }};border-radius:9px;text-decoration:none;color:inherit;background:{{ $version->is($postulante) ? '#faf5ff' : 'transparent' }};">
+                        <span><strong style="font-size:.82rem;">{{ $version->folio }}</strong><small style="display:block;color:var(--text-muted);margin-top:.1rem;">{{ $version->created_at->format('d/m/Y H:i') }} · {{ $version->email }}</small></span>
+                        <span style="padding:.18rem .5rem;border-radius:999px;font-size:.68rem;font-weight:800;background:{{ $version->es_vigente ? '#dcfce7' : '#f1f5f9' }};color:{{ $version->es_vigente ? '#166534' : '#64748b' }};">{{ $version->es_vigente ? 'Vigente' : 'Historial' }}</span>
+                    </a>
+                    @endforeach
+                </div>
+            </div>
+            @endif
 
             <!-- Documentos -->
             <div class="glass-card" style="padding:1.5rem;">

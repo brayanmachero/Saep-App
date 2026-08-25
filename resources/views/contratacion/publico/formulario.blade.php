@@ -272,6 +272,16 @@
     </div>
     @endif
 
+    @if(! $postulante)
+    <div class="postulante-banner" style="background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a;">
+        <i class="bi bi-arrow-repeat"></i>
+        <div>
+            <strong>¿Ya postulaste antes con otro correo?</strong><br>
+            Puedes completar el formulario con tu RUT y tus documentos actuales. Se creará una nueva versión para revisión de RRHH, sin exponer ni reemplazar tus documentos anteriores.
+        </div>
+    </div>
+    @endif
+
     @if($postulante)
     <div class="postulante-banner">
         <i class="bi bi-patch-check-fill"></i>

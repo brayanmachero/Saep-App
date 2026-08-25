@@ -9,11 +9,13 @@ use App\Models\ContratacionSyncLog;
 use App\Models\PostulanteContratacion;
 use App\Models\RegistroTratamientoDatos;
 use App\Services\OneDriveService;
+use App\Support\ContratacionSharePointPaths;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -40,7 +42,7 @@ class ContratacionController extends Controller
     // ─── Listado ─────────────────────────────────────────────────
     public function index(Request $request)
     {
-        $query = PostulanteContratacion::query();
+        $query = PostulanteContratacion::query()->with(['ultimoSync', 'postulacionAnterior']);
 
         if ($request->filled('buscar')) {
             $b = str_replace(['%', '_'], ['\%', '\_'], $request->buscar);
@@ -55,7 +57,7 @@ class ContratacionController extends Controller
             $query->where('estado', $request->estado);
         }
 
-        $postulantes = $query->with('ultimoSync')->orderByDesc('created_at')->paginate(25)->withQueryString();
+        $postulantes = $query->orderByDesc('created_at')->paginate(25)->withQueryString();
 
         $stats = [
             'total'       => PostulanteContratacion::count(),
@@ -71,7 +73,14 @@ class ContratacionController extends Controller
     // ─── Detalle ─────────────────────────────────────────────────
     public function show(PostulanteContratacion $postulante)
     {
-        return view('contratacion.admin.show', compact('postulante'));
+        $postulante->load('postulacionAnterior');
+        $versiones = PostulanteContratacion::query()
+            ->where('rut', $postulante->rut)
+            ->orderByDesc('es_vigente')
+            ->latest('created_at')
+            ->get();
+
+        return view('contratacion.admin.show', compact('postulante', 'versiones'));
     }
 
     // ─── Ingreso manual (form) ────────────────────────────────────
@@ -172,14 +181,14 @@ class ContratacionController extends Controller
     }
 
     // ─── Helper: subir ficha PDF a SharePoint ─────────────────────
-    private function subirFichaSharePoint(PostulanteContratacion $postulante): void
+    private function subirFichaSharePoint(PostulanteContratacion $postulante, ?string $destino = null): bool
     {
         $oneDrive = app(OneDriveService::class);
 
         $graphConfig = config('services.microsoft_graph');
         $site        = $graphConfig['contratacion_site']   ?? 'RRH';
         $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
-        $carpeta     = $postulante->rut . ' - ' . $postulante->nombre;
+        $destino ??= $postulante->es_repostulacion && ! $postulante->es_vigente ? 'historial' : 'vigente';
 
         $intentoPrev = ContratacionSyncLog::where('postulante_id', $postulante->id)
             ->where('accion', ContratacionSyncLog::ACCION_SUBIDA_FICHA)
@@ -190,7 +199,7 @@ class ContratacionController extends Controller
             'status'          => ContratacionSyncLog::STATUS_EN_PROCESO,
             'intento'         => (int) ($intentoPrev ?? 0) + 1,
             'sharepoint_site' => $site,
-            'origen'          => 'ingreso_manual',
+            'origen'          => $destino === 'historial' ? 'admin_historial' : 'admin_vigente',
             'started_at'      => now(),
         ]);
 
@@ -200,27 +209,31 @@ class ContratacionController extends Controller
                 'error_mensaje' => 'Microsoft Graph no configurado',
                 'finished_at'   => now(),
             ]);
-            return;
+            return false;
         }
 
         try {
             $fichaBytes = $this->generarFichaBytes($postulante);
-            $filename   = $this->fichaFilename($postulante);
+            $remotePath = $destino === 'historial'
+                ? ContratacionSharePointPaths::historial($folder, $postulante)
+                : ContratacionSharePointPaths::vigente($folder, $postulante);
+            $filename = basename($remotePath);
             $ok = $oneDrive->uploadFileToSite(
                 $site,
                 $fichaBytes,
-                "{$folder}/{$carpeta}/{$filename}"
+                $remotePath
             );
             $up = $oneDrive->lastUploadResult;
             $syncLog->update([
                 'status'             => $ok ? ContratacionSyncLog::STATUS_EXITOSO : ContratacionSyncLog::STATUS_FALLIDO,
                 'archivo_nombre'     => $filename,
                 'archivo_tamano'     => strlen($fichaBytes),
-                'sharepoint_path'    => $up['path'] ?? "{$folder}/{$carpeta}/{$filename}",
+                'sharepoint_path'    => $up['path'] ?? $remotePath,
                 'sharepoint_item_id' => $up['item_id'] ?? null,
                 'error_mensaje'      => $ok ? null : ($up['error'] ?? 'Subida falló'),
                 'finished_at'        => now(),
             ]);
+            return $ok;
         } catch (\Throwable $e) {
             Log::error('Contratacion manual: fallo subida ficha SharePoint', ['folio' => $postulante->folio, 'error' => $e->getMessage()]);
             $syncLog->update([
@@ -228,6 +241,7 @@ class ContratacionController extends Controller
                 'error_mensaje' => substr($e->getMessage(), 0, 1000),
                 'finished_at'   => now(),
             ]);
+            return false;
         }
     }
 
@@ -239,12 +253,45 @@ class ContratacionController extends Controller
             'observaciones' => 'nullable|string|max:2000',
         ]);
 
-        $postulante->update([
-            'estado'        => $request->estado,
-            'observaciones' => $request->observaciones,
-        ]);
+        $publicarComoVigente = $postulante->es_repostulacion
+            && ! $postulante->es_vigente
+            && $request->estado === 'aprobado';
 
-        return back()->with('success', 'Estado actualizado correctamente.');
+        DB::transaction(function () use ($postulante, $request, $publicarComoVigente): void {
+            if ($publicarComoVigente) {
+                PostulanteContratacion::query()
+                    ->where('rut', $postulante->rut)
+                    ->whereKeyNot($postulante->id)
+                    ->update(['es_vigente' => false]);
+            }
+
+            $postulante->update([
+                'estado'        => $request->estado,
+                'observaciones' => $request->observaciones,
+                'es_vigente'    => $publicarComoVigente ? true : $postulante->es_vigente,
+            ]);
+        });
+
+        if ($publicarComoVigente) {
+            try {
+                // Se reutiliza la misma generación de ficha consolidada; solo
+                // se publica la versión aprobada en la carpeta vigente.
+                if (! $this->subirFichaSharePoint($postulante->fresh(), 'vigente')) {
+                    return back()->with('warning', 'Estado actualizado, pero no se pudo publicar la ficha vigente en SharePoint. Usa “Sincronizar SharePoint” para reintentar.');
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Contratacion: no se pudo publicar repostulación vigente', [
+                    'folio' => $postulante->folio,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return back()->with('warning', 'Estado actualizado, pero no se pudo publicar la ficha vigente en SharePoint. Usa “Sincronizar SharePoint” para reintentar.');
+            }
+        }
+
+        return back()->with('success', $publicarComoVigente
+            ? 'Repostulación aprobada y publicada como documentación vigente.'
+            : 'Estado actualizado correctamente.');
     }
 
     // ─── Actualizar documentos desde admin ───────────────────────
@@ -559,7 +606,7 @@ class ContratacionController extends Controller
         $graphConfig = config('services.microsoft_graph');
         $site        = $graphConfig['contratacion_site']   ?? 'RRH';
         $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
-        $carpeta     = $postulante->rut . ' - ' . $postulante->nombre;
+        $destino     = $postulante->es_repostulacion && ! $postulante->es_vigente ? 'historial' : 'vigente';
 
         $intentoPrev = ContratacionSyncLog::where('postulante_id', $postulante->id)
             ->where('accion', ContratacionSyncLog::ACCION_RESINCRONIZACION)
@@ -585,18 +632,21 @@ class ContratacionController extends Controller
 
         try {
             $fichaBytes = $this->generarFichaBytes($postulante);
-            $filename   = $this->fichaFilename($postulante);
+            $remotePath = $destino === 'historial'
+                ? ContratacionSharePointPaths::historial($folder, $postulante)
+                : ContratacionSharePointPaths::vigente($folder, $postulante);
+            $filename = basename($remotePath);
             $ok = $oneDrive->uploadFileToSite(
                 $site,
                 $fichaBytes,
-                "{$folder}/{$carpeta}/{$filename}"
+                $remotePath
             );
             $up = $oneDrive->lastUploadResult;
             $syncLog->update([
                 'status'             => $ok ? ContratacionSyncLog::STATUS_EXITOSO : ContratacionSyncLog::STATUS_FALLIDO,
                 'archivo_nombre'     => $filename,
                 'archivo_tamano'     => strlen($fichaBytes),
-                'sharepoint_path'    => $up['path'] ?? "{$folder}/{$carpeta}/{$filename}",
+                'sharepoint_path'    => $up['path'] ?? $remotePath,
                 'sharepoint_item_id' => $up['item_id'] ?? null,
                 'error_mensaje'      => $ok ? null : ($up['error'] ?? 'Subida falló'),
                 'finished_at'        => now(),

@@ -9,6 +9,7 @@ use App\Models\ContratacionSyncLog;
 use App\Models\PostulanteContratacion;
 use App\Models\RegistroTratamientoDatos;
 use App\Services\OneDriveService;
+use App\Support\ContratacionSharePointPaths;
 use App\Support\PrivacyPolicy;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -278,11 +279,17 @@ class ContratacionPublicoController extends Controller
         $rutFormateado = PostulanteContratacion::formatearRut($rutLimpio);
         $rutCarpeta    = strtolower(preg_replace('/\./', '', $rutLimpio));
 
-        if ($esNuevo && PostulanteContratacion::where('rut', $rutFormateado)->exists()) {
-            throw ValidationException::withMessages([
-                'rut' => 'Este RUT ya tiene una postulación registrada. Ingresa con la misma cuenta de Google usada inicialmente o contacta a RRHH.',
-            ]);
-        }
+        // El RUT identifica a la persona, no a su cuenta Google. Si vuelve a
+        // postular con otro correo, se crea una versión nueva y aislada del
+        // expediente anterior para que RRHH pueda revisar ambos historiales.
+        $postulacionAnterior = $esNuevo
+            ? PostulanteContratacion::query()
+                ->where('rut', $rutFormateado)
+                ->orderByDesc('es_vigente')
+                ->latest('id')
+                ->first()
+            : null;
+        $esRepostulacion = $postulacionAnterior !== null;
 
         if (!$esNuevo && $rutFormateado !== $postulante->rut) {
             throw ValidationException::withMessages([
@@ -301,6 +308,10 @@ class ContratacionPublicoController extends Controller
                 'google_id'     => $googleUser['id'],
                 'google_name'   => $googleUser['name'],
                 'google_avatar' => $googleUser['avatar'],
+                'postulacion_anterior_id' => $postulacionAnterior?->id,
+                // Hasta que RRHH revise una repostulación, la documentación
+                // vigente continúa siendo la versión anterior.
+                'es_vigente' => ! $esRepostulacion,
             ];
         } else {
             $datos = [
@@ -337,11 +348,12 @@ class ContratacionPublicoController extends Controller
         $this->deleteOldDocuments($rutasAnteriores, array_intersect_key($datos, array_flip(self::DOCUMENT_FIELDS)));
 
         RegistroTratamientoDatos::registrar(
-            $esNuevo ? 'postulacion_publica_creada' : 'postulacion_publica_actualizada',
+            $esNuevo ? ($esRepostulacion ? 'repostulacion_publica_creada' : 'postulacion_publica_creada') : 'postulacion_publica_actualizada',
             'postulantes_contratacion',
             $postulante->id,
             'personal',
-            "Postulación pública {$postulante->folio} recibida con consentimiento v" . PrivacyPolicy::VERSION
+            ($esRepostulacion ? "Repostulación pública {$postulante->folio} vinculada a {$postulacionAnterior->folio}" : "Postulación pública {$postulante->folio}")
+                . ' recibida con consentimiento v' . PrivacyPolicy::VERSION
         );
 
         // Enviar emails solo en la primera postulación
@@ -363,6 +375,11 @@ class ContratacionPublicoController extends Controller
 
         // Subir documentos + ficha PDF a SharePoint (no crítico)
         try {
+            // La ficha vigente anterior queda congelada como versión histórica
+            // antes de recibir la nueva. El contenido del PDF no se modifica.
+            if ($esNuevo && $esRepostulacion && $postulacionAnterior) {
+                $this->subirASharePoint($postulacionAnterior->fresh(), 'historial');
+            }
             $this->subirASharePoint($postulante);
         } catch (\Throwable $e) {
             Log::warning('SharePoint contratacion upload falló (no crítico): ' . $e->getMessage());
@@ -402,13 +419,14 @@ class ContratacionPublicoController extends Controller
     }
 
     // ─── Subida a SharePoint ─────────────────────────────────────
-    private function subirASharePoint(PostulanteContratacion $postulante): void
+    private function subirASharePoint(PostulanteContratacion $postulante, ?string $destino = null): void
     {
         $graphConfig = config('services.microsoft_graph');
         $site        = $graphConfig['contratacion_site']   ?? 'RRH';
         $folder      = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
 
         $oneDrive = app(OneDriveService::class);
+        $destino ??= $postulante->es_repostulacion && ! $postulante->es_vigente ? 'historial' : 'vigente';
 
         // Registro inicial de sincronización (visible al admin)
         $intentoPrev = ContratacionSyncLog::where('postulante_id', $postulante->id)
@@ -420,7 +438,7 @@ class ContratacionPublicoController extends Controller
             'status'          => ContratacionSyncLog::STATUS_EN_PROCESO,
             'intento'         => (int) ($intentoPrev ?? 0) + 1,
             'sharepoint_site' => $site,
-            'origen'          => 'portal_publico',
+            'origen'          => $destino === 'historial' ? 'portal_publico_historial' : 'portal_publico_vigente',
             'started_at'      => now(),
         ]);
 
@@ -432,9 +450,6 @@ class ContratacionPublicoController extends Controller
             ]);
             return;
         }
-
-        // Carpeta del postulante: "{RUT} - {Nombre}"
-        $carpeta = $postulante->rut . ' - ' . $postulante->nombre;
 
         // Generar PDF consolidado y subirlo
         try {
@@ -717,14 +732,15 @@ class ContratacionPublicoController extends Controller
                 'size'  => strlen($fichaBytes),
             ]);
 
-            $seq          = (int) substr(strrchr($postulante->folio, '-'), 1);
-            $fichaNum     = str_pad($seq, 3, '0', STR_PAD_LEFT);
-            $fichaFilename = $postulante->rut . ' - FICHA ' . $fichaNum . ' - ' . $postulante->nombre . '.pdf';
+            $remotePath = $destino === 'historial'
+                ? ContratacionSharePointPaths::historial($folder, $postulante)
+                : ContratacionSharePointPaths::vigente($folder, $postulante);
+            $fichaFilename = basename($remotePath);
 
             $ok = $oneDrive->uploadFileToSite(
                 $site,
                 $fichaBytes,
-                "{$folder}/{$carpeta}/{$fichaFilename}"
+                $remotePath
             );
 
             $up = $oneDrive->lastUploadResult;
@@ -732,7 +748,7 @@ class ContratacionPublicoController extends Controller
                 'status'             => $ok ? ContratacionSyncLog::STATUS_EXITOSO : ContratacionSyncLog::STATUS_FALLIDO,
                 'archivo_nombre'     => $fichaFilename,
                 'archivo_tamano'     => strlen($fichaBytes),
-                'sharepoint_path'    => $up['path'] ?? "{$folder}/{$carpeta}/{$fichaFilename}",
+                'sharepoint_path'    => $up['path'] ?? $remotePath,
                 'sharepoint_item_id' => $up['item_id'] ?? null,
                 'error_mensaje'      => $ok ? null : ($up['error'] ?? 'Subida falló'),
                 'finished_at'        => now(),

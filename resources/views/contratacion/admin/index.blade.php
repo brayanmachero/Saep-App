@@ -137,6 +137,11 @@
                     <tr>
                         <td>
                             <code style="font-weight:700;font-size:.8rem;color:#0369a1;">{{ $p->folio }}</code>
+                            @if($p->es_repostulacion)
+                            <div style="margin-top:.35rem;"><span style="padding:.16rem .45rem;border-radius:999px;font-size:.66rem;font-weight:800;background:#ede9fe;color:#6d28d9;">Repostulación</span></div>
+                            @elseif($p->es_vigente)
+                            <div style="margin-top:.35rem;"><span style="padding:.16rem .45rem;border-radius:999px;font-size:.66rem;font-weight:800;background:#dcfce7;color:#166534;">Vigente</span></div>
+                            @endif
                         </td>
                         <td>
                             <div style="font-weight:600;">{{ $p->nombre }}</div>

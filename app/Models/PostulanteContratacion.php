@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -16,6 +17,7 @@ class PostulanteContratacion extends Model
     protected $fillable = [
         'folio', 'nombre', 'rut', 'email',
         'google_id', 'google_name', 'google_avatar',
+        'postulacion_anterior_id', 'es_vigente',
         'carnet_frontal', 'carnet_reverso',
         'certificado_afp', 'certificado_fonasa',
         'licencia_conducir_frontal', 'licencia_conducir_reverso',
@@ -31,6 +33,7 @@ class PostulanteContratacion extends Model
         'consentimiento_at' => 'datetime',
         'consentimiento_aceptado_at' => 'datetime',
         'anonimizado_at' => 'datetime',
+        'es_vigente' => 'boolean',
     ];
 
     public const DOCUMENTOS_OBLIGATORIOS = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa'];
@@ -121,6 +124,21 @@ class PostulanteContratacion extends Model
     public function syncLogs(): HasMany
     {
         return $this->hasMany(ContratacionSyncLog::class, 'postulante_id')->latest('id');
+    }
+
+    public function postulacionAnterior(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'postulacion_anterior_id');
+    }
+
+    public function repostulaciones(): HasMany
+    {
+        return $this->hasMany(self::class, 'postulacion_anterior_id')->latest('id');
+    }
+
+    public function getEsRepostulacionAttribute(): bool
+    {
+        return $this->postulacion_anterior_id !== null;
     }
 
     public function ultimoSync(): HasOne

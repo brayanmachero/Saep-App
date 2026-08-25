@@ -4,11 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\LeyKarin;
 use App\Models\PostulanteContratacion;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 class PublicConfirmationSignatureTest extends TestCase
 {
+    use RefreshDatabase;
+
     private array $leyKarinIds = [];
     private array $postulanteIds = [];
 
