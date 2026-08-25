@@ -102,6 +102,14 @@ class InventarioBodegaController extends Controller
             ->paginate(30, ['*'], 'productos_pagina')
             ->withQueryString();
 
+        // El listado visible puede estar filtrado o paginado, pero el editor debe
+        // permitir recuperar cualquier producto histórico para reactivarlo.
+        $productEditorOptions = InventarioProducto::query()
+            ->with('variantes')
+            ->orderByDesc('activo')
+            ->orderBy('nombre')
+            ->get();
+
         $locations = InventarioUbicacion::query()->orderByDesc('activo')->orderBy('nombre')->get();
         $activeLocations = $locations->where('activo', true)->values();
         $variantOptions = InventarioVariante::query()
@@ -360,6 +368,7 @@ class InventarioBodegaController extends Controller
             'movements' => $movements,
             'summaryAnalytics' => $summaryAnalytics,
             'products' => $products,
+            'productEditorOptions' => $productEditorOptions,
             'ingresos' => InventarioIngreso::query()
                 ->with(['ubicacion', 'proveedor', 'items.producto', 'items.variante', 'reversadoPor', 'registradoPor'])
                 ->whereDate('fecha_recepcion', '>=', $operationalStart)

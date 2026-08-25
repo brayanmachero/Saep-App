@@ -1982,6 +1982,39 @@ class InventarioBodegaStockTest extends TestCase
             ->assertDontSee('Casco de seguridad');
     }
 
+    public function test_product_management_can_find_and_reactivate_inactive_products_outside_the_visible_table_filter(): void
+    {
+        [$user] = $this->inventoryContext();
+        $variant = InventarioVariante::query()->where('talla', 'M')->firstOrFail();
+        $product = $variant->producto;
+        $product->update(['activo' => false]);
+
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'catalogo', 'producto_estado' => 'activos']))
+            ->assertOk()
+            ->assertSee('Busca y selecciona productos activos o inactivos')
+            ->assertSee($product->codigo.' - Casco de seguridad · Inactivo')
+            ->assertSee('data-active="0"', false);
+
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->from(route('inventario-bodega.index', ['vista' => 'catalogo']))
+            ->put(route('inventario-bodega.productos.update', $product), [
+                'nombre' => $product->nombre,
+                'tipo' => $product->tipo,
+                'categoria' => $product->categoria,
+                'subcategoria' => $product->subcategoria,
+                'unidad_medida' => $product->unidad_medida,
+                'stock_minimo' => $product->stock_minimo,
+                'tallas' => 'M',
+                'activo' => '1',
+            ])
+            ->assertRedirect(route('inventario-bodega.index', ['vista' => 'catalogo']));
+
+        $this->assertDatabaseHas('inventario_productos', ['id' => $product->id, 'activo' => true]);
+    }
+
     public function test_inactive_saep_products_are_removed_from_kizeo_and_can_be_republished(): void
     {
         [$user] = $this->inventoryContext();
