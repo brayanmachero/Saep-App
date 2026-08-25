@@ -522,6 +522,25 @@
             <article class="inventory-kpi accent-blue"><span>Histórico Kizeo</span><strong>{{ $kizeoStats['historical'] }}</strong><small>Formulario 947762, no descuenta</small></article>
         </section>
 
+        @php
+            $kizeoDeliveredUnits = (float) $kizeoDeliveredArticles->sum('cantidad');
+        @endphp
+        <section class="inventory-kizeo-delivered" aria-label="Artículos descontados desde Kizeo">
+            <div class="inventory-kizeo-delivered-heading">
+                <div>
+                    <p class="inventory-kicker">Salida aplicada</p>
+                    <h3>Artículos descontados en Kizeo · {{ $kizeoPeriod['label'] }}</h3>
+                    <p>Resumen de entregas vigentes que ya descontaron stock desde Sede Central SAEP.</p>
+                </div>
+                <div class="inventory-kizeo-delivered-total"><strong>{{ rtrim(rtrim(number_format($kizeoDeliveredUnits, 3, ',', '.'), '0'), ',') }}</strong><span>unidades entregadas</span></div>
+            </div>
+            @if($kizeoDeliveredArticles->isNotEmpty())
+                <div class="inventory-table-wrap inventory-kizeo-delivered-table"><table class="inventory-table"><thead><tr><th>Código</th><th>Artículo</th><th>Talla</th><th class="text-end">Unidades</th><th class="text-end">Comprobantes</th></tr></thead><tbody>@foreach($kizeoDeliveredArticles as $article)<tr><td><a class="inventory-code" href="{{ route('inventario-bodega.index', array_merge($kizeoFilterQuery, ['kizeo_articulo' => $article->producto_codigo])) }}">{{ $article->producto_codigo }}</a></td><td><strong>{{ $article->producto_nombre }}</strong></td><td>{{ $article->talla }}</td><td class="text-end"><strong>{{ rtrim(rtrim(number_format((float) $article->cantidad, 3, ',', '.'), '0'), ',') }}</strong></td><td class="text-end">{{ number_format($article->entregas) }}</td></tr>@endforeach</tbody></table></div>
+            @else
+                <div class="inventory-kizeo-delivered-empty"><i class="bi bi-check2-circle"></i>No hay artículos descontados para este período.</div>
+            @endif
+        </section>
+
         <section class="inventory-kizeo-notice"><i class="bi bi-shield-check"></i><div><strong>Salida centralizada</strong><span>Las entregas Kizeo siempre descuentan desde <strong>{{ $centralKizeoLocation?->nombre ?: 'SAEP-CENTRAL' }}</strong>. La aplicación masiva exige artículo y talla exactos; las tallas genéricas <strong>NA</strong> se asocian de forma segura a la variante <strong>ESTANDAR</strong> del mismo artículo. El formulario histórico <strong>Control de Entrega Bodega (947762)</strong> no se descuenta: son {{ number_format($kizeoStats['historical']) }} comprobantes de consulta. Si Kizeo se corrige luego, usa el reverso para reponer el stock y deja el motivo registrado. @if(! empty($kizeoAutoApply['enabled'])) El interruptor automático solo cubre caídas nuevas posteriores a su activación.@else El descuento automático está apagado: las caídas nuevas de formularios vigentes quedan pendientes hasta que Bodega las aplique.@endif</span></div></section>
         <script id="inventory-kizeo-central-stock" type="application/json">@json($kizeoCentralStockByVariant)</script>
 
@@ -973,6 +992,9 @@
     @container (max-width: 760px) { .inventory-kizeo-batch-form { grid-template-columns:1fr; align-items:stretch; }.inventory-kizeo-batch-form .inventory-btn { width:100%; }.inventory-kizeo-batch-all { width:max-content; max-width:100%; white-space:normal; } }
     .dark-mode .inventory-delivery-card[open] > .inventory-delivery-header,.dark-mode .inventory-delivery-body-actions { background:rgba(255,255,255,.025); border-color:#374151; }
     .dark-mode .inventory-delivery-items { color:#aeb9cc; }.dark-mode .inventory-delivery-toggle { color:#c4b5fd; background:#1f2937; border-color:#475569; }
+
+    .inventory-kizeo-delivered { margin:0 0 1rem; overflow:hidden; background:#fff; border:1px solid #dce6f3; border-radius:.68rem; }.inventory-kizeo-delivered-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.85rem 1rem; background:linear-gradient(100deg,#f7f5ff,#f4fbf7); border-bottom:1px solid #e4ebf4; }.inventory-kizeo-delivered-heading .inventory-kicker { margin:0 0 .16rem; }.inventory-kizeo-delivered-heading h3 { margin:0; color:#263652; font-size:.92rem; font-weight:800; }.inventory-kizeo-delivered-heading p:not(.inventory-kicker) { margin:.14rem 0 0; color:#687995; font-size:.76rem; }.inventory-kizeo-delivered-total { min-width:8rem; padding:.45rem .7rem; color:#285642; background:#ecfdf3; border:1px solid #b7ebcb; border-radius:.5rem; text-align:right; }.inventory-kizeo-delivered-total strong,.inventory-kizeo-delivered-total span { display:block; }.inventory-kizeo-delivered-total strong { font-size:1.03rem; font-weight:850; }.inventory-kizeo-delivered-total span { margin-top:.06rem; font-size:.68rem; font-weight:700; }.inventory-kizeo-delivered-table { max-height:18rem; margin:0; }.inventory-kizeo-delivered-table .inventory-table { min-width:38rem; }.inventory-kizeo-delivered-empty { display:flex; align-items:center; gap:.45rem; padding:1rem; color:#65748b; font-size:.8rem; }.inventory-kizeo-delivered-empty i { color:#16a34a; font-size:1rem; }.dark-mode .inventory-kizeo-delivered { background:#1f2937; border-color:#374151; }.dark-mode .inventory-kizeo-delivered-heading { background:linear-gradient(100deg,#211a3b,#143325); border-color:#374151; }.dark-mode .inventory-kizeo-delivered-heading h3 { color:#f8fafc; }.dark-mode .inventory-kizeo-delivered-heading p:not(.inventory-kicker),.dark-mode .inventory-kizeo-delivered-empty { color:#aeb9cc; }.dark-mode .inventory-kizeo-delivered-total { color:#bbf7d0; background:#052e16; border-color:#166534; }
+    @container (max-width: 620px) { .inventory-kizeo-delivered-heading { align-items:flex-start; flex-direction:column; }.inventory-kizeo-delivered-total { min-width:0; width:100%; text-align:left; } }
 
     /* Compact, resilient inventory controls for desktop zoom and smaller work areas. */
     .inventory-page { box-sizing:border-box; width:100%; max-width:1680px; margin:0 auto; padding:.65rem clamp(.85rem,1.35vw,1.5rem) 2.25rem; }

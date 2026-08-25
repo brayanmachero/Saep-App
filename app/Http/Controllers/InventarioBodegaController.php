@@ -61,6 +61,7 @@ class InventarioBodegaController extends Controller
         $summaryPeriod = $view === 'resumen'
             ? $this->summaryOperationalPeriod($request)
             : null;
+        $operationalStart = $this->inventoryReportingStart();
 
         $critical = $balances->filter(function (InventarioVariante $variant) {
             $minimum = $variant->stock_minimo ?? $variant->producto->stock_minimo;
@@ -264,6 +265,7 @@ class InventarioBodegaController extends Controller
             }
         }
         $kizeoStats = ['pending' => 0, 'historical' => 0, 'returns' => 0, 'applied' => 0, 'review' => 0];
+        $kizeoDeliveredArticles = collect();
         $kizeoLastSyncedAt = null;
         if ($view === 'kizeo') {
             $kizeoApplications = InventarioEntregaKizeoAplicacion::query()
@@ -298,6 +300,23 @@ class InventarioBodegaController extends Controller
                     })
                     ->count(),
             ];
+            $kizeoAppliedDeliveryIds = $this->currentKizeoDeliveryForms(clone $kizeoPeriodQuery)
+                ->where('flujo_inventario', 'SALIDA')
+                ->whereHas('inventarioAplicacion', fn (Builder $query) => $query->where('estado', 'APLICADA'))
+                ->select('entregas_bodega.id');
+            $kizeoDeliveredArticles = DB::table('inventario_entrega_kizeo_lineas as lineas')
+                ->join('inventario_entrega_kizeo_aplicaciones as aplicaciones', 'aplicaciones.id', '=', 'lineas.aplicacion_id')
+                ->join('inventario_variantes as variantes', 'variantes.id', '=', 'lineas.variante_id')
+                ->join('inventario_productos as productos', 'productos.id', '=', 'lineas.producto_id')
+                ->where('aplicaciones.estado', 'APLICADA')
+                ->whereIn('aplicaciones.entrega_bodega_id', $kizeoAppliedDeliveryIds->toBase())
+                ->select('lineas.variante_id', 'productos.codigo as producto_codigo', 'productos.nombre as producto_nombre', 'variantes.talla')
+                ->selectRaw('SUM(lineas.cantidad_fuente) as cantidad')
+                ->selectRaw('COUNT(DISTINCT aplicaciones.entrega_bodega_id) as entregas')
+                ->groupBy('lineas.variante_id', 'productos.codigo', 'productos.nombre', 'variantes.talla')
+                ->orderByDesc('cantidad')
+                ->orderBy('productos.nombre')
+                ->get();
             $lastSync = EntregaBodega::query()->max('synced_at');
             $kizeoLastSyncedAt = $lastSync ? Carbon::parse($lastSync) : null;
         }
@@ -343,14 +362,23 @@ class InventarioBodegaController extends Controller
             'products' => $products,
             'ingresos' => InventarioIngreso::query()
                 ->with(['ubicacion', 'proveedor', 'items.producto', 'items.variante', 'reversadoPor', 'registradoPor'])
+                ->whereDate('fecha_recepcion', '>=', $operationalStart)
                 ->latest('fecha_recepcion')
                 ->latest('id')
                 ->limit(15)
                 ->get(),
-            'conteos' => InventarioConteo::query()->with('ubicacion')->withCount('lineas')->latest('fecha_corte')->latest('id')->limit(15)->get(),
+            'conteos' => InventarioConteo::query()
+                ->with('ubicacion')
+                ->withCount('lineas')
+                ->whereDate('fecha_corte', '>=', $operationalStart)
+                ->latest('fecha_corte')
+                ->latest('id')
+                ->limit(15)
+                ->get(),
             'kizeoDeliveries' => $kizeoDeliveries,
             'kizeoSuggestions' => $kizeoSuggestions,
             'kizeoStats' => $kizeoStats,
+            'kizeoDeliveredArticles' => $kizeoDeliveredArticles,
             'centralKizeoLocation' => $centralKizeoLocation,
             'kizeoCentralStockByVariant' => $kizeoCentralStockByVariant,
             'kizeoBatchEligibleIds' => $kizeoBatchEligibleIds,

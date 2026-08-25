@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\InventarioIngreso;
+use App\Models\InventarioConteo;
 use App\Models\InventarioMovimiento;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -24,14 +25,19 @@ class ReiniciarTrazabilidadOperativaInventario extends Command
     public function handle(): int
     {
         [$startAt, $importFrom, $importTo] = $this->dates();
-        $targetMovements = $this->targetMovements($startAt, $importFrom, $importTo)->get();
+        $legacyReceiptIds = DB::table('inventario_ingresos')
+            ->where(fn ($receipts) => $receipts
+                ->where('created_at', '<', $startAt)
+                ->orWhereDate('fecha_recepcion', '<', $startAt))
+            ->pluck('id');
+        $legacyStocktakeIds = DB::table('inventario_conteos')
+            ->whereDate('fecha_corte', '<', $startAt)
+            ->pluck('id');
+        $targetMovements = $this->targetMovements($startAt, $importFrom, $importTo, $legacyReceiptIds, $legacyStocktakeIds)->get();
         $importMovements = $targetMovements->filter(fn ($movement) => $movement->origen === 'IMPORTACION_CATALOGO'
             && Carbon::parse($movement->created_at)->betweenIncluded($importFrom, $importTo));
         $legacyMovements = $targetMovements->filter(fn ($movement) => Carbon::parse($movement->ocurrido_en)->lt($startAt));
-        $legacyReceiptIds = DB::table('inventario_ingresos')
-            ->where('created_at', '<', $startAt)
-            ->pluck('id');
-        $baseRows = $this->baseRows($startAt, $importFrom, $importTo);
+        $baseRows = $this->baseRows($startAt, $importFrom, $importTo, $legacyReceiptIds, $legacyStocktakeIds);
         $negativeBaseRows = $baseRows->filter(fn (object $row) => (float) $row->cantidad < 0);
         $currentKizeoBeforeImport = InventarioMovimiento::query()
             ->where('origen', 'KIZEO_EPP')
@@ -54,6 +60,7 @@ class ReiniciarTrazabilidadOperativaInventario extends Command
             ['Movimientos anteriores', $legacyMovements->count()],
             ['Movimientos de nómina a reemplazar', $importMovements->count()],
             ['Ingresos anteriores a retirar', $legacyReceiptIds->count()],
+            ['Conteos anteriores a retirar', $legacyStocktakeIds->count()],
             ['Saldos iniciales oficiales', $baseRows->where('cantidad', '>', 0)->count()],
             ['Unidades de la nómina', $baseRows->sum('cantidad')],
             ['Descuentos Kizeo protegidos', InventarioMovimiento::query()->where('origen', 'KIZEO_EPP')->where('ocurrido_en', '>=', $startAt)->count()],
@@ -84,6 +91,8 @@ class ReiniciarTrazabilidadOperativaInventario extends Command
             'movimientos_reemplazados' => $targetMovements,
             'ingresos_historicos' => DB::table('inventario_ingresos')->whereIn('id', $legacyReceiptIds)->get(),
             'lineas_ingresos_historicos' => DB::table('inventario_ingreso_items')->whereIn('ingreso_id', $legacyReceiptIds)->get(),
+            'conteos_historicos' => DB::table('inventario_conteos')->whereIn('id', $legacyStocktakeIds)->get(),
+            'lineas_conteos_historicos' => DB::table('inventario_conteo_lineas')->whereIn('conteo_id', $legacyStocktakeIds)->get(),
             'costos_historicos' => DB::table('inventario_historial_costos')
                 ->where('referencia_tipo', InventarioIngreso::class)
                 ->whereIn('referencia_id', $legacyReceiptIds)
@@ -93,7 +102,7 @@ class ReiniciarTrazabilidadOperativaInventario extends Command
         Storage::disk('local')->put($backupPath, json_encode($backup, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
 
         try {
-            DB::transaction(function () use ($targetMovements, $legacyReceiptIds, $baseRows, $startAt, $documentNumber, $now, $beforeBalances): void {
+            DB::transaction(function () use ($targetMovements, $legacyReceiptIds, $legacyStocktakeIds, $baseRows, $startAt, $documentNumber, $now, $beforeBalances): void {
                 $movementIds = $targetMovements->pluck('id');
                 $actor = $targetMovements
                     ->firstWhere('origen', 'IMPORTACION_CATALOGO');
@@ -105,6 +114,8 @@ class ReiniciarTrazabilidadOperativaInventario extends Command
                     ->whereIn('referencia_id', $legacyReceiptIds)
                     ->delete();
                 DB::table('inventario_ingresos')->whereIn('id', $legacyReceiptIds)->delete();
+                DB::table('inventario_conteo_lineas')->whereIn('conteo_id', $legacyStocktakeIds)->delete();
+                DB::table('inventario_conteos')->whereIn('id', $legacyStocktakeIds)->delete();
 
                 $initialRows = $baseRows
                     ->filter(fn (object $row) => (float) $row->cantidad > 0)
@@ -197,21 +208,32 @@ class ReiniciarTrazabilidadOperativaInventario extends Command
         return Carbon::createFromFormat($format, $value);
     }
 
-    private function targetMovements(Carbon $startAt, Carbon $importFrom, Carbon $importTo)
+    private function targetMovements(Carbon $startAt, Carbon $importFrom, Carbon $importTo, $legacyReceiptIds, $legacyStocktakeIds)
     {
         return DB::table('inventario_movimientos')
-            ->where(function ($query) use ($startAt, $importFrom, $importTo): void {
+            ->where(function ($query) use ($startAt, $importFrom, $importTo, $legacyReceiptIds, $legacyStocktakeIds): void {
                 $query->where('ocurrido_en', '<', $startAt)
                     ->orWhere(function ($imports) use ($importFrom, $importTo): void {
                         $imports->where('origen', 'IMPORTACION_CATALOGO')
                             ->whereBetween('created_at', [$importFrom, $importTo]);
+                    })
+                    ->orWhere(function ($references) use ($legacyReceiptIds, $legacyStocktakeIds): void {
+                        $references
+                            ->where(function ($receipts) use ($legacyReceiptIds): void {
+                                $receipts->where('referencia_tipo', InventarioIngreso::class)
+                                    ->whereIn('referencia_id', $legacyReceiptIds);
+                            })
+                            ->orWhere(function ($stocktakes) use ($legacyStocktakeIds): void {
+                                $stocktakes->where('referencia_tipo', InventarioConteo::class)
+                                    ->whereIn('referencia_id', $legacyStocktakeIds);
+                            });
                     });
             });
     }
 
-    private function baseRows(Carbon $startAt, Carbon $importFrom, Carbon $importTo)
+    private function baseRows(Carbon $startAt, Carbon $importFrom, Carbon $importTo, $legacyReceiptIds, $legacyStocktakeIds)
     {
-        return $this->targetMovements($startAt, $importFrom, $importTo)
+        return $this->targetMovements($startAt, $importFrom, $importTo, $legacyReceiptIds, $legacyStocktakeIds)
             ->selectRaw('ubicacion_id, producto_id, variante_id, SUM(cantidad) as cantidad')
             ->groupBy('ubicacion_id', 'producto_id', 'variante_id')
             ->orderBy('ubicacion_id')

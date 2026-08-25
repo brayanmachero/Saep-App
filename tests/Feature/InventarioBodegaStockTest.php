@@ -850,6 +850,14 @@ class InventarioBodegaStockTest extends TestCase
             ->where('referencia_tipo', InventarioIngreso::class)
             ->where('referencia_id', $legacyReceipt->id)
             ->update(['ocurrido_en' => '2026-08-23 16:00:00', 'created_at' => '2026-08-23 16:00:00', 'updated_at' => '2026-08-23 16:00:00']);
+        $legacyStocktake = InventarioConteo::create([
+            'codigo' => 'CNT-LEGACY',
+            'ubicacion_id' => $origin->id,
+            'fecha_corte' => '2026-08-21',
+            'estado' => 'BORRADOR',
+            'observacion' => 'Conteo anterior al inicio oficial.',
+            'creado_por' => $user->id,
+        ]);
         InventarioMovimiento::create([
             'codigo' => 'MOV-LEGACY-STOCK',
             'tipo' => 'STOCK_INICIAL',
@@ -919,6 +927,7 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertSame(0, $exitCode, Artisan::output());
 
         $this->assertDatabaseMissing('inventario_ingresos', ['id' => $legacyReceipt->id]);
+        $this->assertDatabaseMissing('inventario_conteos', ['id' => $legacyStocktake->id]);
         $this->assertDatabaseHas('inventario_movimientos', [
             'tipo' => 'STOCK_INICIAL',
             'origen' => 'NOMINA_INICIAL',
@@ -968,6 +977,29 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('Entrega casco por código')
             ->assertDontSee('Entrega de guante')
             ->assertSee('1 entrega sincronizada en SAEP');
+    }
+
+    public function test_kizeo_view_summarizes_applied_articles_for_the_selected_period(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContextWithCentralStock(5);
+        $delivery = $this->newKizeoDelivery('kizeo-applied-summary', $variant, 2, now());
+        $item = $delivery->items->firstOrFail();
+
+        app(InventarioStockService::class)->applyKizeoDelivery(
+            $delivery,
+            $origin->id,
+            [$item->id => ['variante_id' => $variant->id]],
+            $user,
+        );
+
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
+            ->assertOk()
+            ->assertSee('Artículos descontados en Kizeo')
+            ->assertSee($variant->producto->nombre)
+            ->assertSee('unidades entregadas')
+            ->assertSee('Comprobantes');
     }
 
     public function test_catalog_import_sets_stock_by_location_without_confusing_it_with_stock_minimum(): void
