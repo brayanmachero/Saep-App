@@ -316,7 +316,24 @@
                         <label class="inventory-wide-label">Observacion <input name="observacion" class="form-control" maxlength="500" placeholder="Compra, reposicion u otra referencia"></label>
                         <div class="inventory-line-header"><h3>Articulos recibidos</h3><button type="button" class="btn btn-light inventory-btn inventory-add-line" data-target="receipt-lines"><i class="bi bi-plus-lg"></i>Agregar articulo</button></div>
                         <div id="receipt-lines" class="inventory-lines"></div>
-                        <template id="receipt-line-template"><div class="inventory-line"><label>Articulo<select name="items[__INDEX__][variante_id]" class="form-select" required data-inventory-search-select data-search-placeholder="Buscar por codigo, articulo o talla"><option value="">Selecciona articulo y talla</option>@foreach($variantOptions as $variant)<option value="{{ $variant->id }}">{{ $variant->producto->codigo }} - {{ $variant->producto->nombre }} · {{ $variant->talla }}</option>@endforeach</select></label><label>Cantidad<input name="items[__INDEX__][cantidad]" type="number" min="0.001" step="0.001" class="form-control" required></label><label>Costo unitario<input name="items[__INDEX__][costo_unitario]" type="number" min="0" step="0.01" class="form-control" placeholder="Opcional"></label><button type="button" class="btn btn-light inventory-icon-btn inventory-remove-line" title="Quitar articulo"><i class="bi bi-trash3"></i></button></div></template>
+                        <template id="receipt-line-template">
+                            <div class="inventory-line">
+                                <label>Articulo
+                                    <select name="items[__INDEX__][variante_id]" class="form-select" required data-inventory-search-select data-receipt-variant-select data-search-placeholder="Buscar por codigo, articulo o talla">
+                                        <option value="">Selecciona articulo y talla</option>
+                                        @foreach($variantOptions as $variant)
+                                            <option value="{{ $variant->id }}" data-reference-cost="{{ (float) $variant->costo_referencia > 0 ? number_format((float) $variant->costo_referencia, 2, '.', '') : '' }}">{{ $variant->producto->codigo }} - {{ $variant->producto->nombre }} · {{ $variant->talla }}</option>
+                                        @endforeach
+                                    </select>
+                                </label>
+                                <label>Cantidad<input name="items[__INDEX__][cantidad]" type="number" min="0.001" step="0.001" class="form-control" required></label>
+                                <label class="inventory-receipt-cost">Costo unitario
+                                    <input name="items[__INDEX__][costo_unitario]" type="number" min="0" step="0.01" class="form-control" placeholder="Se carga al seleccionar" data-receipt-unit-cost>
+                                    <small data-receipt-cost-hint>Se precarga el costo de referencia; puedes modificarlo para esta compra.</small>
+                                </label>
+                                <button type="button" class="btn btn-light inventory-icon-btn inventory-remove-line" title="Quitar articulo"><i class="bi bi-trash3"></i></button>
+                            </div>
+                        </template>
                         <div class="inventory-form-actions"><button type="submit" class="btn btn-primary inventory-btn"><i class="bi bi-check2-circle"></i>Guardar ingreso</button></div>
                     </form>
                 @endif
@@ -1211,12 +1228,37 @@ document.addEventListener('DOMContentLoaded', function () {
     var template = document.getElementById('receipt-line-template');
     var addButton = document.querySelector('.inventory-add-line');
     var nextIndex = 0;
+    function prefillReceiptReferenceCost(line) {
+        var variantSelect = line.querySelector('[data-receipt-variant-select]');
+        var costInput = line.querySelector('[data-receipt-unit-cost]');
+        var hint = line.querySelector('[data-receipt-cost-hint]');
+        if (!variantSelect || !costInput) return;
+
+        function applyReferenceCost() {
+            var option = variantSelect.options[variantSelect.selectedIndex];
+            var referenceCost = Number(option && option.value ? option.dataset.referenceCost : 0);
+            if (Number.isFinite(referenceCost) && referenceCost > 0) {
+                costInput.value = referenceCost.toFixed(2);
+                costInput.placeholder = 'Costo de referencia';
+                if (hint) hint.textContent = 'Costo de referencia precargado. Modifícalo si esta compra tuvo otro valor.';
+                return;
+            }
+
+            costInput.value = '';
+            costInput.placeholder = 'Sin referencia';
+            if (hint) hint.textContent = 'No hay costo de referencia. Ingresa el valor de esta compra si lo conoces.';
+        }
+
+        variantSelect.addEventListener('change', applyReferenceCost);
+    }
     function addLine() {
         if (!lines || !template) return;
         var fragment = template.content.cloneNode(true);
         fragment.firstElementChild.innerHTML = fragment.firstElementChild.innerHTML.replaceAll('__INDEX__', nextIndex++);
         lines.appendChild(fragment);
-        setupSearchSelects(lines.lastElementChild);
+        var line = lines.lastElementChild;
+        prefillReceiptReferenceCost(line);
+        setupSearchSelects(line);
     }
     if (addButton) { addButton.addEventListener('click', addLine); }
     document.addEventListener('click', function (event) { if (event.target.closest('.inventory-remove-line')) { event.target.closest('.inventory-line').remove(); } });
