@@ -309,9 +309,10 @@ class ContratacionPublicoController extends Controller
                 'google_name'   => $googleUser['name'],
                 'google_avatar' => $googleUser['avatar'],
                 'postulacion_anterior_id' => $postulacionAnterior?->id,
-                // Hasta que RRHH revise una repostulación, la documentación
-                // vigente continúa siendo la versión anterior.
-                'es_vigente' => ! $esRepostulacion,
+                // La ficha principal siempre representa la última versión
+                // enviada. Su estado de RRHH se mantiene en revisión hasta que
+                // la persona responsable la apruebe o rechace.
+                'es_vigente' => true,
             ];
         } else {
             $datos = [
@@ -342,6 +343,10 @@ class ContratacionPublicoController extends Controller
 
         if ($esNuevo) {
             $postulante = PostulanteContratacion::create($datos);
+
+            if ($esRepostulacion && $postulacionAnterior) {
+                $postulacionAnterior->update(['es_vigente' => false]);
+            }
         } else {
             $postulante->update($datos);
         }
@@ -375,12 +380,22 @@ class ContratacionPublicoController extends Controller
 
         // Subir documentos + ficha PDF a SharePoint (no crítico)
         try {
-            // La ficha vigente anterior queda congelada como versión histórica
-            // antes de recibir la nueva. El contenido del PDF no se modifica.
+            // La ficha anterior se archiva antes de reemplazar la principal.
+            // No se modifica cómo se genera el PDF consolidado.
+            $historialActualizado = true;
             if ($esNuevo && $esRepostulacion && $postulacionAnterior) {
-                $this->subirASharePoint($postulacionAnterior->fresh(), 'historial');
+                $historialActualizado = $this->subirASharePoint($postulacionAnterior->fresh(), 'historial');
             }
-            $this->subirASharePoint($postulante);
+
+            if ($historialActualizado) {
+                $principalActualizada = $this->subirASharePoint($postulante, 'vigente');
+
+                // La copia de raíz se borra solo si la anterior ya quedó en
+                // Historial y la nueva ficha principal se publicó con éxito.
+                if ($principalActualizada && $esNuevo && $esRepostulacion && $postulacionAnterior) {
+                    $this->retirarFichaPrincipalAnterior($postulacionAnterior->fresh());
+                }
+            }
         } catch (\Throwable $e) {
             Log::warning('SharePoint contratacion upload falló (no crítico): ' . $e->getMessage());
         }
@@ -419,7 +434,7 @@ class ContratacionPublicoController extends Controller
     }
 
     // ─── Subida a SharePoint ─────────────────────────────────────
-    private function subirASharePoint(PostulanteContratacion $postulante, ?string $destino = null): void
+    private function subirASharePoint(PostulanteContratacion $postulante, ?string $destino = null): bool
     {
         $graphConfig = config('services.microsoft_graph');
         $site        = $graphConfig['contratacion_site']   ?? 'RRH';
@@ -448,7 +463,7 @@ class ContratacionPublicoController extends Controller
                 'error_mensaje' => 'Microsoft Graph no configurado',
                 'finished_at'   => now(),
             ]);
-            return;
+            return false;
         }
 
         // Generar PDF consolidado y subirlo
@@ -755,6 +770,8 @@ class ContratacionPublicoController extends Controller
             ]);
 
             Log::info('SharePoint contratacion: ficha PDF subida exitosamente', ['folio' => $postulante->folio]);
+
+            return $ok;
         } catch (\Throwable $e) {
             Log::error('SharePoint contratacion: fallo en generacion/subida de ficha PDF', [
                 'folio'   => $postulante->folio,
@@ -766,6 +783,27 @@ class ContratacionPublicoController extends Controller
                 'status'        => ContratacionSyncLog::STATUS_FALLIDO,
                 'error_mensaje' => substr($e->getMessage(), 0, 1000),
                 'finished_at'   => now(),
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
+     * La versión anterior ya fue conservada en Historial. Recién entonces se
+     * puede quitar su PDF de la raíz para que solo la última ficha quede fuera.
+     */
+    private function retirarFichaPrincipalAnterior(PostulanteContratacion $postulante): void
+    {
+        $graphConfig = config('services.microsoft_graph');
+        $site = $graphConfig['contratacion_site'] ?? 'RRH';
+        $folder = $graphConfig['contratacion_folder'] ?? 'Postulantes Documents';
+        $path = ContratacionSharePointPaths::vigente($folder, $postulante);
+
+        if (! app(OneDriveService::class)->deleteFileFromSite($site, $path)) {
+            Log::warning('SharePoint contratacion: no se pudo retirar ficha principal anterior', [
+                'folio' => $postulante->folio,
+                'path' => $path,
             ]);
         }
     }

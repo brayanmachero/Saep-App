@@ -53,11 +53,7 @@
             <div>
                 <strong style="color:#4c1d95;">Repostulación con documentación nueva</strong>
                 <div style="font-size:.84rem;color:#5b21b6;margin-top:.2rem;">
-                    @if($postulante->es_vigente)
-                        Esta versión ya es la documentación vigente para contratación.
-                    @else
-                        Esta versión permanece en Historial de SharePoint hasta que RRHH la apruebe. La documentación vigente anterior no se modifica.
-                    @endif
+                    Esta es la última documentación recibida y queda como ficha principal en SharePoint. Su estado permanece en revisión hasta que RRHH la apruebe o rechace.
                     @if($postulante->postulacionAnterior)
                         <a href="{{ route('contratacion.show', $postulante->postulacionAnterior) }}" style="font-weight:700;color:#5b21b6;">Ver postulación anterior {{ $postulante->postulacionAnterior->folio }}</a>
                     @endif

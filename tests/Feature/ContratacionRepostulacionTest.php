@@ -34,7 +34,9 @@ class ContratacionRepostulacionTest extends TestCase
         ]);
 
         $oneDrive = Mockery::mock(OneDriveService::class);
-        $oneDrive->shouldReceive('isConfigured')->twice()->andReturn(false);
+        // Si el respaldo histórico no puede subirse, la ficha principal no se
+        // reemplaza: la operación se detiene para no perder la versión previa.
+        $oneDrive->shouldReceive('isConfigured')->once()->andReturn(false);
         $this->app->instance(OneDriveService::class, $oneDrive);
 
         $response = $this->withSession([
@@ -60,10 +62,10 @@ class ContratacionRepostulacionTest extends TestCase
         $repostulacion = PostulanteContratacion::where('google_id', 'google-nuevo')->firstOrFail();
         $this->assertSame($previous->id, $repostulacion->postulacion_anterior_id);
         $this->assertTrue($repostulacion->es_repostulacion);
-        $this->assertFalse($repostulacion->es_vigente);
+        $this->assertTrue($repostulacion->es_vigente);
         $this->assertSame('18.527.794-1', $repostulacion->rut);
         $this->assertSame('aprobado', $previous->fresh()->estado);
-        $this->assertTrue($previous->fresh()->es_vigente);
+        $this->assertFalse($previous->fresh()->es_vigente);
     }
 
     public function test_approving_a_reapplication_makes_only_that_version_current(): void

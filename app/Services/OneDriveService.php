@@ -268,6 +268,46 @@ class OneDriveService
     }
 
     /**
+     * Elimina un archivo de un sitio SharePoint. Un 404 se considera exitoso:
+     * el resultado deseado (que ya no esté en la carpeta principal) ya se cumple.
+     */
+    public function deleteFileFromSite(string $site, string $remotePath): bool
+    {
+        $this->lastError = null;
+
+        if (! $this->isConfigured()) {
+            $this->recordUploadError('SharePoint: Servicio no configurado para eliminar archivo', ['path' => $remotePath]);
+
+            return false;
+        }
+
+        $token = $this->getAccessToken();
+        $siteId = $this->getSiteIdForSite($site);
+        if (! $token || ! $siteId) {
+            $this->recordUploadError('SharePoint: No se pudo preparar eliminación de archivo', ['path' => $remotePath]);
+
+            return false;
+        }
+
+        $fullPath = $this->sanitizePath($remotePath);
+        $response = Http::withToken($token)->delete($this->driveRootUrl($siteId, $fullPath));
+
+        if ($response->successful() || $response->status() === 404) {
+            Log::info('SharePoint: Ficha principal anterior retirada', ['path' => $fullPath, 'status' => $response->status()]);
+
+            return true;
+        }
+
+        $this->recordUploadError('SharePoint: Error eliminando archivo', [
+            'path' => $fullPath,
+            'status' => $response->status(),
+            'body' => $response->body(),
+        ]);
+
+        return false;
+    }
+
+    /**
      * Obtener URL web de un archivo o carpeta en un sitio SharePoint especifico.
      */
     public function getItemWebUrlForSite(string $site, string $remotePath): ?string
