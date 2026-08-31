@@ -33,6 +33,7 @@ class TalanaKizeoPersonalSyncTest extends TestCase
             $table->string('apellido_paterno', 100)->nullable();
             $table->string('apellido_materno', 100)->nullable();
             $table->string('email', 150)->nullable();
+            $table->date('fecha_nacimiento')->nullable();
             $table->boolean('activo')->default(true);
             $table->timestamp('synced_at')->nullable();
             $table->timestamps();
@@ -44,6 +45,7 @@ class TalanaKizeoPersonalSyncTest extends TestCase
             $table->string('persona_nombre', 200)->nullable();
             $table->string('persona_rut', 20)->nullable();
             $table->string('persona_email', 150)->nullable();
+            $table->date('fecha_contratacion')->nullable();
             $table->date('desde')->nullable();
             $table->date('hasta')->nullable();
             $table->boolean('finiquitado')->default(false);
@@ -189,6 +191,26 @@ class TalanaKizeoPersonalSyncTest extends TestCase
             && ($request['items'][0]['item_id'] ?? null) === 'remote-a');
     }
 
+    public function test_age_and_company_seniority_are_published_when_talana_has_the_source_dates(): void
+    {
+        $this->seedVigenteWorker();
+        TalanaPersona::query()->update([
+            'fecha_nacimiento' => now('America/Santiago')->subYears(30)->toDateString(),
+        ]);
+        TalanaContrato::query()->update([
+            'fecha_contratacion' => now('America/Santiago')->subYears(2)->subMonths(3)->toDateString(),
+        ]);
+
+        $this->fakeKizeoList();
+        app(TalanaKizeoPersonalSyncService::class)->synchronize();
+
+        Http::assertSent(function (HttpRequest $request) {
+            return $request->method() === 'POST'
+                && ($request['items'][0]['properties']['property-edad'] ?? null) === '30'
+                && ($request['items'][0]['properties']['property-antiguedad'] ?? null) === '2 años y 3 meses';
+        });
+    }
+
     public function test_reconciliation_removes_duplicate_and_stale_ruts_only_after_the_source_is_validated(): void
     {
         $this->seedVigenteWorker();
@@ -243,6 +265,8 @@ class TalanaKizeoPersonalSyncTest extends TestCase
                 'email' => ['id' => 'property-email', 'display_name' => 'Email'],
                 'cargo' => ['id' => 'property-cargo', 'display_name' => 'Cargo'],
                 'jefe' => ['id' => 'property-jefe', 'display_name' => 'Jefe'],
+                'edad' => ['id' => 'property-edad', 'display_name' => 'Edad'],
+                'antiguedad' => ['id' => 'property-antiguedad', 'display_name' => 'Antigüedad'],
             ],
         ];
 

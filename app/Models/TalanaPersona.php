@@ -10,12 +10,13 @@ class TalanaPersona extends Model
 
     protected $fillable = [
         'talana_id', 'rut', 'nombre', 'apellido_paterno', 'apellido_materno',
-        'email', 'activo', 'synced_at',
+        'email', 'fecha_nacimiento', 'activo', 'synced_at',
     ];
 
     protected $casts = [
-        'activo'    => 'boolean',
-        'synced_at' => 'datetime',
+        'fecha_nacimiento' => 'date',
+        'activo'           => 'boolean',
+        'synced_at'        => 'datetime',
     ];
 
     public function contratos()

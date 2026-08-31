@@ -6,6 +6,7 @@ use App\Models\InventarioCentroCosto;
 use App\Models\TalanaContrato;
 use App\Models\TalanaKizeoPersonalItem;
 use App\Models\TalanaPersona;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -264,6 +265,7 @@ class TalanaKizeoPersonalSyncService
                     'apellido_materno' => $apellidoMaterno,
                     'nombre_completo' => $this->fullName($nombres, $apellidoPaterno, $apellidoMaterno, $contrato->persona_nombre),
                     'email' => trim((string) ($persona?->email ?: $contrato->persona_email)),
+                    'fecha_nacimiento' => $persona?->fecha_nacimiento,
                 ],
                 'contrato' => $contrato,
                 'rut' => $this->formatRut($rut),
@@ -509,6 +511,8 @@ class TalanaKizeoPersonalSyncService
             'email' => ['email', 'correo', 'mail', 'e mail', 'correo electronico'],
             'cargo' => ['cargo', 'puesto', 'cargo trabajador'],
             'jefe' => ['jefe', 'jefe de operaciones', 'jefe operaciones', 'jefe cdd', 'jefe vd', 'jefatura'],
+            'edad' => ['edad', 'edad trabajador'],
+            'antiguedad' => ['antiguedad', 'antiguedad empresa', 'antiguedad en la empresa', 'anos de servicio'],
         ];
 
         $mapped = [];
@@ -554,6 +558,8 @@ class TalanaKizeoPersonalSyncService
             'email' => $persona['email'],
             'cargo' => trim((string) $contrato->cargo_nombre),
             'jefe' => $jefesPorCentro[$this->comparisonKey($cdd)] ?? trim((string) $contrato->jefe_nombre),
+            'edad' => $this->age($persona['fecha_nacimiento'] ?? null),
+            'antiguedad' => $this->seniority($contrato->fecha_contratacion),
         ];
 
         $properties = [];
@@ -565,6 +571,40 @@ class TalanaKizeoPersonalSyncService
             'label' => $row['rut'],
             'properties' => $properties,
         ];
+    }
+
+    private function age(mixed $birthDate): string
+    {
+        if (! $birthDate instanceof CarbonInterface || $birthDate->isFuture()) {
+            return '';
+        }
+
+        return (string) ((int) $birthDate->copy()->startOfDay()->diffInYears(now('America/Santiago')->startOfDay()));
+    }
+
+    private function seniority(mixed $hireDate): string
+    {
+        if (! $hireDate instanceof CarbonInterface || $hireDate->isFuture()) {
+            return '';
+        }
+
+        $months = (int) $hireDate->copy()->startOfDay()->diffInMonths(now('America/Santiago')->startOfDay());
+        $years = intdiv($months, 12);
+        $remainingMonths = $months % 12;
+
+        if ($years === 0 && $remainingMonths === 0) {
+            return 'Menos de 1 mes';
+        }
+
+        $parts = [];
+        if ($years > 0) {
+            $parts[] = $years.' '.($years === 1 ? 'año' : 'años');
+        }
+        if ($remainingMonths > 0) {
+            $parts[] = $remainingMonths.' '.($remainingMonths === 1 ? 'mes' : 'meses');
+        }
+
+        return implode(' y ', $parts);
     }
 
     private function samePayload(array $remoteItem, array $payload): bool

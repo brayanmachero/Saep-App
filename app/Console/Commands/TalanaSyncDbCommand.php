@@ -112,11 +112,12 @@ class TalanaSyncDbCommand extends Command
                 $lote[] = [
                     'talana_id' => $p['id'],
                     'rut' => $this->str($p['rut'] ?? null),
-                    'nombre' => $this->str($p['name'] ?? null),
-                    'apellido_paterno' => $this->str($p['paternalSurname'] ?? null),
-                    'apellido_materno' => $this->str($p['maternalSurname'] ?? null),
+                    'nombre' => $this->str($p['name'] ?? $p['nombre'] ?? null),
+                    'apellido_paterno' => $this->str($p['paternalSurname'] ?? $p['apellidoPaterno'] ?? null),
+                    'apellido_materno' => $this->str($p['maternalSurname'] ?? $p['apellidoMaterno'] ?? null),
                     'email' => $this->str($p['email'] ?? null),
-                    'activo' => (bool) ($p['active'] ?? true),
+                    'fecha_nacimiento' => $this->date($p['birthDate'] ?? $p['fechaNacimiento'] ?? null),
+                    'activo' => (bool) ($p['active'] ?? $p['activo'] ?? true),
                     'synced_at' => $now,
                     'created_at' => $now,
                     'updated_at' => $now,
@@ -127,7 +128,7 @@ class TalanaSyncDbCommand extends Command
                 foreach (array_chunk($lote, 200) as $chunk) {
                     TalanaPersona::upsert($chunk, ['talana_id'], [
                         'rut', 'nombre', 'apellido_paterno', 'apellido_materno',
-                        'email', 'activo', 'synced_at', 'updated_at',
+                        'email', 'fecha_nacimiento', 'activo', 'synced_at', 'updated_at',
                     ]);
                 }
             }
@@ -189,6 +190,7 @@ class TalanaSyncDbCommand extends Command
                         'persona_email' => $this->str($emp['email'] ?? null),
                         'tipo_contrato' => $this->str($tipo['codigo'] ?? $tipo['id'] ?? null),
                         'tipo_contrato_nombre' => $this->str($tipo['nombre'] ?? null),
+                        'fecha_contratacion' => $this->date($c['fechaContratacion'] ?? $c['hireDate'] ?? null),
                         'desde' => $this->date($c['desde'] ?? null),
                         'hasta' => $this->date($c['hasta'] ?? null),
                         'finiquitado' => (bool) ($c['finiquitado'] ?? false),
@@ -213,7 +215,7 @@ class TalanaSyncDbCommand extends Command
                     TalanaContrato::upsert($chunk, ['talana_id'], [
                         'empresa_id', 'empresa_nombre',
                         'persona_talana_id', 'persona_nombre', 'persona_rut', 'persona_email',
-                        'tipo_contrato', 'tipo_contrato_nombre', 'desde', 'hasta',
+                        'tipo_contrato', 'tipo_contrato_nombre', 'fecha_contratacion', 'desde', 'hasta',
                         'finiquitado', 'sucursal_nombre', 'centro_costo_nombre',
                         'cargo_nombre', 'horas_jornada', 'jefe_nombre', 'synced_at', 'updated_at',
                     ]);
