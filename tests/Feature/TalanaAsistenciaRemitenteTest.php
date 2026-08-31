@@ -41,4 +41,10 @@ class TalanaAsistenciaRemitenteTest extends TestCase
         $this->assertSame('notificaciones@saep.cl', $envelope->from->address);
         $this->assertSame('SAEP · Asistencia', $envelope->from->name);
     }
+
+    public function test_daily_attendance_recipients_are_configured_separately_from_other_talana_alerts(): void
+    {
+        $this->assertSame('sgarcia@saep.cl', config('talana_attendance.recipients.to'));
+        $this->assertSame('jrodriguez@saep.cl,bmachero@saep.cl', config('talana_attendance.recipients.cc'));
+    }
 }

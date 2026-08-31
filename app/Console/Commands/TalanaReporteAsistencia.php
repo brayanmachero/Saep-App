@@ -28,7 +28,7 @@ class TalanaReporteAsistencia extends Command
 {
     protected $signature = 'talana:reporte-asistencia
                             {--fecha=           : Fecha YYYY-MM-DD a analizar (default: ayer)}
-                            {--email=           : Email destinatario (default: TALANA_ALERTA_EMAIL)}
+                            {--email=           : Email destinatario (sobrescribe el destinatario de asistencia y omite sus copias)}
                             {--centro-costo=    : Centro de costo a reportar (sobrescribe TALANA_ASISTENCIA_CENTRO_COSTO)}
                             {--empresa-id=      : Empresa Talana a reportar (sobrescribe TALANA_ASISTENCIA_EMPRESA_ID)}
                             {--dias-nuevo=60    : Días de antigüedad máxima para marcar como "nuevo"}
@@ -49,7 +49,12 @@ class TalanaReporteAsistencia extends Command
         $fechaAnalisis = Carbon::parse($fecha, 'America/Santiago')->startOfDay();
         $isDry = $this->option('dry-run');
         $diasNuevo = (int) ($this->option('dias-nuevo') ?? 60);
-        $email = $this->option('email') ?: config('services.talana.alerta_email');
+        $emailSobrescrito = $this->option('email');
+        $email = $emailSobrescrito
+            ?: config('talana_attendance.recipients.to')
+            ?: config('services.talana.alerta_email');
+        $email = is_string($email) ? trim($email) : '';
+        $copias = $emailSobrescrito ? [] : $this->destinatariosEnCopia($email);
         $centroCosto = $this->resolverCentroCosto();
         $empresaId = $this->resolverEmpresaId();
         $alcanceReporte = $this->descripcionAlcance($centroCosto, $empresaId);
@@ -60,7 +65,7 @@ class TalanaReporteAsistencia extends Command
         $umbralBajoH = 7.0;                             // < 7h trabajadas → sospechoso
 
         if (! $email) {
-            $this->error('No hay email configurado. Usa --email= o define TALANA_ALERTA_EMAIL en .env');
+            $this->error('No hay email configurado. Usa --email= o define TALANA_ASISTENCIA_EMAIL en .env');
 
             return self::FAILURE;
         }
@@ -219,8 +224,13 @@ class TalanaReporteAsistencia extends Command
         }
 
         try {
-            Mail::to($email)->send(new TalanaAsistenciaReporteMail($resultado, $fecha));
-            $this->info("📧 Email enviado a {$email}");
+            $correo = Mail::to($email);
+            if ($copias !== []) {
+                $correo->cc($copias);
+            }
+            $correo->send(new TalanaAsistenciaReporteMail($resultado, $fecha));
+            $detalleCopias = $copias !== [] ? ' | CC: '.implode(', ', $copias) : '';
+            $this->info("📧 Email enviado a {$email}{$detalleCopias}");
         } catch (\Throwable $e) {
             $this->error("Error al enviar email: {$e->getMessage()}");
             Log::error('TalanaReporteAsistencia: error email', ['error' => $e->getMessage()]);
@@ -229,6 +239,34 @@ class TalanaReporteAsistencia extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Normaliza las copias configuradas, descartando direcciones inválidas,
+     * duplicadas o iguales al destinatario principal.
+     *
+     * @return array<int, string>
+     */
+    private function destinatariosEnCopia(string $destinatario): array
+    {
+        $configurados = config('talana_attendance.recipients.cc', '');
+        $correos = is_array($configurados)
+            ? $configurados
+            : (preg_split('/[;,\r\n]+/', (string) $configurados) ?: []);
+
+        $resultado = [];
+        foreach ($correos as $correo) {
+            $correo = trim((string) $correo);
+            if (! filter_var($correo, FILTER_VALIDATE_EMAIL)
+                || strcasecmp($correo, $destinatario) === 0) {
+                continue;
+            }
+
+            $clave = Str::lower($correo);
+            $resultado[$clave] = $correo;
+        }
+
+        return array_values($resultado);
     }
 
     private function resolverCentroCosto(): ?string
