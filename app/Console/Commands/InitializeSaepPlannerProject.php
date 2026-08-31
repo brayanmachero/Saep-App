@@ -9,7 +9,8 @@ use RuntimeException;
 class InitializeSaepPlannerProject extends Command
 {
     protected $signature = 'planner:initialize-saep-project
-        {--dry-run : Muestra los cambios sin escribir en Planner}';
+        {--dry-run : Muestra los cambios sin escribir en Planner}
+        {--sync-status : Alinea las tarjetas existentes con el estado definido para el tablero}';
 
     protected $description = 'Crea la estructura y los pendientes iniciales del plan SAEP en Microsoft Planner.';
 
@@ -40,10 +41,9 @@ class InitializeSaepPlannerProject extends Command
             'description' => 'Revisar que las entregas nuevas sigan descontando stock de forma trazable desde la línea base operativa.',
         ],
         [
-            'bucket' => 'Completado',
+            'bucket' => 'Validación',
             'title' => 'Dejar operativo el inventario y la trazabilidad de bodega',
             'description' => 'Stock base, ingresos, salidas, catálogo, trazabilidad y revisión de entregas Kizeo disponibles en producción.',
-            'completed' => true,
         ],
         [
             'bucket' => 'Completado',
@@ -154,52 +154,44 @@ class InitializeSaepPlannerProject extends Command
             'completed' => true,
         ],
         [
-            'bucket' => 'Completado',
+            'bucket' => 'Validación',
             'title' => '[Reclutamiento] Campañas WhatsApp, consentimiento y webhook oficial',
             'description' => 'Gestión de campañas y bandeja de reclutamiento, webhook oficial, plantillas, consentimiento verificable y despacho programado de campañas aprobadas.',
-            'completed' => true,
         ],
         [
-            'bucket' => 'Completado',
+            'bucket' => 'Validación',
             'title' => '[SAEP Recruit] Base de contactos, consentimiento y bajas trazables',
             'description' => 'Alta manual e importación desde portales de empleo, finalidad y evidencia de autorización, vigencia, revocación y bloqueo automático ante BAJA, STOP, SALIR, CANCELAR o NO CONTACTAR.',
-            'completed' => true,
         ],
         [
-            'bucket' => 'Completado',
+            'bucket' => 'Validación',
             'title' => '[SAEP Recruit] Campañas masivas y plantillas aprobadas de Meta',
             'description' => 'Preparación, aprobación y programación de campañas; sincronización de plantillas aprobadas por Meta y control previo para enviar solo a contactos autorizados, sin documentos ni antecedentes sensibles.',
-            'completed' => true,
         ],
         [
-            'bucket' => 'Completado',
+            'bucket' => 'Validación',
             'title' => '[SAEP Recruit] Bandeja de conversaciones y atención asignable',
             'description' => 'Bandeja para clasificar, asignar responsables, actualizar estados y responder conversaciones. La respuesta directa respeta la ventana de 24 horas definida por WhatsApp.',
-            'completed' => true,
         ],
         [
-            'bucket' => 'Completado',
+            'bucket' => 'Validación',
             'title' => '[SAEP Recruit] Webhook Meta y trazabilidad de mensajes',
             'description' => 'Webhook oficial validado con firma HMAC para recibir mensajes entrantes y estados de entrega, lectura o fallo; evita duplicados y conserva auditoría sin replicar contenidos sensibles.',
-            'completed' => true,
         ],
         [
-            'bucket' => 'Completado',
+            'bucket' => 'Validación',
             'title' => '[Inventario / Kizeo] Sincronización de entregas, catálogo y aplicación controlada',
             'description' => 'Sincronización de entregas EPP y catálogo cada 30 minutos, aplicación masiva, revisión de diferencias, reversos, asociación de tallas y descuento automático solo para entregas nuevas.',
-            'completed' => true,
         ],
         [
-            'bucket' => 'Completado',
+            'bucket' => 'Validación',
             'title' => '[Inventario] Catálogo, variantes, maestros y costos de referencia',
             'description' => 'Administración de productos y tallas activas/inactivas, maestros de ubicaciones y proveedores, alertas de stock, stock inicial, importaciones y trazabilidad de costos.',
-            'completed' => true,
         ],
         [
-            'bucket' => 'Completado',
+            'bucket' => 'Validación',
             'title' => '[Inventario] Resumen, trazabilidad e historiales consultables',
             'description' => 'Resumen filtrable por período, flujo diario, detalle por producto o talla, historial de ingresos y movimientos con búsqueda y paginación.',
-            'completed' => true,
         ],
         [
             'bucket' => 'Completado',
@@ -220,14 +212,14 @@ class InitializeSaepPlannerProject extends Command
             'completed' => true,
         ],
         [
-            'bucket' => 'Validación',
+            'bucket' => 'En curso',
             'title' => '[Comercial / Cotizaciones] Ejecutar validación integral del módulo',
-            'description' => 'Pruebas de clientes y centros de costo, creación y edición de cotizaciones, tarifas, estados simplificados, plantillas de importación, mantenedor y reportes. Pendiente de pruebas formales durante la semana.',
+            'description' => 'Trabajo activo en clientes y centros de costo, creación y edición de cotizaciones, tarifas, estados simplificados, plantillas de importación, mantenedor y reportes. Las pruebas formales se registrarán cuando el frente alcance validación.',
         ],
         [
-            'bucket' => 'Validación',
+            'bucket' => 'En curso',
             'title' => '[Operaciones / Contenedores] Ejecutar validación integral del flujo',
-            'description' => 'Pruebas de carga rápida, tarifas, dotación Talana, FACT, equipos, evidencia fotográfica, bandeja de revisión, permisos, edición lateral y acciones masivas. Pendiente de pruebas formales durante la semana.',
+            'description' => 'Trabajo activo en carga rápida, tarifas, dotación Talana, FACT, equipos, evidencia fotográfica, bandeja de revisión, permisos, edición lateral y acciones masivas. Las pruebas formales se registrarán cuando el frente alcance validación.',
         ],
         [
             'bucket' => 'Validación',
@@ -276,7 +268,7 @@ class InitializeSaepPlannerProject extends Command
             $buckets = $planner->buckets();
             $tasks = $planner->tasks();
             $bucketMap = $this->bucketMap($buckets);
-            $existingTaskTitles = $this->taskTitles($tasks);
+            $existingTasks = $this->tasksByTitle($tasks);
             $renamedDefaultBucket = false;
 
             if (! isset($bucketMap[$this->normalize('Pendientes')]) && count($buckets) === 1 && count($tasks) === 0) {
@@ -305,8 +297,27 @@ class InitializeSaepPlannerProject extends Command
 
             foreach (self::INITIAL_TASKS as $task) {
                 $titleKey = $this->normalize($task['title']);
-                if (isset($existingTaskTitles[$titleKey])) {
+                $existingTask = $existingTasks[$titleKey] ?? null;
+                if ($existingTask) {
                     $this->line("Conservada: {$task['title']}");
+
+                    if ($this->option('sync-status')) {
+                        $bucket = $bucketMap[$this->normalize($task['bucket'])] ?? null;
+                        if (! $bucket || empty($bucket['id'])) {
+                            throw new RuntimeException("No fue posible resolver la columna {$task['bucket']} en Planner.");
+                        }
+
+                        $completed = (bool) ($task['completed'] ?? false);
+                        $sameBucket = (string) ($existingTask['bucketId'] ?? '') === (string) $bucket['id'];
+                        $sameCompletion = (int) ($existingTask['percentComplete'] ?? 0) === ($completed ? 100 : 0);
+
+                        if (! $sameBucket || ! $sameCompletion) {
+                            $this->line("Actualizar estado [{$task['bucket']}]: {$task['title']}");
+                            if (! $this->option('dry-run')) {
+                                $planner->updateTaskState($existingTask, (string) $bucket['id'], $completed);
+                            }
+                        }
+                    }
 
                     continue;
                 }
@@ -357,15 +368,15 @@ class InitializeSaepPlannerProject extends Command
     }
 
     /** @param array<int, array<string, mixed>> $tasks
-     * @return array<string, true>
+     * @return array<string, array<string, mixed>>
      */
-    private function taskTitles(array $tasks): array
+    private function tasksByTitle(array $tasks): array
     {
         $titles = [];
         foreach ($tasks as $task) {
             $title = (string) ($task['title'] ?? '');
             if ($title !== '') {
-                $titles[$this->normalize($title)] = true;
+                $titles[$this->normalize($title)] = $task;
             }
         }
 

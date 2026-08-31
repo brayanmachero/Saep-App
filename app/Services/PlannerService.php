@@ -124,6 +124,22 @@ class PlannerService
         return $task;
     }
 
+    /** @param array<string, mixed> $task */
+    public function updateTaskState(array $task, string $bucketId, bool $completed): void
+    {
+        $taskId = (string) ($task['id'] ?? '');
+        $etag = $this->etag($task);
+
+        if ($taskId === '' || $etag === '') {
+            throw new RuntimeException('No fue posible actualizar el estado de una tarea de Planner.');
+        }
+
+        $this->patch('/planner/tasks/'.rawurlencode($taskId), [
+            'bucketId' => $bucketId,
+            'percentComplete' => $completed ? 100 : 0,
+        ], $etag);
+    }
+
     private function updateTaskDetails(string $taskId, string $description): void
     {
         $details = $this->get('/planner/tasks/'.rawurlencode($taskId).'/details');
