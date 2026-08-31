@@ -277,6 +277,7 @@ class InventarioBodegaStockTest extends TestCase
             'observacion' => null,
         ], [['variante_id' => $variant->id, 'cantidad' => 2, 'costo_unitario' => null]], $user);
 
+        $variant->update(['activo' => false]);
         $replacement = $service->recreateStocktake($source, $user);
         $replacementLine = $replacement->lineas()->firstOrFail();
 

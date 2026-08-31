@@ -471,7 +471,22 @@ class InventarioStockService
             }
 
             $balances = $this->balances($location->id)
-                ->filter(fn (InventarioVariante $variante) => abs((float) $variante->stock_actual) > 0.0001);
+                ->filter(fn (InventarioVariante $variante) => abs((float) $variante->stock_actual) > 0.0001)
+                ->keyBy('id');
+
+            // A count is an audit record: if a previously counted size now has
+            // zero stock or became inactive, retain its entered physical value.
+            foreach ($source->lineas as $previousLine) {
+                if ($balances->has($previousLine->variante_id) || ! $previousLine->variante) {
+                    continue;
+                }
+
+                $variant = $previousLine->variante;
+                $variant->setAttribute('stock_actual', $this->stockActual($location->id, $variant->id));
+                $balances->put($variant->id, $variant);
+            }
+
+            $balances = $balances->values();
 
             if ($balances->isEmpty()) {
                 throw ValidationException::withMessages([
