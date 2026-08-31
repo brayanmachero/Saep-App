@@ -581,6 +581,89 @@ class InventarioBodegaStockTest extends TestCase
         ]);
     }
 
+    public function test_receipt_and_movement_history_are_searchable_paginated_and_include_previous_dates(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+        $provider = InventarioProveedor::create(['nombre' => 'Proveedor Archivo', 'activo' => true]);
+        $yesterday = now()->subDay();
+
+        $oldReceipt = $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => $provider->id,
+            'tipo_documento' => 'FACTURA',
+            'numero_documento' => 'F-HIST-001',
+            'fecha_documento' => $yesterday->toDateString(),
+            'fecha_recepcion' => $yesterday->toDateString(),
+            'observacion' => 'Recepción que debe permanecer en el historial.',
+        ], [[
+            'variante_id' => $variant->id,
+            'cantidad' => 1,
+            'costo_unitario' => 1000,
+        ]], $user);
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'GUIA_DESPACHO',
+            'numero_documento' => 'GD-ACTUAL-001',
+            'fecha_documento' => now()->toDateString(),
+            'fecha_recepcion' => now()->toDateString(),
+            'observacion' => 'Recepción actual.',
+        ], [[
+            'variante_id' => $variant->id,
+            'cantidad' => 1,
+            'costo_unitario' => 1200,
+        ]], $user);
+
+        $receiptResponse = $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'ingresos']));
+        $receiptResponse->assertOk()->assertSee('Historial de ingresos');
+        $this->assertSame(2, $receiptResponse->viewData('ingresos')->total());
+
+        $filteredReceipts = $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'ingresos', 'ingreso_buscar' => 'Proveedor Archivo']));
+        $this->assertSame(1, $filteredReceipts->viewData('ingresos')->total());
+        $this->assertSame($oldReceipt->id, $filteredReceipts->viewData('ingresos')->first()->id);
+
+        $oldMovement = InventarioMovimiento::create([
+            'codigo' => 'MOV-HISTORICO',
+            'tipo' => 'AJUSTE_POSITIVO',
+            'origen' => 'MANUAL',
+            'ubicacion_id' => $origin->id,
+            'producto_id' => $variant->producto_id,
+            'variante_id' => $variant->id,
+            'cantidad' => 1,
+            'destinatario_nombre' => 'Destino Archivo',
+            'ocurrido_en' => $yesterday,
+            'registrado_por' => $user->id,
+            'registrado_por_nombre' => $user->name,
+        ]);
+        foreach (range(1, 21) as $index) {
+            InventarioMovimiento::create([
+                'codigo' => 'MOV-ACTUAL-'.$index,
+                'tipo' => 'AJUSTE_POSITIVO',
+                'origen' => 'MANUAL',
+                'ubicacion_id' => $origin->id,
+                'producto_id' => $variant->producto_id,
+                'variante_id' => $variant->id,
+                'cantidad' => 1,
+                'ocurrido_en' => now()->addSeconds($index),
+                'registrado_por' => $user->id,
+                'registrado_por_nombre' => $user->name,
+            ]);
+        }
+
+        $movementResponse = $this->withoutMiddleware(VerificarConsentimientoDatos::class)
+            ->actingAs($user)
+            ->get(route('inventario-bodega.index', ['vista' => 'movimientos', 'movimiento_buscar' => 'Destino Archivo']));
+        $movementResponse->assertOk()->assertSee('Kardex histórico');
+        $this->assertSame(1, $movementResponse->viewData('movements')->total());
+        $this->assertSame($oldMovement->id, $movementResponse->viewData('movements')->first()->id);
+        $this->assertSame(25, $movementResponse->viewData('movements')->perPage());
+    }
+
     public function test_summary_filters_balances_kpis_and_recent_movements_by_catalog_supplier_and_stock_status(): void
     {
         [$user, $origin] = $this->inventoryContext();

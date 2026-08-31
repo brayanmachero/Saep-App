@@ -56,6 +56,8 @@ class InventarioBodegaController extends Controller
             : 'resumen';
         $selectedLocation = $request->integer('ubicacion_id') ?: null;
         $summaryFilters = $this->summaryFilters($request);
+        $receiptHistoryFilters = $this->receiptHistoryFilters($request);
+        $movementHistoryFilters = $this->movementHistoryFilters($request);
         $search = $summaryFilters['search'];
         $balances = $this->filterSummaryBalances($this->stock->balances($selectedLocation), $summaryFilters);
         $summaryPeriod = $view === 'resumen'
@@ -69,15 +71,23 @@ class InventarioBodegaController extends Controller
             return (float) $minimum > 0 && (float) $variant->stock_actual <= (float) $minimum;
         })->values();
 
-        $movements = InventarioMovimiento::query()
+        $movementQuery = InventarioMovimiento::query()
             ->with(['producto', 'variante', 'ubicacion', 'centroCosto', 'coordinador'])
-            ->withCount('reversos')
-            ->when($selectedLocation, fn ($query) => $query->where('ubicacion_id', $selectedLocation))
-            ->when($view === 'resumen' && $summaryFilters['applied'], fn ($query) => $query->whereIn('variante_id', $balances->pluck('id')))
-            ->when($summaryPeriod, fn (Builder $query) => $this->applySummaryOperationalPeriod($query, $summaryPeriod))
-            ->latest('ocurrido_en')
-            ->limit(20)
-            ->get();
+            ->withCount('reversos');
+
+        $movements = $view === 'movimientos'
+            ? $this->applyMovementHistoryFilters($movementQuery, $movementHistoryFilters)
+                ->latest('ocurrido_en')
+                ->latest('id')
+                ->paginate(25, ['*'], 'movimientos_pagina')
+                ->withQueryString()
+            : $movementQuery
+                ->when($selectedLocation, fn ($query) => $query->where('ubicacion_id', $selectedLocation))
+                ->when($view === 'resumen' && $summaryFilters['applied'], fn ($query) => $query->whereIn('variante_id', $balances->pluck('id')))
+                ->when($summaryPeriod, fn (Builder $query) => $this->applySummaryOperationalPeriod($query, $summaryPeriod))
+                ->latest('ocurrido_en')
+                ->limit(20)
+                ->get();
 
         $summaryAnalytics = $view === 'resumen'
             ? $this->summaryAnalytics($selectedLocation, $summaryFilters, $balances, $summaryPeriod)
@@ -369,13 +379,19 @@ class InventarioBodegaController extends Controller
             'summaryAnalytics' => $summaryAnalytics,
             'products' => $products,
             'productEditorOptions' => $productEditorOptions,
-            'ingresos' => InventarioIngreso::query()
-                ->with(['ubicacion', 'proveedor', 'items.producto', 'items.variante', 'reversadoPor', 'registradoPor'])
-                ->whereDate('fecha_recepcion', '>=', $operationalStart)
-                ->latest('fecha_recepcion')
-                ->latest('id')
-                ->limit(15)
-                ->get(),
+            'ingresos' => $view === 'ingresos'
+                ? $this->applyReceiptHistoryFilters(
+                    InventarioIngreso::query()
+                        ->with(['ubicacion', 'proveedor', 'items.producto', 'items.variante', 'reversadoPor', 'registradoPor']),
+                    $receiptHistoryFilters,
+                )
+                    ->latest('fecha_recepcion')
+                    ->latest('id')
+                    ->paginate(25, ['*'], 'ingresos_pagina')
+                    ->withQueryString()
+                : collect(),
+            'receiptHistoryFilters' => $receiptHistoryFilters,
+            'movementHistoryFilters' => $movementHistoryFilters,
             'conteos' => InventarioConteo::query()
                 ->with('ubicacion')
                 ->withCount('lineas')
@@ -1229,6 +1245,99 @@ class InventarioBodegaController extends Controller
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /** @return array{search: string, from: ?string, to: ?string, status: string, location_id: ?int} */
+    private function receiptHistoryFilters(Request $request): array
+    {
+        $from = $this->kizeoDateInput($request->input('ingreso_desde'));
+        $to = $this->kizeoDateInput($request->input('ingreso_hasta'));
+
+        return [
+            'search' => trim((string) $request->input('ingreso_buscar', '')),
+            'from' => $from?->toDateString(),
+            'to' => $to?->toDateString(),
+            'status' => in_array($request->input('ingreso_estado'), ['vigentes', 'anulados'], true)
+                ? $request->input('ingreso_estado')
+                : '',
+            'location_id' => $request->integer('ingreso_ubicacion_id') ?: null,
+        ];
+    }
+
+    /** @return array{search: string, from: ?string, to: ?string, type: string, location_id: ?int} */
+    private function movementHistoryFilters(Request $request): array
+    {
+        $from = $this->kizeoDateInput($request->input('movimiento_desde'));
+        $to = $this->kizeoDateInput($request->input('movimiento_hasta'));
+        $type = (string) $request->input('movimiento_tipo', '');
+
+        return [
+            'search' => trim((string) $request->input('movimiento_buscar', '')),
+            'from' => $from?->toDateString(),
+            'to' => $to?->toDateString(),
+            'type' => array_key_exists($type, InventarioMovimiento::TIPOS) ? $type : '',
+            'location_id' => $request->integer('movimiento_ubicacion_id') ?: null,
+        ];
+    }
+
+    /**
+     * @param  array{search: string, from: ?string, to: ?string, status: string, location_id: ?int}  $filters
+     */
+    private function applyReceiptHistoryFilters(Builder $query, array $filters): Builder
+    {
+        return $query
+            ->when($filters['from'], fn (Builder $receipts, string $from) => $receipts->whereDate('fecha_recepcion', '>=', $from))
+            ->when($filters['to'], fn (Builder $receipts, string $to) => $receipts->whereDate('fecha_recepcion', '<=', $to))
+            ->when($filters['status'] === 'vigentes', fn (Builder $receipts) => $receipts->whereNull('reversado_en'))
+            ->when($filters['status'] === 'anulados', fn (Builder $receipts) => $receipts->whereNotNull('reversado_en'))
+            ->when($filters['location_id'], fn (Builder $receipts, int $locationId) => $receipts->where('ubicacion_id', $locationId))
+            ->when($filters['search'] !== '', function (Builder $receipts) use ($filters) {
+                $term = '%'.$filters['search'].'%';
+
+                $receipts->where(function (Builder $matches) use ($term) {
+                    $matches->where('codigo', 'like', $term)
+                        ->orWhere('numero_documento', 'like', $term)
+                        ->orWhere('tipo_documento', 'like', $term)
+                        ->orWhere('observacion', 'like', $term)
+                        ->orWhereHas('ubicacion', fn (Builder $locations) => $locations->where('nombre', 'like', $term)->orWhere('codigo', 'like', $term))
+                        ->orWhereHas('proveedor', fn (Builder $providers) => $providers->where('nombre', 'like', $term)->orWhere('rut', 'like', $term))
+                        ->orWhereHas('registradoPor', fn (Builder $users) => $users->where('name', 'like', $term))
+                        ->orWhereHas('items.producto', fn (Builder $products) => $products->where('nombre', 'like', $term)->orWhere('codigo', 'like', $term))
+                        ->orWhereHas('items.variante', fn (Builder $variants) => $variants->where('talla', 'like', $term)->orWhere('codigo', 'like', $term));
+                });
+            });
+    }
+
+    /**
+     * @param  array{search: string, from: ?string, to: ?string, type: string, location_id: ?int}  $filters
+     */
+    private function applyMovementHistoryFilters(Builder $query, array $filters): Builder
+    {
+        return $query
+            ->when($filters['from'], fn (Builder $movements, string $from) => $movements->whereDate('ocurrido_en', '>=', $from))
+            ->when($filters['to'], fn (Builder $movements, string $to) => $movements->whereDate('ocurrido_en', '<=', $to))
+            ->when($filters['type'] !== '', fn (Builder $movements) => $movements->where('tipo', $filters['type']))
+            ->when($filters['location_id'], fn (Builder $movements, int $locationId) => $movements->where('ubicacion_id', $locationId))
+            ->when($filters['search'] !== '', function (Builder $movements) use ($filters) {
+                $term = '%'.$filters['search'].'%';
+
+                $movements->where(function (Builder $matches) use ($term) {
+                    $matches->where('codigo', 'like', $term)
+                        ->orWhere('documento_numero', 'like', $term)
+                        ->orWhere('documento_tipo', 'like', $term)
+                        ->orWhere('destinatario_nombre', 'like', $term)
+                        ->orWhere('destinatario_rut', 'like', $term)
+                        ->orWhere('centro_costo', 'like', $term)
+                        ->orWhere('registrado_por_nombre', 'like', $term)
+                        ->orWhere('observacion', 'like', $term)
+                        ->orWhereHas('producto', fn (Builder $products) => $products->where('nombre', 'like', $term)->orWhere('codigo', 'like', $term))
+                        ->orWhereHas('variante', fn (Builder $variants) => $variants->where('talla', 'like', $term)->orWhere('codigo', 'like', $term))
+                        ->orWhereHas('ubicacion', fn (Builder $locations) => $locations->where('nombre', 'like', $term)->orWhere('codigo', 'like', $term))
+                        ->orWhereHas('centroCosto', fn (Builder $centers) => $centers->where('nombre', 'like', $term)->orWhere('numero_maestro', 'like', $term))
+                        ->orWhereHas('coordinador', fn (Builder $coordinators) => $coordinators->where('nombre', 'like', $term)->orWhere('rut', 'like', $term))
+                        ->orWhereHas('registradoPor', fn (Builder $users) => $users->where('name', 'like', $term));
+                });
+            });
     }
 
     /**
