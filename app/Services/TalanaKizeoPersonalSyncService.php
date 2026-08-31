@@ -265,7 +265,7 @@ class TalanaKizeoPersonalSyncService
                     'apellido_materno' => $apellidoMaterno,
                     'nombre_completo' => $this->fullName($nombres, $apellidoPaterno, $apellidoMaterno, $contrato->persona_nombre),
                     'email' => trim((string) ($persona?->email ?: $contrato->persona_email)),
-                    'fecha_nacimiento' => $persona?->fecha_nacimiento,
+                    'fecha_nacimiento' => $persona?->fecha_nacimiento ?: $contrato->persona_fecha_nacimiento,
                 ],
                 'contrato' => $contrato,
                 'rut' => $this->formatRut($rut),

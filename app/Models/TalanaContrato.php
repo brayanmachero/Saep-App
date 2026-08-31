@@ -11,7 +11,7 @@ class TalanaContrato extends Model
     protected $fillable = [
         'talana_id', 'empresa_id', 'empresa_nombre',
         'persona_talana_id', 'persona_nombre', 'persona_rut',
-        'persona_email', 'tipo_contrato', 'tipo_contrato_nombre',
+        'persona_email', 'persona_fecha_nacimiento', 'tipo_contrato', 'tipo_contrato_nombre',
         'fecha_contratacion', 'desde', 'hasta', 'finiquitado', 'sucursal_nombre',
         'centro_costo_nombre', 'cargo_nombre', 'horas_jornada',
         'jefe_nombre', 'synced_at',
@@ -19,6 +19,7 @@ class TalanaContrato extends Model
 
     protected $casts = [
         'fecha_contratacion' => 'date',
+        'persona_fecha_nacimiento' => 'date',
         'desde'              => 'date',
         'hasta'              => 'date',
         'finiquitado'        => 'boolean',

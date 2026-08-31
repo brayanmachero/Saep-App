@@ -45,6 +45,7 @@ class TalanaKizeoPersonalSyncTest extends TestCase
             $table->string('persona_nombre', 200)->nullable();
             $table->string('persona_rut', 20)->nullable();
             $table->string('persona_email', 150)->nullable();
+            $table->date('persona_fecha_nacimiento')->nullable();
             $table->date('fecha_contratacion')->nullable();
             $table->date('desde')->nullable();
             $table->date('hasta')->nullable();
@@ -209,6 +210,28 @@ class TalanaKizeoPersonalSyncTest extends TestCase
                 && ($request['items'][0]['properties']['property-edad'] ?? null) === '30'
                 && ($request['items'][0]['properties']['property-antiguedad'] ?? null) === '2 años y 3 meses';
         });
+    }
+
+    public function test_birthdate_embedded_in_the_contract_is_used_when_the_person_record_is_not_available(): void
+    {
+        TalanaContrato::create([
+            'talana_id' => 200,
+            'persona_talana_id' => 999999,
+            'persona_nombre' => 'Camila Andrea Perez Soto',
+            'persona_rut' => '17222333-4',
+            'persona_fecha_nacimiento' => now('America/Santiago')->subYears(28)->toDateString(),
+            'desde' => now('America/Santiago')->subMonth()->toDateString(),
+            'hasta' => null,
+            'finiquitado' => false,
+            'centro_costo_nombre' => 'CCU RENCA',
+            'cargo_nombre' => 'OPERADORA',
+        ]);
+        $this->fakeKizeoList();
+
+        app(TalanaKizeoPersonalSyncService::class)->synchronize();
+
+        Http::assertSent(fn (HttpRequest $request) => $request->method() === 'POST'
+            && ($request['items'][0]['properties']['property-edad'] ?? null) === '28');
     }
 
     public function test_reconciliation_removes_duplicate_and_stale_ruts_only_after_the_source_is_validated(): void

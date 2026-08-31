@@ -188,6 +188,7 @@ class TalanaSyncDbCommand extends Command
                         'persona_nombre' => $this->nombreCompleto($emp),
                         'persona_rut' => $this->str($emp['rut'] ?? null),
                         'persona_email' => $this->str($emp['email'] ?? null),
+                        'persona_fecha_nacimiento' => $this->date($emp['birthDate'] ?? $emp['fechaNacimiento'] ?? null),
                         'tipo_contrato' => $this->str($tipo['codigo'] ?? $tipo['id'] ?? null),
                         'tipo_contrato_nombre' => $this->str($tipo['nombre'] ?? null),
                         'fecha_contratacion' => $this->date($c['fechaContratacion'] ?? $c['hireDate'] ?? null),
@@ -214,7 +215,7 @@ class TalanaSyncDbCommand extends Command
                 foreach (array_chunk($loteTotal, 200) as $chunk) {
                     TalanaContrato::upsert($chunk, ['talana_id'], [
                         'empresa_id', 'empresa_nombre',
-                        'persona_talana_id', 'persona_nombre', 'persona_rut', 'persona_email',
+                        'persona_talana_id', 'persona_nombre', 'persona_rut', 'persona_email', 'persona_fecha_nacimiento',
                         'tipo_contrato', 'tipo_contrato_nombre', 'fecha_contratacion', 'desde', 'hasta',
                         'finiquitado', 'sucursal_nombre', 'centro_costo_nombre',
                         'cargo_nombre', 'horas_jornada', 'jefe_nombre', 'synced_at', 'updated_at',
