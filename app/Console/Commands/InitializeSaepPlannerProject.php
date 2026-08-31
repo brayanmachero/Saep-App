@@ -20,6 +20,7 @@ class InitializeSaepPlannerProject extends Command
         'En curso',
         'Validación',
         'Completado',
+        'Bitácora y evidencias',
         'Incidentes',
     ];
 
@@ -61,6 +62,12 @@ class InitializeSaepPlannerProject extends Command
             'bucket' => 'Completado',
             'title' => 'Eliminar ejecución duplicada del programador SAEP',
             'description' => 'Se retiró la entrada duplicada del scheduler en el servidor y se verificó una ejecución por minuto.',
+            'completed' => true,
+        ],
+        [
+            'bucket' => 'Bitácora y evidencias',
+            'title' => '[31/08] Seguimiento del proyecto consolidado en Microsoft Planner',
+            'description' => 'Se conectó el plan SAEP – Operación y Mejoras a Microsoft Graph, se levantó el historial de módulos y automatizaciones, y se ordenaron los frentes por En curso, Validación, Completado, Pendientes e Incidentes.',
             'completed' => true,
         ],
         [
@@ -250,6 +257,12 @@ class InitializeSaepPlannerProject extends Command
             'bucket' => 'En curso',
             'title' => '[SAEP Comunicaciones] Incorporar el avance paralelo al tablero',
             'description' => 'Registrar el alcance, entregables, automatizaciones y pruebas del frente de comunicaciones. En este repositorio no aparece aún como módulo independiente, por lo que queda separado hasta contar con su fuente técnica o historial propio.',
+        ],
+        [
+            'bucket' => 'Incidentes',
+            'title' => '[Resuelto · 31/08] 504 Gateway Time-out en SAEP',
+            'description' => 'Reporte: caída temporal con 504 Gateway Time-out. Diagnóstico: existían dos ejecuciones iguales de schedule:run para SAEP en el crontab del servidor, lo que podía duplicar procesos y elevar la carga. Medida correctiva: se respaldó y retiró únicamente la entrada duplicada, manteniendo el programador independiente de TNS. Verificación: Nginx, PHP-FPM, MySQL, Redis y cron quedaron activos; la aplicación respondió nuevamente HTTP 200 con tiempo normal. Estado: resuelto y monitoreado.',
+            'completed' => true,
         ],
     ];
 
