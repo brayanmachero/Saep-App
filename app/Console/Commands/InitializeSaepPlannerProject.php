@@ -10,7 +10,8 @@ class InitializeSaepPlannerProject extends Command
 {
     protected $signature = 'planner:initialize-saep-project
         {--dry-run : Muestra los cambios sin escribir en Planner}
-        {--sync-status : Alinea las tarjetas existentes con el estado definido para el tablero}';
+        {--sync-status : Alinea las tarjetas existentes con el estado definido para el tablero}
+        {--sync-schedule : Alinea las tarjetas existentes con sus fechas de inicio y objetivo}';
 
     protected $description = 'Crea la estructura y los pendientes iniciales del plan SAEP en Microsoft Planner.';
 
@@ -22,6 +23,53 @@ class InitializeSaepPlannerProject extends Command
         'Completado',
         'Bitácora y evidencias',
         'Incidentes',
+    ];
+
+    /** @var array<string, array{start: string, due: string}> */
+    private const TASK_SCHEDULES = [
+        'Reforzar reintentos de Kizeo ante demoras externas' => ['start' => '2026-09-01', 'due' => '2026-09-11'],
+        'Validar informes diarios de asistencia durante la primera semana' => ['start' => '2026-08-31', 'due' => '2026-09-05'],
+        'Monitorear descuentos automáticos y sincronización de entregas Kizeo' => ['start' => '2026-08-24', 'due' => '2026-09-05'],
+        'Dejar operativo el inventario y la trazabilidad de bodega' => ['start' => '2026-08-07', 'due' => '2026-09-05'],
+        'Ordenar repostulaciones y documentos en SharePoint' => ['start' => '2026-05-28', 'due' => '2026-08-25'],
+        'Configurar reportes diarios Talana con remitente oficial' => ['start' => '2026-05-29', 'due' => '2026-08-31'],
+        'Eliminar ejecución duplicada del programador SAEP' => ['start' => '2026-08-31', 'due' => '2026-08-31'],
+        '[31/08] Seguimiento del proyecto consolidado en Microsoft Planner' => ['start' => '2026-08-31', 'due' => '2026-08-31'],
+        '[Plataforma] Base operativa, administración y permisos de SAEP' => ['start' => '2026-03-24', 'due' => '2026-03-26'],
+        '[Formularios] Gestión, categorías y exportación de respuestas' => ['start' => '2026-04-09', 'due' => '2026-04-21'],
+        '[Kanban] Tareas, adjuntos, alertas y recurrencias' => ['start' => '2026-04-14', 'due' => '2026-04-27'],
+        '[SST / Kizeo] Automatizaciones documentales hacia SharePoint' => ['start' => '2026-03-31', 'due' => '2026-07-20'],
+        '[SST] Seguimiento de charlas Kizeo y reporte semanal' => ['start' => '2026-03-24', 'due' => '2026-04-29'],
+        '[SST / STOP CCU] Tablero y reportes desde Google Sheets' => ['start' => '2026-04-07', 'due' => '2026-07-02'],
+        '[SST / Observaciones CCU] Dashboard Kizeo, filtros y analítica' => ['start' => '2026-07-24', 'due' => '2026-08-19'],
+        '[SST / Inspecciones PDR] Dashboard preventivo conectado a Kizeo' => ['start' => '2026-07-24', 'due' => '2026-07-24'],
+        '[SST / Carta Gantt] Programas, equipos y seguimiento operativo' => ['start' => '2026-03-30', 'due' => '2026-08-14'],
+        '[SST / Ley Karin] Formulario ampliado y dashboard de gestión' => ['start' => '2026-03-26', 'due' => '2026-06-30'],
+        '[Talana] Sincronización de personal, contratos, turnos y ausencias' => ['start' => '2026-05-25', 'due' => '2026-08-06'],
+        '[Talana] Alertas de contratos y análisis de asistencia' => ['start' => '2026-05-25', 'due' => '2026-07-27'],
+        '[Talana ↔ Kizeo] Publicación de personal vigente para CDD' => ['start' => '2026-08-21', 'due' => '2026-08-24'],
+        '[Contratación] Portal público, carga documental y ficha consolidada' => ['start' => '2026-05-28', 'due' => '2026-06-18'],
+        '[Contratación] Cierre diario RRHH y enlaces a SharePoint' => ['start' => '2026-05-29', 'due' => '2026-06-18'],
+        '[Reclutamiento] Campañas WhatsApp, consentimiento y webhook oficial' => ['start' => '2026-08-04', 'due' => '2026-09-05'],
+        '[SAEP Recruit] Base de contactos, consentimiento y bajas trazables' => ['start' => '2026-08-04', 'due' => '2026-09-05'],
+        '[SAEP Recruit] Campañas masivas y plantillas aprobadas de Meta' => ['start' => '2026-08-04', 'due' => '2026-09-05'],
+        '[SAEP Recruit] Bandeja de conversaciones y atención asignable' => ['start' => '2026-08-04', 'due' => '2026-09-05'],
+        '[SAEP Recruit] Webhook Meta y trazabilidad de mensajes' => ['start' => '2026-08-10', 'due' => '2026-09-05'],
+        '[Inventario / Kizeo] Sincronización de entregas, catálogo y aplicación controlada' => ['start' => '2026-08-17', 'due' => '2026-09-05'],
+        '[Inventario] Catálogo, variantes, maestros y costos de referencia' => ['start' => '2026-08-07', 'due' => '2026-09-05'],
+        '[Inventario] Resumen, trazabilidad e historiales consultables' => ['start' => '2026-08-13', 'due' => '2026-09-05'],
+        '[Reservas de vehículos] Portal, disponibilidad, agenda y actas Kizeo' => ['start' => '2026-07-31', 'due' => '2026-08-11'],
+        '[Privacidad y cumplimiento] ARCO, retención, términos y marca SAEP' => ['start' => '2026-06-25', 'due' => '2026-06-26'],
+        '[Planner] Conector Microsoft Graph para seguimiento del proyecto' => ['start' => '2026-08-31', 'due' => '2026-08-31'],
+        '[Comercial / Cotizaciones] Ejecutar validación integral del módulo' => ['start' => '2026-06-22', 'due' => '2026-09-11'],
+        '[Operaciones / Contenedores] Ejecutar validación integral del flujo' => ['start' => '2026-07-02', 'due' => '2026-09-11'],
+        '[Reservas de vehículos] Validar ciclo operativo completo' => ['start' => '2026-08-11', 'due' => '2026-09-05'],
+        '[SST / Kizeo] Confirmar continuidad de sincronizaciones y archivos' => ['start' => '2026-07-20', 'due' => '2026-09-05'],
+        '[Reclutamiento] Validar campaña WhatsApp y ciclo público de postulación' => ['start' => '2026-08-10', 'due' => '2026-09-05'],
+        '[SAEP Recruit / Meta] Habilitar canal oficial y primer envío controlado' => ['start' => '2026-08-10', 'due' => '2026-09-05'],
+        '[Operación] Consolidar el registro histórico de avances en Planner' => ['start' => '2026-08-31', 'due' => '2026-09-30'],
+        '[SAEP Comunicaciones] Incorporar el avance paralelo al tablero' => ['start' => '2026-08-31', 'due' => '2026-09-30'],
+        '[Resuelto · 31/08] 504 Gateway Time-out en SAEP' => ['start' => '2026-08-31', 'due' => '2026-08-31'],
     ];
 
     /** @var array<int, array{bucket: string, title: string, description: string, completed?: bool}> */
@@ -310,9 +358,11 @@ class InitializeSaepPlannerProject extends Command
 
             foreach (self::INITIAL_TASKS as $task) {
                 $titleKey = $this->normalize($task['title']);
+                $schedule = $this->taskSchedule($task['title']);
                 $existingTask = $existingTasks[$titleKey] ?? null;
                 if ($existingTask) {
                     $this->line("Conservada: {$task['title']}");
+                    $changes = [];
 
                     if ($this->option('sync-status')) {
                         $bucket = $bucketMap[$this->normalize($task['bucket'])] ?? null;
@@ -326,10 +376,21 @@ class InitializeSaepPlannerProject extends Command
 
                         if (! $sameBucket || ! $sameCompletion) {
                             $this->line("Actualizar estado [{$task['bucket']}]: {$task['title']}");
-                            if (! $this->option('dry-run')) {
-                                $planner->updateTaskState($existingTask, (string) $bucket['id'], $completed);
-                            }
+                            $changes['bucketId'] = (string) $bucket['id'];
+                            $changes['percentComplete'] = $completed ? 100 : 0;
                         }
+                    }
+
+                    if ($this->option('sync-schedule')
+                        && (! $this->samePlannerDate($existingTask['startDateTime'] ?? null, $schedule['start'])
+                            || ! $this->samePlannerDate($existingTask['dueDateTime'] ?? null, $schedule['due']))) {
+                        $this->line("Calendarizar {$schedule['start']} → {$schedule['due']}: {$task['title']}");
+                        $changes['startDateTime'] = $schedule['start'];
+                        $changes['dueDateTime'] = $schedule['due'];
+                    }
+
+                    if ($changes !== [] && ! $this->option('dry-run')) {
+                        $planner->updateTask($existingTask, $changes);
                     }
 
                     continue;
@@ -347,6 +408,8 @@ class InitializeSaepPlannerProject extends Command
                         title: $task['title'],
                         description: $task['description'],
                         completed: (bool) ($task['completed'] ?? false),
+                        startDateTime: $schedule['start'],
+                        dueDateTime: $schedule['due'],
                     );
                 }
             }
@@ -399,5 +462,24 @@ class InitializeSaepPlannerProject extends Command
     private function normalize(string $value): string
     {
         return mb_strtolower(trim($value));
+    }
+
+    /** @return array{start: string, due: string} */
+    private function taskSchedule(string $title): array
+    {
+        $schedule = self::TASK_SCHEDULES[$title] ?? null;
+        if ($schedule === null) {
+            throw new RuntimeException("Falta calendarizar la tarea de Planner: {$title}");
+        }
+
+        return [
+            'start' => $schedule['start'].'T12:00:00Z',
+            'due' => $schedule['due'].'T21:00:00Z',
+        ];
+    }
+
+    private function samePlannerDate(mixed $current, string $expected): bool
+    {
+        return is_string($current) && $current === $expected;
     }
 }

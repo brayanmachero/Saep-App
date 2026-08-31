@@ -91,13 +91,29 @@ class PlannerService
     /**
      * @return array<string, mixed>
      */
-    public function createTask(string $bucketId, string $title, ?string $description = null, bool $completed = false): array
-    {
-        $task = $this->post('/planner/tasks', [
+    public function createTask(
+        string $bucketId,
+        string $title,
+        ?string $description = null,
+        bool $completed = false,
+        ?string $startDateTime = null,
+        ?string $dueDateTime = null,
+    ): array {
+        $payload = [
             'planId' => $this->planId(),
             'bucketId' => $bucketId,
             'title' => $title,
-        ]);
+        ];
+
+        if ($startDateTime !== null) {
+            $payload['startDateTime'] = $startDateTime;
+        }
+
+        if ($dueDateTime !== null) {
+            $payload['dueDateTime'] = $dueDateTime;
+        }
+
+        $task = $this->post('/planner/tasks', $payload);
 
         $taskId = (string) ($task['id'] ?? '');
         if ($taskId === '') {
@@ -124,20 +140,20 @@ class PlannerService
         return $task;
     }
 
-    /** @param array<string, mixed> $task */
-    public function updateTaskState(array $task, string $bucketId, bool $completed): void
+    /**
+     * @param  array<string, mixed>  $task
+     * @param  array<string, mixed>  $changes
+     */
+    public function updateTask(array $task, array $changes): void
     {
         $taskId = (string) ($task['id'] ?? '');
         $etag = $this->etag($task);
 
         if ($taskId === '' || $etag === '') {
-            throw new RuntimeException('No fue posible actualizar el estado de una tarea de Planner.');
+            throw new RuntimeException('No fue posible actualizar una tarea de Planner.');
         }
 
-        $this->patch('/planner/tasks/'.rawurlencode($taskId), [
-            'bucketId' => $bucketId,
-            'percentComplete' => $completed ? 100 : 0,
-        ], $etag);
+        $this->patch('/planner/tasks/'.rawurlencode($taskId), $changes, $etag);
     }
 
     private function updateTaskDetails(string $taskId, string $description): void
