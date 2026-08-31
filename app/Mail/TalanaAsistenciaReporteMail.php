@@ -5,6 +5,7 @@ namespace App\Mail;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -30,6 +31,8 @@ class TalanaAsistenciaReporteMail extends Mailable
     {
         $r = $this->reporte;
         $fecha = Carbon::parse($this->fecha)->locale('es')->isoFormat('dddd D [de] MMMM YYYY');
+        $fromAddress = trim((string) config('talana_attendance.from.address')) ?: (string) config('mail.from.address');
+        $fromName = trim((string) config('talana_attendance.from.name')) ?: (string) config('mail.from.name');
 
         $urgencias = $r['total_alertas']
             ?? ($r['total_incompletas'] + $r['total_sin_marcacion'] + ($r['total_revision'] ?? 0));
@@ -41,6 +44,7 @@ class TalanaAsistenciaReporteMail extends Mailable
         $alcance = $alcanceReporte ? " — {$alcanceReporte}" : '';
 
         return new Envelope(
+            from: new Address($fromAddress, $fromName),
             subject: "{$prefijo} Reporte Asistencia Talana{$alcance} — {$fecha}",
         );
     }
