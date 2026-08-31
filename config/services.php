@@ -152,6 +152,11 @@ return [
         'asistencia_empresa_id' => env('TALANA_ASISTENCIA_EMPRESA_ID')
             ? (int) env('TALANA_ASISTENCIA_EMPRESA_ID')
             : null,
+        // Segundo reporte diario, independiente de Quilicura.
+        'asistencia_centro_costo_penon' => env('TALANA_ASISTENCIA_CENTRO_COSTO_PENON') ?: 'LTS PEÑON EST',
+        'asistencia_empresa_id_penon' => (int) (env('TALANA_ASISTENCIA_EMPRESA_ID_PENON') ?: 1081),
+        'asistencia_penon_email' => env('TALANA_ASISTENCIA_PENON_EMAIL') ?: 'fortiz@saep.cl',
+        'asistencia_penon_cc' => env('TALANA_ASISTENCIA_PENON_CC') ?: 'jrodriguez@saep.cl,bmachero@saep.cl',
         'empresas'    => [
             (int) env('TALANA_EMPRESA_SAEP_ID', 1039)    => 'SAEP',
             (int) env('TALANA_EMPRESA_SAEP_EST_ID', 1081) => 'SAEP EST',

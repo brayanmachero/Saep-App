@@ -28,7 +28,8 @@ class TalanaReporteAsistencia extends Command
 {
     protected $signature = 'talana:reporte-asistencia
                             {--fecha=           : Fecha YYYY-MM-DD a analizar (default: ayer)}
-                            {--email=           : Email destinatario (sobrescribe el destinatario de asistencia y omite sus copias)}
+                            {--email=           : Email destinatario (sobrescribe el destinatario de asistencia)}
+                            {--cc=              : Correos en copia, separados por comas (sobrescribe las copias configuradas)}
                             {--centro-costo=    : Centro de costo a reportar (sobrescribe TALANA_ASISTENCIA_CENTRO_COSTO)}
                             {--empresa-id=      : Empresa Talana a reportar (sobrescribe TALANA_ASISTENCIA_EMPRESA_ID)}
                             {--dias-nuevo=60    : Días de antigüedad máxima para marcar como "nuevo"}
@@ -54,7 +55,11 @@ class TalanaReporteAsistencia extends Command
             ?: config('talana_attendance.recipients.to')
             ?: config('services.talana.alerta_email');
         $email = is_string($email) ? trim($email) : '';
-        $copias = $emailSobrescrito ? [] : $this->destinatariosEnCopia($email);
+        $ccSobrescrito = $this->option('cc');
+        $configuracionCopias = $ccSobrescrito !== null
+            ? $ccSobrescrito
+            : ($emailSobrescrito ? [] : config('talana_attendance.recipients.cc', []));
+        $copias = $this->destinatariosEnCopia($email, $configuracionCopias);
         $centroCosto = $this->resolverCentroCosto();
         $empresaId = $this->resolverEmpresaId();
         $alcanceReporte = $this->descripcionAlcance($centroCosto, $empresaId);
@@ -247,9 +252,8 @@ class TalanaReporteAsistencia extends Command
      *
      * @return array<int, string>
      */
-    private function destinatariosEnCopia(string $destinatario): array
+    private function destinatariosEnCopia(string $destinatario, mixed $configurados): array
     {
-        $configurados = config('talana_attendance.recipients.cc', '');
         $correos = is_array($configurados)
             ? $configurados
             : (preg_split('/[;,\r\n]+/', (string) $configurados) ?: []);

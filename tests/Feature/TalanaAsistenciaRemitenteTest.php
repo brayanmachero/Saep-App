@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Console\Commands\TalanaReporteAsistencia;
 use App\Mail\TalanaAsistenciaReporteMail;
+use ReflectionMethod;
 use Tests\TestCase;
 
 class TalanaAsistenciaRemitenteTest extends TestCase
@@ -46,5 +48,27 @@ class TalanaAsistenciaRemitenteTest extends TestCase
     {
         $this->assertSame('sgarcia@saep.cl', config('talana_attendance.recipients.to'));
         $this->assertSame('jrodriguez@saep.cl,bmachero@saep.cl', config('talana_attendance.recipients.cc'));
+    }
+
+    public function test_penon_attendance_report_has_its_own_recipient_and_copies(): void
+    {
+        $this->assertSame('LTS PEÑON EST', config('services.talana.asistencia_centro_costo_penon'));
+        $this->assertSame(1081, config('services.talana.asistencia_empresa_id_penon'));
+        $this->assertSame('fortiz@saep.cl', config('services.talana.asistencia_penon_email'));
+        $this->assertSame('jrodriguez@saep.cl,bmachero@saep.cl', config('services.talana.asistencia_penon_cc'));
+    }
+
+    public function test_penon_copies_are_normalized_without_repeating_the_main_recipient(): void
+    {
+        $command = app(TalanaReporteAsistencia::class);
+        $method = new ReflectionMethod($command, 'destinatariosEnCopia');
+
+        $copias = $method->invoke(
+            $command,
+            'fortiz@saep.cl',
+            'jrodriguez@saep.cl, bmachero@saep.cl, fortiz@saep.cl, correo-invalido'
+        );
+
+        $this->assertSame(['jrodriguez@saep.cl', 'bmachero@saep.cl'], $copias);
     }
 }

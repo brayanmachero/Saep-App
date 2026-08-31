@@ -107,7 +107,32 @@ Schedule::command('talana:sync-turnos --dias=30')
 Schedule::command('talana:reporte-asistencia')
     ->cron('15 8 * * 1-6')
     ->withoutOverlapping()
-    ->skip(fn() => ! config('services.talana.alerta_email') || ! config('services.talana.token'));
+    ->skip(fn() => ! config('talana_attendance.recipients.to') || ! config('services.talana.token'));
+
+// Segundo reporte independiente, LTS PEÑON EST (lun–sáb 08:20).
+$centroPenon = config('services.talana.asistencia_centro_costo_penon');
+if (filled($centroPenon)) {
+    $penonArgs = ['--centro-costo' => $centroPenon];
+    $empresaPenon = (int) config('services.talana.asistencia_empresa_id_penon');
+    if ($empresaPenon > 0) {
+        $penonArgs['--empresa-id'] = $empresaPenon;
+    }
+
+    $penonEmail = config('services.talana.asistencia_penon_email');
+    if (filled($penonEmail)) {
+        $penonArgs['--email'] = $penonEmail;
+    }
+
+    $penonCc = config('services.talana.asistencia_penon_cc');
+    if (filled($penonCc)) {
+        $penonArgs['--cc'] = $penonCc;
+    }
+
+    Schedule::command('talana:reporte-asistencia', $penonArgs)
+        ->cron('20 8 * * 1-6')
+        ->withoutOverlapping()
+        ->skip(fn () => ! filled($penonEmail) || ! config('services.talana.token'));
+}
 
 // RRHH: cierre diario de postulantes ingresados en el portal (17:00 Chile)
 Schedule::command('contratacion:cierre-diario')->dailyAt('17:00')->timezone('America/Santiago')->withoutOverlapping();
