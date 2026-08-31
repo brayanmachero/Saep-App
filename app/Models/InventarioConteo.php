@@ -11,6 +11,7 @@ class InventarioConteo extends Model
     public const ESTADOS = [
         'BORRADOR' => 'En conteo',
         'EN_REVISION' => 'En revision',
+        'REEMPLAZADO' => 'Reemplazado por saldo consolidado',
         'APROBADO' => 'Aprobado y ajustado',
     ];
 
@@ -35,6 +36,6 @@ class InventarioConteo extends Model
 
     public function puedeEliminarse(): bool
     {
-        return $this->estado !== 'APROBADO';
+        return in_array($this->estado, ['BORRADOR', 'EN_REVISION'], true);
     }
 }

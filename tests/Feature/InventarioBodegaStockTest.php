@@ -51,6 +51,7 @@ class InventarioBodegaStockTest extends TestCase
         foreach ([
             'inventario_entrega_kizeo_lineas', 'inventario_entrega_kizeo_aplicaciones',
             'inventario_conteo_lineas', 'inventario_conteos', 'inventario_importacion_movimientos', 'inventario_movimientos',
+            'inventario_centros_costo', 'inventario_coordinadores',
             'inventario_historial_costos', 'inventario_ingreso_items', 'inventario_ingresos', 'inventario_variantes',
             'inventario_kizeo_catalog_items', 'inventario_productos', 'inventario_proveedores', 'inventario_ubicaciones',
             'entrega_bodega_items', 'entregas_bodega', 'configuraciones',
@@ -241,6 +242,52 @@ class InventarioBodegaStockTest extends TestCase
             'referencia_id' => $conteo->id,
             'cantidad' => -2,
         ]);
+    }
+
+    public function test_open_stocktake_can_be_recreated_with_consolidated_balance_and_original_cutoff(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'GUIA_DESPACHO',
+            'numero_documento' => 'GD-RECREATE-1',
+            'fecha_documento' => null,
+            'fecha_recepcion' => '2026-08-01',
+            'observacion' => null,
+        ], [['variante_id' => $variant->id, 'cantidad' => 8, 'costo_unitario' => null]], $user);
+
+        $source = $service->createStocktake([
+            'ubicacion_id' => $origin->id,
+            'fecha_corte' => '2026-08-28',
+            'observacion' => 'Conteo previo',
+            'incluir_sin_stock' => false,
+        ], $user);
+        $sourceLine = $source->lineas()->firstOrFail();
+        $service->saveStocktake($source, [$sourceLine->id => ['cantidad_fisica' => 9, 'observacion' => 'Validado en terreno']]);
+
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'GUIA_DESPACHO',
+            'numero_documento' => 'GD-RECREATE-2',
+            'fecha_documento' => null,
+            'fecha_recepcion' => '2026-08-02',
+            'observacion' => null,
+        ], [['variante_id' => $variant->id, 'cantidad' => 2, 'costo_unitario' => null]], $user);
+
+        $replacement = $service->recreateStocktake($source, $user);
+        $replacementLine = $replacement->lineas()->firstOrFail();
+
+        $this->assertSame('REEMPLAZADO', $source->fresh()->estado);
+        $this->assertFalse($source->fresh()->puedeEliminarse());
+        $this->assertSame('EN_REVISION', $replacement->fresh()->estado);
+        $this->assertSame('2026-08-28', $replacement->fresh()->fecha_corte->toDateString());
+        $this->assertStringStartsWith('CNT-20260828-', $replacement->codigo);
+        $this->assertSame(10.0, (float) $replacementLine->cantidad_sistema);
+        $this->assertSame(9.0, (float) $replacementLine->cantidad_fisica);
+        $this->assertSame('Validado en terreno', $replacementLine->observacion);
     }
 
     public function test_draft_stocktake_can_be_deleted_without_touching_kardex(): void

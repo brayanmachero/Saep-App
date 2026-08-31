@@ -3,8 +3,10 @@
 @section('content')
 @php
     $canApprove = $canEdit && $conteo->estado === 'EN_REVISION';
-    $isLocked = $conteo->estado === 'APROBADO' || ! $canEdit;
+    $isLocked = ! in_array($conteo->estado, ['BORRADOR', 'EN_REVISION'], true) || ! $canEdit;
     $completed = $conteo->lineas->whereNotNull('cantidad_fisica')->count();
+    $pending = $conteo->lineas->count() - $completed;
+    $differences = $conteo->lineas->filter(fn($line) => $line->cantidad_fisica !== null && abs((float) $line->cantidad_fisica - (float) $line->cantidad_sistema) > 0.0001)->count();
 @endphp
 
 <div class="stocktake-page">
@@ -16,7 +18,13 @@
             <span>Fecha de corte: {{ optional($conteo->fecha_corte)->format('d/m/Y') }}</span>
         </div>
         <div class="stocktake-heading-meta">
-            <div class="stocktake-state {{ strtolower($conteo->estado) }}">{{ str_replace('_', ' ', $conteo->estado) }}</div>
+            <div class="stocktake-state {{ strtolower($conteo->estado) }}">{{ \App\Models\InventarioConteo::ESTADOS[$conteo->estado] ?? str_replace('_', ' ', $conteo->estado) }}</div>
+            @if($canEdit && in_array($conteo->estado, ['BORRADOR', 'EN_REVISION'], true))
+                <form method="POST" action="{{ route('inventario-bodega.conteos.recrear', $conteo) }}" onsubmit="return confirm('Se creará una nueva planilla con el saldo consolidado, manteniendo la fecha de corte y los valores físicos ingresados. Este conteo quedará solo como respaldo. ¿Continuar?');">
+                    @csrf
+                    <button class="btn btn-light stocktake-btn" type="submit"><i class="bi bi-arrow-repeat"></i>Recrear con saldo consolidado</button>
+                </form>
+            @endif
             @if($canEdit && $conteo->puedeEliminarse())
                 <form method="POST" action="{{ route('inventario-bodega.conteos.destroy', $conteo) }}" onsubmit="return confirm('Se eliminará el conteo {{ $conteo->codigo }} y sus líneas. No toca el kardex. ¿Continuar?');">
                     @csrf @method('DELETE')
@@ -30,10 +38,10 @@
     @if($errors->any())<div class="alert alert-danger stocktake-alert"><i class="bi bi-exclamation-octagon-fill"></i>{{ $errors->first() }}</div>@endif
 
     <section class="stocktake-summary">
-        <div><span>Lineas</span><strong>{{ $conteo->lineas->count() }}</strong></div>
-        <div><span>Registradas</span><strong>{{ $completed }}</strong></div>
-        <div><span>Pendientes</span><strong>{{ $conteo->lineas->count() - $completed }}</strong></div>
-        <div><span>Diferencias</span><strong id="stocktake-differences">{{ $conteo->lineas->filter(fn($line) => $line->cantidad_fisica !== null && abs((float) $line->cantidad_fisica - (float) $line->cantidad_sistema) > 0.0001)->count() }}</strong></div>
+        <div class="stocktake-metric is-neutral"><i class="bi bi-list-check"></i><div><span>Líneas</span><strong>{{ $conteo->lineas->count() }}</strong><small>Artículos por revisar</small></div></div>
+        <div class="stocktake-metric is-ready"><i class="bi bi-clipboard-check"></i><div><span>Registradas</span><strong>{{ $completed }}<small>/ {{ $conteo->lineas->count() }}</small></strong><small>Con cantidad física</small></div></div>
+        <div class="stocktake-metric {{ $pending ? 'is-pending' : 'is-ready' }}"><i class="bi bi-hourglass-split"></i><div><span>Pendientes</span><strong id="stocktake-pending">{{ $pending }}</strong><small>{{ $pending ? 'Faltan por ingresar' : 'Planilla completa' }}</small></div></div>
+        <div class="stocktake-metric {{ $differences ? 'is-difference' : 'is-ready' }}"><i class="bi bi-arrow-left-right"></i><div><span>Diferencias</span><strong id="stocktake-differences">{{ $differences }}</strong><small>{{ $differences ? 'Requieren revisión' : 'Sin diferencias' }}</small></div></div>
     </section>
 
     <section class="stocktake-section">
@@ -54,7 +62,7 @@
                             <td><strong>{{ $line->producto->nombre }}</strong><small>{{ $line->producto->codigo }}</small></td>
                             <td>{{ $line->variante->talla }}</td>
                             <td class="text-end" data-system-value="{{ (float) $line->cantidad_sistema }}">{{ rtrim(rtrim(number_format((float) $line->cantidad_sistema, 3, ',', '.'), '0'), ',') }}</td>
-                            <td class="physical-col"><input name="lineas[{{ $line->id }}][cantidad_fisica]" type="number" min="0" step="0.001" class="form-control stocktake-physical" value="{{ $line->cantidad_fisica }}" @disabled($isLocked)></td>
+                            <td class="physical-col"><input name="lineas[{{ $line->id }}][cantidad_fisica]" type="number" min="0" step="0.001" inputmode="decimal" class="form-control stocktake-physical" value="{{ $line->cantidad_fisica === null ? '' : rtrim(rtrim(number_format((float) $line->cantidad_fisica, 3, '.', ''), '0'), '.') }}" @disabled($isLocked)></td>
                             <td class="text-end stocktake-difference {{ $difference !== null && $difference != 0 ? ($difference > 0 ? 'positive' : 'negative') : '' }}" data-difference>{{ $difference === null ? '-' : ($difference > 0 ? '+' : '') . rtrim(rtrim(number_format($difference, 3, ',', '.'), '0'), ',') }}</td>
                             <td><input name="lineas[{{ $line->id }}][observacion]" class="form-control" maxlength="300" value="{{ $line->observacion }}" placeholder="Opcional" @disabled($isLocked)></td>
                         </tr>
@@ -75,11 +83,25 @@
         </section>
     @elseif($conteo->estado === 'BORRADOR')
         <div class="stocktake-reminder"><i class="bi bi-info-circle"></i>Completa todas las cantidades fisicas y guarda para dejar este conteo listo para revision.</div>
+    @elseif($conteo->estado === 'REEMPLAZADO')
+        <div class="stocktake-reminder stocktake-replaced"><i class="bi bi-arrow-repeat"></i>Este conteo se conservó solo como respaldo. Utiliza el nuevo conteo creado con el saldo consolidado.</div>
     @endif
 </div>
 
 <style>
     .stocktake-page { padding:1.35rem 1.75rem 2.5rem; color:#17213a; }.stocktake-heading,.stocktake-tools,.stocktake-actions,.stocktake-approval,.stocktake-summary,.stocktake-heading-meta { display:flex; align-items:center; }.stocktake-heading { justify-content:space-between; gap:1rem; margin-bottom:1rem; }.stocktake-heading-meta { gap:.65rem; flex-wrap:wrap; justify-content:flex-end; }.stocktake-heading-meta form { margin:0; }.stocktake-back { color:#49308b; text-decoration:none; display:inline-flex; gap:.4rem; align-items:center; font-size:.84rem; font-weight:750; }.stocktake-heading p { color:#67758c; margin:.55rem 0 .1rem; font-size:.84rem; }.stocktake-heading h1 { margin:0; font-size:1.6rem; font-weight:850; }.stocktake-heading span { color:#748198; font-size:.82rem; }.stocktake-state { border-radius:999px; padding:.38rem .7rem; font-size:.75rem; font-weight:850; background:#eef1f5; color:#617087; white-space:nowrap; }.stocktake-state.en_revision { background:#eee8ff; color:#5632b5; }.stocktake-state.aprobado { background:#e7f8ef; color:#087245; }.stocktake-alert { display:flex; gap:.6rem; align-items:center; }.stocktake-summary { gap:.8rem; margin-bottom:1rem; }.stocktake-summary > div { flex:1; border:1px solid #e2e7f0; background:#fff; border-radius:.6rem; padding:.75rem .9rem; }.stocktake-summary span { display:block; font-size:.68rem; text-transform:uppercase; font-weight:800; letter-spacing:.045em; color:#748198; }.stocktake-summary strong { font-size:1.35rem; display:block; margin-top:.18rem; }.stocktake-section { padding:1rem; background:#fff; border:1px solid #e1e7f0; border-radius:.65rem; box-shadow:0 .4rem 1.2rem rgba(29,41,67,.05); }.stocktake-tools { justify-content:space-between; gap:1rem; margin-bottom:.8rem; }.stocktake-tools h2,.stocktake-approval h2 { font-size:1rem; font-weight:850; margin:0 0 .15rem; }.stocktake-tools p,.stocktake-approval p { margin:0; color:#68758b; font-size:.82rem; }.stocktake-search { position:relative; min-width:260px; }.stocktake-search i { position:absolute; left:.7rem; top:.65rem; color:#79869a; }.stocktake-search input { padding-left:2rem; font-size:.84rem; }.stocktake-note,.stocktake-reminder { display:flex; gap:.55rem; align-items:center; border-radius:.45rem; padding:.7rem; margin-bottom:.8rem; font-size:.82rem; }.stocktake-note { background:#f4f2ff; color:#4f3d85; }.stocktake-reminder { background:#fff8e8; color:#80520e; margin-top:1rem; }.stocktake-table-wrap { overflow:auto; }.stocktake-table { width:100%; min-width:840px; border-collapse:collapse; font-size:.84rem; }.stocktake-table th { padding:.58rem .55rem; font-size:.68rem; letter-spacing:.045em; text-transform:uppercase; color:#68758b; border-bottom:1px solid #dee5ef; white-space:nowrap; }.stocktake-table td { padding:.56rem .55rem; border-bottom:1px solid #edf0f5; vertical-align:middle; }.stocktake-table td small { display:block; color:#748198; font-size:.72rem; margin-top:.12rem; }.stocktake-table tbody tr:last-child td { border-bottom:0; }.stocktake-table .form-control { min-height:2.3rem; font-size:.84rem; }.stocktake-difference.positive { color:#087245; font-weight:800; }.stocktake-difference.negative { color:#ba2936; font-weight:800; }.stocktake-actions { justify-content:flex-end; border-top:1px solid #e8edf4; padding-top:.85rem; margin-top:.7rem; }.stocktake-btn { border-radius:.48rem; min-height:2.5rem; font-size:.86rem; font-weight:800; display:inline-flex; gap:.45rem; align-items:center; }.stocktake-btn.btn-primary { background:#23085d; border-color:#23085d; }.stocktake-approval { justify-content:space-between; gap:1rem; margin-top:1rem; padding:1rem; border:1px solid #aee5c7; border-left:4px solid #1aa364; background:#f0fbf5; border-radius:.6rem; }.stocktake-approval > div { display:flex; gap:.7rem; align-items:flex-start; }.stocktake-approval > div > i { color:#087245; font-size:1.15rem; }.stocktake-approval .btn-success { background:#087245; border-color:#087245; }
+    .stocktake-state.reemplazado { background:#edf1f5; color:#586577; }
+    .stocktake-summary > .stocktake-metric { flex:1; display:flex; align-items:center; gap:.7rem; border:1px solid #e2e7f0; background:#fff; border-radius:.65rem; padding:.78rem .9rem; min-height:4.6rem; }
+    .stocktake-metric > i { display:grid; place-items:center; width:2.2rem; height:2.2rem; border-radius:.55rem; background:#eef1f7; color:#536177; font-size:1.05rem; }
+    .stocktake-metric span,.stocktake-metric small { display:block; }
+    .stocktake-metric span { font-size:.68rem; text-transform:uppercase; font-weight:800; letter-spacing:.045em; color:#748198; }
+    .stocktake-metric strong { font-size:1.35rem; display:block; margin-top:.04rem; line-height:1.25; }
+    .stocktake-metric strong small { display:inline; font-size:.76rem; color:#748198; font-weight:750; }
+    .stocktake-metric > div > small { color:#748198; font-size:.71rem; }
+    .stocktake-metric.is-ready > i { background:#e7f8ef; color:#087245; }
+    .stocktake-metric.is-pending > i { background:#fff3dc; color:#aa6900; }
+    .stocktake-metric.is-difference > i { background:#fff0ed; color:#c3452e; }
+    .stocktake-replaced { background:#edf1f5; color:#586577; }
     @media (max-width:900px) { .stocktake-page { padding:1rem .85rem 5rem; }.stocktake-heading { align-items:flex-start; flex-wrap:wrap; }.stocktake-heading-meta { width:100%; }.stocktake-heading-meta form,.stocktake-heading-meta button { width:100%; }.stocktake-heading-meta button { justify-content:center; }.stocktake-summary { display:grid; grid-template-columns:repeat(2,1fr); }.stocktake-tools { align-items:flex-start; flex-direction:column; }.stocktake-search { width:100%; min-width:0; }.stocktake-approval { align-items:flex-start; flex-direction:column; }.stocktake-approval form,.stocktake-approval button { width:100%; }.stocktake-approval button { justify-content:center; } }
 </style>
 
@@ -87,6 +109,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     var search = document.getElementById('stocktake-search');
     var differences = document.getElementById('stocktake-differences');
+    var pending = document.getElementById('stocktake-pending');
     function trimNumber(value) { return value.toLocaleString('es-CL', { maximumFractionDigits: 3 }); }
     function refreshDifference(input) {
         var row = input.closest('tr');
@@ -97,7 +120,7 @@ document.addEventListener('DOMContentLoaded', function () {
         cell.textContent = (difference > 0 ? '+' : '') + trimNumber(difference);
         cell.className = 'text-end stocktake-difference ' + (difference > 0 ? 'positive' : (difference < 0 ? 'negative' : ''));
     }
-    function refreshCount() { var count = Array.from(document.querySelectorAll('[data-difference]')).filter(function (cell) { return cell.textContent.trim() !== '-' && cell.textContent.trim() !== '0'; }).length; if (differences) differences.textContent = count; }
+    function refreshCount() { var inputs = Array.from(document.querySelectorAll('.stocktake-physical')); var count = Array.from(document.querySelectorAll('[data-difference]')).filter(function (cell) { return cell.textContent.trim() !== '-' && cell.textContent.trim() !== '0'; }).length; if (differences) differences.textContent = count; if (pending) pending.textContent = inputs.filter(function (input) { return input.value === ''; }).length; }
     document.querySelectorAll('.stocktake-physical').forEach(function (input) { input.addEventListener('input', function () { refreshDifference(input); refreshCount(); }); });
     if (search) search.addEventListener('input', function () { var term = search.value.toLowerCase().trim(); document.querySelectorAll('[data-stocktake-row]').forEach(function (row) { row.hidden = term !== '' && !row.dataset.search.includes(term); }); });
 });

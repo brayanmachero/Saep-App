@@ -587,6 +587,9 @@ Route::middleware('auth')->group(function () {
           Route::post('conteos/{conteo}/aprobar', [InventarioBodegaController::class, 'approveStocktake'])
               ->middleware('modulo:inventario_bodega,puede_editar')
               ->name('conteos.aprobar');
+          Route::post('conteos/{conteo}/recrear', [InventarioBodegaController::class, 'recreateStocktake'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('conteos.recrear');
           Route::delete('conteos/{conteo}', [InventarioBodegaController::class, 'destroyStocktake'])
               ->middleware('modulo:inventario_bodega,puede_editar')
               ->name('conteos.destroy');

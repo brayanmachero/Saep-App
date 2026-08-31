@@ -719,6 +719,14 @@ class InventarioBodegaController extends Controller
             ->with('success', "Conteo {$conteo->codigo} aprobado. Las diferencias se registraron como ajustes trazables.");
     }
 
+    public function recreateStocktake(Request $request, InventarioConteo $conteo): RedirectResponse
+    {
+        $replacement = $this->stock->recreateStocktake($conteo, $request->user());
+
+        return redirect()->route('inventario-bodega.conteos.show', $replacement)
+            ->with('success', "Se recreó {$replacement->codigo} con el saldo consolidado de {$conteo->codigo}. Se mantuvo la fecha de corte y se copiaron los valores físicos ya registrados.");
+    }
+
     public function destroyStocktake(InventarioConteo $conteo): RedirectResponse
     {
         $codigo = $conteo->codigo;
