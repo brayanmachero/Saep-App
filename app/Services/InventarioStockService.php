@@ -440,10 +440,88 @@ class InventarioStockService
         });
     }
 
+    /**
+     * Rebuilds an open stocktake after a location consolidation, preserving the
+     * original cut-off date and every physical value already entered.
+     */
+    public function recreateStocktake(InventarioConteo $conteo, User $user): InventarioConteo
+    {
+        return DB::transaction(function () use ($conteo, $user) {
+            $source = InventarioConteo::query()
+                ->with('lineas')
+                ->lockForUpdate()
+                ->findOrFail($conteo->id);
+
+            if (! in_array($source->estado, ['BORRADOR', 'EN_REVISION'], true)) {
+                throw ValidationException::withMessages([
+                    'conteo' => 'Solo se puede recrear un conteo que aún no ha sido aprobado ni reemplazado.',
+                ]);
+            }
+
+            $location = InventarioUbicacion::query()
+                ->whereKey($source->ubicacion_id)
+                ->where('activo', true)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $location) {
+                throw ValidationException::withMessages([
+                    'conteo' => 'La ubicación de este conteo ya no está activa. No se puede reconstruir su saldo.',
+                ]);
+            }
+
+            $balances = $this->balances($location->id)
+                ->filter(fn (InventarioVariante $variante) => abs((float) $variante->stock_actual) > 0.0001);
+
+            if ($balances->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'conteo' => 'No hay saldo disponible para recrear este conteo.',
+                ]);
+            }
+
+            $previousLines = $source->lineas->keyBy('variante_id');
+            $replacement = InventarioConteo::create([
+                'codigo' => $this->code('CNT'),
+                'ubicacion_id' => $location->id,
+                'fecha_corte' => $source->fecha_corte,
+                'estado' => 'BORRADOR',
+                'observacion' => "Recreado desde {$source->codigo} tras consolidar ubicaciones. Conserva la fecha de corte y los registros físicos ya ingresados.",
+                'creado_por' => $user->id,
+            ]);
+
+            $hasPendingLines = false;
+            foreach ($balances as $variante) {
+                $previous = $previousLines->get($variante->id);
+                $physical = $previous?->cantidad_fisica;
+
+                InventarioConteoLinea::create([
+                    'conteo_id' => $replacement->id,
+                    'producto_id' => $variante->producto_id,
+                    'variante_id' => $variante->id,
+                    'cantidad_sistema' => $variante->stock_actual,
+                    'cantidad_fisica' => $physical,
+                    'observacion' => $previous?->observacion,
+                ]);
+
+                $hasPendingLines = $hasPendingLines || $physical === null;
+            }
+
+            $replacement->update(['estado' => $hasPendingLines ? 'BORRADOR' : 'EN_REVISION']);
+
+            $source->update([
+                'estado' => 'REEMPLAZADO',
+                'observacion' => Str::limit(trim(($source->observacion ? $source->observacion."\n" : '')
+                    ."Reemplazado por {$replacement->codigo} después de consolidar las ubicaciones de stock."), 500, ''),
+            ]);
+
+            return $replacement->load('lineas');
+        });
+    }
+
     public function saveStocktake(InventarioConteo $conteo, array $lineas): void
     {
-        if ($conteo->estado === 'APROBADO') {
-            throw ValidationException::withMessages(['conteo' => 'Este conteo ya fue aprobado y no se puede editar.']);
+        if (in_array($conteo->estado, ['APROBADO', 'REEMPLAZADO'], true)) {
+            throw ValidationException::withMessages(['conteo' => 'Este conteo ya fue aprobado o reemplazado y no se puede editar.']);
         }
 
         DB::transaction(function () use ($conteo, $lineas) {
@@ -505,7 +583,7 @@ class InventarioStockService
     {
         if ($conteo->estado === 'APROBADO' || ! $conteo->puedeEliminarse()) {
             throw ValidationException::withMessages([
-                'conteo' => 'No se puede eliminar un conteo aprobado: ya dejó ajustes en el kardex.',
+                'conteo' => 'No se puede eliminar un conteo aprobado o reemplazado: se conserva por trazabilidad.',
             ]);
         }
 
