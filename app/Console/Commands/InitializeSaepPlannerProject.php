@@ -161,6 +161,30 @@ class InitializeSaepPlannerProject extends Command
         ],
         [
             'bucket' => 'Completado',
+            'title' => '[SAEP Recruit] Base de contactos, consentimiento y bajas trazables',
+            'description' => 'Alta manual e importación desde portales de empleo, finalidad y evidencia de autorización, vigencia, revocación y bloqueo automático ante BAJA, STOP, SALIR, CANCELAR o NO CONTACTAR.',
+            'completed' => true,
+        ],
+        [
+            'bucket' => 'Completado',
+            'title' => '[SAEP Recruit] Campañas masivas y plantillas aprobadas de Meta',
+            'description' => 'Preparación, aprobación y programación de campañas; sincronización de plantillas aprobadas por Meta y control previo para enviar solo a contactos autorizados, sin documentos ni antecedentes sensibles.',
+            'completed' => true,
+        ],
+        [
+            'bucket' => 'Completado',
+            'title' => '[SAEP Recruit] Bandeja de conversaciones y atención asignable',
+            'description' => 'Bandeja para clasificar, asignar responsables, actualizar estados y responder conversaciones. La respuesta directa respeta la ventana de 24 horas definida por WhatsApp.',
+            'completed' => true,
+        ],
+        [
+            'bucket' => 'Completado',
+            'title' => '[SAEP Recruit] Webhook Meta y trazabilidad de mensajes',
+            'description' => 'Webhook oficial validado con firma HMAC para recibir mensajes entrantes y estados de entrega, lectura o fallo; evita duplicados y conserva auditoría sin replicar contenidos sensibles.',
+            'completed' => true,
+        ],
+        [
+            'bucket' => 'Completado',
             'title' => '[Inventario / Kizeo] Sincronización de entregas, catálogo y aplicación controlada',
             'description' => 'Sincronización de entregas EPP y catálogo cada 30 minutos, aplicación masiva, revisión de diferencias, reversos, asociación de tallas y descuento automático solo para entregas nuevas.',
             'completed' => true,
@@ -221,9 +245,19 @@ class InitializeSaepPlannerProject extends Command
             'description' => 'Realizar una prueba controlada de campaña aprobada, consentimiento, webhook y postulación con carga documental para confirmar el flujo completo de reclutamiento.',
         ],
         [
+            'bucket' => 'Validación',
+            'title' => '[SAEP Recruit / Meta] Habilitar canal oficial y primer envío controlado',
+            'description' => 'Configurar en producción las credenciales de Meta Cloud API y el webhook, sincronizar una plantilla aprobada y probar con destinatarios autorizados antes de habilitar campañas reales o masivas.',
+        ],
+        [
             'bucket' => 'En curso',
             'title' => '[Operación] Consolidar el registro histórico de avances en Planner',
             'description' => 'Mantener este plan como fuente de seguimiento: cada mejora relevante, automatización, validación o incidente debe registrarse y moverse según su estado.',
+        ],
+        [
+            'bucket' => 'En curso',
+            'title' => '[SAEP Comunicaciones] Incorporar el avance paralelo al tablero',
+            'description' => 'Registrar el alcance, entregables, automatizaciones y pruebas del frente de comunicaciones. En este repositorio no aparece aún como módulo independiente, por lo que queda separado hasta contar con su fuente técnica o historial propio.',
         ],
     ];
 
