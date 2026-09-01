@@ -480,13 +480,19 @@ class InventarioBodegaStockTest extends TestCase
         ], $user);
 
         $originalItem->update(['talla' => 'L', 'cantidad' => 3]);
-        $delivery->update(['kizeo_updated_at' => now()->addMinute()]);
+        $delivery->update([
+            'kizeo_updated_at' => now()->addMinute(),
+            'estado_fuente' => 'REQUIERE_REVISION',
+            'alerta_fuente' => 'El comprobante fue actualizado en Kizeo después de afectar el stock. Revisa la salida y revérsala si corresponde.',
+        ]);
         $corrected = $service->tryAutoReconcileUpdatedKizeoDelivery($delivery->fresh(['items', 'inventarioAplicacion.lineas']));
 
         $this->assertNotNull($corrected);
         $this->assertSame('CORREGIDA', $corrected->estado);
         $this->assertSame(10.0, $service->stockActual($origin->id, $medium->id));
         $this->assertSame(2.0, $service->stockActual($origin->id, $large->id));
+        $this->assertSame('ACTIVA', $delivery->fresh()->estado_fuente);
+        $this->assertNull($delivery->fresh()->alerta_fuente);
         $this->assertSame('L', $corrected->correccion_snapshot[0]['talla_fuente']);
         $this->assertSame(3.0, (float) $corrected->correccion_snapshot[0]['cantidad_fuente']);
         $this->assertDatabaseHas('inventario_movimientos', [

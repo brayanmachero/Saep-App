@@ -866,7 +866,7 @@ class InventarioStockService
             return null;
         }
 
-        if (in_array($delivery->estado_fuente, ['ELIMINADA_EN_KIZEO', 'INCOMPLETA', 'REQUIERE_REVISION'], true)) {
+        if ($this->kizeoSourceBlocksAutomaticReconciliation($delivery)) {
             throw ValidationException::withMessages([
                 'entrega' => $delivery->alerta_fuente
                     ?: 'La fuente Kizeo no se puede conciliar automáticamente en su estado actual.',
@@ -906,6 +906,7 @@ class InventarioStockService
                     }
                 }
                 $application->update($updates);
+                $this->clearKizeoAutomaticReview($delivery);
 
                 return $application->fresh(['ubicacion', 'lineas.variante.producto']);
             }
@@ -952,6 +953,7 @@ class InventarioStockService
                 'correccion_pendiente_motivo' => null,
                 'observacion' => 'Salida conciliada automáticamente con la actualización de Kizeo.',
             ]);
+            $this->clearKizeoAutomaticReview($delivery);
 
             return $application->fresh(['ubicacion', 'lineas.variante.producto']);
         });
@@ -2026,6 +2028,35 @@ class InventarioStockService
     private function number(float $value): string
     {
         return rtrim(rtrim(number_format($value, 3, ',', '.'), '0'), ',');
+    }
+
+    private function kizeoSourceBlocksAutomaticReconciliation(EntregaBodega $delivery): bool
+    {
+        if (in_array($delivery->estado_fuente, ['ELIMINADA_EN_KIZEO', 'INCOMPLETA'], true)) {
+            return true;
+        }
+        if ($delivery->estado_fuente !== 'REQUIERE_REVISION') {
+            return false;
+        }
+
+        // El flujo anterior marcaba todo cambio posterior al descuento como
+        // revisión. Este caso es precisamente el que ahora se concilia solo.
+        return $delivery->fuente_ausente_desde !== null
+            || ! Str::contains((string) $delivery->alerta_fuente, 'actualizado en Kizeo después de afectar el stock');
+    }
+
+    private function clearKizeoAutomaticReview(EntregaBodega $delivery): void
+    {
+        if ($delivery->estado_fuente !== 'REQUIERE_REVISION'
+            || $delivery->fuente_ausente_desde !== null
+            || ! Str::contains((string) $delivery->alerta_fuente, 'actualizado en Kizeo después de afectar el stock')) {
+            return;
+        }
+
+        $delivery->update([
+            'estado_fuente' => 'ACTIVA',
+            'alerta_fuente' => null,
+        ]);
     }
 
     /** @return array<int, array{linea_fuente:int, articulo_fuente:string, talla_fuente:?string, cantidad_fuente:float, producto_id:int, variante_id:int}> */
