@@ -972,6 +972,11 @@ class InventarioStockService
         $hasNewSourceVersion = $delivery->kizeo_updated_at
             && (! $acknowledgedAt || $delivery->kizeo_updated_at->gt($acknowledgedAt));
         if (! $hasNewSourceVersion && ! filled($application->correccion_pendiente_motivo)) {
+            // Puede quedar una alerta genérica del flujo anterior aunque la
+            // versión de Kizeo ya haya sido reconocida. No debe mostrarse como
+            // una corrección pendiente ni seguir entrando a las colas de revisión.
+            $this->clearKizeoAutomaticReview($delivery);
+
             return null;
         }
 

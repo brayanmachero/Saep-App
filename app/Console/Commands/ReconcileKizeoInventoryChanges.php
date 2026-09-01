@@ -33,6 +33,12 @@ class ReconcileKizeoInventoryChanges extends Command
                     $hasNewSourceVersion = $delivery->kizeo_updated_at
                         && (! $acknowledgedAt || $delivery->kizeo_updated_at->gt($acknowledgedAt));
                     if (! $hasNewSourceVersion && ! filled($application->correccion_pendiente_motivo)) {
+                        // Limpia alertas genéricas antiguas que ya fueron
+                        // reconocidas por una corrección automática previa.
+                        if ($delivery->estado_fuente === 'REQUIERE_REVISION') {
+                            $stock->tryAutoReconcileUpdatedKizeoDelivery($delivery);
+                        }
+
                         continue;
                     }
 

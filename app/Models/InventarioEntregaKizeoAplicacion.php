@@ -47,6 +47,15 @@ class InventarioEntregaKizeoAplicacion extends Model
         return $this->hasMany(InventarioEntregaKizeoLinea::class, 'aplicacion_id')->orderBy('linea_fuente');
     }
 
+    /** Movimientos que dejan constancia del ajuste automático posterior de Kizeo. */
+    public function movimientosCorreccion(): HasMany
+    {
+        return $this->hasMany(InventarioMovimiento::class, 'referencia_id')
+            ->where('referencia_tipo', self::class)
+            ->where('origen', 'CORRECCION_KIZEO_EPP')
+            ->orderBy('id');
+    }
+
     public function aplicadaPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'aplicada_por');

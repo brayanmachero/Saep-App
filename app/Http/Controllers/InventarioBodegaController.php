@@ -269,6 +269,8 @@ class InventarioBodegaController extends Controller
                     'items',
                     'inventarioAplicacion.ubicacion',
                     'inventarioAplicacion.lineas.variante.producto',
+                    'inventarioAplicacion.movimientosCorreccion.producto',
+                    'inventarioAplicacion.movimientosCorreccion.variante',
                 ])
                 ->when(
                     $kizeoQueue === 'historico',

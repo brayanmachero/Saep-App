@@ -495,6 +495,17 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertNull($delivery->fresh()->alerta_fuente);
         $this->assertSame('L', $corrected->correccion_snapshot[0]['talla_fuente']);
         $this->assertSame(3.0, (float) $corrected->correccion_snapshot[0]['cantidad_fuente']);
+
+        // Una alerta genérica que quedó de una sincronización anterior no debe
+        // volver a mostrarse si la misma versión ya fue reconocida.
+        $delivery->fresh()->update([
+            'estado_fuente' => 'REQUIERE_REVISION',
+            'alerta_fuente' => 'El comprobante fue actualizado en Kizeo después de afectar el stock. Revisa la salida y revérsala si corresponde.',
+        ]);
+        $service->tryAutoReconcileUpdatedKizeoDelivery($delivery->fresh(['items', 'inventarioAplicacion.lineas']));
+        $this->assertSame('ACTIVA', $delivery->fresh()->estado_fuente);
+        $this->assertNull($delivery->fresh()->alerta_fuente);
+
         $this->assertDatabaseHas('inventario_movimientos', [
             'origen' => 'CORRECCION_KIZEO_EPP',
             'variante_id' => $medium->id,
@@ -544,6 +555,9 @@ class InventarioBodegaStockTest extends TestCase
         $request->setUserResolver(fn () => $user);
         $view = app(InventarioBodegaController::class)->index($request)->render();
         $this->assertStringContainsString('Corregida automáticamente', $view);
+        $this->assertStringContainsString('Corrección aplicada en SAEP', $view);
+        $this->assertStringContainsString('Stock repuesto', $view);
+        $this->assertStringContainsString('Stock descontado', $view);
         $this->assertStringContainsString('Estas son las líneas vigentes que ya fueron conciliadas', $view);
 
         $service->reverseKizeoDelivery($application->fresh(), 'Comprobante completo anulado.', $user);
