@@ -318,7 +318,9 @@ class EntregaBodegaSyncService
             return $delivery->refresh();
         });
 
-        $this->inventoryStock()->tryAutoApplyNewKizeoDelivery($delivery->load('items'), $isNew);
+        $delivery = $delivery->load('items', 'inventarioAplicacion.lineas');
+        $this->inventoryStock()->tryAutoApplyNewKizeoDelivery($delivery, $isNew);
+        $this->inventoryStock()->tryAutoReconcileUpdatedKizeoDelivery($delivery);
 
         return $delivery->fresh(['items']) ?? $delivery;
     }
@@ -406,7 +408,7 @@ class EntregaBodegaSyncService
     private function sourceState(array $fields, array $items, array $mapping, array $metadata, ?EntregaBodega $stored): array
     {
         $issue = $this->sourceIssue($fields, $items, $mapping);
-        $hasAppliedStock = $stored?->inventarioAplicacion?->estado === 'APLICADA';
+        $hasAppliedStock = in_array($stored?->inventarioAplicacion?->estado, ['APLICADA', 'CORREGIDA'], true);
         $changed = $stored && $this->sourceHasChanged($metadata, $stored);
 
         if ($issue !== null) {
@@ -484,7 +486,7 @@ class EntregaBodegaSyncService
 
     private function markDeliverySourceMissing(EntregaBodega $delivery, string $alert): EntregaBodega
     {
-        $hasAppliedStock = $delivery->inventarioAplicacion?->estado === 'APLICADA';
+        $hasAppliedStock = in_array($delivery->inventarioAplicacion?->estado, ['APLICADA', 'CORREGIDA'], true);
         $delivery->update([
             'estado_fuente' => $hasAppliedStock ? 'REQUIERE_REVISION' : 'ELIMINADA_EN_KIZEO',
             'alerta_fuente' => $hasAppliedStock

@@ -844,12 +844,162 @@ class InventarioStockService
     public function kizeoDeliveryNeedsReview(EntregaBodega $delivery): bool
     {
         $application = $delivery->inventarioAplicacion;
-        if (! $application || $application->estado !== 'APLICADA') {
+        if (! $application || $application->estado === 'REVERSADA') {
             return false;
         }
 
+        $acknowledgedAt = $application->fuente_corregida_en ?: $application->fuente_actualizada_en;
+
         return $delivery->kizeo_updated_at
-            && (! $application->fuente_actualizada_en || $delivery->kizeo_updated_at->gt($application->fuente_actualizada_en));
+            && (! $acknowledgedAt || $delivery->kizeo_updated_at->gt($acknowledgedAt));
+    }
+
+    /**
+     * Conciliates a Kizeo source that was edited after it had already affected stock.
+     * The original discount stays untouched; only the stock difference is recorded.
+     */
+    public function reconcileKizeoDeliveryFromSource(EntregaBodega $delivery): ?InventarioEntregaKizeoAplicacion
+    {
+        $delivery->loadMissing('items', 'inventarioAplicacion.lineas');
+        $application = $delivery->inventarioAplicacion;
+        if (! $application || $application->estado === 'REVERSADA') {
+            return null;
+        }
+
+        if ($this->kizeoSourceBlocksAutomaticReconciliation($delivery)) {
+            throw ValidationException::withMessages([
+                'entrega' => $delivery->alerta_fuente
+                    ?: 'La fuente Kizeo no se puede conciliar automáticamente en su estado actual.',
+            ]);
+        }
+
+        $lineMappings = $this->suggestedKizeoLineMappings($delivery);
+
+        return DB::transaction(function () use ($delivery, $lineMappings) {
+            $application = InventarioEntregaKizeoAplicacion::query()
+                ->with('lineas')
+                ->lockForUpdate()
+                ->findOrFail($delivery->inventarioAplicacion->id);
+            if ($application->estado === 'REVERSADA') {
+                return null;
+            }
+
+            $location = InventarioUbicacion::query()->find($application->ubicacion_id);
+            if (! $location) {
+                throw ValidationException::withMessages([
+                    'entrega' => 'La ubicación usada en el descuento original ya no existe; la corrección requiere revisión manual.',
+                ]);
+            }
+
+            $previous = $this->effectiveKizeoApplicationSnapshot($application);
+            $current = $this->resolvedKizeoSourceSnapshot($delivery, $lineMappings);
+            $instructions = $this->kizeoCorrectionInstructions($previous, $current);
+            $sourceUpdatedAt = $delivery->kizeo_updated_at;
+
+            if ($instructions === []) {
+                $updates = ['correccion_pendiente_motivo' => null];
+                if ($sourceUpdatedAt) {
+                    if ($application->estado === 'APLICADA') {
+                        $updates['fuente_actualizada_en'] = $sourceUpdatedAt;
+                    } else {
+                        $updates['fuente_corregida_en'] = $sourceUpdatedAt;
+                    }
+                }
+                $application->update($updates);
+                $this->clearKizeoAutomaticReview($delivery);
+
+                return $application->fresh(['ubicacion', 'lineas.variante.producto']);
+            }
+
+            $positive = array_filter($instructions, fn (array $instruction) => $instruction['cantidad'] > 0);
+            $negative = array_filter($instructions, fn (array $instruction) => $instruction['cantidad'] < 0);
+            foreach (array_merge($positive, $negative) as $instruction) {
+                $quantity = abs((float) $instruction['cantidad']);
+                if ($instruction['cantidad'] < 0) {
+                    $this->ensureAvailability($location->id, $instruction['variante_id'], $quantity);
+                }
+
+                $variant = InventarioVariante::query()->with('producto')->find($instruction['variante_id']);
+                if (! $variant || ! $variant->producto) {
+                    throw ValidationException::withMessages([
+                        'entrega' => 'Uno de los artículos de la corrección ya no existe en el catálogo.',
+                    ]);
+                }
+
+                $this->createMovement([
+                    'tipo' => $instruction['cantidad'] < 0 ? 'ENTREGA_EPP' : 'REVERSO',
+                    'origen' => 'CORRECCION_KIZEO_EPP',
+                    'ubicacion_id' => $location->id,
+                    'producto_id' => $variant->producto_id,
+                    'variante_id' => $variant->id,
+                    'cantidad' => (float) $instruction['cantidad'],
+                    'referencia_tipo' => InventarioEntregaKizeoAplicacion::class,
+                    'referencia_id' => $application->id,
+                    'documento_tipo' => 'KIZEO_EPP',
+                    'documento_numero' => $this->kizeoDocumentNumber($delivery),
+                    'destinatario_nombre' => $delivery->nombre,
+                    'destinatario_rut' => $delivery->rut,
+                    'centro_costo' => $delivery->centro,
+                    'observacion' => $this->kizeoCorrectionObservation($delivery, $instruction),
+                    'ocurrido_en' => $sourceUpdatedAt ?: now(),
+                ]);
+            }
+
+            $application->update([
+                'estado' => 'CORREGIDA',
+                'corregida_en' => now(),
+                'fuente_corregida_en' => $sourceUpdatedAt ?: now(),
+                'correccion_snapshot' => array_values($current),
+                'correccion_pendiente_motivo' => null,
+                'observacion' => 'Salida conciliada automáticamente con la actualización de Kizeo.',
+            ]);
+            $this->clearKizeoAutomaticReview($delivery);
+
+            return $application->fresh(['ubicacion', 'lineas.variante.producto']);
+        });
+    }
+
+    /** Runs after every synchronization; failures remain visible as pending review without touching stock. */
+    public function tryAutoReconcileUpdatedKizeoDelivery(EntregaBodega $delivery): ?InventarioEntregaKizeoAplicacion
+    {
+        $delivery->loadMissing('items', 'inventarioAplicacion.lineas');
+        $application = $delivery->inventarioAplicacion;
+        if (! $application || $application->estado === 'REVERSADA') {
+            return null;
+        }
+
+        $acknowledgedAt = $application->fuente_corregida_en ?: $application->fuente_actualizada_en;
+        $hasNewSourceVersion = $delivery->kizeo_updated_at
+            && (! $acknowledgedAt || $delivery->kizeo_updated_at->gt($acknowledgedAt));
+        if (! $hasNewSourceVersion && ! filled($application->correccion_pendiente_motivo)) {
+            return null;
+        }
+
+        try {
+            return $this->reconcileKizeoDeliveryFromSource($delivery);
+        } catch (ValidationException $exception) {
+            $reason = (string) collect($exception->errors())->flatten()->first();
+            $application->update(['correccion_pendiente_motivo' => $reason]);
+            Log::warning('Entrega Kizeo modificada pendiente de conciliación.', [
+                'entrega_bodega_id' => $delivery->id,
+                'kizeo_form_id' => $delivery->kizeo_form_id,
+                'kizeo_data_id' => $delivery->kizeo_data_id,
+                'aplicacion_id' => $application->id,
+                'reason' => $reason,
+            ]);
+
+            return null;
+        } catch (\Throwable $exception) {
+            Log::error('Error al conciliar una entrega Kizeo modificada.', [
+                'entrega_bodega_id' => $delivery->id,
+                'kizeo_form_id' => $delivery->kizeo_form_id,
+                'kizeo_data_id' => $delivery->kizeo_data_id,
+                'aplicacion_id' => $application->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     public function applyKizeoDelivery(EntregaBodega $delivery, int $locationId, array $lineMappings, ?User $user = null): InventarioEntregaKizeoAplicacion
@@ -959,7 +1109,7 @@ class InventarioStockService
 
     public function reverseKizeoDelivery(InventarioEntregaKizeoAplicacion $application, string $reason, User $user): void
     {
-        if ($application->estado !== 'APLICADA') {
+        if (! in_array($application->estado, ['APLICADA', 'CORREGIDA'], true)) {
             throw ValidationException::withMessages(['aplicacion' => 'Esta entrega ya fue reversada o no puede modificarse.']);
         }
 
@@ -969,11 +1119,18 @@ class InventarioStockService
                 ->lockForUpdate()
                 ->findOrFail($application->id);
 
-            foreach ($application->lineas as $line) {
-                $original = $line->movimiento;
-                if (! $original || $line->reverso_movimiento_id) {
-                    continue;
-                }
+            $originalMovements = $application->lineas
+                ->filter(fn (InventarioEntregaKizeoLinea $line) => $line->movimiento && ! $line->reverso_movimiento_id)
+                ->map(fn (InventarioEntregaKizeoLinea $line) => $line->movimiento)
+                ->values();
+            $correctionMovements = InventarioMovimiento::query()
+                ->where('referencia_tipo', InventarioEntregaKizeoAplicacion::class)
+                ->where('referencia_id', $application->id)
+                ->where('origen', 'CORRECCION_KIZEO_EPP')
+                ->whereNull('reverso_de_id')
+                ->get();
+
+            foreach ($originalMovements->concat($correctionMovements) as $original) {
 
                 $reverse = $this->createMovement([
                     'tipo' => 'REVERSO',
@@ -981,7 +1138,7 @@ class InventarioStockService
                     'ubicacion_id' => $original->ubicacion_id,
                     'producto_id' => $original->producto_id,
                     'variante_id' => $original->variante_id,
-                    'cantidad' => abs((float) $original->cantidad),
+                    'cantidad' => -(float) $original->cantidad,
                     'referencia_tipo' => InventarioEntregaKizeoAplicacion::class,
                     'referencia_id' => $application->id,
                     'documento_tipo' => 'KIZEO_EPP',
@@ -994,7 +1151,9 @@ class InventarioStockService
                     'reverso_de_id' => $original->id,
                 ], $user);
 
-                $line->update(['reverso_movimiento_id' => $reverse->id]);
+                $application->lineas
+                    ->first(fn (InventarioEntregaKizeoLinea $line) => $line->movimiento_id === $original->id)
+                    ?->update(['reverso_movimiento_id' => $reverse->id]);
             }
 
             $application->update([
@@ -1869,6 +2028,171 @@ class InventarioStockService
     private function number(float $value): string
     {
         return rtrim(rtrim(number_format($value, 3, ',', '.'), '0'), ',');
+    }
+
+    private function kizeoSourceBlocksAutomaticReconciliation(EntregaBodega $delivery): bool
+    {
+        if (in_array($delivery->estado_fuente, ['ELIMINADA_EN_KIZEO', 'INCOMPLETA'], true)) {
+            return true;
+        }
+        if ($delivery->estado_fuente !== 'REQUIERE_REVISION') {
+            return false;
+        }
+
+        // El flujo anterior marcaba todo cambio posterior al descuento como
+        // revisión. Este caso es precisamente el que ahora se concilia solo.
+        return $delivery->fuente_ausente_desde !== null
+            || ! Str::contains((string) $delivery->alerta_fuente, 'actualizado en Kizeo después de afectar el stock');
+    }
+
+    private function clearKizeoAutomaticReview(EntregaBodega $delivery): void
+    {
+        if ($delivery->estado_fuente !== 'REQUIERE_REVISION'
+            || $delivery->fuente_ausente_desde !== null
+            || ! Str::contains((string) $delivery->alerta_fuente, 'actualizado en Kizeo después de afectar el stock')) {
+            return;
+        }
+
+        $delivery->update([
+            'estado_fuente' => 'ACTIVA',
+            'alerta_fuente' => null,
+        ]);
+    }
+
+    /** @return array<int, array{linea_fuente:int, articulo_fuente:string, talla_fuente:?string, cantidad_fuente:float, producto_id:int, variante_id:int}> */
+    private function effectiveKizeoApplicationSnapshot(InventarioEntregaKizeoAplicacion $application): array
+    {
+        $snapshot = collect($application->correccion_snapshot ?? [])
+            ->filter(fn ($line) => is_array($line) && isset($line['linea_fuente'], $line['variante_id']))
+            ->map(fn (array $line) => [
+                'linea_fuente' => (int) $line['linea_fuente'],
+                'articulo_fuente' => (string) ($line['articulo_fuente'] ?? 'Sin artículo'),
+                'talla_fuente' => $line['talla_fuente'] ?? null,
+                'cantidad_fuente' => (float) ($line['cantidad_fuente'] ?? 0),
+                'producto_id' => (int) ($line['producto_id'] ?? 0),
+                'variante_id' => (int) $line['variante_id'],
+            ])
+            ->keyBy('linea_fuente')
+            ->all();
+        if ($snapshot !== []) {
+            return $snapshot;
+        }
+
+        return $application->lineas
+            ->map(fn (InventarioEntregaKizeoLinea $line) => [
+                'linea_fuente' => (int) $line->linea_fuente,
+                'articulo_fuente' => (string) $line->articulo_fuente,
+                'talla_fuente' => $line->talla_fuente,
+                'cantidad_fuente' => (float) $line->cantidad_fuente,
+                'producto_id' => (int) $line->producto_id,
+                'variante_id' => (int) $line->variante_id,
+            ])
+            ->keyBy('linea_fuente')
+            ->all();
+    }
+
+    /** @return array<int, array{linea_fuente:int, articulo_fuente:string, talla_fuente:?string, cantidad_fuente:float, producto_id:int, variante_id:int}> */
+    private function resolvedKizeoSourceSnapshot(EntregaBodega $delivery, array $lineMappings): array
+    {
+        $items = $delivery->items()
+            ->where('cantidad', '>', 0)
+            ->orderBy('linea')
+            ->get();
+        $variantIds = collect($lineMappings)->pluck('variante_id')->filter()->unique()->values();
+        $variants = InventarioVariante::query()
+            ->with('producto')
+            ->whereIn('id', $variantIds)
+            ->get()
+            ->keyBy('id');
+
+        $snapshot = [];
+        foreach ($items as $item) {
+            $variantId = $lineMappings[$item->id]['variante_id'] ?? null;
+            $variant = $variantId ? $variants->get($variantId) : null;
+            if (! $variant || ! $variant->producto || ! $variant->activo || ! $variant->producto->activo) {
+                throw ValidationException::withMessages([
+                    'entrega' => "No se puede conciliar '{$item->articulo}' porque su artículo o talla no está activo en el catálogo.",
+                ]);
+            }
+
+            $snapshot[(int) $item->linea] = [
+                'linea_fuente' => (int) $item->linea,
+                'articulo_fuente' => $item->articulo ?: 'Sin artículo',
+                'talla_fuente' => $item->talla,
+                'cantidad_fuente' => (float) $item->cantidad,
+                'producto_id' => (int) $variant->producto_id,
+                'variante_id' => (int) $variant->id,
+            ];
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $previous
+     * @param  array<int, array<string, mixed>>  $current
+     * @return array<int, array{linea:int, variante_id:int, cantidad:float, detalle:string}>
+     */
+    private function kizeoCorrectionInstructions(array $previous, array $current): array
+    {
+        $instructions = [];
+        foreach (collect(array_keys($previous))->merge(array_keys($current))->unique()->sort()->values() as $line) {
+            $before = $previous[$line] ?? null;
+            $after = $current[$line] ?? null;
+            $beforeQuantity = (float) ($before['cantidad_fuente'] ?? 0);
+            $afterQuantity = (float) ($after['cantidad_fuente'] ?? 0);
+            $beforeVariantId = $before['variante_id'] ?? null;
+            $afterVariantId = $after['variante_id'] ?? null;
+
+            if ($beforeVariantId === $afterVariantId) {
+                $difference = $afterQuantity - $beforeQuantity;
+                if (abs($difference) < 0.0001) {
+                    continue;
+                }
+                if (! $afterVariantId) {
+                    continue;
+                }
+
+                $instructions[] = [
+                    'linea' => (int) $line,
+                    'variante_id' => (int) $afterVariantId,
+                    'cantidad' => -$difference,
+                    'detalle' => 'cantidad '.$this->number($beforeQuantity).' → '.$this->number($afterQuantity),
+                ];
+
+                continue;
+            }
+
+            if ($beforeVariantId && $beforeQuantity > 0) {
+                $instructions[] = [
+                    'linea' => (int) $line,
+                    'variante_id' => (int) $beforeVariantId,
+                    'cantidad' => $beforeQuantity,
+                    'detalle' => $afterVariantId
+                        ? 'artículo o talla reemplazado en Kizeo'
+                        : 'línea eliminada en Kizeo',
+                ];
+            }
+            if ($afterVariantId && $afterQuantity > 0) {
+                $instructions[] = [
+                    'linea' => (int) $line,
+                    'variante_id' => (int) $afterVariantId,
+                    'cantidad' => -$afterQuantity,
+                    'detalle' => $beforeVariantId
+                        ? 'artículo o talla reemplazado en Kizeo'
+                        : 'línea agregada en Kizeo',
+                ];
+            }
+        }
+
+        return $instructions;
+    }
+
+    /** @param array{linea:int, variante_id:int, cantidad:float, detalle:string} $instruction */
+    private function kizeoCorrectionObservation(EntregaBodega $delivery, array $instruction): string
+    {
+        return 'Corrección automática Kizeo '.$this->kizeoDocumentNumber($delivery)
+            .' · línea '.$instruction['linea'].': '.$instruction['detalle'].'.';
     }
 
     private function comparisonKey(?string $value): string

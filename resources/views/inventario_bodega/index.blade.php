@@ -502,6 +502,7 @@
                 'kizeo_desde' => $kizeoPeriod['from']?->toDateString(),
                 'kizeo_hasta' => $kizeoPeriod['to']?->toDateString(),
                 'kizeo_articulo' => $kizeoArticle,
+                'kizeo_cambios' => $kizeoChangeFilter,
             ], fn ($value) => $value !== null && $value !== '');
             $kizeoPeriodUrl = fn (string $period) => route('inventario-bodega.index', array_merge($kizeoFilterQuery, [
                 'kizeo_periodo' => $period,
@@ -539,6 +540,13 @@
                 </label>
                 <label>Artículo entregado
                     <input type="search" name="kizeo_articulo" class="form-control" value="{{ $kizeoArticle }}" placeholder="Código o nombre del artículo" maxlength="200" autocomplete="off">
+                </label>
+                <label>Estado de cambios
+                    <select name="kizeo_cambios" class="form-select" data-inventory-search-ignore>
+                        <option value="todos" @selected($kizeoChangeFilter === 'todos')>Todos</option>
+                        <option value="cambiados" @selected($kizeoChangeFilter === 'cambiados')>Cambiados por corregir</option>
+                        <option value="corregidos" @selected($kizeoChangeFilter === 'corregidos')>Corregidos automáticamente</option>
+                    </select>
                 </label>
                 <div class="inventory-kizeo-custom-range {{ $kizeoPeriod['period'] === 'personalizado' ? 'is-visible' : '' }}" data-kizeo-custom-range>
                     <label>Desde<input type="date" name="kizeo_desde" class="form-control" value="{{ $kizeoPeriod['period'] === 'personalizado' ? $kizeoPeriod['from']?->toDateString() : '' }}"></label>
@@ -579,7 +587,7 @@
             @endif
         </section>
 
-        <section class="inventory-kizeo-notice"><i class="bi bi-shield-check"></i><div><strong>Salida centralizada</strong><span>Las entregas Kizeo siempre descuentan desde <strong>{{ $centralKizeoLocation?->nombre ?: 'SAEP-CENTRAL' }}</strong>. La aplicación masiva exige artículo y talla exactos; las tallas genéricas <strong>NA</strong> se asocian de forma segura a la variante <strong>ESTANDAR</strong> del mismo artículo. El formulario histórico <strong>Control de Entrega Bodega (947762)</strong> no se descuenta: son {{ number_format($kizeoStats['historical']) }} comprobantes de consulta. Si Kizeo se corrige luego, usa el reverso para reponer el stock y deja el motivo registrado. @if(! empty($kizeoAutoApply['enabled'])) El interruptor automático solo cubre caídas nuevas posteriores a su activación.@else El descuento automático está apagado: las caídas nuevas de formularios vigentes quedan pendientes hasta que Bodega las aplique.@endif</span></div></section>
+        <section class="inventory-kizeo-notice"><i class="bi bi-shield-check"></i><div><strong>Salida centralizada y conciliada</strong><span>Las entregas Kizeo siempre descuentan desde <strong>{{ $centralKizeoLocation?->nombre ?: 'SAEP-CENTRAL' }}</strong>. La aplicación masiva exige artículo y talla exactos; las tallas genéricas <strong>NA</strong> se asocian de forma segura a la variante <strong>ESTANDAR</strong> del mismo artículo. Si Kizeo modifica después un artículo, talla o cantidad, SAEP conserva la salida original y aplica automáticamente solo la diferencia cuando la relación y el stock son válidos. El formulario histórico <strong>Control de Entrega Bodega (947762)</strong> no se descuenta: son {{ number_format($kizeoStats['historical']) }} comprobantes de consulta.</span></div></section>
         <script id="inventory-kizeo-central-stock" type="application/json">@json($kizeoCentralStockByVariant)</script>
 
         @if(! $centralKizeoLocation)
@@ -604,7 +612,10 @@
             @forelse($kizeoDeliveries as $delivery)
                 @php
                     $application = $delivery->inventarioAplicacion;
-                    $needsReview = $application && $application->estado === 'APLICADA' && $delivery->kizeo_updated_at && (! $application->fuente_actualizada_en || $delivery->kizeo_updated_at->gt($application->fuente_actualizada_en));
+                    $sourceAcknowledgedAt = $application ? ($application->fuente_corregida_en ?: $application->fuente_actualizada_en) : null;
+                    $needsReview = $application && $application->estado !== 'REVERSADA' && ($application->correccion_pendiente_motivo || ($delivery->kizeo_updated_at && (! $sourceAcknowledgedAt || $delivery->kizeo_updated_at->gt($sourceAcknowledgedAt))));
+                    $wasCorrected = $application?->estado === 'CORREGIDA';
+                    $showCurrentSource = $needsReview || $wasCorrected;
                     $deliverySuggestions = $kizeoSuggestions[$delivery->id] ?? [];
                     $deliveryItems = $delivery->items->where('cantidad', '>', 0);
                     $isReturn = $delivery->flujo_inventario === 'ENTRADA';
@@ -641,8 +652,11 @@
                                 <span class="inventory-status is-empty" title="La salida fue reversada y el stock ya fue repuesto.">Stock repuesto</span>
                             @else
                                 <span class="inventory-status is-ok" title="Esta entrega ya descontó stock y no puede aplicarse nuevamente.">Salida descontada</span>
+                                @if($wasCorrected)
+                                    <span class="inventory-status is-review" title="Los cambios de artículo, talla o cantidad informados por Kizeo ya ajustaron el stock.">Corregida automáticamente</span>
+                                @endif
                                 @if($needsReview)
-                                    <span class="inventory-status is-critical" title="Kizeo fue modificado despues de descontar el stock.">Kizeo actualizado</span>
+                                    <span class="inventory-status is-critical" title="Kizeo fue modificado y aún no pudo conciliarse automáticamente.">Cambio por corregir</span>
                                 @endif
                             @endif
                             <i class="bi bi-chevron-down inventory-delivery-toggle" aria-hidden="true"></i>
@@ -698,10 +712,11 @@
                                 <div><span>Ubicacion de salida</span><strong>{{ $application->ubicacion->nombre ?? '-' }}</strong></div>
                                 <div><span>Aplicada</span><strong>{{ optional($application->aplicada_en)->format('d/m/Y H:i') ?: '-' }}</strong></div>
                                 <div><span>Lineas descontadas</span><strong>{{ $application->lineas->count() }}</strong></div>
+                                @if($wasCorrected)<div><span>Corregida</span><strong>{{ optional($application->corregida_en)->format('d/m/Y H:i') ?: '-' }}</strong></div>@endif
                                 @if($application->estado === 'REVERSADA')<div><span>Reversada</span><strong>{{ optional($application->revertida_en)->format('d/m/Y H:i') ?: '-' }}</strong></div>@endif
                             </div>
                             @if($needsReview)
-                                <div class="inventory-source-warning"><i class="bi bi-exclamation-triangle-fill"></i><span>{{ $delivery->alerta_fuente ?: 'Esta entrega fue modificada en Kizeo despues de aplicar el stock. Revisa el comprobante y reversa la salida si ya no corresponde.' }}</span></div>
+                                <div class="inventory-source-warning"><i class="bi bi-exclamation-triangle-fill"></i><span>{{ $application->correccion_pendiente_motivo ?: ($delivery->alerta_fuente ?: 'Esta entrega fue modificada en Kizeo y no se pudo conciliar automáticamente. Revisa el detalle y reversa la salida solo si ya no corresponde.') }}</span></div>
                             @endif
                             <div class="inventory-kizeo-application-lines">
                                 <section class="inventory-kizeo-line-panel">
@@ -728,12 +743,12 @@
                                         @endforeach
                                     </tbody></table></div>
                                 </section>
-                                @if($needsReview)
+                                @if($showCurrentSource)
                                     <section class="inventory-kizeo-line-panel is-current-source">
                                         <div class="inventory-kizeo-line-panel-heading">
                                             <div>
                                                 <strong><i class="bi bi-arrow-repeat"></i>Lo que Kizeo informa ahora</strong>
-                                                <span>Compara estas líneas con la salida descontada antes de decidir si corresponde reversar.</span>
+                                                <span>{{ $needsReview ? 'Compara estas líneas con la salida descontada antes de decidir si corresponde reversar.' : 'Estas son las líneas vigentes que ya fueron conciliadas automáticamente con el stock.' }}</span>
                                             </div>
                                             @if($delivery->kizeo_updated_at)<small>Actualizado {{ $delivery->kizeo_updated_at->timezone(config('app.timezone'))->format('d/m/Y H:i') }}</small>@endif
                                         </div>
@@ -747,7 +762,7 @@
                                     </section>
                                 @endif
                             </div>
-                            @if($application->estado === 'APLICADA' && $canEdit)
+                            @if(in_array($application->estado, ['APLICADA', 'CORREGIDA'], true) && $canEdit)
                                 <details class="inventory-reverse-details"><summary><i class="bi bi-arrow-counterclockwise"></i>Corregir esta aplicacion</summary><form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.revertir', $application) }}" class="inventory-reverse-form">@csrf<label>Motivo del reverso<input name="motivo_reversion" class="form-control" minlength="5" maxlength="500" required placeholder="Ej. entrega anulada o cantidades corregidas en Kizeo"></label><button type="submit" class="btn btn-light inventory-btn" onclick="return confirm('Se repondra el stock con movimientos nuevos. ¿Continuar?')"><i class="bi bi-arrow-counterclockwise"></i>Reversar salida</button></form></details>
                             @endif
                         @endif

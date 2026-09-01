@@ -223,11 +223,38 @@ class InventarioBodegaController extends Controller
             : 'vigentes';
         $kizeoPeriod = $this->kizeoDeliveryPeriod($request);
         $kizeoArticle = trim((string) $request->input('kizeo_articulo', ''));
+        $kizeoChangeFilter = in_array($request->input('kizeo_cambios'), ['todos', 'cambiados', 'corregidos'], true)
+            ? $request->input('kizeo_cambios')
+            : 'todos';
         $kizeoPeriodQuery = $view === 'kizeo'
             ? $this->applyKizeoDeliveryPeriod(EntregaBodega::query(), $kizeoPeriod)
             : null;
         if ($kizeoPeriodQuery && $kizeoArticle !== '') {
             $kizeoPeriodQuery = $this->applyKizeoDeliveryArticleFilter($kizeoPeriodQuery, $kizeoArticle);
+        }
+        $kizeoApplications = collect();
+        $applicationReviewIds = collect();
+        $applicationCorrectedIds = collect();
+        if ($view === 'kizeo') {
+            $kizeoApplications = InventarioEntregaKizeoAplicacion::query()
+                ->with('entrega')
+                ->get();
+            $applicationReviewIds = $kizeoApplications
+                ->filter(function (InventarioEntregaKizeoAplicacion $application) {
+                    if ($application->estado === 'REVERSADA' || ! $application->entrega) {
+                        return false;
+                    }
+
+                    $acknowledgedAt = $application->fuente_corregida_en ?: $application->fuente_actualizada_en;
+
+                    return filled($application->correccion_pendiente_motivo)
+                        || ($application->entrega->kizeo_updated_at
+                            && (! $acknowledgedAt || $application->entrega->kizeo_updated_at->gt($acknowledgedAt)));
+                })
+                ->pluck('entrega_bodega_id');
+            $applicationCorrectedIds = $kizeoApplications
+                ->where('estado', 'CORREGIDA')
+                ->pluck('entrega_bodega_id');
         }
         $kizeoQueueCounts = ['vigentes' => 0, 'historico' => 0];
         if ($kizeoPeriodQuery) {
@@ -248,6 +275,13 @@ class InventarioBodegaController extends Controller
                     fn ($query) => $query->where('kizeo_form_id', EntregaBodegaSyncService::LEGACY_FORM_ID),
                     fn ($query) => $this->currentKizeoDeliveryForms($query),
                 )
+                ->when($kizeoChangeFilter === 'cambiados', function (Builder $query) use ($applicationReviewIds) {
+                    $query->where(function (Builder $query) use ($applicationReviewIds) {
+                        $query->whereIn('entregas_bodega.id', $applicationReviewIds)
+                            ->orWhereIn('estado_fuente', ['REQUIERE_REVISION', 'ELIMINADA_EN_KIZEO', 'INCOMPLETA']);
+                    });
+                })
+                ->when($kizeoChangeFilter === 'corregidos', fn (Builder $query) => $query->whereIn('entregas_bodega.id', $applicationCorrectedIds))
                 ->orderByDesc('fecha_pedido')
                 ->orderByDesc('id')
                 ->paginate(20, ['*'], 'kizeo_pagina')
@@ -286,14 +320,6 @@ class InventarioBodegaController extends Controller
         $kizeoDeliveredArticles = collect();
         $kizeoLastSyncedAt = null;
         if ($view === 'kizeo') {
-            $kizeoApplications = InventarioEntregaKizeoAplicacion::query()
-                ->with('entrega')
-                ->get();
-            $applicationReviewIds = $kizeoApplications
-                ->filter(fn (InventarioEntregaKizeoAplicacion $application) => $application->estado === 'APLICADA'
-                    && $application->entrega?->kizeo_updated_at
-                    && (! $application->fuente_actualizada_en || $application->entrega->kizeo_updated_at->gt($application->fuente_actualizada_en)))
-                ->pluck('entrega_bodega_id');
             $kizeoStats = [
                 'pending' => $this->currentKizeoDeliveryForms(clone $kizeoPeriodQuery)
                     ->where('flujo_inventario', 'SALIDA')
@@ -309,7 +335,7 @@ class InventarioBodegaController extends Controller
                     ->whereDoesntHave('inventarioAplicacion')
                     ->count(),
                 'applied' => $this->currentKizeoDeliveryForms(clone $kizeoPeriodQuery)
-                    ->whereHas('inventarioAplicacion', fn (Builder $query) => $query->where('estado', 'APLICADA'))
+                    ->whereHas('inventarioAplicacion', fn (Builder $query) => $query->whereIn('estado', ['APLICADA', 'CORREGIDA']))
                     ->count(),
                 'review' => $this->currentKizeoDeliveryForms(clone $kizeoPeriodQuery)
                     ->where(function (Builder $query) use ($applicationReviewIds) {
@@ -320,13 +346,13 @@ class InventarioBodegaController extends Controller
             ];
             $kizeoAppliedDeliveryIds = $this->currentKizeoDeliveryForms(clone $kizeoPeriodQuery)
                 ->where('flujo_inventario', 'SALIDA')
-                ->whereHas('inventarioAplicacion', fn (Builder $query) => $query->where('estado', 'APLICADA'))
+                ->whereHas('inventarioAplicacion', fn (Builder $query) => $query->whereIn('estado', ['APLICADA', 'CORREGIDA']))
                 ->select('entregas_bodega.id');
             $kizeoDeliveredArticles = DB::table('inventario_entrega_kizeo_lineas as lineas')
                 ->join('inventario_entrega_kizeo_aplicaciones as aplicaciones', 'aplicaciones.id', '=', 'lineas.aplicacion_id')
                 ->join('inventario_variantes as variantes', 'variantes.id', '=', 'lineas.variante_id')
                 ->join('inventario_productos as productos', 'productos.id', '=', 'lineas.producto_id')
-                ->where('aplicaciones.estado', 'APLICADA')
+                ->whereIn('aplicaciones.estado', ['APLICADA', 'CORREGIDA'])
                 ->whereIn('aplicaciones.entrega_bodega_id', $kizeoAppliedDeliveryIds->toBase())
                 ->select('lineas.variante_id', 'productos.codigo as producto_codigo', 'productos.nombre as producto_nombre', 'variantes.talla')
                 ->selectRaw('SUM(lineas.cantidad_fuente) as cantidad')
@@ -411,6 +437,7 @@ class InventarioBodegaController extends Controller
             'kizeoQueueCounts' => $kizeoQueueCounts,
             'kizeoPeriod' => $kizeoPeriod,
             'kizeoArticle' => $kizeoArticle,
+            'kizeoChangeFilter' => $kizeoChangeFilter,
             'kizeoLastSyncedAt' => $kizeoLastSyncedAt,
             'kizeoAutoApply' => $this->stock->kizeoAutoApplyState(),
             'kizeoCatalogListId' => config('services.kizeo.inventory_catalog_list_id'),
