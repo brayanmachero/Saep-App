@@ -887,7 +887,7 @@ class InventarioBodegaStockTest extends TestCase
             ->assertSee('Por tipo de movimiento');
     }
 
-    public function test_stock_detail_loads_product_variants_balances_and_recent_responsible_movements(): void
+    public function test_stock_detail_loads_product_variants_balances_and_stock_ledger(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContext();
         $otherVariant = InventarioVariante::create([
@@ -941,23 +941,29 @@ class InventarioBodegaStockTest extends TestCase
             'registrado_por_nombre' => 'Kizeo automático',
         ]);
 
-        $this->withoutMiddleware(VerificarConsentimientoDatos::class)
-            ->actingAs($user)
-            ->get(route('inventario-bodega.stock.detalle', ['variante' => $variant, 'ubicacion_id' => $origin->id]))
-            ->assertOk()
-            ->assertSee('Detalle de stock')
-            ->assertSee('Bodega Principal')
-            ->assertSee($variant->talla)
-            ->assertSee($otherVariant->talla)
-            ->assertSee($criticalVariant->talla)
-            ->assertSee('6')
-            ->assertSee('Sin stock')
-            ->assertSee('Crítico')
-            ->assertSee($user->name)
-            ->assertSee('Kizeo')
-            ->assertSee('KZ-DETALLE-1')
-            ->assertDontSee('Usuario de otra talla')
-            ->assertDontSee('La variante seleccionada no tiene stock.');
+        $request = Request::create('/inventario-bodega/stock/'.$variant->id.'/detalle', 'GET', [
+            'ubicacion_id' => $origin->id,
+        ]);
+        $detail = (new InventarioBodegaController(app(InventarioStockService::class)))->stockDetail($request, $variant);
+        $ledger = $detail->getData()['movements']->values();
+        $html = $detail->render();
+
+        $this->assertSame([6.0, -1.0], $ledger->map(fn ($movement) => (float) $movement->cantidad)->all());
+        $this->assertSame([6.0, 5.0], $ledger->map(fn ($movement) => (float) $movement->saldo_resultante)->all());
+        $this->assertStringContainsString('Detalle de stock', $html);
+        $this->assertStringContainsString('Cartola de stock', $html);
+        $this->assertStringContainsString('Saldo actual: 5', $html);
+        $this->assertStringContainsString('Bodega Principal', $html);
+        $this->assertStringContainsString($variant->talla, $html);
+        $this->assertStringContainsString($otherVariant->talla, $html);
+        $this->assertStringContainsString($criticalVariant->talla, $html);
+        $this->assertStringContainsString('Sin stock', $html);
+        $this->assertStringContainsString('Crítico', $html);
+        $this->assertStringContainsString($user->name, $html);
+        $this->assertStringContainsString('Kizeo', $html);
+        $this->assertStringContainsString('KZ-DETALLE-1', $html);
+        $this->assertStringNotContainsString('Usuario de otra talla', $html);
+        $this->assertStringNotContainsString('La variante seleccionada no tiene stock.', $html);
     }
 
     public function test_operational_rebase_replaces_legacy_history_and_preserves_current_kizeo_and_receipts(): void

@@ -65,12 +65,12 @@
 
 <section class="inventory-detail-lines">
     <div class="inventory-detail-section-title">
-        <div><h3>Movimientos recientes</h3><small>Últimos {{ $movements->count() }} movimiento(s) de la talla {{ $selectedVariant->talla ?: 'ESTANDAR' }} en {{ $scope }}</small></div>
-        <strong>Trazabilidad</strong>
+        <div><h3>Cartola de stock</h3><small>{{ $movements->count() }} movimiento(s) de la talla {{ $selectedVariant->talla ?: 'ESTANDAR' }} en {{ $scope }} · ordenados desde el saldo inicial</small></div>
+        <strong>Saldo actual: {{ rtrim(rtrim(number_format($selectedStock, 3, ',', '.'), '0'), ',') }}</strong>
     </div>
     <div class="inventory-detail-table-wrap">
         <table class="inventory-detail-table">
-            <thead><tr><th>Fecha</th><th>Tipo</th><th>Origen</th><th>Usuario</th><th class="text-end">Cantidad</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Origen</th><th>Usuario</th><th class="text-end">Cantidad</th><th class="text-end">Saldo</th></tr></thead>
             <tbody>
             @forelse($movements as $movement)
                 @php
@@ -94,9 +94,10 @@
                     <td><span class="inventory-status {{ $isKizeo ? 'is-review' : 'is-empty' }}">{{ $source }}</span>@if($isKizeo && $movement->documento_numero)<small>{{ $movement->documento_numero }}</small>@endif</td>
                     <td>{{ $user }}</td>
                     <td class="text-end {{ $movement->cantidad < 0 ? 'text-danger' : 'text-success' }}"><strong>{{ $movement->cantidad > 0 ? '+' : '' }}{{ rtrim(rtrim(number_format((float) $movement->cantidad, 3, ',', '.'), '0'), ',') }}</strong></td>
+                    <td class="text-end"><strong class="inventory-ledger-balance">{{ rtrim(rtrim(number_format((float) $movement->saldo_resultante, 3, ',', '.'), '0'), ',') }}</strong></td>
                 </tr>
             @empty
-                <tr><td colspan="5" class="inventory-empty">No hay movimientos de esta talla para la ubicación seleccionada.</td></tr>
+                <tr><td colspan="6" class="inventory-empty">No hay movimientos de esta talla para la ubicación seleccionada.</td></tr>
             @endforelse
             </tbody>
         </table>

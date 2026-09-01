@@ -455,9 +455,18 @@ class InventarioBodegaController extends Controller
             // pero su trazabilidad no debe mezclarse en el historial consultado.
             ->where('variante_id', $selectedVariant->id)
             ->when($locationId, fn (Builder $query) => $query->where('ubicacion_id', $locationId))
-            ->latest('ocurrido_en')
-            ->limit(12)
+            ->orderBy('ocurrido_en')
+            ->orderBy('id')
             ->get();
+
+        // La cartola se construye desde el primer movimiento de la variante.
+        // Cada fila conserva el saldo que quedó después de esa operación, sin
+        // mezclar movimientos de otras tallas del mismo producto.
+        $runningBalance = 0.0;
+        $movements->each(function (InventarioMovimiento $movement) use (&$runningBalance): void {
+            $runningBalance += (float) $movement->cantidad;
+            $movement->setAttribute('saldo_resultante', $runningBalance);
+        });
 
         return view('inventario_bodega.partials.stock-detail', [
             'product' => $product,
