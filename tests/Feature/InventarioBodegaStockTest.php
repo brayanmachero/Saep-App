@@ -28,13 +28,14 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\ViewErrorBag;
 use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -151,6 +152,8 @@ class InventarioBodegaStockTest extends TestCase
 
         $kizeoMigration = require dirname(__DIR__, 2).'/database/migrations/2026_08_07_123000_create_inventario_entrega_kizeo_tables.php';
         $kizeoMigration->up();
+        $kizeoReconciliationMigration = require dirname(__DIR__, 2).'/database/migrations/2026_09_01_120000_add_kizeo_reconciliation_fields_to_inventory_applications.php';
+        $kizeoReconciliationMigration->up();
     }
 
     public function test_receipt_and_transfer_update_stock_without_losing_traceability(): void
@@ -434,7 +437,7 @@ class InventarioBodegaStockTest extends TestCase
         ]);
 
         auth()->setUser($user);
-        view()->share('errors', new \Illuminate\Support\ViewErrorBag());
+        view()->share('errors', new ViewErrorBag);
         $request = Request::create('/inventario-bodega', 'GET', ['vista' => 'kizeo']);
         $request->setUserResolver(fn () => $user);
         $view = app(InventarioBodegaController::class)->index($request)->render();
@@ -444,10 +447,104 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertStringContainsString('Lo que Kizeo informa ahora', $view);
         $this->assertStringContainsString('Casco corregido en Kizeo', $view);
         $this->assertStringContainsString('Kizeo modificó el comprobante después del descuento.', $view);
-        $this->assertStringContainsString('Kizeo actualizado', $view);
+        $this->assertStringContainsString('Cambio por corregir', $view);
 
         $this->assertDatabaseHas('inventario_entrega_kizeo_aplicaciones', ['id' => $application->id, 'estado' => 'APLICADA']);
         $this->assertSame(6.0, $service->stockActual($origin->id, $variant->id));
+    }
+
+    public function test_kizeo_source_changes_are_reconciled_by_quantity_or_size_and_can_be_reversed_as_one_delivery(): void
+    {
+        [$user, $origin, , $medium] = $this->inventoryContextWithCentralStock(10);
+        $large = InventarioVariante::create([
+            'producto_id' => $medium->producto_id,
+            'codigo' => 'CASCO-SEGURIDAD-L',
+            'talla' => 'L',
+            'activo' => true,
+        ]);
+        $service = app(InventarioStockService::class);
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'GUIA_DESPACHO',
+            'numero_documento' => 'GD-KIZEO-L',
+            'fecha_documento' => now()->toDateString(),
+            'fecha_recepcion' => now()->toDateString(),
+            'observacion' => null,
+        ], [['variante_id' => $large->id, 'cantidad' => 5, 'costo_unitario' => null]], $user);
+
+        $delivery = $this->newKizeoDelivery('kizeo-auto-correction', $medium, 2, now());
+        $originalItem = $delivery->items()->firstOrFail();
+        $application = $service->applyKizeoDelivery($delivery, $origin->id, [
+            $originalItem->id => ['variante_id' => $medium->id],
+        ], $user);
+
+        $originalItem->update(['talla' => 'L', 'cantidad' => 3]);
+        $delivery->update(['kizeo_updated_at' => now()->addMinute()]);
+        $corrected = $service->tryAutoReconcileUpdatedKizeoDelivery($delivery->fresh(['items', 'inventarioAplicacion.lineas']));
+
+        $this->assertNotNull($corrected);
+        $this->assertSame('CORREGIDA', $corrected->estado);
+        $this->assertSame(10.0, $service->stockActual($origin->id, $medium->id));
+        $this->assertSame(2.0, $service->stockActual($origin->id, $large->id));
+        $this->assertSame('L', $corrected->correccion_snapshot[0]['talla_fuente']);
+        $this->assertSame(3.0, (float) $corrected->correccion_snapshot[0]['cantidad_fuente']);
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'origen' => 'CORRECCION_KIZEO_EPP',
+            'variante_id' => $medium->id,
+            'cantidad' => 2,
+        ]);
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'origen' => 'CORRECCION_KIZEO_EPP',
+            'variante_id' => $large->id,
+            'cantidad' => -3,
+        ]);
+
+        $replacementProduct = $service->createProduct([
+            'nombre' => 'Guante de reemplazo',
+            'tipo' => 'EPP',
+            'categoria' => 'Proteccion',
+            'subcategoria' => null,
+            'unidad_medida' => 'Unidad',
+            'stock_minimo' => 0,
+            'tallas' => 'M',
+            'activo' => true,
+        ], $user);
+        $replacement = InventarioVariante::query()->where('producto_id', $replacementProduct->id)->firstOrFail();
+        $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_documento' => 'GUIA_DESPACHO',
+            'numero_documento' => 'GD-KIZEO-REEMPLAZO',
+            'fecha_documento' => now()->toDateString(),
+            'fecha_recepcion' => now()->toDateString(),
+            'observacion' => null,
+        ], [['variante_id' => $replacement->id, 'cantidad' => 5, 'costo_unitario' => null]], $user);
+        $originalItem->fresh()->update(['articulo' => $replacementProduct->nombre, 'talla' => 'M', 'cantidad' => 2]);
+        $delivery->update(['kizeo_updated_at' => now()->addMinutes(2)]);
+        $correctedAgain = $service->tryAutoReconcileUpdatedKizeoDelivery($delivery->fresh(['items', 'inventarioAplicacion.lineas']));
+
+        $this->assertNotNull($correctedAgain);
+        $this->assertSame($replacement->id, $correctedAgain->correccion_snapshot[0]['variante_id']);
+        $this->assertSame(5.0, $service->stockActual($origin->id, $large->id));
+        $this->assertSame(3.0, $service->stockActual($origin->id, $replacement->id));
+
+        auth()->setUser($user);
+        view()->share('errors', new ViewErrorBag);
+        $request = Request::create('/inventario-bodega', 'GET', [
+            'vista' => 'kizeo',
+            'kizeo_cambios' => 'corregidos',
+        ]);
+        $request->setUserResolver(fn () => $user);
+        $view = app(InventarioBodegaController::class)->index($request)->render();
+        $this->assertStringContainsString('Corregida automáticamente', $view);
+        $this->assertStringContainsString('Estas son las líneas vigentes que ya fueron conciliadas', $view);
+
+        $service->reverseKizeoDelivery($application->fresh(), 'Comprobante completo anulado.', $user);
+        $this->assertSame('REVERSADA', $application->fresh()->estado);
+        $this->assertSame(10.0, $service->stockActual($origin->id, $medium->id));
+        $this->assertSame(5.0, $service->stockActual($origin->id, $large->id));
+        $this->assertSame(5.0, $service->stockActual($origin->id, $replacement->id));
     }
 
     public function test_kizeo_delivery_reversal_replenishes_stock_with_a_new_movement(): void

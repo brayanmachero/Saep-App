@@ -10,6 +10,7 @@ class InventarioEntregaKizeoAplicacion extends Model
 {
     public const ESTADOS = [
         'APLICADA' => 'Aplicada a stock',
+        'CORREGIDA' => 'Corregida automáticamente',
         'REVERSADA' => 'Reversada',
     ];
 
@@ -17,13 +18,17 @@ class InventarioEntregaKizeoAplicacion extends Model
 
     protected $fillable = [
         'entrega_bodega_id', 'ubicacion_id', 'estado', 'fuente_actualizada_en',
-        'aplicada_por', 'aplicada_en', 'revertida_por', 'revertida_en',
-        'motivo_reversion', 'observacion',
+        'aplicada_por', 'aplicada_en', 'corregida_en', 'fuente_corregida_en',
+        'revertida_por', 'revertida_en', 'motivo_reversion', 'correccion_snapshot',
+        'correccion_pendiente_motivo', 'observacion',
     ];
 
     protected $casts = [
         'fuente_actualizada_en' => 'datetime',
         'aplicada_en' => 'datetime',
+        'corregida_en' => 'datetime',
+        'fuente_corregida_en' => 'datetime',
+        'correccion_snapshot' => 'array',
         'revertida_en' => 'datetime',
     ];
 

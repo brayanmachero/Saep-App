@@ -318,7 +318,9 @@ class EntregaBodegaSyncService
             return $delivery->refresh();
         });
 
-        $this->inventoryStock()->tryAutoApplyNewKizeoDelivery($delivery->load('items'), $isNew);
+        $delivery = $delivery->load('items', 'inventarioAplicacion.lineas');
+        $this->inventoryStock()->tryAutoApplyNewKizeoDelivery($delivery, $isNew);
+        $this->inventoryStock()->tryAutoReconcileUpdatedKizeoDelivery($delivery);
 
         return $delivery->fresh(['items']) ?? $delivery;
     }
