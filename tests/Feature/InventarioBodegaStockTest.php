@@ -415,6 +415,41 @@ class InventarioBodegaStockTest extends TestCase
         ], $user);
     }
 
+    public function test_kizeo_applied_delivery_shows_the_discounted_snapshot_and_current_source_when_modified(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContextWithCentralStock(8);
+        $service = app(InventarioStockService::class);
+        $delivery = $this->newKizeoDelivery('kizeo-source-review', $variant, 2, now());
+        $item = $delivery->items()->firstOrFail();
+        $item->update(['articulo' => 'Casco informado al descontar', 'talla' => 'M', 'cantidad' => 2]);
+
+        $application = $service->applyKizeoDelivery($delivery->fresh()->load('items'), $origin->id, [
+            $item->id => ['variante_id' => $variant->id],
+        ], $user);
+
+        $item->update(['articulo' => 'Casco corregido en Kizeo', 'talla' => 'XL', 'cantidad' => 3]);
+        $delivery->update([
+            'kizeo_updated_at' => now()->addMinute(),
+            'alerta_fuente' => 'Kizeo modificó el comprobante después del descuento.',
+        ]);
+
+        auth()->setUser($user);
+        view()->share('errors', new \Illuminate\Support\ViewErrorBag());
+        $request = Request::create('/inventario-bodega', 'GET', ['vista' => 'kizeo']);
+        $request->setUserResolver(fn () => $user);
+        $view = app(InventarioBodegaController::class)->index($request)->render();
+
+        $this->assertStringContainsString('Salida descontada en SAEP', $view);
+        $this->assertStringContainsString('Casco informado al descontar', $view);
+        $this->assertStringContainsString('Lo que Kizeo informa ahora', $view);
+        $this->assertStringContainsString('Casco corregido en Kizeo', $view);
+        $this->assertStringContainsString('Kizeo modificó el comprobante después del descuento.', $view);
+        $this->assertStringContainsString('Kizeo actualizado', $view);
+
+        $this->assertDatabaseHas('inventario_entrega_kizeo_aplicaciones', ['id' => $application->id, 'estado' => 'APLICADA']);
+        $this->assertSame(6.0, $service->stockActual($origin->id, $variant->id));
+    }
+
     public function test_kizeo_delivery_reversal_replenishes_stock_with_a_new_movement(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContext();
