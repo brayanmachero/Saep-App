@@ -54,10 +54,12 @@ class EntregaBodegaExcelExport
         $cards = [
             ['Entregas', $analytics['total'] ?? 0],
             ['Unidades EPP', $analytics['unidades'] ?? 0],
-            ['Lineas de detalle', $analytics['lineas'] ?? 0],
+            ['Valor referencial (CLP)', $analytics['valor_referencial'] ?? 0],
+            ['Precio ref. promedio', $analytics['precio_referencia_promedio'] ?? 0],
+            ['Unidades valorizadas', $analytics['unidades_valorizadas'] ?? 0],
+            ['Unidades sin precio', $analytics['unidades_sin_precio'] ?? 0],
             ['Personas', $analytics['personas'] ?? 0],
             ['Centros activos', $analytics['centros_activos'] ?? 0],
-            ['Promedio por entrega', $analytics['promedio_unidades'] ?? 0],
         ];
 
         foreach ($cards as $index => [$label, $value]) {
@@ -73,6 +75,15 @@ class EntregaBodegaExcelExport
             $sheet->getStyle("{$column}5")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getColumnDimension($column)->setWidth(21);
         }
+        foreach (['C5', 'D5'] as $cell) {
+            $sheet->getStyle($cell)->getNumberFormat()->setFormatCode('$#,##0');
+        }
+
+        $sheet->mergeCells('A7:H7');
+        $sheet->setCellValue('A7', 'Los valores son referenciales: usan el precio vigente del catálogo cuando la línea está vinculada a inventario o coincide exactamente por artículo y talla.');
+        $sheet->getStyle('A7:H7')->getFont()->setItalic(true)->setSize(9);
+        $sheet->getStyle('A7:H7')->getAlignment()->setWrapText(true);
+        $sheet->getRowDimension(7)->setRowHeight(28);
 
         $columns = [['A', 'B'], ['D', 'E'], ['G', 'H']];
         $sectionIndex = 0;
@@ -148,11 +159,11 @@ class EntregaBodegaExcelExport
     {
         $sheet = $book->createSheet();
         $sheet->setTitle('Entregas');
-        $headers = ['Kizeo', 'Fecha', 'Persona', 'RUT', 'Centro de costo', 'Registrado por', 'Lineas', 'Unidades'];
+        $headers = ['Kizeo', 'Fecha', 'Persona', 'RUT', 'Centro de costo', 'Registrado por', 'Lineas', 'Unidades', 'Unidades valorizadas', 'Unidades sin precio', 'Valor referencial (CLP)'];
         $sheet->fromArray($headers, null, 'A1');
-        $this->heading($sheet, 'A1:H1');
+        $this->heading($sheet, 'A1:K1');
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:H1');
+        $sheet->setAutoFilter('A1:K1');
 
         $row = 2;
         foreach ($records as $record) {
@@ -165,11 +176,17 @@ class EntregaBodegaExcelExport
                 $record->registrado_por,
                 $record->lineas_count,
                 $record->unidades_total,
+                $record->unidades_valorizadas,
+                $record->unidades_sin_precio,
+                $record->valor_referencial,
             ], null, "A{$row}");
-            $this->zebra($sheet, $row, 'H');
+            $this->zebra($sheet, $row, 'K');
             $row++;
         }
-        foreach (range('A', 'H') as $column) {
+        if ($row > 2) {
+            $sheet->getStyle('K2:K'.($row - 1))->getNumberFormat()->setFormatCode('$#,##0');
+        }
+        foreach (range('A', 'K') as $column) {
             $sheet->getColumnDimension($column)->setWidth(in_array($column, ['C', 'E', 'F'], true) ? 30 : 17);
         }
     }
@@ -178,11 +195,11 @@ class EntregaBodegaExcelExport
     {
         $sheet = $book->createSheet();
         $sheet->setTitle('Items EPP');
-        $headers = ['Kizeo', 'Fecha', 'Persona', 'Centro de costo', 'Articulo EPP', 'Talla', 'Cantidad'];
+        $headers = ['Kizeo', 'Fecha', 'Persona', 'Centro de costo', 'Articulo EPP', 'Talla', 'Cantidad', 'Precio referencia (CLP)', 'Valor referencial (CLP)', 'Origen del precio'];
         $sheet->fromArray($headers, null, 'A1');
-        $this->heading($sheet, 'A1:G1');
+        $this->heading($sheet, 'A1:J1');
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:G1');
+        $sheet->setAutoFilter('A1:J1');
 
         $row = 2;
         foreach ($records as $record) {
@@ -195,12 +212,18 @@ class EntregaBodegaExcelExport
                     $item->articulo,
                     $item->talla,
                     $item->cantidad,
+                    $item->precio_referencia,
+                    $item->valor_referencial,
+                    $item->origen_precio_referencia ?: 'Sin precio de referencia',
                 ], null, "A{$row}");
-                $this->zebra($sheet, $row, 'G');
+                $this->zebra($sheet, $row, 'J');
                 $row++;
             }
         }
-        foreach (range('A', 'G') as $column) {
+        if ($row > 2) {
+            $sheet->getStyle('H2:I'.($row - 1))->getNumberFormat()->setFormatCode('$#,##0');
+        }
+        foreach (range('A', 'J') as $column) {
             $sheet->getColumnDimension($column)->setWidth(in_array($column, ['C', 'D', 'E'], true) ? 30 : 17);
         }
     }
