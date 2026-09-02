@@ -11,12 +11,12 @@ class EntregaBodegaAnalyticsService
 {
     public function hasSyncedData(): bool
     {
-        return EntregaBodega::query()->exists();
+        return $this->currentDeliveries()->exists();
     }
 
     public function getSyncInfo(): ?array
     {
-        $summary = EntregaBodega::query()
+        $summary = $this->currentDeliveries()
             ->selectRaw('COUNT(*) as total, MAX(synced_at) as last_sync, MAX(fecha_pedido) as latest_delivery')
             ->first();
 
@@ -54,7 +54,7 @@ class EntregaBodegaAnalyticsService
 
     public function getFilteredRecords(array $filters = []): Collection
     {
-        $query = EntregaBodega::query()->with('items');
+        $query = $this->currentDeliveries()->with('items');
         $this->applyFilters($query, $filters);
 
         return $query->orderByDesc('fecha_pedido')->orderByDesc('id')->get();
@@ -63,11 +63,27 @@ class EntregaBodegaAnalyticsService
     public function getFilterOptions(): array
     {
         return [
-            'centros' => $this->distinctValues(EntregaBodega::query(), 'centro'),
-            'trabajadores' => $this->distinctValues(EntregaBodega::query(), 'nombre'),
-            'articulos' => $this->distinctValues(EntregaBodegaItem::query(), 'articulo'),
-            'tallas' => $this->distinctValues(EntregaBodegaItem::query(), 'talla'),
+            'centros' => $this->distinctValues($this->currentDeliveries(), 'centro'),
+            'trabajadores' => $this->distinctValues($this->currentDeliveries(), 'nombre'),
+            'articulos' => $this->distinctValues(
+                EntregaBodegaItem::query()->whereHas('entrega', fn (Builder $query) => $this->onlyCurrentForms($query)),
+                'articulo',
+            ),
+            'tallas' => $this->distinctValues(
+                EntregaBodegaItem::query()->whereHas('entrega', fn (Builder $query) => $this->onlyCurrentForms($query)),
+                'talla',
+            ),
         ];
+    }
+
+    private function currentDeliveries(): Builder
+    {
+        return $this->onlyCurrentForms(EntregaBodega::query());
+    }
+
+    private function onlyCurrentForms(Builder $query): Builder
+    {
+        return $query->whereIn('kizeo_form_id', EntregaBodegaSyncService::currentFormIds());
     }
 
     private function applyFilters(Builder $query, array $filters): void

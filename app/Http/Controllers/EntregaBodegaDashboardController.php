@@ -6,6 +6,7 @@ use App\Jobs\DashboardSyncJob;
 use App\Models\EntregaBodega;
 use App\Services\EntregaBodegaAnalyticsService;
 use App\Services\EntregaBodegaExcelExport;
+use App\Services\EntregaBodegaSyncService;
 use App\Services\KizeoService;
 use Illuminate\Http\Request;
 
@@ -27,6 +28,7 @@ class EntregaBodegaDashboardController extends Controller
             'filters' => $filters,
             'syncInfo' => $this->analytics->getSyncInfo(),
             'hasData' => $this->analytics->hasSyncedData(),
+            'sourceForms' => EntregaBodegaSyncService::currentFormNames(),
         ]);
     }
 

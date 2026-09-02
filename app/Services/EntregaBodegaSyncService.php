@@ -75,6 +75,14 @@ class EntregaBodegaSyncService
         return array_keys(self::FORMS);
     }
 
+    /** @return array<string, string> Formularios vigentes que alimentan Bodega. */
+    public static function currentFormNames(): array
+    {
+        return collect(self::FORMS)
+            ->map(fn (array $mapping) => (string) $mapping['name'])
+            ->all();
+    }
+
     /**
      * Sincroniza de inmediato una respuesta avisada por el webhook de Kizeo.
      * El contenido se vuelve a consultar desde la API, por lo que el webhook

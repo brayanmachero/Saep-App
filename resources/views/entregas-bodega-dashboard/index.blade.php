@@ -40,7 +40,7 @@
     <div class="warehouse-header">
         <div class="warehouse-heading">
             <h2><i class="bi bi-box-seam-fill" style="color:var(--accent-color)"></i> Entregas de Bodega</h2>
-            <p>Control de Entrega Bodega desde Kizeo.
+            <p>Indicadores de entregas EPP desde los formularios vigentes de Kizeo: <strong>{{ implode(' · ', $sourceForms ?? []) }}</strong>.
                 @if($syncInfo)<span title="Ultima sincronizacion local"><i class="bi bi-database-check" style="color:#16a34a"></i> {{ number_format($syncInfo['total']) }} entregas · actualizado {{ \Carbon\Carbon::parse($syncInfo['last_sync'])->diffForHumans() }}</span>
                 @else <span><i class="bi bi-cloud-arrow-down"></i> Aun no se han sincronizado datos.</span>@endif
             </p>
@@ -61,7 +61,7 @@
             @endforeach
             <div><label for="warehouse-desde">Desde</label><input id="warehouse-desde" type="date" name="fecha_desde" value="{{ $filters['fecha_desde'] ?? '' }}"></div>
             <div><label for="warehouse-hasta">Hasta</label><input id="warehouse-hasta" type="date" name="fecha_hasta" value="{{ $filters['fecha_hasta'] ?? '' }}"></div>
-            <div class="warehouse-filter-actions"><button type="submit" class="btn-premium" title="Aplicar filtros"><i class="bi bi-funnel-fill"></i> Aplicar</button><a href="{{ route('entregas-bodega-dashboard.index', ['todo' => 1]) }}" class="btn-secondary warehouse-clear-filter" title="Quitar filtros y ver el historial" aria-label="Quitar filtros y ver el historial"><i class="bi bi-x-lg"></i></a></div>
+            <div class="warehouse-filter-actions"><button type="submit" class="btn-premium" title="Aplicar filtros"><i class="bi bi-funnel-fill"></i> Aplicar</button><a href="{{ route('entregas-bodega-dashboard.index', ['todo' => 1]) }}" class="btn-secondary warehouse-clear-filter" title="Quitar filtros y ver todas las entregas de los formularios vigentes" aria-label="Quitar filtros y ver todas las entregas de los formularios vigentes"><i class="bi bi-x-lg"></i></a></div>
         </form>
     </section>
 
