@@ -36,10 +36,21 @@ class WallmarPenonAttendanceApiTest extends TestCase
             $table->timestamp('synced_at')->nullable();
             $table->timestamps();
         });
+
+        Schema::create('talana_contratos', function (Blueprint $table): void {
+            $table->id();
+            $table->integer('persona_talana_id');
+            $table->string('cargo_nombre', 150)->nullable();
+            $table->string('centro_costo_nombre', 150)->nullable();
+            $table->boolean('finiquitado')->default(false);
+            $table->date('desde')->nullable();
+            $table->timestamps();
+        });
     }
 
     protected function tearDown(): void
     {
+        Schema::dropIfExists('talana_contratos');
         Schema::dropIfExists('talana_marcas');
 
         parent::tearDown();
@@ -61,6 +72,10 @@ class WallmarPenonAttendanceApiTest extends TestCase
             'hora' => '05:57:31',
             'tipo' => 'E',
         ]);
+        $this->createContract([
+            'persona_talana_id' => 123,
+            'cargo_nombre' => 'OPERARIO DE DESPACHO',
+        ]);
         $this->createMark([
             'persona_talana_id' => 999,
             'centro_costo_nombre' => 'LTS QUILICURA EST',
@@ -75,6 +90,7 @@ class WallmarPenonAttendanceApiTest extends TestCase
             ->assertJsonPath('meta.total_registros', 1)
             ->assertJsonPath('data.0.rut', '21060862-1')
             ->assertJsonPath('data.0.centro_costo', 'LTS FLEX PEÑON EST')
+            ->assertJsonPath('data.0.cargo_actual', 'OPERARIO DE DESPACHO')
             ->assertJsonPath('data.0.direccion', 'Entrada')
             ->assertJsonMissing(['persona_talana_id']);
     }
@@ -104,6 +120,19 @@ class WallmarPenonAttendanceApiTest extends TestCase
             'centro_costo_nombre' => 'LTS PEÑON EST',
             'raw_ts' => '2026-09-03 14:50:02',
             'synced_at' => '2026-09-04 06:00:00',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], $attributes));
+    }
+
+    private function createContract(array $attributes = []): void
+    {
+        DB::table('talana_contratos')->insert(array_merge([
+            'persona_talana_id' => 123,
+            'cargo_nombre' => 'Cargo de prueba',
+            'centro_costo_nombre' => 'LTS PEÑON EST',
+            'finiquitado' => false,
+            'desde' => '2026-08-01',
             'created_at' => now(),
             'updated_at' => now(),
         ], $attributes));

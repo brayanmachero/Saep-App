@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\TalanaContrato;
 use App\Models\TalanaMarca;
 use App\Support\TalanaMarcaDirection;
 use Carbon\CarbonImmutable;
@@ -73,7 +74,7 @@ class WallmarPenonAttendanceController extends Controller
 
         $query = TalanaMarca::query()
             ->select([
-                'id', 'persona_rut', 'persona_nombre', 'fecha', 'hora', 'tipo',
+                'id', 'persona_talana_id', 'persona_rut', 'persona_nombre', 'fecha', 'hora', 'tipo',
                 'centro_costo_nombre', 'raw_ts', 'synced_at',
             ])
             ->whereBetween('fecha', [$from->toDateString(), $to->toDateString()])
@@ -85,6 +86,7 @@ class WallmarPenonAttendanceController extends Controller
             ->orderBy('id');
 
         $marks = $query->paginate($pageSize, ['*'], 'page', $page);
+        $cargoActualPorPersona = $this->cargoActualPorPersona($marks->getCollection(), $centerCodes);
         $lastSyncedAt = $marks->getCollection()
             ->pluck('synced_at')
             ->filter()
@@ -105,6 +107,10 @@ class WallmarPenonAttendanceController extends Controller
                 'rut' => $mark->persona_rut,
                 'nombre' => $mark->persona_nombre,
                 'centro_costo' => $settings['center_label'],
+                // El cargo corresponde al contrato vigente de Peñón. No se
+                // presenta como histórico, pues una persona pudo cambiar de
+                // función después de haber realizado una marca anterior.
+                'cargo_actual' => $cargoActualPorPersona->get($mark->persona_talana_id),
                 'fecha' => $mark->fecha?->toDateString(),
                 'hora' => $mark->hora,
                 'direccion' => TalanaMarcaDirection::label($mark->tipo),
@@ -122,5 +128,31 @@ class WallmarPenonAttendanceController extends Controller
                 'actualizado_en' => $lastSyncedAt,
             ],
         ]);
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, TalanaMarca> $marks
+     * @param array<int, string> $centerCodes
+     * @return \Illuminate\Support\Collection<int, string|null>
+     */
+    private function cargoActualPorPersona($marks, array $centerCodes)
+    {
+        $personIds = $marks->pluck('persona_talana_id')->filter()->unique()->values();
+
+        if ($personIds->isEmpty()) {
+            return collect();
+        }
+
+        $contracts = TalanaContrato::query()
+            ->whereIn('persona_talana_id', $personIds)
+            ->where('finiquitado', 0)
+            ->whereIn('centro_costo_nombre', $centerCodes)
+            ->orderByDesc('desde')
+            ->orderByDesc('id')
+            ->get(['persona_talana_id', 'cargo_nombre']);
+
+        return $contracts
+            ->unique('persona_talana_id')
+            ->pluck('cargo_nombre', 'persona_talana_id');
     }
 }
