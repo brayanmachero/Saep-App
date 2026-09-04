@@ -163,6 +163,21 @@ return [
         ],
     ],
 
+    // API de consulta para Wallmar / LTS Peñón. Nunca se comparten las
+    // credenciales Talana: esta interfaz sirve únicamente marcas que SAEP ya
+    // sincronizó en su propia base de datos.
+    'wallmar_attendance' => [
+        'api_key' => env('WALLMAR_PENON_API_KEY'),
+        'center_codes' => array_filter(array_map(
+            'trim',
+            explode(',', (string) env('WALLMAR_PENON_CENTER_CODES', 'LTS PEÑON EST,LTS FLEX PEÑON EST'))
+        )),
+        'center_label' => env('WALLMAR_PENON_CENTER_LABEL', 'LTS FLEX PEÑON EST'),
+        'minimum_date' => env('WALLMAR_PENON_MINIMUM_DATE', '2026-08-01'),
+        'max_days_per_request' => (int) env('WALLMAR_PENON_MAX_DAYS_PER_REQUEST', 31),
+        'max_page_size' => (int) env('WALLMAR_PENON_MAX_PAGE_SIZE', 100),
+    ],
+
     'google_drive' => [
         'credentials_path' => env('GOOGLE_DRIVE_CREDENTIALS_PATH', 'google-credentials.json'),
         'folder_id'        => env('GOOGLE_DRIVE_FOLDER_ID'),

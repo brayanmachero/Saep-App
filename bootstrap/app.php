@@ -5,6 +5,7 @@ use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\CheckRole;
 use App\Http\Middleware\ForcePasswordChange;
 use App\Http\Middleware\VerificarConsentimientoDatos;
+use App\Http\Middleware\AuthenticateWallmarAttendanceApi;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -14,6 +15,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
@@ -24,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'modulo'     => CheckModulo::class,
             'consentimiento' => VerificarConsentimientoDatos::class,
             'force.password' => ForcePasswordChange::class,
+            'wallmar.attendance' => AuthenticateWallmarAttendanceApi::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
