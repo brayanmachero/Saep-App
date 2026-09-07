@@ -246,13 +246,13 @@ class TalanaAsistenciaReporteMail extends Mailable
 
     /**
      * Vista reducida solicitada por Quilicura. Conserva la identificación
-     * contractual y una etiqueta operativa de franja, sin exponer duración,
-     * fechas de contrato ni el detalle horario de cada marca.
+     * contractual, las horas efectivamente marcadas de entrada/salida y una
+     * etiqueta operativa de franja; omite duración y fechas de contrato.
      */
     private function escribirHojaCompletosOperacionales(Worksheet $ws, array $filas, string $titulo): void
     {
         $this->setCellBold($ws, 'A1', $titulo, 12);
-        $ws->mergeCells('A1:F1');
+        $ws->mergeCells('A1:H1');
 
         $headers = [
             'Nombre',
@@ -260,6 +260,8 @@ class TalanaAsistenciaReporteMail extends Mailable
             'Centro Costo / Sucursal',
             'Cargo',
             'Tipo Contrato',
+            'Hora de entrada',
+            'Hora de salida',
             'Franja de entrada',
         ];
 
@@ -277,12 +279,14 @@ class TalanaAsistenciaReporteMail extends Mailable
                 $fila['centro_costo'] ?? '—',
                 $fila['cargo'] ?? '—',
                 $fila['tipo_contrato'] ?? '—',
+                $fila['primera_entrada'] ?? '—',
+                $fila['ultima_salida'] ?? '—',
                 $this->franjaOperacional($fila['franja_turno'] ?? null),
             ]], null, "A{$row}");
             $row++;
         }
 
-        foreach (range('A', 'F') as $column) {
+        foreach (range('A', 'H') as $column) {
             $ws->getColumnDimension($column)->setAutoSize(true);
         }
     }

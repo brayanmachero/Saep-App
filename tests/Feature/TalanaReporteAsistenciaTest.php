@@ -218,10 +218,14 @@ class TalanaReporteAsistenciaTest extends TestCase
                 'Centro Costo / Sucursal',
                 'Cargo',
                 'Tipo Contrato',
+                'Hora de entrada',
+                'Hora de salida',
                 'Franja de entrada',
-            ], $spreadsheet->getActiveSheet()->rangeToArray('A3:F3')[0]);
-            $this->assertSame('F', $spreadsheet->getActiveSheet()->getHighestColumn());
-            $this->assertSame('Mañana', $spreadsheet->getActiveSheet()->getCell('F4')->getValue());
+            ], $spreadsheet->getActiveSheet()->rangeToArray('A3:H3')[0]);
+            $this->assertSame('H', $spreadsheet->getActiveSheet()->getHighestColumn());
+            $this->assertSame('08:00:00', $spreadsheet->getActiveSheet()->getCell('F4')->getValue());
+            $this->assertSame('17:00:00', $spreadsheet->getActiveSheet()->getCell('G4')->getValue());
+            $this->assertSame('Mañana', $spreadsheet->getActiveSheet()->getCell('H4')->getValue());
         } finally {
             @unlink($tempPath);
         }
