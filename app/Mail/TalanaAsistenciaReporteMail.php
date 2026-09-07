@@ -107,7 +107,7 @@ class TalanaAsistenciaReporteMail extends Mailable
                 $titulo .= ' — '.($r['alcance'] ?? $r['centro_costo']);
             }
 
-            $this->escribirHojaPersonas($ws, $r['completos'] ?? [], $titulo, true);
+            $this->escribirHojaCompletosOperacionales($ws, $r['completos'] ?? [], $titulo);
 
             return $this->serializarExcel($spreadsheet);
         }
@@ -242,6 +242,66 @@ class TalanaAsistenciaReporteMail extends Mailable
         $centro = Str::slug($alcanceReporte);
 
         return "asistencia_{$this->fecha}_{$centro}.xlsx";
+    }
+
+    /**
+     * Vista reducida solicitada por Quilicura. Conserva la identificación
+     * contractual y una etiqueta operativa de franja, sin exponer duración,
+     * fechas de contrato ni el detalle horario de cada marca.
+     */
+    private function escribirHojaCompletosOperacionales(Worksheet $ws, array $filas, string $titulo): void
+    {
+        $this->setCellBold($ws, 'A1', $titulo, 12);
+        $ws->mergeCells('A1:F1');
+
+        $headers = [
+            'Nombre',
+            'RUT',
+            'Centro Costo / Sucursal',
+            'Cargo',
+            'Tipo Contrato',
+            'Franja de entrada',
+        ];
+
+        foreach ($headers as $index => $header) {
+            $column = chr(ord('A') + $index);
+            $ws->setCellValue("{$column}3", $header);
+        }
+        $this->styleHeader($ws, 'A3:F3');
+
+        $row = 4;
+        foreach ($filas as $fila) {
+            $ws->fromArray([[
+                $fila['nombre'] ?? '—',
+                $fila['rut'] ?? '—',
+                $fila['centro_costo'] ?? '—',
+                $fila['cargo'] ?? '—',
+                $fila['tipo_contrato'] ?? '—',
+                $this->franjaOperacional($fila['franja_turno'] ?? null),
+            ]], null, "A{$row}");
+            $row++;
+        }
+
+        foreach (range('A', 'F') as $column) {
+            $ws->getColumnDimension($column)->setAutoSize(true);
+        }
+    }
+
+    private function franjaOperacional(mixed $franja): string
+    {
+        $franja = Str::lower(trim((string) $franja));
+
+        if (Str::startsWith($franja, 'mañana')) {
+            return 'Mañana';
+        }
+        if (Str::startsWith($franja, 'tarde')) {
+            return 'Tarde';
+        }
+        if (Str::startsWith($franja, 'noche')) {
+            return 'Noche';
+        }
+
+        return 'Sin definir';
     }
 
     private function escribirHojaPersonas(Worksheet $ws, array $filas, string $titulo, bool $mostrarMarcas, bool $mostrarMotivo = false): void

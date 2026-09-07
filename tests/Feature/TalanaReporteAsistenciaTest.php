@@ -212,6 +212,16 @@ class TalanaReporteAsistenciaTest extends TestCase
             $this->assertSame(['Completos'], $spreadsheet->getSheetNames());
             $this->assertSame('Marcaciones completas — LTS QUILICURA · SAEP EST', $spreadsheet->getActiveSheet()->getCell('A1')->getValue());
             $this->assertSame('María Prueba', $spreadsheet->getActiveSheet()->getCell('A4')->getValue());
+            $this->assertSame([
+                'Nombre',
+                'RUT',
+                'Centro Costo / Sucursal',
+                'Cargo',
+                'Tipo Contrato',
+                'Franja de entrada',
+            ], $spreadsheet->getActiveSheet()->rangeToArray('A3:F3')[0]);
+            $this->assertSame('F', $spreadsheet->getActiveSheet()->getHighestColumn());
+            $this->assertSame('Mañana', $spreadsheet->getActiveSheet()->getCell('F4')->getValue());
         } finally {
             @unlink($tempPath);
         }
