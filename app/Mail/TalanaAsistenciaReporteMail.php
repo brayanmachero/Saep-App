@@ -251,8 +251,22 @@ class TalanaAsistenciaReporteMail extends Mailable
      */
     private function escribirHojaCompletosOperacionales(Worksheet $ws, array $filas, string $titulo): void
     {
-        $this->setCellBold($ws, 'A1', $titulo, 12);
+        $ws->setShowGridlines(false);
+        $this->setCellBold($ws, 'A1', $titulo, 14);
         $ws->mergeCells('A1:H1');
+        $ws->getRowDimension(1)->setRowHeight(28);
+        $ws->getStyle('A1:H1')->getFont()->getColor()->setARGB('FFFFFFFF');
+        $ws->getStyle('A1:H1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FF1E3A5F');
+        $ws->getStyle('A1:H1')->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_LEFT)
+            ->setVertical(Alignment::VERTICAL_CENTER);
+
+        $ws->setCellValue('A2', 'Fecha del reporte: '.Carbon::parse($this->fecha)->format('d/m/Y').' · Horarios según marcaciones registradas en Talana.');
+        $ws->mergeCells('A2:H2');
+        $ws->getRowDimension(2)->setRowHeight(20);
+        $ws->getStyle('A2:H2')->getFont()->setItalic(true)->setSize(9)->getColor()->setARGB('FF52616B');
+        $ws->getStyle('A2:H2')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFF3F6F9');
+        $ws->getStyle('A2:H2')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
 
         $headers = [
             'Nombre',
@@ -269,7 +283,11 @@ class TalanaAsistenciaReporteMail extends Mailable
             $column = chr(ord('A') + $index);
             $ws->setCellValue("{$column}3", $header);
         }
-        $this->styleHeader($ws, 'A3:F3');
+        $this->styleHeader($ws, 'A3:H3');
+        $ws->getRowDimension(3)->setRowHeight(26);
+        $ws->getStyle('A3:H3')->getAlignment()
+            ->setVertical(Alignment::VERTICAL_CENTER)
+            ->setWrapText(true);
 
         $row = 4;
         foreach ($filas as $fila) {
@@ -286,8 +304,42 @@ class TalanaAsistenciaReporteMail extends Mailable
             $row++;
         }
 
-        foreach (range('A', 'H') as $column) {
-            $ws->getColumnDimension($column)->setAutoSize(true);
+        $lastRow = max(3, $row - 1);
+        $ws->setAutoFilter("A3:H{$lastRow}");
+        $ws->freezePane('A4');
+        $ws->getSheetView()->setZoomScale(90);
+
+        $anchos = [
+            'A' => 32,
+            'B' => 15,
+            'C' => 28,
+            'D' => 34,
+            'E' => 17,
+            'F' => 18,
+            'G' => 18,
+            'H' => 19,
+        ];
+        foreach ($anchos as $column => $width) {
+            $ws->getColumnDimension($column)->setWidth($width);
+        }
+
+        if ($lastRow >= 4) {
+            $dataRange = "A4:H{$lastRow}";
+            $ws->getStyle($dataRange)->getBorders()->getBottom()
+                ->setBorderStyle(Border::BORDER_HAIR)
+                ->getColor()->setARGB('FFD9E1E8');
+            $ws->getStyle($dataRange)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+            $ws->getStyle("B4:B{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $ws->getStyle("E4:H{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+            for ($dataRow = 4; $dataRow <= $lastRow; $dataRow++) {
+                $ws->getRowDimension($dataRow)->setRowHeight(19);
+                if ($dataRow % 2 === 0) {
+                    $ws->getStyle("A{$dataRow}:H{$dataRow}")->getFill()
+                        ->setFillType(Fill::FILL_SOLID)
+                        ->getStartColor()->setARGB('FFF7F9FC');
+                }
+            }
         }
     }
 

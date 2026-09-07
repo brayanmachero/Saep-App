@@ -226,6 +226,9 @@ class TalanaReporteAsistenciaTest extends TestCase
             $this->assertSame('08:00:00', $spreadsheet->getActiveSheet()->getCell('F4')->getValue());
             $this->assertSame('17:00:00', $spreadsheet->getActiveSheet()->getCell('G4')->getValue());
             $this->assertSame('Mañana', $spreadsheet->getActiveSheet()->getCell('H4')->getValue());
+            $this->assertSame('FF1E3A5F', strtoupper($spreadsheet->getActiveSheet()->getStyle('H3')->getFill()->getStartColor()->getARGB()));
+            $this->assertSame('A3:H4', $spreadsheet->getActiveSheet()->getAutoFilter()->getRange());
+            $this->assertSame('A4', $spreadsheet->getActiveSheet()->getFreezePane());
         } finally {
             @unlink($tempPath);
         }
