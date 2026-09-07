@@ -209,12 +209,55 @@ class KizeoAutomationServiceTest extends TestCase
         $this->assertSame('CCU SANTIAGO SUR', $context['centro_de_distribucion']);
     }
 
+    public function test_event_date_drives_investigation_folder_and_filename_context(): void
+    {
+        $kizeo = Mockery::mock(KizeoService::class);
+        $kizeo->shouldReceive('rawGet')
+            ->once()
+            ->with('forms/1200400', 20)
+            ->andReturn([
+                'form' => [
+                    'fields' => [
+                        'nombre_del_lesionado' => ['caption' => 'Nombre del lesionado', 'type' => 'text'],
+                        'tipo_de_incidente' => ['caption' => 'Tipo de Incidente', 'type' => 'choice'],
+                        'fecha_del_accidente' => ['caption' => 'Fecha del Evento', 'type' => 'datetime'],
+                        'cd' => ['caption' => 'CD', 'type' => 'text'],
+                    ],
+                ],
+            ]);
+
+        $context = $this->buildContextForForm($kizeo, '1200400', [
+            'fields' => [
+                'nombre_del_lesionado' => ['value' => 'Ana Pérez'],
+                'tipo_de_incidente' => ['value' => 'Trabajo'],
+                'fecha_del_accidente' => ['value' => ['date' => '2026-08-29', 'hour' => '10:15']],
+                'cd' => ['value' => 'CD Quilicura'],
+            ],
+            // Debe ignorarse para construir la ruta; es posterior al evento.
+            'create_time' => '2026-09-07 09:30:00',
+            'record_number' => 'INV-123',
+        ]);
+
+        $this->assertSame('2026-08-29', $context['fecha']);
+        $this->assertSame('2026', $context['anio']);
+        $this->assertSame('08', $context['mes']);
+        $this->assertSame('Agosto', $context['mes_nombre']);
+        $this->assertSame('Ana Pérez', $context['nombre_del_lesionado']);
+        $this->assertSame('Trabajo', $context['tipo_de_incidente']);
+        $this->assertSame('CD Quilicura', $context['cd']);
+    }
+
     private function buildContext(KizeoService $kizeo, array $record): array
+    {
+        return $this->buildContextForForm($kizeo, '1156826', $record);
+    }
+
+    private function buildContextForForm(KizeoService $kizeo, string $formId, array $record): array
     {
         $service = new KizeoAutomationService($kizeo, Mockery::mock(OneDriveService::class));
         $method = new ReflectionMethod($service, 'buildContext');
         $method->setAccessible(true);
 
-        return $method->invoke($service, '1156826', '275857458', [], $record);
+        return $method->invoke($service, $formId, '275857458', [], $record);
     }
 }

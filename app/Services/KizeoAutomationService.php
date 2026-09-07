@@ -293,7 +293,12 @@ class KizeoAutomationService
             'record_id' => $dataId,
         ]);
 
+        // Los formularios de investigación de eventos registran una fecha
+        // propia del suceso. Se prioriza por sobre la fecha de creación para
+        // que la carpeta y el nombre del PDF representen el evento real.
         $dateValue = $context['fecha']
+            ?? $context['fecha_del_accidente']
+            ?? $context['fecha_del_evento']
             ?? $context['fecha_y_hora']
             ?? $context['fecha_hora']
             ?? $record['create_time']
