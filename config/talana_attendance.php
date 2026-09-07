@@ -15,4 +15,17 @@ return [
         'to' => env('TALANA_ASISTENCIA_EMAIL') ?: 'sgarcia@saep.cl',
         'cc' => env('TALANA_ASISTENCIA_CC') ?: 'jrodriguez@saep.cl,bmachero@saep.cl',
     ],
+
+    // Algunos clientes requieren un adjunto operacional reducido: sólo las
+    // personas con marcación completa. El resto de los centros conserva el
+    // libro histórico con sus hojas de detalle.
+    'excel' => [
+        'only_complete_centers' => array_values(array_filter(array_map(
+            static fn (string $center): string => trim($center),
+            preg_split('/[;,\\r\\n]+/', (string) env(
+                'TALANA_ASISTENCIA_EXCEL_SOLO_COMPLETOS_CENTROS',
+                'LTS QUILICURA'
+            )) ?: []
+        ))),
+    ],
 ];

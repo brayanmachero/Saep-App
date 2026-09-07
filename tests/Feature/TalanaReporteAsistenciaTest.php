@@ -8,6 +8,7 @@ use App\Models\TalanaContrato;
 use App\Support\TalanaMarcaDirection;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use ReflectionMethod;
 use Tests\TestCase;
 
@@ -175,6 +176,45 @@ class TalanaReporteAsistenciaTest extends TestCase
 
         $this->assertStringContainsString('LTS QUILICURA · SAEP EST', $mail->envelope()->subject);
         $this->assertStringContainsString('Alcance: <strong>LTS QUILICURA · SAEP EST</strong>', $mail->render());
+    }
+
+    public function test_quilicura_attachment_contains_only_the_complete_attendance_sheet(): void
+    {
+        config()->set('talana_attendance.excel.only_complete_centers', ['LTS QUILICURA']);
+
+        $mail = new TalanaAsistenciaReporteMail([
+            'centro_costo' => 'LTS QUILICURA',
+            'alcance' => 'LTS QUILICURA · SAEP EST',
+            'completos' => [[
+                'nombre' => 'María Prueba',
+                'rut' => '12.345.678-5',
+                'centro_costo' => 'LTS QUILICURA',
+                'cargo' => 'Operaria',
+                'tipo_contrato' => 'Indefinido',
+                'desde' => '2026-01-01',
+                'hasta' => null,
+                'franja_turno' => 'Mañana (06:00–13:59)',
+                'marcas' => '08:00:00 (Entrada), 17:00:00 (Salida)',
+                'primera_entrada' => '08:00:00',
+                'ultima_salida' => '17:00:00',
+                'horas_trabajadas' => 9,
+            ]],
+        ], '2026-09-05');
+
+        $method = new ReflectionMethod($mail, 'buildExcel');
+        $xlsx = $method->invoke($mail);
+        $tempPath = tempnam(sys_get_temp_dir(), 'saep-asistencia-');
+        file_put_contents($tempPath, $xlsx);
+
+        try {
+            $spreadsheet = IOFactory::load($tempPath);
+
+            $this->assertSame(['Completos'], $spreadsheet->getSheetNames());
+            $this->assertSame('Marcaciones completas — LTS QUILICURA · SAEP EST', $spreadsheet->getActiveSheet()->getCell('A1')->getValue());
+            $this->assertSame('María Prueba', $spreadsheet->getActiveSheet()->getCell('A4')->getValue());
+        } finally {
+            @unlink($tempPath);
+        }
     }
 
     private function agrupar(array $raw): array

@@ -95,6 +95,23 @@ class TalanaAsistenciaReporteMail extends Mailable
             ->setTitle("Asistencia {$this->fecha}")
             ->setCreator('SAEP Sistema');
 
+        // Quilicura solicitó un archivo exclusivamente operacional: conserva
+        // sólo la nómina con asistencia completa, sin exponer las demás hojas
+        // de revisión, ausencias o resúmenes.
+        if ($this->adjuntoSoloCompletos($r)) {
+            $ws = $spreadsheet->getActiveSheet();
+            $ws->setTitle('Completos');
+
+            $titulo = 'Marcaciones completas';
+            if (! empty($r['alcance'] ?? $r['centro_costo'] ?? null)) {
+                $titulo .= ' — '.($r['alcance'] ?? $r['centro_costo']);
+            }
+
+            $this->escribirHojaPersonas($ws, $r['completos'] ?? [], $titulo, true);
+
+            return $this->serializarExcel($spreadsheet);
+        }
+
         // ── Hoja 1: Resumen ──────────────────────────────────────────────────
         $ws = $spreadsheet->getActiveSheet();
         $ws->setTitle('Resumen');
@@ -189,12 +206,30 @@ class TalanaAsistenciaReporteMail extends Mailable
 
         $spreadsheet->setActiveSheetIndex(0);
 
+        return $this->serializarExcel($spreadsheet);
+    }
+
+    private function adjuntoSoloCompletos(array $reporte): bool
+    {
+        $centro = Str::lower(trim((string) ($reporte['centro_costo'] ?? '')));
+        if ($centro === '') {
+            return false;
+        }
+
+        $centrosConfigurados = config('talana_attendance.excel.only_complete_centers', []);
+
+        return collect(is_array($centrosConfigurados) ? $centrosConfigurados : [])
+            ->map(fn ($item) => Str::lower(trim((string) $item)))
+            ->contains($centro);
+    }
+
+    private function serializarExcel(Spreadsheet $spreadsheet): string
+    {
         $writer = new Xlsx($spreadsheet);
         ob_start();
         $writer->save('php://output');
-        $content = ob_get_clean();
 
-        return $content;
+        return (string) ob_get_clean();
     }
 
     private function nombreArchivoAdjunto(): string
