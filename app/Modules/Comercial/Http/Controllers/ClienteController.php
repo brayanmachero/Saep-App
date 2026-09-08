@@ -17,11 +17,9 @@ class ClienteController
     {
         $termino = trim((string) $request->get('q', ''));
         $estado = (string) $request->get('estado', '');
+        $clienteId = $request->integer('cliente_id') ?: null;
 
-        $clientesQuery = Cliente::with([
-            'centrosCosto' => fn ($query) => $query->orderBy('nombre'),
-        ])
-            ->withCount('centrosCosto')
+        $clientesQuery = Cliente::withCount('centrosCosto')
             ->orderBy('nombre');
 
         if ($termino !== '') {
@@ -42,6 +40,10 @@ class ClienteController
         }
 
         $centrosQuery = CentroCosto::with('cliente')->orderBy('nombre');
+
+        if ($clienteId) {
+            $centrosQuery->where('cliente_id', $clienteId);
+        }
 
         if ($termino !== '') {
             $centrosQuery->where(function ($query) use ($termino) {
