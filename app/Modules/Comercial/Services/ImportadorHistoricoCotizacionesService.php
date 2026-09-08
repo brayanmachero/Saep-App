@@ -619,7 +619,7 @@ class ImportadorHistoricoCotizacionesService
 
     private function normalizar(string $value): string
     {
-        return trim(preg_replace('/\\s+/', ' ', Str::upper(Str::ascii($value))) ?? '');
+        return trim(preg_replace('/[^A-Z0-9]+/', ' ', Str::upper(Str::ascii($value))) ?? '');
     }
 
     private function cell(Worksheet $sheet, int $column, int $row)
