@@ -119,10 +119,10 @@ class ImportadorHistoricoCotizacionesService
             }
 
             $records = [];
+            $uniqueRecords = [];
             foreach ($spreadsheet->getAllSheets() as $sheetIndex => $sheet) {
                 foreach ($this->extraerBloquesPrecio($sheet) as $block) {
-                    $fecha = $this->resolverFechaBloque($sheet, $block['row'], $path)
-                        ?? $this->resolverFechaArchivo($path);
+                    $fecha = $this->resolverFechaBloque($sheet, $block['row'], $path);
 
                     if ($fecha === null) {
                         continue;
@@ -133,7 +133,7 @@ class ImportadorHistoricoCotizacionesService
                         continue;
                     }
 
-                    $records[] = $this->construirRegistro(
+                    $record = $this->construirRegistro(
                         $source,
                         $sheet,
                         $sheetIndex,
@@ -144,6 +144,18 @@ class ImportadorHistoricoCotizacionesService
                         $centro,
                         $modalidad,
                     );
+                    $recordKey = implode('|', [
+                        $record['fecha_cotizacion']->toDateString(),
+                        $record['cliente_id'],
+                        $record['centro_costo_id'],
+                        $record['modalidad_id'],
+                        $this->normalizar($record['cargo']),
+                        $record['totales']['precio_venta'],
+                    ]);
+                    if (! isset($uniqueRecords[$recordKey])) {
+                        $uniqueRecords[$recordKey] = true;
+                        $records[] = $record;
+                    }
                 }
             }
         } finally {
@@ -152,7 +164,7 @@ class ImportadorHistoricoCotizacionesService
         }
 
         if ($records === []) {
-            return ['status' => 'requiere_revision', 'reason' => 'No se identificó una tarifa completa con precio y cargo.', 'source' => $source];
+            return ['status' => 'requiere_revision', 'reason' => 'No se identificó una tarifa completa con precio, cargo y fecha de origen.', 'source' => $source];
         }
 
         return ['status' => 'listo', 'records' => $records, 'source' => $source];
@@ -366,21 +378,6 @@ class ImportadorHistoricoCotizacionesService
         return null;
     }
 
-    /** @return array{fecha:CarbonImmutable, fuente:string}|null */
-    private function resolverFechaArchivo(string $path): ?array
-    {
-        $modified = filemtime($path);
-
-        if ($modified === false) {
-            return null;
-        }
-
-        return [
-            'fecha' => CarbonImmutable::createFromTimestamp($modified)->startOfDay(),
-            'fuente' => 'modificacion_archivo_referencial',
-        ];
-    }
-
     private function parseDate(mixed $value, bool $excelDate = false): ?CarbonImmutable
     {
         if ($value instanceof \DateTimeInterface) {
@@ -419,6 +416,9 @@ class ImportadorHistoricoCotizacionesService
                 $normalized = $this->normalizar($text);
                 if ($normalized === ''
                     || str_starts_with($normalized, '=')
+                    || str_contains($normalized, 'SERVICIO DE MOVILIZACION')
+                    || str_contains($normalized, 'SERVICIOS DE MOVILIZACION')
+                    || str_contains($normalized, 'SERVICIO DE CASINO')
                     || preg_match('/^(COTIZACION|PRECIO|TOTAL|SUELDOS?|BONOS?|ASIGNACION|GASTOS?|COSTO|SUBTOTAL|MARGEN|REFPREV|SIS|MUTUAL|SEGURO|CESANT|PROVISION|VACACION|INDEMNIZ|UNIFORME|CASINO|HABER|BENEFICIO)\\b/', $normalized) === 1) {
                     continue;
                 }

@@ -176,6 +176,7 @@ class ComercialCotizacionFlowTest extends TestCase
             ['TOTAL COTIZACIONES', 58200],
             ['TOTAL PROVISIONES', 45500],
             ['GASTOS ADMINISTRACIÓN', 28500],
+            ['SERVICIOS DE MOVILIZACION', 0],
             ['COSTO BRUTO', 847200],
             ['MARGEN', 9],
             ['PRECIO VENTA', 923448],
