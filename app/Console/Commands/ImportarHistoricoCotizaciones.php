@@ -15,6 +15,7 @@ class ImportarHistoricoCotizaciones extends Command
     protected $signature = 'comercial:importar-historico
         {directorio : Directorio local con archivos XLSX históricos}
         {--aplicar : Persiste solamente los registros listos para importar}
+        {--detalle : Muestra el detalle cronológico de las tarifas que pasarían el control}
         {--limite=0 : Cantidad máxima de archivos a revisar}';
 
     protected $description = 'Analiza e importa cotizaciones históricas como fotografías de origen, sin recalcularlas con reglas vigentes.';
@@ -48,6 +49,7 @@ class ImportarHistoricoCotizaciones extends Command
             'omitidos' => 0,
         ];
         $issues = [];
+        $readyPreview = [];
 
         foreach ($files as $file) {
             $summary['archivos']++;
@@ -71,6 +73,17 @@ class ImportarHistoricoCotizaciones extends Command
             /** @var array<int, array<string, mixed>> $records */
             $records = $analysis['records'];
             $summary['registros_listos'] += count($records);
+            foreach ($records as $record) {
+                $readyPreview[] = [
+                    'fecha' => $record['fecha_cotizacion']->toDateString(),
+                    'cliente' => $record['resumen_importacion']['cliente'],
+                    'centro' => $record['resumen_importacion']['centro'],
+                    'modalidad' => $record['resumen_importacion']['modalidad'],
+                    'cargo' => $record['cargo'],
+                    'precio' => number_format($record['totales']['precio_venta'], 0, ',', '.'),
+                    'fecha_fuente' => $record['resumen_importacion']['fecha_fuente'],
+                ];
+            }
 
             if (! $this->option('aplicar')) {
                 continue;
@@ -92,6 +105,26 @@ class ImportarHistoricoCotizaciones extends Command
             ['Observadas por fórmulas', $summary['observados']],
             ['Omitidas por instrucción de origen', $summary['omitidos']],
         ]);
+
+        if ($this->option('detalle') && $readyPreview !== []) {
+            $readyPreview = collect($readyPreview)->sortBy(['fecha', 'cliente', 'centro', 'cargo'])->values()->all();
+            $this->newLine();
+            $this->table(
+                ['Fecha', 'Cliente', 'Centro', 'Mod.', 'Cargo', 'Precio', 'Fuente fecha'],
+                array_map(fn (array $item) => [
+                    $item['fecha'],
+                    $item['cliente'],
+                    $item['centro'],
+                    $item['modalidad'],
+                    $item['cargo'],
+                    '$'.$item['precio'],
+                    $item['fecha_fuente'],
+                ], array_slice($readyPreview, 0, 50)),
+            );
+            if (count($readyPreview) > 50) {
+                $this->warn('Se muestran las primeras 50 de '.count($readyPreview).' tarifas listas.');
+            }
+        }
 
         if ($issues !== []) {
             $this->newLine();

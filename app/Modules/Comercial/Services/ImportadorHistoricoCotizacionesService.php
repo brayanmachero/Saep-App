@@ -453,6 +453,12 @@ class ImportadorHistoricoCotizacionesService
             'modalidad_id' => $modalidad->id,
             'fecha_cotizacion' => $fecha['fecha'],
             'observaciones' => 'Importada como fotografía histórica desde Excel. No usa ni modifica las reglas vigentes.',
+            'resumen_importacion' => [
+                'cliente' => $cliente->nombre,
+                'centro' => $centro->nombre,
+                'modalidad' => $modalidad->codigo,
+                'fecha_fuente' => $fecha['fuente'],
+            ],
             'totales' => $totals,
             'detalles' => $details,
             'datos_calculo' => [
