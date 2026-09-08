@@ -474,6 +474,9 @@
                             <button type="button" class="btn-secondary" onclick="crearClienteRapido()">
                                 <i class="bi bi-check-lg"></i> Guardar
                             </button>
+                            <button type="button" class="icon-btn" onclick="cerrarQuickBox('quickClienteBox')" title="Cancelar creación de cliente" aria-label="Cancelar creación de cliente">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
                         </div>
                         <div id="quickClienteStatus" style="font-size:.78rem;color:var(--text-muted);margin-top:.4rem"></div>
                     </div>
@@ -495,6 +498,9 @@
                             <input type="text" id="quickCentroNombre" class="form-control" placeholder="Nombre centro de costo">
                             <button type="button" class="btn-secondary" onclick="crearCentroRapido()">
                                 <i class="bi bi-check-lg"></i> Guardar
+                            </button>
+                            <button type="button" class="icon-btn" onclick="cerrarQuickBox('quickCentroBox')" title="Cancelar creación de centro de costo" aria-label="Cancelar creación de centro de costo">
+                                <i class="bi bi-x-lg"></i>
                             </button>
                         </div>
                         <div id="quickCentroStatus" style="font-size:.78rem;color:var(--text-muted);margin-top:.4rem"></div>
@@ -978,9 +984,24 @@ function refreshQuoteSearchSelect(select) {
 
 function toggleQuickBox(id) {
     const box = document.getElementById(id);
-    if (box) {
-        box.style.display = box.style.display === 'none' || !box.style.display ? 'block' : 'none';
+    if (!box) return;
+
+    if (box.style.display === 'none' || !box.style.display) {
+        box.style.display = 'block';
+        box.querySelector('input')?.focus();
+        return;
     }
+
+    cerrarQuickBox(id);
+}
+
+function cerrarQuickBox(id) {
+    const box = document.getElementById(id);
+    if (!box) return;
+
+    box.style.display = 'none';
+    box.querySelectorAll('input').forEach((input) => { input.value = ''; });
+    box.querySelectorAll('[id$="Status"]').forEach((status) => { status.textContent = ''; });
 }
 
 function setStatus(id, message, type = 'info') {
