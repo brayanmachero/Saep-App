@@ -122,15 +122,8 @@ class ImportadorHistoricoCotizacionesService
             $uniqueRecords = [];
             foreach ($spreadsheet->getAllSheets() as $sheetIndex => $sheet) {
                 foreach ($this->extraerBloquesPrecio($sheet) as $block) {
-                    $blockStart = $this->resolverInicioBloque($sheet, $block['row']);
-                    $fecha = $this->resolverFechaBloque($sheet, $blockStart, $path);
-
-                    if ($fecha === null) {
-                        continue;
-                    }
-
-                    $cargo = $this->resolverCargo($sheet, $blockStart, $block['row']);
-                    if ($cargo === null) {
+                    $contexto = $this->resolverContextoBloque($sheet, $block, $path);
+                    if ($contexto === null) {
                         continue;
                     }
 
@@ -139,9 +132,9 @@ class ImportadorHistoricoCotizacionesService
                         $sheet,
                         $sheetIndex,
                         $block,
-                        $blockStart,
-                        $fecha,
-                        $cargo,
+                        $contexto['fecha'],
+                        $contexto['cargo'],
+                        $contexto['detalles'],
                         $cliente,
                         $centro,
                         $modalidad,
@@ -311,7 +304,7 @@ class ImportadorHistoricoCotizacionesService
         return $errors;
     }
 
-    /** @return list<array{row:int,column:int,price:float,coordinate:string}> */
+    /** @return list<array{row:int,column:int,price:float,coordinate:string,layout:string}> */
     private function extraerBloquesPrecio(Worksheet $sheet): array
     {
         $blocks = [];
@@ -335,11 +328,25 @@ class ImportadorHistoricoCotizacionesService
                     'column' => $column,
                     'price' => $price,
                     'coordinate' => Coordinate::stringFromColumnIndex($column).$row,
+                    'layout' => $this->cantidadPreciosEnFila($sheet, $row, $maxColumn) > 1 ? 'horizontal' : 'vertical',
                 ];
             }
         }
 
         return $blocks;
+    }
+
+    private function cantidadPreciosEnFila(Worksheet $sheet, int $row, int $maxColumn): int
+    {
+        $total = 0;
+        for ($column = 1; $column <= $maxColumn; $column++) {
+            $label = $this->normalizar((string) $this->cellValue($sheet, $column, $row));
+            if (str_contains($label, 'PRECIO VENTA') && preg_match('/\\b(HORA|HHEE|EXTRA|DOMINGO|FESTIVO)\\b/', $label) !== 1) {
+                $total++;
+            }
+        }
+
+        return $total;
     }
 
     private function resolverInicioBloque(Worksheet $sheet, int $priceRow): int
@@ -355,6 +362,71 @@ class ImportadorHistoricoCotizacionesService
         }
 
         return max(1, $priceRow - 58);
+    }
+
+    /**
+     * @param array{row:int,column:int,price:float,coordinate:string,layout:string} $block
+     * @return array{fecha:array{fecha:CarbonImmutable, fuente:string}, cargo:string, detalles:list<array<string, mixed>>}|null
+     */
+    private function resolverContextoBloque(Worksheet $sheet, array $block, string $path): ?array
+    {
+        if ($block['layout'] === 'horizontal') {
+            $fecha = $this->resolverFechaHorizontal($sheet, $block['column'], $block['row'], $path);
+            $cargo = $this->resolverCargoHorizontal($sheet, $block['column'], $block['row']);
+            $detalles = $this->extraerDetallesHorizontal($sheet, $block['column'], $block['row']);
+        } else {
+            $blockStart = $this->resolverInicioBloque($sheet, $block['row']);
+            $fecha = $this->resolverFechaBloque($sheet, $blockStart, $path);
+            $cargo = $this->resolverCargo($sheet, $blockStart, $block['row']);
+            $detalles = $this->extraerDetalles($sheet, $blockStart, $block['row']);
+        }
+
+        if ($fecha === null || $cargo === null) {
+            return null;
+        }
+
+        return compact('fecha', 'cargo', 'detalles');
+    }
+
+    /** @return array{fecha:CarbonImmutable, fuente:string}|null */
+    private function resolverFechaHorizontal(Worksheet $sheet, int $startColumn, int $priceRow, string $path): ?array
+    {
+        $endColumn = min($startColumn + 4, Coordinate::columnIndexFromString($sheet->getHighestDataColumn()));
+        for ($row = $priceRow - 1; $row >= 1; $row--) {
+            for ($column = $startColumn; $column <= $endColumn; $column++) {
+                $value = $this->cellValue($sheet, $column, $row);
+                if (! is_string($value)) {
+                    continue;
+                }
+                $normalized = $this->normalizar($value);
+                if (! str_contains($normalized, 'COTIZACION') && ! str_contains($normalized, 'EMISION')) {
+                    continue;
+                }
+                if ($date = $this->parseDate($value)) {
+                    return ['fecha' => $date, 'fuente' => 'contenido_cotizacion'];
+                }
+            }
+        }
+
+        if ($date = $this->parseDate(pathinfo($path, PATHINFO_FILENAME))) {
+            return ['fecha' => $date, 'fuente' => 'nombre_archivo'];
+        }
+
+        return null;
+    }
+
+    private function resolverCargoHorizontal(Worksheet $sheet, int $startColumn, int $priceRow): ?string
+    {
+        for ($row = $priceRow - 1; $row >= 1; $row--) {
+            $text = $this->cellValue($sheet, $startColumn, $row);
+            if (! is_string($text) || ! $this->esCargoCandidato($text)) {
+                continue;
+            }
+
+            return Str::limit(trim($text), 180, '');
+        }
+
+        return null;
     }
 
     /** @return array{fecha:CarbonImmutable, fuente:string}|null */
@@ -430,16 +502,7 @@ class ImportadorHistoricoCotizacionesService
         for ($row = $priceRow - 1; $row >= $blockStart; $row--) {
             $values = $this->rowTextValues($sheet, $row, 8);
             foreach ($values as $text) {
-                $normalized = $this->normalizar($text);
-                if ($normalized === ''
-                    || str_starts_with($normalized, '=')
-                    || str_contains($normalized, 'SERVICIO DE MOVILIZACION')
-                    || str_contains($normalized, 'SERVICIOS DE MOVILIZACION')
-                    || str_contains($normalized, 'SERVICIO DE CASINO')
-                    || preg_match('/^(COTIZACION|PRECIO|TOTAL|SUELDOS?|BONOS?|ASIGNACION|GASTOS?|COSTO|SUBTOTAL|MARGEN|REFPREV|SIS|MUTUAL|SEGURO|CESANT|PROVISION|VACACION|INDEMNIZ|UNIFORME|CASINO|HABER|BENEFICIO)\\b/', $normalized) === 1) {
-                    continue;
-                }
-                if (preg_match('/\\b(OPERARI|OPERADOR|PICKING|BODEGA|DESPACH|ADMINISTR|ANALISTA|ENCARGADO|SUPERVIS|MOVILIZ|GRUA|ASISTENTE|CHOFER|AUXILIAR|LOGIST|COORDINADOR)\\w*/', $normalized) === 1) {
+                if ($this->esCargoCandidato($text)) {
                     return Str::limit(trim($text), 180, '');
                 }
             }
@@ -448,15 +511,30 @@ class ImportadorHistoricoCotizacionesService
         return null;
     }
 
+    private function esCargoCandidato(string $text): bool
+    {
+        $normalized = $this->normalizar($text);
+
+        if ($normalized === ''
+            || str_starts_with($normalized, '=')
+            || str_contains($normalized, 'SERVICIO DE MOVILIZACION')
+            || str_contains($normalized, 'SERVICIOS DE MOVILIZACION')
+            || str_contains($normalized, 'SERVICIO DE CASINO')
+            || preg_match('/^(COTIZACION|PRECIO|TOTAL|SUELDOS?|BONOS?|ASIGNACION|GASTOS?|COSTO|SUBTOTAL|MARGEN|REFPREV|SIS|MUTUAL|SEGURO|CESANT|PROVISION|VACACION|INDEMNIZ|UNIFORME|CASINO|HABER|BENEFICIO)\\b/', $normalized) === 1) {
+            return false;
+        }
+
+        return preg_match('/\\b(OPERARI|OPERADOR|PICKING|BODEGA|DESPACH|ADMINISTR|ANALISTA|ENCARGADO|SUPERVIS|MOVILIZ|GRUA|ASISTENTE|CHOFER|AUXILIAR|LOGIST|COORDINADOR)\\w*/', $normalized) === 1;
+    }
+
     /**
      * @param array<string, mixed> $source
      * @param array{row:int,column:int,price:float,coordinate:string} $block
      * @param array{fecha:CarbonImmutable, fuente:string} $fecha
      * @return array<string, mixed>
      */
-    private function construirRegistro(array $source, Worksheet $sheet, int $sheetIndex, array $block, int $blockStart, array $fecha, string $cargo, Cliente $cliente, CentroCosto $centro, Modalidad $modalidad): array
+    private function construirRegistro(array $source, Worksheet $sheet, int $sheetIndex, array $block, array $fecha, string $cargo, array $details, Cliente $cliente, CentroCosto $centro, Modalidad $modalidad): array
     {
-        $details = $this->extraerDetalles($sheet, $blockStart, $block['row']);
         $totals = $this->resolverTotales($details, $block['price']);
         $source['hoja'] = $sheet->getTitle();
         $source['celda_precio'] = $block['coordinate'];
@@ -535,6 +613,47 @@ class ImportadorHistoricoCotizacionesService
                     'orden' => count($details) + 1,
                 ];
             }
+        }
+
+        return $details;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function extraerDetallesHorizontal(Worksheet $sheet, int $labelColumn, int $priceRow): array
+    {
+        $details = [];
+        $seen = [];
+        $maxColumn = min($labelColumn + 4, Coordinate::columnIndexFromString($sheet->getHighestDataColumn()));
+
+        for ($row = 1; $row <= $priceRow; $row++) {
+            $rawLabel = $this->cellValue($sheet, $labelColumn, $row);
+            if (! is_string($rawLabel)) {
+                continue;
+            }
+
+            $label = trim(preg_replace('/\\s+/', ' ', $rawLabel) ?? '');
+            $normalized = $this->normalizar($label);
+            if ($normalized === '' || isset($seen[$normalized]) || ! $this->esConceptoCalculo($normalized)) {
+                continue;
+            }
+
+            $value = $this->numericValueToRight($sheet, $row, $labelColumn, $maxColumn);
+            if ($value === null) {
+                continue;
+            }
+
+            $seen[$normalized] = true;
+            $details[] = [
+                'tipo' => $this->tipoDetalle($normalized),
+                'concepto' => Str::limit($label, 160, ''),
+                'descripcion' => 'Valor preservado desde '.$sheet->getTitle().'!'.Coordinate::stringFromColumnIndex($labelColumn).$row,
+                'valor_base' => 0,
+                'porcentaje' => null,
+                'valor' => round($value, 2),
+                'formula' => ['origen' => $sheet->getTitle().'!'.Coordinate::stringFromColumnIndex($labelColumn).$row],
+                'calculos_paso_a_paso' => ['importado_desde_excel' => true],
+                'orden' => count($details) + 1,
+            ];
         }
 
         return $details;

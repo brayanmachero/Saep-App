@@ -209,6 +209,57 @@ class ComercialCotizacionFlowTest extends TestCase
         }
     }
 
+    public function test_separa_tarifas_horizontales_por_cargo_y_fecha_de_cotizacion(): void
+    {
+        $cliente = Cliente::create([
+            'rut' => '76111222-3',
+            'nombre' => 'DHL',
+            'nombre_comercial' => 'DHL',
+            'estado' => 'activo',
+        ]);
+        CentroCosto::create([
+            'cliente_id' => $cliente->id,
+            'nombre' => 'DHL GLOBAL EST',
+            'codigo' => 'HIST-DHL-GLOBAL-EST',
+            'estado' => 'activo',
+        ]);
+
+        $directory = sys_get_temp_dir().DIRECTORY_SEPARATOR.'saep-historico-horizontal-'.uniqid();
+        mkdir($directory);
+        $path = $directory.DIRECTORY_SEPARATOR.'DHL GLOBAL EST - TARIFAS 2026.xlsx';
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray([
+            ['COTIZACIÓN 03-06-2026', null, null, null, null, 'COTIZACIÓN 04-06-2026'],
+            ['OPERARIO DE BODEGA', null, null, null, null, 'SUPERVISOR LOGÍSTICO'],
+            ['SUELDO BASE', 595000, null, null, null, 'SUELDO BASE', 680000],
+            ['TOTAL HABERES', 715000, null, null, null, 'TOTAL HABERES', 800000],
+            ['TOTAL COTIZACIONES', 58200, null, null, null, 'TOTAL COTIZACIONES', 65000],
+            ['TOTAL PROVISIONES', 45500, null, null, null, 'TOTAL PROVISIONES', 52000],
+            ['GASTOS ADMINISTRACIÓN', 28500, null, null, null, 'GASTOS ADMINISTRACIÓN', 32000],
+            ['COSTO BRUTO', 847200, null, null, null, 'COSTO BRUTO', 949000],
+            ['MARGEN', 9, null, null, null, 'MARGEN', 10],
+            ['PRECIO VENTA', 923448, null, null, null, 'PRECIO VENTA', 1043900],
+        ]);
+        (new Xlsx($spreadsheet))->save($path);
+        $spreadsheet->disconnectWorksheets();
+
+        try {
+            $analysis = app(ImportadorHistoricoCotizacionesService::class)->analizar($path, $directory);
+
+            $this->assertSame('listo', $analysis['status']);
+            $this->assertCount(2, $analysis['records']);
+            $this->assertSame('OPERARIO DE BODEGA', $analysis['records'][0]['cargo']);
+            $this->assertSame('2026-06-03', $analysis['records'][0]['fecha_cotizacion']->toDateString());
+            $this->assertSame('SUPERVISOR LOGÍSTICO', $analysis['records'][1]['cargo']);
+            $this->assertSame('2026-06-04', $analysis['records'][1]['fecha_cotizacion']->toDateString());
+            $this->assertSame(1043900.0, $analysis['records'][1]['totales']['precio_venta']);
+        } finally {
+            @unlink($path);
+            @rmdir($directory);
+        }
+    }
+
     private function createAdminUser(): User
     {
         $rol = Rol::create([
