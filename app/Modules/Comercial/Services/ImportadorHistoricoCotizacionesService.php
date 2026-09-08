@@ -27,7 +27,7 @@ class ImportadorHistoricoCotizacionesService
 
     private const MAX_SCAN_COLUMNS = 32;
 
-    private const MINIMUM_HISTORICAL_TARIFF = 100000.0;
+    private const MINIMUM_HISTORICAL_TARIFF = 400000.0;
 
     /** @var array<string, string> */
     private const CLIENT_ALIASES = [
