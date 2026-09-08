@@ -122,13 +122,14 @@ class ImportadorHistoricoCotizacionesService
             $uniqueRecords = [];
             foreach ($spreadsheet->getAllSheets() as $sheetIndex => $sheet) {
                 foreach ($this->extraerBloquesPrecio($sheet) as $block) {
-                    $fecha = $this->resolverFechaBloque($sheet, $block['row'], $path);
+                    $blockStart = $this->resolverInicioBloque($sheet, $block['row']);
+                    $fecha = $this->resolverFechaBloque($sheet, $blockStart, $path);
 
                     if ($fecha === null) {
                         continue;
                     }
 
-                    $cargo = $this->resolverCargo($sheet, $block['row']);
+                    $cargo = $this->resolverCargo($sheet, $blockStart, $block['row']);
                     if ($cargo === null) {
                         continue;
                     }
@@ -138,6 +139,7 @@ class ImportadorHistoricoCotizacionesService
                         $sheet,
                         $sheetIndex,
                         $block,
+                        $blockStart,
                         $fecha,
                         $cargo,
                         $cliente,
@@ -340,6 +342,21 @@ class ImportadorHistoricoCotizacionesService
         return $blocks;
     }
 
+    private function resolverInicioBloque(Worksheet $sheet, int $priceRow): int
+    {
+        $maxColumn = min(Coordinate::columnIndexFromString($sheet->getHighestDataColumn()), self::MAX_SCAN_COLUMNS);
+        for ($row = $priceRow - 1; $row >= max(1, $priceRow - 120); $row--) {
+            for ($column = 1; $column <= $maxColumn; $column++) {
+                $label = $this->normalizar((string) $this->cellValue($sheet, $column, $row));
+                if (str_contains($label, 'PRECIO VENTA') && preg_match('/\\b(HORA|HHEE|EXTRA|DOMINGO|FESTIVO)\\b/', $label) !== 1) {
+                    return $row + 1;
+                }
+            }
+        }
+
+        return max(1, $priceRow - 58);
+    }
+
     /** @return array{fecha:CarbonImmutable, fuente:string}|null */
     private function resolverFechaBloque(Worksheet $sheet, int $priceRow, string $path): ?array
     {
@@ -408,9 +425,9 @@ class ImportadorHistoricoCotizacionesService
         return CarbonImmutable::create($year, $month, $day)->startOfDay();
     }
 
-    private function resolverCargo(Worksheet $sheet, int $priceRow): ?string
+    private function resolverCargo(Worksheet $sheet, int $blockStart, int $priceRow): ?string
     {
-        for ($row = $priceRow - 1; $row >= max(1, $priceRow - 55); $row--) {
+        for ($row = $priceRow - 1; $row >= $blockStart; $row--) {
             $values = $this->rowTextValues($sheet, $row, 8);
             foreach ($values as $text) {
                 $normalized = $this->normalizar($text);
@@ -437,9 +454,9 @@ class ImportadorHistoricoCotizacionesService
      * @param array{fecha:CarbonImmutable, fuente:string} $fecha
      * @return array<string, mixed>
      */
-    private function construirRegistro(array $source, Worksheet $sheet, int $sheetIndex, array $block, array $fecha, string $cargo, Cliente $cliente, CentroCosto $centro, Modalidad $modalidad): array
+    private function construirRegistro(array $source, Worksheet $sheet, int $sheetIndex, array $block, int $blockStart, array $fecha, string $cargo, Cliente $cliente, CentroCosto $centro, Modalidad $modalidad): array
     {
-        $details = $this->extraerDetalles($sheet, $block['row']);
+        $details = $this->extraerDetalles($sheet, $blockStart, $block['row']);
         $totals = $this->resolverTotales($details, $block['price']);
         $source['hoja'] = $sheet->getTitle();
         $source['celda_precio'] = $block['coordinate'];
@@ -481,9 +498,8 @@ class ImportadorHistoricoCotizacionesService
     }
 
     /** @return list<array<string, mixed>> */
-    private function extraerDetalles(Worksheet $sheet, int $priceRow): array
+    private function extraerDetalles(Worksheet $sheet, int $startRow, int $priceRow): array
     {
-        $startRow = max(1, $priceRow - 58);
         $details = [];
         $seen = [];
         $maxColumn = min(Coordinate::columnIndexFromString($sheet->getHighestDataColumn()), 12);
