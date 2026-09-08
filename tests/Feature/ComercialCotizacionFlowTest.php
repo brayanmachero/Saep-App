@@ -191,6 +191,7 @@ class ComercialCotizacionFlowTest extends TestCase
             $this->assertCount(1, $analysis['records']);
             $record = $analysis['records'][0];
             $this->assertSame('2026-06-03', $record['fecha_cotizacion']->toDateString());
+            $this->assertSame('OPERARIO DE BODEGA', $record['cargo']);
             $this->assertSame(923448.0, $record['totales']['precio_venta']);
 
             $cotizacion = $service->importar($record);

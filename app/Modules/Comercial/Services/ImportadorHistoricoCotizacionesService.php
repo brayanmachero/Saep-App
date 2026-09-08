@@ -27,6 +27,8 @@ class ImportadorHistoricoCotizacionesService
 
     private const MAX_SCAN_COLUMNS = 32;
 
+    private const MINIMUM_HISTORICAL_TARIFF = 100000.0;
+
     /** @var array<string, string> */
     private const CLIENT_ALIASES = [
         'WALMART' => 'Walmart Chile',
@@ -310,7 +312,7 @@ class ImportadorHistoricoCotizacionesService
                 }
 
                 $price = $this->numericValueToRight($sheet, $row, $column, min($column + 6, $maxColumn));
-                if ($price === null || $price <= 0) {
+                if ($price === null || $price < self::MINIMUM_HISTORICAL_TARIFF) {
                     continue;
                 }
 
@@ -415,7 +417,9 @@ class ImportadorHistoricoCotizacionesService
             $values = $this->rowTextValues($sheet, $row, 8);
             foreach ($values as $text) {
                 $normalized = $this->normalizar($text);
-                if ($normalized === '' || str_contains($normalized, 'COTIZACION') || str_contains($normalized, 'PRECIO') || str_contains($normalized, 'TOTAL') || str_contains($normalized, 'SUELDO') || str_contains($normalized, 'REMUNERACION') || str_contains($normalized, 'COSTO')) {
+                if ($normalized === ''
+                    || str_starts_with($normalized, '=')
+                    || preg_match('/^(COTIZACION|PRECIO|TOTAL|SUELDOS?|BONOS?|ASIGNACION|GASTOS?|COSTO|SUBTOTAL|MARGEN|REFPREV|SIS|MUTUAL|SEGURO|CESANT|PROVISION|VACACION|INDEMNIZ|UNIFORME|CASINO|HABER|BENEFICIO)\\b/', $normalized) === 1) {
                     continue;
                 }
                 if (preg_match('/\\b(OPERARI|OPERADOR|PICKING|BODEGA|DESPACH|ADMINISTR|ANALISTA|ENCARGADO|SUPERVIS|MOVILIZ|GRUA|ASISTENTE|CHOFER|AUXILIAR|LOGIST|COORDINADOR)\\w*/', $normalized) === 1) {
