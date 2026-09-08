@@ -44,7 +44,7 @@ class CotizacionController
 
         $historicas = (clone $baseQuery)
             ->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_NO_VIGENTE))
-            ->latest('updated_at')
+            ->latest('fecha_cotizacion')
             ->latest('id')
             ->paginate(8, ['*'], 'historicas_page')
             ->withQueryString();
@@ -304,7 +304,7 @@ class CotizacionController
 
         $historicasComerciales = (clone $relacionadasQuery)
             ->whereIn('estado', Cotizacion::estadosParaFiltro(Cotizacion::ESTADO_NO_VIGENTE))
-            ->latest('updated_at')
+            ->latest('fecha_cotizacion')
             ->latest('id')
             ->limit(6)
             ->get();
@@ -453,7 +453,7 @@ class CotizacionController
             ->where('centro_costo_id', $cotizacion->centro_costo_id)
             ->where('modalidad_id', $cotizacion->modalidad_id)
             ->where('cargo', $cotizacion->cargo)
-            ->orderByDesc('created_at')
+            ->orderByDesc('fecha_cotizacion')
             ->get();
 
         return view('comercial::cotizador.historico', compact('cotizacion', 'versiones'));

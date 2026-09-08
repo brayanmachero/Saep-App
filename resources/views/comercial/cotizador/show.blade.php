@@ -128,6 +128,8 @@
     $puedeEditarComercial = auth()->user()->tieneAcceso('comercial', 'puede_editar');
     $puedeEliminarComercial = auth()->user()->esAdminSistema()
         && auth()->user()->tieneAcceso('comercial', 'puede_eliminar');
+    $origenHistorico = data_get($cotizacion->datos_calculo, 'origen');
+    $esHistoricoImportado = data_get($cotizacion->datos_calculo, 'es_fotografia_historica', false) === true;
 @endphp
 <div class="page-container">
     <div class="page-header">
@@ -169,6 +171,21 @@
     </div>
 
     @include('partials._alerts')
+    @if($esHistoricoImportado)
+    <div class="glass-card" style="margin-bottom:1rem;border-left:4px solid var(--accent-primary);padding:1rem">
+        <strong><i class="bi bi-archive-fill"></i> Fotografía histórica importada</strong>
+        <p style="margin:.4rem 0 0;color:var(--text-muted);font-size:.86rem">
+            Los importes se preservan desde el archivo original y no se recalcularon con las reglas actuales.
+            Fecha usada: {{ $cotizacion->fecha_cotizacion?->format('d/m/Y') ?? '-' }}
+            ({{ data_get($origenHistorico, 'fecha_fuente') === 'modificacion_archivo_referencial' ? 'referencia de modificación del archivo' : 'fecha identificada en el origen' }}).
+        </p>
+        <p style="margin:.3rem 0 0;color:var(--text-muted);font-size:.8rem">
+            Archivo: {{ data_get($origenHistorico, 'ruta_relativa', 'No disponible') }}
+            · Hoja: {{ data_get($origenHistorico, 'hoja', '-') }}
+            · Celda de precio: {{ data_get($origenHistorico, 'celda_precio', '-') }}
+        </p>
+    </div>
+    @endif
     @php
         $resumen = $cotizacion->datos_calculo['resumen_excel'] ?? [];
         $horas = $cotizacion->datos_calculo['horas'] ?? [];

@@ -15,11 +15,14 @@ use App\Modules\Comercial\Models\CotizacionAuditoria;
 use App\Modules\Comercial\Models\Modalidad;
 use App\Modules\Comercial\Services\CalculadoraCotizacionService;
 use App\Modules\Comercial\Services\GeneradorPDFService;
+use App\Modules\Comercial\Services\ImportadorHistoricoCotizacionesService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Mockery\MockInterface;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
 
 class ComercialCotizacionFlowTest extends TestCase
@@ -143,6 +146,65 @@ class ComercialCotizacionFlowTest extends TestCase
 
         $duracion = microtime(true) - $inicio;
         $this->assertLessThan(15, $duracion, "El lote de {$iteraciones} cálculos tardó {$duracion} segundos.");
+    }
+
+    public function test_importa_fotografia_historica_con_fecha_del_origen_sin_recalcularla(): void
+    {
+        $cliente = Cliente::create([
+            'rut' => '76111222-3',
+            'nombre' => 'DHL',
+            'nombre_comercial' => 'DHL',
+            'estado' => 'activo',
+        ]);
+        CentroCosto::create([
+            'cliente_id' => $cliente->id,
+            'nombre' => 'DHL GLOBAL EST',
+            'codigo' => 'HIST-DHL-GLOBAL-EST',
+            'estado' => 'activo',
+        ]);
+
+        $directory = sys_get_temp_dir().DIRECTORY_SEPARATOR.'saep-historico-'.uniqid();
+        mkdir($directory);
+        $path = $directory.DIRECTORY_SEPARATOR.'DHL GLOBAL EST - TARIFAS 2026.xlsx';
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray([
+            ['COTIZACIÓN 03-06-2026', null],
+            ['OPERARIO DE BODEGA', null],
+            ['SUELDO BASE', 595000],
+            ['TOTAL HABERES', 715000],
+            ['TOTAL COTIZACIONES', 58200],
+            ['TOTAL PROVISIONES', 45500],
+            ['GASTOS ADMINISTRACIÓN', 28500],
+            ['COSTO BRUTO', 847200],
+            ['MARGEN', 9],
+            ['PRECIO VENTA', 923448],
+        ]);
+        (new Xlsx($spreadsheet))->save($path);
+        $spreadsheet->disconnectWorksheets();
+
+        try {
+            $service = app(ImportadorHistoricoCotizacionesService::class);
+            $analysis = $service->analizar($path, $directory);
+
+            $this->assertSame('listo', $analysis['status']);
+            $this->assertCount(1, $analysis['records']);
+            $record = $analysis['records'][0];
+            $this->assertSame('2026-06-03', $record['fecha_cotizacion']->toDateString());
+            $this->assertSame(923448.0, $record['totales']['precio_venta']);
+
+            $cotizacion = $service->importar($record);
+            $cotizacion->refresh();
+
+            $this->assertSame(Cotizacion::ESTADO_NO_VIGENTE, $cotizacion->estado);
+            $this->assertSame('2026-06-03', $cotizacion->fecha_cotizacion->toDateString());
+            $this->assertSame('923448.00', $cotizacion->precio_venta);
+            $this->assertTrue((bool) data_get($cotizacion->datos_calculo, 'es_fotografia_historica'));
+            $this->assertSame('contenido_cotizacion', data_get($cotizacion->datos_calculo, 'origen.fecha_fuente'));
+        } finally {
+            @unlink($path);
+            @rmdir($directory);
+        }
     }
 
     private function createAdminUser(): User
