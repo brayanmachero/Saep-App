@@ -46,13 +46,9 @@
         border: 0 !important;
     }
 
-    .quote-search-select-trigger {
+    .quote-search-select-input {
         width: 100%;
         min-height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: .65rem;
         padding: .55rem .7rem;
         color: var(--text-primary);
         background: var(--surface-color, #fff);
@@ -63,37 +59,28 @@
         text-align: left;
     }
 
-    .quote-search-select-trigger:hover {
+    .quote-search-select-input:hover {
         border-color: var(--accent-primary, #7250ca);
     }
 
-    .quote-search-select-trigger:focus-visible {
+    .quote-search-select-input:focus {
         outline: 0;
         border-color: var(--accent-primary, #7250ca);
         box-shadow: 0 0 0 .16rem color-mix(in srgb, var(--accent-primary, #7250ca) 18%, transparent);
     }
 
-    .quote-search-select-trigger > span {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .quote-search-select-trigger > i {
-        flex: 0 0 auto;
-        color: var(--text-muted);
-    }
-
-    .quote-search-select.is-invalid .quote-search-select-trigger {
+    .quote-search-select.is-invalid .quote-search-select-input {
         border-color: var(--danger-color, #d63946);
         box-shadow: 0 0 0 .16rem rgba(214, 57, 70, .12);
     }
 
     .quote-search-select-menu {
-        position: fixed;
-        z-index: 1060;
-        max-height: calc(100vh - 2rem);
+        position: absolute;
+        z-index: 100;
+        top: calc(100% + .35rem);
+        left: 0;
+        width: 100%;
+        box-sizing: border-box;
         padding: .55rem;
         background: var(--surface-color, #fff);
         border: 1px solid var(--surface-border, #cfd8e6);
@@ -105,26 +92,8 @@
         display: none;
     }
 
-    .quote-search-select-search {
-        width: 100%;
-        min-height: 38px;
-        padding: .46rem .62rem;
-        color: var(--text-primary);
-        background: var(--bg-tertiary, #fbfcfe);
-        border: 1px solid var(--surface-border, #d5deeb);
-        border-radius: 6px;
-        font: inherit;
-    }
-
-    .quote-search-select-search:focus {
-        outline: 0;
-        border-color: var(--accent-primary, #7250ca);
-        box-shadow: 0 0 0 .16rem color-mix(in srgb, var(--accent-primary, #7250ca) 18%, transparent);
-    }
-
     .quote-search-select-results {
-        max-height: 16rem;
-        margin-top: .45rem;
+        max-height: 17rem;
         overflow: auto;
         overscroll-behavior: contain;
     }
@@ -164,17 +133,8 @@
         font-style: italic;
     }
 
-    .quote-search-select-help {
-        display: block;
-        margin: .38rem .1rem 0;
-        color: var(--text-muted);
-        font-size: .72rem;
-        line-height: 1.35;
-    }
-
-    .dark-mode .quote-search-select-trigger,
-    .dark-mode .quote-search-select-menu,
-    .dark-mode .quote-search-select-search {
+    .dark-mode .quote-search-select-input,
+    .dark-mode .quote-search-select-menu {
         color: #e5edf9;
         background: #111827;
         border-color: #475569;
@@ -816,9 +776,12 @@ function getQuoteSelectableOptions(select) {
 }
 
 function closeQuoteSearchSelect(component) {
+    if (!component) return;
+
     component.menu.hidden = true;
     component.wrapper.classList.remove('is-open');
-    component.trigger.setAttribute('aria-expanded', 'false');
+    component.input.setAttribute('aria-expanded', 'false');
+    component.syncSelectedOption?.();
 }
 
 function closeAllQuoteSearchSelects(except = null) {
@@ -827,41 +790,15 @@ function closeAllQuoteSearchSelects(except = null) {
     });
 }
 
-function positionQuoteSearchSelect(component) {
-    if (component.menu.hidden) return;
-
-    const bounds = component.trigger.getBoundingClientRect();
-    const padding = 16;
-    const availableWidth = Math.max(1, window.innerWidth - (padding * 2));
-    const width = Math.min(Math.max(bounds.width, 280), Math.min(560, availableWidth));
-    const left = Math.min(
-        Math.max(padding, bounds.left),
-        window.innerWidth - width - padding
-    );
-
-    component.menu.style.width = `${width}px`;
-    component.menu.style.left = `${left}px`;
-    component.menu.style.top = `${bounds.bottom + 5}px`;
-
-    const menuBounds = component.menu.getBoundingClientRect();
-    if (menuBounds.bottom > window.innerHeight - padding && bounds.top - menuBounds.height - 5 >= padding) {
-        component.menu.style.top = `${Math.max(padding, bounds.top - menuBounds.height - 5)}px`;
-    }
-}
-
 function setupQuoteSearchSelect(select, index) {
     if (select.dataset.quoteSearchReady === 'true') return null;
     select.dataset.quoteSearchReady = 'true';
 
     const originalRequired = select.required;
     const wrapper = document.createElement('div');
-    const trigger = document.createElement('button');
-    const triggerLabel = document.createElement('span');
-    const triggerIcon = document.createElement('i');
+    const input = document.createElement('input');
     const menu = document.createElement('div');
-    const search = document.createElement('input');
     const results = document.createElement('div');
-    const help = document.createElement('small');
     const searchPlaceholder = select.dataset.searchPlaceholder || 'Buscar una opción';
     const searchLabel = select.dataset.searchLabel || 'opción';
 
@@ -872,35 +809,27 @@ function setupQuoteSearchSelect(select, index) {
     select.required = false;
     select.tabIndex = -1;
 
-    trigger.type = 'button';
-    trigger.className = 'quote-search-select-trigger';
-    trigger.setAttribute('aria-haspopup', 'listbox');
-    trigger.setAttribute('aria-expanded', 'false');
-    trigger.setAttribute('aria-label', `Buscar ${searchLabel}`);
-    trigger.title = `Buscar ${searchLabel}`;
-    triggerIcon.className = 'bi bi-search';
-    trigger.append(triggerLabel, triggerIcon);
+    input.type = 'text';
+    input.className = 'quote-search-select-input';
+    input.autocomplete = 'off';
+    input.placeholder = searchPlaceholder;
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-haspopup', 'listbox');
+    input.setAttribute('aria-expanded', 'false');
+    input.setAttribute('aria-label', `Buscar ${searchLabel}`);
 
     menu.className = 'quote-search-select-menu';
     menu.hidden = true;
     menu.id = `quote-search-select-${index}`;
-    trigger.setAttribute('aria-controls', menu.id);
-
-    search.type = 'search';
-    search.className = 'quote-search-select-search';
-    search.autocomplete = 'off';
-    search.placeholder = searchPlaceholder;
-    search.setAttribute('aria-label', searchPlaceholder);
+    input.setAttribute('aria-controls', menu.id);
 
     results.className = 'quote-search-select-results';
     results.setAttribute('role', 'listbox');
-    help.className = 'quote-search-select-help';
-    help.textContent = 'Escribe para filtrar las opciones disponibles.';
-    menu.append(search, results, help);
-    wrapper.appendChild(trigger);
-    document.body.appendChild(menu);
+    menu.appendChild(results);
+    wrapper.append(input, menu);
 
-    const component = { select, wrapper, trigger, triggerLabel, menu, search, results, originalRequired };
+    const component = { select, wrapper, input, menu, results, originalRequired };
     quoteSearchSelects.push(component);
 
     function selectedOption() {
@@ -909,16 +838,21 @@ function setupQuoteSearchSelect(select, index) {
 
     function syncSelectedOption() {
         const option = selectedOption();
-        const label = option ? option.textContent.trim() : 'Seleccionar opción';
-        triggerLabel.textContent = label;
-        triggerLabel.title = label;
-        wrapper.classList.toggle('is-invalid', originalRequired && !select.value);
-        trigger.disabled = select.disabled;
-        trigger.setAttribute('aria-disabled', select.disabled ? 'true' : 'false');
+        const label = select.value && option ? option.textContent.trim() : '';
+
+        if (document.activeElement !== input || menu.hidden) {
+            input.value = label;
+        }
+
+        input.dataset.selectedLabel = label;
+        input.title = label || `Buscar ${searchLabel}`;
+        wrapper.classList.toggle('is-invalid', select.classList.contains('is-invalid') || wrapper.dataset.validationError === 'true');
+        input.disabled = select.disabled;
+        input.setAttribute('aria-disabled', select.disabled ? 'true' : 'false');
     }
 
     function renderResults() {
-        const query = normalizeQuoteSearch(search.value);
+        const query = normalizeQuoteSearch(input.value);
         const matches = getQuoteSelectableOptions(select)
             .filter((option) => !query || normalizeQuoteSearch(option.textContent).includes(query))
             .slice(0, 80);
@@ -944,7 +878,6 @@ function setupQuoteSearchSelect(select, index) {
                 select.value = option.value;
                 select.dispatchEvent(new Event('change', { bubbles: true }));
                 closeQuoteSearchSelect(component);
-                trigger.focus();
             });
             results.appendChild(result);
         });
@@ -956,30 +889,27 @@ function setupQuoteSearchSelect(select, index) {
         closeAllQuoteSearchSelects(component);
         wrapper.classList.add('is-open');
         menu.hidden = false;
-        trigger.setAttribute('aria-expanded', 'true');
-        search.value = '';
+        input.setAttribute('aria-expanded', 'true');
         renderResults();
-        positionQuoteSearchSelect(component);
-        window.requestAnimationFrame(() => search.focus());
     }
 
     component.open = openSearchSelect;
 
-    trigger.addEventListener('click', () => {
-        if (menu.hidden) openSearchSelect(); else closeQuoteSearchSelect(component);
-    });
-    trigger.addEventListener('keydown', (event) => {
-        if (['ArrowDown', 'Enter', ' '].includes(event.key)) {
-            event.preventDefault();
-            openSearchSelect();
+    component.syncSelectedOption = syncSelectedOption;
+    input.addEventListener('focus', () => {
+        if (input.value === input.dataset.selectedLabel) {
+            input.value = '';
         }
+        openSearchSelect();
     });
-    search.addEventListener('input', renderResults);
-    search.addEventListener('keydown', (event) => {
+    input.addEventListener('input', () => {
+        if (menu.hidden) openSearchSelect();
+        renderResults();
+    });
+    input.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             event.preventDefault();
             closeQuoteSearchSelect(component);
-            trigger.focus();
         }
 
         if (event.key === 'Enter') {
@@ -989,8 +919,23 @@ function setupQuoteSearchSelect(select, index) {
                 firstResult.click();
             }
         }
+
+        if (event.key === 'ArrowDown' && menu.hidden) {
+            event.preventDefault();
+            openSearchSelect();
+        }
     });
-    select.addEventListener('change', syncSelectedOption);
+    input.addEventListener('blur', () => {
+        window.setTimeout(() => {
+            if (!menu.contains(document.activeElement)) {
+                closeQuoteSearchSelect(component);
+            }
+        }, 0);
+    });
+    select.addEventListener('change', () => {
+        delete wrapper.dataset.validationError;
+        syncSelectedOption();
+    });
     select.addEventListener('quote:options-updated', () => {
         syncSelectedOption();
         renderResults();
@@ -1000,8 +945,6 @@ function setupQuoteSearchSelect(select, index) {
             closeQuoteSearchSelect(component);
         }
     });
-    window.addEventListener('resize', () => positionQuoteSearchSelect(component));
-    window.addEventListener('scroll', () => positionQuoteSearchSelect(component), true);
 
     syncSelectedOption();
     return component;
@@ -1021,6 +964,7 @@ function setupQuoteSearchSelects() {
             ));
             if (missing) {
                 event.preventDefault();
+                missing.wrapper.dataset.validationError = 'true';
                 missing.wrapper.classList.add('is-invalid');
                 missing.open();
             }
