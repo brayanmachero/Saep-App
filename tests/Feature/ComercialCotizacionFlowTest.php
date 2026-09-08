@@ -203,6 +203,8 @@ class ComercialCotizacionFlowTest extends TestCase
             $this->assertSame('923448.00', $cotizacion->precio_venta);
             $this->assertTrue((bool) data_get($cotizacion->datos_calculo, 'es_fotografia_historica'));
             $this->assertSame('contenido_cotizacion', data_get($cotizacion->datos_calculo, 'origen.fecha_fuente'));
+            app(ImportadorHistoricoCotizacionesService::class)->importar($record);
+            $this->assertSame(1, Cotizacion::count());
         } finally {
             @unlink($path);
             @rmdir($directory);
@@ -249,6 +251,7 @@ class ComercialCotizacionFlowTest extends TestCase
 
             $this->assertSame('listo', $analysis['status']);
             $this->assertCount(2, $analysis['records']);
+            $this->assertNotSame($analysis['records'][0]['numero'], $analysis['records'][1]['numero']);
             $this->assertSame('OPERARIO DE BODEGA', $analysis['records'][0]['cargo']);
             $this->assertSame('2026-06-03', $analysis['records'][0]['fecha_cotizacion']->toDateString());
             $this->assertSame('SUPERVISOR LOGÍSTICO', $analysis['records'][1]['cargo']);

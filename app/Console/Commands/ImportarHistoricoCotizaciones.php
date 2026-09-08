@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Modules\Comercial\Models\Cotizacion;
 use App\Modules\Comercial\Services\ImportadorHistoricoCotizacionesService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
@@ -90,7 +89,7 @@ class ImportarHistoricoCotizaciones extends Command
             }
 
             foreach ($records as $record) {
-                $alreadyExists = Cotizacion::withTrashed()->where('numero', $record['numero'])->exists();
+                $alreadyExists = $importador->existe($record);
                 $importador->importar($record);
                 $summary[$alreadyExists ? 'ya_existentes' : 'importados']++;
             }

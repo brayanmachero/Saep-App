@@ -169,7 +169,7 @@ class ImportadorHistoricoCotizacionesService
     public function importar(array $record): Cotizacion
     {
         return DB::transaction(function () use ($record): Cotizacion {
-            $existing = Cotizacion::withTrashed()->where('numero', $record['numero'])->first();
+            $existing = $this->buscarExistente($record);
             if ($existing !== null) {
                 if ($existing->trashed()) {
                     $existing->restore();
@@ -224,6 +224,32 @@ class ImportadorHistoricoCotizacionesService
 
             return $cotizacion;
         });
+    }
+
+    /** @param array<string, mixed> $record */
+    public function existe(array $record): bool
+    {
+        return $this->buscarExistente($record) !== null;
+    }
+
+    /** @param array<string, mixed> $record */
+    private function buscarExistente(array $record): ?Cotizacion
+    {
+        $existing = Cotizacion::withTrashed()->where('numero', $record['numero'])->first();
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $origen = $record['datos_calculo']['origen'] ?? [];
+        if (! isset($origen['hash_sha256'], $origen['hoja'], $origen['celda_precio'])) {
+            return null;
+        }
+
+        return Cotizacion::withTrashed()
+            ->where('datos_calculo->origen->hash_sha256', $origen['hash_sha256'])
+            ->where('datos_calculo->origen->hoja', $origen['hoja'])
+            ->where('datos_calculo->origen->celda_precio', $origen['celda_precio'])
+            ->first();
     }
 
     private function resolverModalidad(string $context): ?Modalidad
@@ -541,7 +567,7 @@ class ImportadorHistoricoCotizacionesService
         $source['fecha_fuente'] = $fecha['fuente'];
 
         $year = $fecha['fecha']->year;
-        $identifier = substr($source['hash_sha256'], 0, 10).'-'.($sheetIndex + 1).'-'.$block['row'];
+        $identifier = substr($source['hash_sha256'], 0, 10).'-'.($sheetIndex + 1).'-'.$block['coordinate'];
 
         return [
             'numero' => "HIST-{$year}-{$identifier}",
