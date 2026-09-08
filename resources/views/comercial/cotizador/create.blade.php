@@ -26,6 +26,175 @@
         padding-bottom: .55rem;
     }
 
+    /* Selector con búsqueda: conserva el select nativo como fuente de verdad
+       para no alterar la validación ni la relación cliente -> centro de costo. */
+    .quote-search-select {
+        position: relative;
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .quote-search-select-native {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        margin: -1px !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        clip: rect(0 0 0 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+    }
+
+    .quote-search-select-trigger {
+        width: 100%;
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .65rem;
+        padding: .55rem .7rem;
+        color: var(--text-primary);
+        background: var(--surface-color, #fff);
+        border: 1px solid var(--surface-border, #cfd8e6);
+        border-radius: 7px;
+        font: inherit;
+        line-height: 1.35;
+        text-align: left;
+    }
+
+    .quote-search-select-trigger:hover {
+        border-color: var(--accent-primary, #7250ca);
+    }
+
+    .quote-search-select-trigger:focus-visible {
+        outline: 0;
+        border-color: var(--accent-primary, #7250ca);
+        box-shadow: 0 0 0 .16rem color-mix(in srgb, var(--accent-primary, #7250ca) 18%, transparent);
+    }
+
+    .quote-search-select-trigger > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .quote-search-select-trigger > i {
+        flex: 0 0 auto;
+        color: var(--text-muted);
+    }
+
+    .quote-search-select.is-invalid .quote-search-select-trigger {
+        border-color: var(--danger-color, #d63946);
+        box-shadow: 0 0 0 .16rem rgba(214, 57, 70, .12);
+    }
+
+    .quote-search-select-menu {
+        position: fixed;
+        z-index: 1060;
+        max-height: calc(100vh - 2rem);
+        padding: .55rem;
+        background: var(--surface-color, #fff);
+        border: 1px solid var(--surface-border, #cfd8e6);
+        border-radius: 8px;
+        box-shadow: 0 .75rem 1.7rem rgba(28, 39, 63, .2);
+    }
+
+    .quote-search-select-menu[hidden] {
+        display: none;
+    }
+
+    .quote-search-select-search {
+        width: 100%;
+        min-height: 38px;
+        padding: .46rem .62rem;
+        color: var(--text-primary);
+        background: var(--bg-tertiary, #fbfcfe);
+        border: 1px solid var(--surface-border, #d5deeb);
+        border-radius: 6px;
+        font: inherit;
+    }
+
+    .quote-search-select-search:focus {
+        outline: 0;
+        border-color: var(--accent-primary, #7250ca);
+        box-shadow: 0 0 0 .16rem color-mix(in srgb, var(--accent-primary, #7250ca) 18%, transparent);
+    }
+
+    .quote-search-select-results {
+        max-height: 16rem;
+        margin-top: .45rem;
+        overflow: auto;
+        overscroll-behavior: contain;
+    }
+
+    .quote-search-select-option,
+    .quote-search-select-empty {
+        width: 100%;
+        padding: .5rem .6rem;
+        border: 0;
+        border-radius: 5px;
+        font: inherit;
+        font-size: .84rem;
+        line-height: 1.35;
+        text-align: left;
+    }
+
+    .quote-search-select-option {
+        color: var(--text-primary);
+        background: transparent;
+    }
+
+    .quote-search-select-option:hover,
+    .quote-search-select-option:focus-visible {
+        color: var(--primary-color, #23085d);
+        background: color-mix(in srgb, var(--accent-primary, #7250ca) 11%, var(--surface-color, #fff));
+        outline: 0;
+    }
+
+    .quote-search-select-option.is-selected {
+        color: var(--primary-color, #321170);
+        background: color-mix(in srgb, var(--accent-primary, #7250ca) 17%, var(--surface-color, #fff));
+        font-weight: 700;
+    }
+
+    .quote-search-select-empty {
+        color: var(--text-muted);
+        font-style: italic;
+    }
+
+    .quote-search-select-help {
+        display: block;
+        margin: .38rem .1rem 0;
+        color: var(--text-muted);
+        font-size: .72rem;
+        line-height: 1.35;
+    }
+
+    .dark-mode .quote-search-select-trigger,
+    .dark-mode .quote-search-select-menu,
+    .dark-mode .quote-search-select-search {
+        color: #e5edf9;
+        background: #111827;
+        border-color: #475569;
+    }
+
+    .dark-mode .quote-search-select-option {
+        color: #e5edf9;
+    }
+
+    .dark-mode .quote-search-select-option:hover,
+    .dark-mode .quote-search-select-option:focus-visible {
+        color: #fff;
+        background: #312252;
+    }
+
+    .dark-mode .quote-search-select-option.is-selected {
+        color: #ede9fe;
+        background: #3b2b62;
+    }
+
     .quote-form textarea.form-control {
         min-height: 72px;
     }
@@ -326,7 +495,7 @@
                 <div class="form-group">
                     <label>Cliente <span class="required">*</span></label>
                     <div style="display:flex;gap:.5rem">
-                        <select name="cliente_id" id="clienteSelect" class="form-control @error('cliente_id') is-invalid @enderror" required onchange="cargarCentrosCosto()">
+                        <select name="cliente_id" id="clienteSelect" class="form-control @error('cliente_id') is-invalid @enderror" required onchange="cargarCentrosCosto()" data-quote-search-select data-search-placeholder="Buscar cliente" data-search-label="cliente">
                             <option value="">-- Seleccionar Cliente --</option>
                             @foreach($clientes as $cliente)
                             <option value="{{ $cliente->id }}" {{ old('cliente_id') == $cliente->id ? 'selected' : '' }}>
@@ -353,7 +522,7 @@
                 <div class="form-group">
                     <label>Centro de Costo <span class="required">*</span></label>
                     <div style="display:flex;gap:.5rem">
-                        <select name="centro_costo_id" id="centroCostoSelect" class="form-control @error('centro_costo_id') is-invalid @enderror" required>
+                        <select name="centro_costo_id" id="centroCostoSelect" class="form-control @error('centro_costo_id') is-invalid @enderror" required data-quote-search-select data-search-placeholder="Buscar centro de costo" data-search-label="centro de costo">
                             <option value="">-- Seleccionar Centro --</option>
                         </select>
                         <button type="button" class="icon-btn" onclick="toggleQuickBox('quickCentroBox')" title="Crear centro de costo">
@@ -632,6 +801,236 @@ const clpFormatter = new Intl.NumberFormat('es-CL', {
     maximumFractionDigits: 0
 });
 let previewTimer = null;
+const quoteSearchSelects = [];
+
+function normalizeQuoteSearch(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('es-CL')
+        .trim();
+}
+
+function getQuoteSelectableOptions(select) {
+    return Array.from(select.options).filter((option) => option.value && !option.disabled);
+}
+
+function closeQuoteSearchSelect(component) {
+    component.menu.hidden = true;
+    component.wrapper.classList.remove('is-open');
+    component.trigger.setAttribute('aria-expanded', 'false');
+}
+
+function closeAllQuoteSearchSelects(except = null) {
+    quoteSearchSelects.forEach((component) => {
+        if (component !== except) closeQuoteSearchSelect(component);
+    });
+}
+
+function positionQuoteSearchSelect(component) {
+    if (component.menu.hidden) return;
+
+    const bounds = component.trigger.getBoundingClientRect();
+    const padding = 16;
+    const availableWidth = Math.max(1, window.innerWidth - (padding * 2));
+    const width = Math.min(Math.max(bounds.width, 280), Math.min(560, availableWidth));
+    const left = Math.min(
+        Math.max(padding, bounds.left),
+        window.innerWidth - width - padding
+    );
+
+    component.menu.style.width = `${width}px`;
+    component.menu.style.left = `${left}px`;
+    component.menu.style.top = `${bounds.bottom + 5}px`;
+
+    const menuBounds = component.menu.getBoundingClientRect();
+    if (menuBounds.bottom > window.innerHeight - padding && bounds.top - menuBounds.height - 5 >= padding) {
+        component.menu.style.top = `${Math.max(padding, bounds.top - menuBounds.height - 5)}px`;
+    }
+}
+
+function setupQuoteSearchSelect(select, index) {
+    if (select.dataset.quoteSearchReady === 'true') return null;
+    select.dataset.quoteSearchReady = 'true';
+
+    const originalRequired = select.required;
+    const wrapper = document.createElement('div');
+    const trigger = document.createElement('button');
+    const triggerLabel = document.createElement('span');
+    const triggerIcon = document.createElement('i');
+    const menu = document.createElement('div');
+    const search = document.createElement('input');
+    const results = document.createElement('div');
+    const help = document.createElement('small');
+    const searchPlaceholder = select.dataset.searchPlaceholder || 'Buscar una opción';
+    const searchLabel = select.dataset.searchLabel || 'opción';
+
+    wrapper.className = 'quote-search-select';
+    select.parentNode.insertBefore(wrapper, select);
+    wrapper.appendChild(select);
+    select.classList.add('quote-search-select-native');
+    select.required = false;
+    select.tabIndex = -1;
+
+    trigger.type = 'button';
+    trigger.className = 'quote-search-select-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-label', `Buscar ${searchLabel}`);
+    trigger.title = `Buscar ${searchLabel}`;
+    triggerIcon.className = 'bi bi-search';
+    trigger.append(triggerLabel, triggerIcon);
+
+    menu.className = 'quote-search-select-menu';
+    menu.hidden = true;
+    menu.id = `quote-search-select-${index}`;
+    trigger.setAttribute('aria-controls', menu.id);
+
+    search.type = 'search';
+    search.className = 'quote-search-select-search';
+    search.autocomplete = 'off';
+    search.placeholder = searchPlaceholder;
+    search.setAttribute('aria-label', searchPlaceholder);
+
+    results.className = 'quote-search-select-results';
+    results.setAttribute('role', 'listbox');
+    help.className = 'quote-search-select-help';
+    help.textContent = 'Escribe para filtrar las opciones disponibles.';
+    menu.append(search, results, help);
+    wrapper.appendChild(trigger);
+    document.body.appendChild(menu);
+
+    const component = { select, wrapper, trigger, triggerLabel, menu, search, results, originalRequired };
+    quoteSearchSelects.push(component);
+
+    function selectedOption() {
+        return select.options[select.selectedIndex] || select.options[0];
+    }
+
+    function syncSelectedOption() {
+        const option = selectedOption();
+        const label = option ? option.textContent.trim() : 'Seleccionar opción';
+        triggerLabel.textContent = label;
+        triggerLabel.title = label;
+        wrapper.classList.toggle('is-invalid', originalRequired && !select.value);
+        trigger.disabled = select.disabled;
+        trigger.setAttribute('aria-disabled', select.disabled ? 'true' : 'false');
+    }
+
+    function renderResults() {
+        const query = normalizeQuoteSearch(search.value);
+        const matches = getQuoteSelectableOptions(select)
+            .filter((option) => !query || normalizeQuoteSearch(option.textContent).includes(query))
+            .slice(0, 80);
+
+        results.replaceChildren();
+
+        if (!matches.length) {
+            const empty = document.createElement('div');
+            empty.className = 'quote-search-select-empty';
+            empty.textContent = query ? 'No hay opciones que coincidan.' : 'No hay opciones disponibles.';
+            results.appendChild(empty);
+            return;
+        }
+
+        matches.forEach((option) => {
+            const result = document.createElement('button');
+            result.type = 'button';
+            result.className = `quote-search-select-option${option.selected ? ' is-selected' : ''}`;
+            result.setAttribute('role', 'option');
+            result.setAttribute('aria-selected', option.selected ? 'true' : 'false');
+            result.textContent = option.textContent.trim();
+            result.addEventListener('click', () => {
+                select.value = option.value;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                closeQuoteSearchSelect(component);
+                trigger.focus();
+            });
+            results.appendChild(result);
+        });
+    }
+
+    function openSearchSelect() {
+        if (select.disabled) return;
+
+        closeAllQuoteSearchSelects(component);
+        wrapper.classList.add('is-open');
+        menu.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        search.value = '';
+        renderResults();
+        positionQuoteSearchSelect(component);
+        window.requestAnimationFrame(() => search.focus());
+    }
+
+    component.open = openSearchSelect;
+
+    trigger.addEventListener('click', () => {
+        if (menu.hidden) openSearchSelect(); else closeQuoteSearchSelect(component);
+    });
+    trigger.addEventListener('keydown', (event) => {
+        if (['ArrowDown', 'Enter', ' '].includes(event.key)) {
+            event.preventDefault();
+            openSearchSelect();
+        }
+    });
+    search.addEventListener('input', renderResults);
+    search.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeQuoteSearchSelect(component);
+            trigger.focus();
+        }
+
+        if (event.key === 'Enter') {
+            const firstResult = results.querySelector('.quote-search-select-option');
+            if (firstResult) {
+                event.preventDefault();
+                firstResult.click();
+            }
+        }
+    });
+    select.addEventListener('change', syncSelectedOption);
+    select.addEventListener('quote:options-updated', () => {
+        syncSelectedOption();
+        renderResults();
+    });
+    document.addEventListener('pointerdown', (event) => {
+        if (!wrapper.contains(event.target) && !menu.contains(event.target)) {
+            closeQuoteSearchSelect(component);
+        }
+    });
+    window.addEventListener('resize', () => positionQuoteSearchSelect(component));
+    window.addEventListener('scroll', () => positionQuoteSearchSelect(component), true);
+
+    syncSelectedOption();
+    return component;
+}
+
+function setupQuoteSearchSelects() {
+    document.querySelectorAll('[data-quote-search-select]').forEach((select) => {
+        setupQuoteSearchSelect(select, quoteSearchSelects.length);
+    });
+
+    const form = document.getElementById('cotizacionForm');
+    if (form && !form.dataset.quoteSearchValidationReady) {
+        form.dataset.quoteSearchValidationReady = 'true';
+        form.addEventListener('submit', (event) => {
+            const missing = quoteSearchSelects.find((component) => (
+                component.originalRequired && !component.select.disabled && !component.select.value
+            ));
+            if (missing) {
+                event.preventDefault();
+                missing.wrapper.classList.add('is-invalid');
+                missing.open();
+            }
+        });
+    }
+}
+
+function refreshQuoteSearchSelect(select) {
+    select?.dispatchEvent(new Event('quote:options-updated'));
+}
 
 function toggleQuickBox(id) {
     const box = document.getElementById(id);
@@ -707,6 +1106,7 @@ function appendOption(select, value, label) {
     option.textContent = label;
     option.selected = true;
     select.appendChild(option);
+    refreshQuoteSearchSelect(select);
 }
 
 async function crearClienteRapido() {
@@ -759,7 +1159,9 @@ async function crearCentroRapido() {
         centrosCostoData[clienteId] = centrosCostoData[clienteId] || [];
         centrosCostoData[clienteId].push(centro);
         cargarCentrosCosto();
-        document.getElementById('centroCostoSelect').value = String(centro.id);
+        const centroSelect = document.getElementById('centroCostoSelect');
+        centroSelect.value = String(centro.id);
+        centroSelect.dispatchEvent(new Event('change', { bubbles: true }));
         input.value = '';
         setStatus('quickCentroStatus', 'Centro creado.', 'success');
         if (typeof showToast === 'function') showToast('Centro de costo creado.', 'success');
@@ -881,6 +1283,8 @@ function cargarCentrosCosto() {
             select.appendChild(opt);
         });
     }
+
+    refreshQuoteSearchSelect(select);
 }
 
 function formatCLP(value) {
@@ -1257,6 +1661,7 @@ async function actualizarCalculos() {
 // Cargar centros de costo si hay cliente preseleccionado
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('cotizacionForm');
+    setupQuoteSearchSelects();
     form.addEventListener('input', schedulePreview);
     form.addEventListener('change', schedulePreview);
     form.addEventListener('submit', normalizeMoneyInputsForSubmit);
