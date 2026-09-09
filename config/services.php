@@ -178,6 +178,12 @@ return [
         'max_page_size' => (int) env('WALLMAR_PENON_MAX_PAGE_SIZE', 100),
     ],
 
+    // Catálogo de sólo lectura para SAEP Reclutamiento. Esta clave es
+    // independiente de Talana, WhatsApp y las APIs de otros clientes.
+    'recruitment_catalog' => [
+        'token' => env('RECRUITMENT_CATALOG_API_TOKEN'),
+    ],
+
     'google_drive' => [
         'credentials_path' => env('GOOGLE_DRIVE_CREDENTIALS_PATH', 'google-credentials.json'),
         'folder_id'        => env('GOOGLE_DRIVE_FOLDER_ID'),

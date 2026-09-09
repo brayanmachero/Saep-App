@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccidenteSstController;
+use App\Http\Controllers\Api\RecruitmentCatalogController;
 use App\Http\Controllers\OpcionAccidenteSstController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PasswordResetController;
@@ -61,6 +62,12 @@ Route::get('/api/reclutamiento/whatsapp/webhook', [ReclutamientoWhatsappWebhookC
 Route::post('/api/reclutamiento/whatsapp/webhook', [ReclutamientoWhatsappWebhookController::class, 'handle'])
     ->name('reclutamiento-whatsapp.webhook.handle')
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
+// Catálogo de sólo lectura para el formulario externo de Reclutamiento.
+// La autenticación es de servicio a servicio; nunca expone el token Talana.
+Route::get('/api/reclutamiento/catalogo', [RecruitmentCatalogController::class, 'index'])
+    ->middleware('throttle:60,1')
+    ->name('reclutamiento.catalogo');
 
 // Auth (con throttle para prevenir fuerza bruta)
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
