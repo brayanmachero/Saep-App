@@ -33,10 +33,11 @@ class RecruitmentCatalogController extends Controller
             ->where('activo', true)
             ->whereNotNull('centro_costo_nombre')
             ->where('centro_costo_nombre', '<>', '')
-            ->get(['centro_costo_id', 'centro_costo_nombre', 'razon_social']);
+            ->get(['centro_costo_id', 'centro_costo_nombre', 'cargo_nombre', 'razon_social']);
 
         $companies = [];
         $costCenters = [];
+        $jobRoles = [];
 
         foreach ($workerRows as $worker) {
             $company = trim((string) $worker->razon_social);
@@ -66,7 +67,40 @@ class RecruitmentCatalogController extends Controller
             if ($company !== '') {
                 $costCenters[$centerId]['company_ids'][$this->companyId($company)] = true;
             }
+
+            $jobRoleName = trim((string) $worker->cargo_nombre);
+            $jobRoleKey = $this->normalizar($jobRoleName);
+            if ($jobRoleKey !== '') {
+                if (! isset($jobRoles[$jobRoleKey])) {
+                    $jobRoles[$jobRoleKey] = [
+                        'id' => 'talana-cargo-'.sha1($jobRoleKey),
+                        'name' => $jobRoleName,
+                        'cost_center_ids' => [],
+                        'is_manual' => false,
+                    ];
+                }
+
+                $jobRoles[$jobRoleKey]['cost_center_ids'][$centerId] = true;
+            }
         }
+
+        Cargo::query()
+            ->where('activo', true)
+            ->orderBy('nombre')
+            ->get(['id', 'nombre'])
+            ->each(function (Cargo $cargo) use (&$jobRoles): void {
+                $jobRoleKey = $this->normalizar($cargo->nombre);
+                if ($jobRoleKey === '' || isset($jobRoles[$jobRoleKey])) {
+                    return;
+                }
+
+                $jobRoles[$jobRoleKey] = [
+                    'id' => 'manual-cargo-'.$cargo->id,
+                    'name' => $cargo->nombre,
+                    'cost_center_ids' => [],
+                    'is_manual' => true,
+                ];
+            });
 
         $coordinators = InventarioCoordinador::query()
             ->where('activo', true)
@@ -106,14 +140,13 @@ class RecruitmentCatalogController extends Controller
                 ->values(),
             'coordinators' => $coordinators,
             'operational_leads' => $operationalLeads,
-            'job_roles' => Cargo::query()
-                ->where('activo', true)
-                ->orderBy('nombre')
-                ->get(['id', 'nombre'])
-                ->map(fn (Cargo $cargo): array => [
-                    'id' => 'talana-cargo-'.$cargo->id,
-                    'name' => $cargo->nombre,
-                ])
+            'job_roles' => collect($jobRoles)
+                ->map(function (array $jobRole): array {
+                    $jobRole['cost_center_ids'] = array_keys($jobRole['cost_center_ids']);
+
+                    return $jobRole;
+                })
+                ->sortBy('name')
                 ->values(),
         ]);
     }
