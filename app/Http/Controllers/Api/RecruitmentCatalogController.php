@@ -118,6 +118,49 @@ class RecruitmentCatalogController extends Controller
         ]);
     }
 
+    public function storeJobRoles(Request $request): JsonResponse
+    {
+        $this->authorizeRequest($request);
+
+        $names = $request->input('names');
+        if (! is_array($names) || count($names) === 0 || count($names) > 20) {
+            abort(JsonResponse::HTTP_UNPROCESSABLE_ENTITY, 'Los cargos no son válidos.');
+        }
+
+        $existingRoles = Cargo::query()->get(['id', 'codigo', 'nombre', 'activo']);
+        $jobRoles = [];
+        foreach ($names as $name) {
+            $jobRoleName = $this->jobRoleName($name);
+            $normalizedName = $this->normalizar($jobRoleName);
+            if ($normalizedName === '') {
+                abort(JsonResponse::HTTP_UNPROCESSABLE_ENTITY, 'Los cargos no son válidos.');
+            }
+
+            $jobRole = $existingRoles->first(
+                fn (Cargo $role): bool => $this->normalizar($role->nombre) === $normalizedName
+            );
+            if ($jobRole) {
+                if (! $jobRole->activo) {
+                    $jobRole->update(['activo' => true]);
+                }
+            } else {
+                $jobRole = Cargo::create([
+                    'codigo' => $this->jobRoleCode($jobRoleName),
+                    'nombre' => $jobRoleName,
+                    'activo' => true,
+                ]);
+                $existingRoles->push($jobRole);
+            }
+
+            $jobRoles[] = [
+                'id' => 'talana-cargo-'.$jobRole->id,
+                'name' => $jobRole->nombre,
+            ];
+        }
+
+        return response()->json(['job_roles' => $jobRoles]);
+    }
+
     private function authorizeRequest(Request $request): void
     {
         $expectedToken = trim((string) config('services.recruitment_catalog.token'));
@@ -139,5 +182,29 @@ class RecruitmentCatalogController extends Controller
     private function normalizar(string $value): string
     {
         return Str::of($value)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString();
+    }
+
+    private function jobRoleName(mixed $name): string
+    {
+        $value = is_string($name) ? $name : '';
+        $value = preg_replace('/\s+/', ' ', trim($value)) ?? '';
+
+        abort_if(mb_strlen($value) < 2 || mb_strlen($value) > 160, JsonResponse::HTTP_UNPROCESSABLE_ENTITY, 'Los cargos no son válidos.');
+
+        return $value;
+    }
+
+    private function jobRoleCode(string $name): string
+    {
+        $base = Str::upper(Str::slug($name, '_'));
+        $code = Str::limit($base, 50, '');
+        $suffix = 0;
+
+        while (Cargo::query()->where('codigo', $code)->exists()) {
+            $suffix++;
+            $code = Str::limit($base, 47, '').'_'.$suffix;
+        }
+
+        return $code;
     }
 }

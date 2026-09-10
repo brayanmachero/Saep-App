@@ -68,6 +68,9 @@ Route::post('/api/reclutamiento/whatsapp/webhook', [ReclutamientoWhatsappWebhook
 Route::get('/api/reclutamiento/catalogo', [RecruitmentCatalogController::class, 'index'])
     ->middleware('throttle:60,1')
     ->name('reclutamiento.catalogo');
+Route::post('/api/reclutamiento/catalogo/cargos', [RecruitmentCatalogController::class, 'storeJobRoles'])
+    ->middleware('throttle:20,1')
+    ->name('reclutamiento.catalogo.cargos');
 
 // Auth (con throttle para prevenir fuerza bruta)
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
