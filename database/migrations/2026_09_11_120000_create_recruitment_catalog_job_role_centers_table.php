@@ -8,6 +8,13 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Esta tabla fue provisionada previamente en algunos servidores antes
+        // de incorporar la migración al repositorio. No se debe recrear ni
+        // tocar su información existente durante el despliegue.
+        if (Schema::hasTable('recruitment_catalog_job_role_centers')) {
+            return;
+        }
+
         Schema::create('recruitment_catalog_job_role_centers', function (Blueprint $table) {
             $table->id();
             $table->foreignId('cargo_id')->constrained('cargos')->cascadeOnDelete();
