@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Cargo;
 use App\Models\InventarioCentroCosto;
 use App\Models\InventarioCoordinador;
+use App\Models\RecruitmentCatalogJobRoleCenter;
 use App\Models\TalanaTrabajador;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -47,9 +48,7 @@ class RecruitmentCatalogController extends Controller
             }
 
             $centerName = trim((string) $worker->centro_costo_nombre);
-            $centerId = $worker->centro_costo_id
-                ? 'talana-'.$worker->centro_costo_id
-                : 'nombre-'.sha1($this->normalizar($centerName));
+            $centerId = $this->costCenterId($worker->centro_costo_id, $centerName);
 
             if (! isset($costCenters[$centerId])) {
                 $masterCenter = $operationalCenters->get($this->normalizar($centerName));
@@ -84,23 +83,42 @@ class RecruitmentCatalogController extends Controller
             }
         }
 
-        Cargo::query()
+        $manualRoles = Cargo::query()
             ->where('activo', true)
             ->orderBy('nombre')
-            ->get(['id', 'nombre'])
-            ->each(function (Cargo $cargo) use (&$jobRoles): void {
-                $jobRoleKey = $this->normalizar($cargo->nombre);
-                if ($jobRoleKey === '' || isset($jobRoles[$jobRoleKey])) {
-                    return;
+            ->get(['id', 'nombre']);
+        $manualRoleCenterIds = RecruitmentCatalogJobRoleCenter::query()
+            ->whereIn('cargo_id', $manualRoles->pluck('id'))
+            ->get(['cargo_id', 'cost_center_external_id'])
+            ->groupBy('cargo_id')
+            ->map(fn ($assignments): array => $assignments
+                ->pluck('cost_center_external_id')
+                ->unique()
+                ->values()
+                ->all());
+
+        $manualRoles->each(function (Cargo $cargo) use (&$jobRoles, $manualRoleCenterIds): void {
+            $jobRoleKey = $this->normalizar($cargo->nombre);
+            $costCenterIds = $manualRoleCenterIds->get($cargo->id, []);
+            if ($jobRoleKey === '' || $costCenterIds === []) {
+                return;
+            }
+
+            if (isset($jobRoles[$jobRoleKey])) {
+                foreach ($costCenterIds as $costCenterId) {
+                    $jobRoles[$jobRoleKey]['cost_center_ids'][$costCenterId] = true;
                 }
 
-                $jobRoles[$jobRoleKey] = [
-                    'id' => 'manual-cargo-'.$cargo->id,
-                    'name' => $cargo->nombre,
-                    'cost_center_ids' => [],
-                    'is_manual' => true,
-                ];
-            });
+                return;
+            }
+
+            $jobRoles[$jobRoleKey] = [
+                'id' => 'manual-cargo-'.$cargo->id,
+                'name' => $cargo->nombre,
+                'cost_center_ids' => array_fill_keys($costCenterIds, true),
+                'is_manual' => true,
+            ];
+        });
 
         $coordinators = InventarioCoordinador::query()
             ->where('activo', true)
@@ -159,6 +177,10 @@ class RecruitmentCatalogController extends Controller
         if (! is_array($names) || count($names) === 0 || count($names) > 20) {
             abort(JsonResponse::HTTP_UNPROCESSABLE_ENTITY, 'Los cargos no son válidos.');
         }
+        $costCenterId = $request->input('cost_center_id');
+        if (! is_string($costCenterId) || ! in_array($costCenterId, $this->catalogCostCenterIds(), true)) {
+            abort(JsonResponse::HTTP_UNPROCESSABLE_ENTITY, 'El centro de costo no es válido.');
+        }
 
         $existingRoles = Cargo::query()->get(['id', 'codigo', 'nombre', 'activo']);
         $jobRoles = [];
@@ -184,10 +206,16 @@ class RecruitmentCatalogController extends Controller
                 ]);
                 $existingRoles->push($jobRole);
             }
+            RecruitmentCatalogJobRoleCenter::query()->firstOrCreate([
+                'cargo_id' => $jobRole->id,
+                'cost_center_external_id' => $costCenterId,
+            ]);
 
             $jobRoles[] = [
-                'id' => 'talana-cargo-'.$jobRole->id,
+                'id' => 'manual-cargo-'.$jobRole->id,
                 'name' => $jobRole->nombre,
+                'cost_center_ids' => [$costCenterId],
+                'is_manual' => true,
             ];
         }
 
@@ -210,6 +238,29 @@ class RecruitmentCatalogController extends Controller
     private function companyId(string $company): string
     {
         return 'talana-empresa-'.sha1($this->normalizar($company));
+    }
+
+    private function catalogCostCenterIds(): array
+    {
+        return TalanaTrabajador::query()
+            ->where('activo', true)
+            ->whereNotNull('centro_costo_nombre')
+            ->where('centro_costo_nombre', '<>', '')
+            ->get(['centro_costo_id', 'centro_costo_nombre'])
+            ->map(fn (TalanaTrabajador $worker): string => $this->costCenterId(
+                $worker->centro_costo_id,
+                trim((string) $worker->centro_costo_nombre)
+            ))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function costCenterId(mixed $centerId, string $centerName): string
+    {
+        return $centerId
+            ? 'talana-'.$centerId
+            : 'nombre-'.sha1($this->normalizar($centerName));
     }
 
     private function normalizar(string $value): string
