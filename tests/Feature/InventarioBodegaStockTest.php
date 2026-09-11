@@ -1178,6 +1178,7 @@ class InventarioBodegaStockTest extends TestCase
             'variante_id' => $variant->id,
             'cantidad' => -1,
             'documento_numero' => 'KZ-DETALLE-1',
+            'centro_costo' => 'LTS FLEX PEÑÓN EST',
             'ocurrido_en' => now(),
             'registrado_por_nombre' => 'Kizeo automático',
         ]);
@@ -1203,6 +1204,8 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertStringContainsString($user->name, $html);
         $this->assertStringContainsString('Kizeo', $html);
         $this->assertStringContainsString('KZ-DETALLE-1', $html);
+        $this->assertStringContainsString('Centro de costo', $html);
+        $this->assertStringContainsString('LTS FLEX PEÑÓN EST', $html);
         $this->assertStringNotContainsString('Usuario de otra talla', $html);
         $this->assertStringNotContainsString('La variante seleccionada no tiene stock.', $html);
     }

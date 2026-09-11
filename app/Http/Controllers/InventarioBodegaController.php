@@ -487,7 +487,7 @@ class InventarioBodegaController extends Controller
         $selectedVariant = $variants->firstWhere('id', $variante->id) ?? $variante;
 
         $movements = InventarioMovimiento::query()
-            ->with(['ubicacion', 'variante', 'registradoPor'])
+            ->with(['ubicacion', 'variante', 'registradoPor', 'centroCosto'])
             ->withCount('reversos')
             // La ficha se abre desde una fila de stock, que representa una talla
             // concreta. El resumen superior conserva las demás tallas del producto,
