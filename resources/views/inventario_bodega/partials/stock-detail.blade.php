@@ -76,9 +76,10 @@
                 @php
                     $isReversed = $movement->reversos_count > 0;
                     $user = $movement->registrado_por_nombre ?: ($movement->registradoPor?->nombre_completo ?? $movement->registradoPor?->name ?? 'No disponible');
-                    $isKizeo = in_array($movement->origen, ['KIZEO_EPP', 'REVERSO_KIZEO_EPP'], true);
+                    $isKizeo = in_array($movement->origen, ['KIZEO_EPP', 'KIZEO_EPP_DEVOLUCION', 'REVERSO_KIZEO_EPP'], true);
                     $source = match ($movement->origen) {
                         'KIZEO_EPP' => 'Kizeo',
+                        'KIZEO_EPP_DEVOLUCION' => 'Devolución Kizeo',
                         'REVERSO_KIZEO_EPP' => 'Reverso Kizeo',
                         'IMPORTACION_CATALOGO' => 'Importación de stock',
                         'INGRESO_BODEGA' => 'Ingreso de bodega',

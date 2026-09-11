@@ -12,6 +12,7 @@ class InventarioMovimiento extends Model
         'STOCK_INICIAL' => 'Stock inicial',
         'INGRESO_COMPRA' => 'Ingreso por compra',
         'ENTREGA_EPP' => 'Entrega de EPP',
+        'DEVOLUCION_EPP' => 'Devolución de EPP',
         'DESPACHO_CENTRO' => 'Despacho a centro o region',
         'TRASLADO_SALIDA' => 'Traslado entre ubicaciones',
         'TRASLADO_ENTRADA' => 'Recepcion de traslado',

@@ -563,27 +563,28 @@
 
         <section class="inventory-kpis inventory-kizeo-kpis">
             <article class="inventory-kpi accent-orange"><span>Pendientes de aplicar</span><strong>{{ $kizeoStats['pending'] }}</strong><small>Formularios vigentes, sin descontar</small></article>
-            <article class="inventory-kpi accent-green"><span>Aplicadas</span><strong>{{ $kizeoStats['applied'] }}</strong><small>Con salida trazable</small></article>
+            <article class="inventory-kpi accent-green"><span>Aplicadas</span><strong>{{ $kizeoStats['applied'] }}</strong><small>Con movimiento trazable</small></article>
+            <article class="inventory-kpi accent-orange"><span>Devoluciones pendientes</span><strong>{{ $kizeoStats['returns'] }}</strong><small>Por ingresar e imputar</small></article>
             <article class="inventory-kpi accent-red"><span>Requieren revision</span><strong>{{ $kizeoStats['review'] }}</strong><small>Fuente modificada, incompleta o ausente</small></article>
             <article class="inventory-kpi accent-blue"><span>Histórico Kizeo</span><strong>{{ $kizeoStats['historical'] }}</strong><small>Formulario 947762, no descuenta</small></article>
         </section>
 
         @php
-            $kizeoDeliveredUnits = (float) $kizeoDeliveredArticles->sum('cantidad');
+            $kizeoDeliveredUnits = (float) $kizeoDeliveredArticles->sum('cantidad_neta');
         @endphp
-        <section class="inventory-kizeo-delivered" aria-label="Artículos descontados desde Kizeo">
+        <section class="inventory-kizeo-delivered" aria-label="Consumo neto de artículos desde Kizeo">
             <div class="inventory-kizeo-delivered-heading">
                 <div>
-                    <p class="inventory-kicker">Salida aplicada</p>
-                    <h3>Artículos descontados en Kizeo · {{ $kizeoPeriod['label'] }}</h3>
-                    <p>Resumen de entregas vigentes que ya descontaron stock desde Sede Central SAEP.</p>
+                    <p class="inventory-kicker">Consumo neto aplicado</p>
+                    <h3>Entregas menos devoluciones · {{ $kizeoPeriod['label'] }}</h3>
+                    <p>Las devoluciones ingresadas en Sede Central SAEP se descuentan del consumo del centro de costo.</p>
                 </div>
-                <div class="inventory-kizeo-delivered-total"><strong>{{ rtrim(rtrim(number_format($kizeoDeliveredUnits, 3, ',', '.'), '0'), ',') }}</strong><span>unidades entregadas</span></div>
+                <div class="inventory-kizeo-delivered-total"><strong>{{ rtrim(rtrim(number_format($kizeoDeliveredUnits, 3, ',', '.'), '0'), ',') }}</strong><span>unidades netas</span></div>
             </div>
             @if($kizeoDeliveredArticles->isNotEmpty())
-                <div class="inventory-table-wrap inventory-kizeo-delivered-table"><table class="inventory-table"><thead><tr><th>Código</th><th>Artículo</th><th>Talla</th><th class="text-end">Unidades</th><th class="text-end">Comprobantes</th></tr></thead><tbody>@foreach($kizeoDeliveredArticles as $article)<tr><td><a class="inventory-code" href="{{ route('inventario-bodega.index', array_merge($kizeoFilterQuery, ['kizeo_articulo' => $article->producto_codigo])) }}">{{ $article->producto_codigo }}</a></td><td><strong>{{ $article->producto_nombre }}</strong></td><td>{{ $article->talla }}</td><td class="text-end"><strong>{{ rtrim(rtrim(number_format((float) $article->cantidad, 3, ',', '.'), '0'), ',') }}</strong></td><td class="text-end">{{ number_format($article->entregas) }}</td></tr>@endforeach</tbody></table></div>
+                <div class="inventory-table-wrap inventory-kizeo-delivered-table"><table class="inventory-table"><thead><tr><th>Código</th><th>Artículo</th><th>Talla</th><th class="text-end">Entregadas</th><th class="text-end">Devueltas</th><th class="text-end">Consumo neto</th></tr></thead><tbody>@foreach($kizeoDeliveredArticles as $article)<tr><td><a class="inventory-code" href="{{ route('inventario-bodega.index', array_merge($kizeoFilterQuery, ['kizeo_articulo' => $article->producto_codigo])) }}">{{ $article->producto_codigo }}</a></td><td><strong>{{ $article->producto_nombre }}</strong></td><td>{{ $article->talla }}</td><td class="text-end">{{ rtrim(rtrim(number_format((float) $article->entregadas, 3, ',', '.'), '0'), ',') }}</td><td class="text-end">{{ rtrim(rtrim(number_format((float) $article->devueltas, 3, ',', '.'), '0'), ',') }}</td><td class="text-end"><strong>{{ rtrim(rtrim(number_format((float) $article->cantidad_neta, 3, ',', '.'), '0'), ',') }}</strong></td></tr>@endforeach</tbody></table></div>
             @else
-                <div class="inventory-kizeo-delivered-empty"><i class="bi bi-check2-circle"></i>No hay artículos descontados para este período.</div>
+                <div class="inventory-kizeo-delivered-empty"><i class="bi bi-check2-circle"></i>No hay movimientos Kizeo aplicados para este período.</div>
             @endif
         </section>
 
@@ -617,7 +618,15 @@
                     $wasCorrected = $application?->estado === 'CORREGIDA';
                     $showCurrentSource = $needsReview || $wasCorrected;
                     $correctionMovements = $wasCorrected ? $application->movimientosCorreccion : collect();
+                    $appliedCostCenters = $application
+                        ? $application->lineas
+                            ->map(fn ($line) => $line->movimiento?->centro_costo ?: $line->movimiento?->centroCosto?->nombre)
+                            ->filter()
+                            ->unique()
+                            ->values()
+                        : collect();
                     $deliverySuggestions = $kizeoSuggestions[$delivery->id] ?? [];
+                    $returnCostCenterSuggestion = $kizeoReturnCostCenterSuggestions[$delivery->id] ?? null;
                     $deliveryItems = $delivery->items->where('cantidad', '>', 0);
                     $isReturn = $delivery->flujo_inventario === 'ENTRADA';
                     $isHistorical = \App\Services\EntregaBodegaSyncService::isHistoricalStockForm($delivery->kizeo_form_id);
@@ -650,9 +659,9 @@
                             @elseif(! $application)
                                 <span class="inventory-status is-review" title="Esta entrega aun no genera una salida de stock.">No descontada</span>
                             @elseif($application->estado === 'REVERSADA')
-                                <span class="inventory-status is-empty" title="La salida fue reversada y el stock ya fue repuesto.">Stock repuesto</span>
+                                <span class="inventory-status is-empty" title="La aplicación fue reversada y su efecto de stock quedó anulado.">{{ $isReturn ? 'Devolución reversada' : 'Stock repuesto' }}</span>
                             @else
-                                <span class="inventory-status is-ok" title="Esta entrega ya descontó stock y no puede aplicarse nuevamente.">Salida descontada</span>
+                                <span class="inventory-status is-ok" title="Este comprobante ya afectó stock y no puede aplicarse nuevamente.">{{ $isReturn ? 'Devolución ingresada' : 'Salida descontada' }}</span>
                                 @if($wasCorrected)
                                     <span class="inventory-status is-review" title="Los cambios de artículo, talla o cantidad informados por Kizeo ya ajustaron el stock.">Corregida automáticamente</span>
                                 @endif
@@ -671,7 +680,31 @@
                         @elseif($isHistorical && ! $application)
                             <div class="inventory-notice"><i class="bi bi-archive"></i><div><strong>Formulario histórico.</strong><br>Este comprobante viene de Control de Entrega Bodega (947762). Se conserva para consulta y no se puede descontar del inventario actual.</div></div>
                         @elseif($isReturn && ! $application)
-                            <div class="inventory-notice"><i class="bi bi-box-arrow-in-down"></i><div><strong>Devolución detectada.</strong><br>Este comprobante corresponde a una entrada de inventario. Aún no se descuenta ni se aplica como salida; quedará disponible para el flujo de ingreso con su ubicación de recepción.</div></div>
+                            @if(! $centralKizeoLocation)
+                                <div class="inventory-notice"><i class="bi bi-exclamation-triangle"></i>Falta la ubicación Sede Central SAEP para registrar esta devolución.</div>
+                            @elseif($inventoryCostCenters->isEmpty())
+                                <div class="inventory-notice"><i class="bi bi-diagram-3"></i><div><strong>Faltan centros de costo operativos.</strong><br>Antes de ingresar una devolución debes tener al menos un centro de costo activo en Maestros.</div></div>
+                            @elseif($variantOptions->isEmpty())
+                                <div class="inventory-notice"><i class="bi bi-info-circle"></i>Debes tener artículos activos antes de registrar devoluciones desde Kizeo.</div>
+                            @elseif(! $canCreate)
+                                <div class="inventory-notice"><i class="bi bi-lock"></i>Tu perfil puede revisar esta devolución, pero necesita permiso de creación para ingresarla al stock.</div>
+                            @else
+                                <form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.devoluciones.registrar', $delivery) }}" class="inventory-kizeo-form">
+                                    @csrf
+                                    <div class="inventory-kizeo-form-heading">
+                                        <label>Ubicación de ingreso<input class="form-control" value="{{ $centralKizeoLocation->nombre }}" readonly></label>
+                                        <label>Centro de costo que devuelve<select name="centro_costo_id" class="form-select" required data-inventory-search-select data-search-placeholder="Buscar centro de costo"><option value="">Selecciona el centro de costo</option>@foreach($inventoryCostCenters as $costCenter)<option value="{{ $costCenter->id }}" @selected((int) old('centro_costo_id', $returnCostCenterSuggestion) === $costCenter->id)>{{ $costCenter->nombre }}{{ $costCenter->comuna ? ' · ' . $costCenter->comuna : '' }}</option>@endforeach</select></label>
+                                        <p>La devolución aumenta el stock solo en <strong>Sede Central SAEP</strong> y queda imputada al centro seleccionado. Kizeo informó: <strong>{{ $delivery->centro ?: 'sin centro' }}</strong>.</p>
+                                    </div>
+                                    <div class="inventory-table-wrap"><table class="inventory-table inventory-table-compact"><thead><tr><th>Artículo informado</th><th>Talla</th><th class="text-end">Cantidad devuelta</th><th>Relación con inventario</th></tr></thead><tbody>
+                                        @foreach($deliveryItems as $item)
+                                            @php $selectedVariantId = $deliverySuggestions[$item->id] ?? null; @endphp
+                                            <tr><td><strong>{{ $item->articulo ?: 'Sin artículo' }}</strong></td><td>{{ $item->talla ?: 'Estándar' }}</td><td class="text-end">{{ rtrim(rtrim(number_format((float) $item->cantidad, 3, ',', '.'), '0'), ',') }}</td><td><select name="lineas[{{ $item->id }}][variante_id]" class="form-select form-select-sm" required data-inventory-search-select data-search-placeholder="Buscar por código, artículo o talla"><option value="">Selecciona artículo y talla</option>@foreach($variantOptions as $variant)<option value="{{ $variant->id }}" @selected($selectedVariantId === $variant->id)>{{ $variant->producto->codigo }} - {{ $variant->producto->nombre }} · {{ $variant->talla }}</option>@endforeach</select></td></tr>
+                                        @endforeach
+                                    </tbody></table></div>
+                                    <div class="inventory-form-actions"><button class="btn btn-primary inventory-btn" type="submit" onclick="return confirm('Se ingresará esta devolución en Sede Central SAEP y se imputará al centro de costo seleccionado. ¿Continuar?')"><i class="bi bi-box-arrow-in-down"></i>Ingresar devolución</button></div>
+                                </form>
+                            @endif
                         @elseif(! $application)
                             @if(! $centralKizeoLocation)
                                 <div class="inventory-notice"><i class="bi bi-exclamation-triangle"></i>Falta la ubicación Sede Central SAEP para aplicar las salidas Kizeo.</div>
@@ -710,25 +743,26 @@
                             @endif
                         @else
                             <div class="inventory-delivery-summary">
-                                <div><span>Ubicacion de salida</span><strong>{{ $application->ubicacion->nombre ?? '-' }}</strong></div>
+                                <div><span>{{ $isReturn ? 'Ubicación de ingreso' : 'Ubicación de salida' }}</span><strong>{{ $application->ubicacion->nombre ?? '-' }}</strong></div>
                                 <div><span>Aplicada</span><strong>{{ optional($application->aplicada_en)->format('d/m/Y H:i') ?: '-' }}</strong></div>
-                                <div><span>Lineas descontadas</span><strong>{{ $application->lineas->count() }}</strong></div>
+                                <div><span>{{ $isReturn ? 'Líneas ingresadas' : 'Líneas descontadas' }}</span><strong>{{ $application->lineas->count() }}</strong></div>
+                                @if($isReturn)<div><span>Centro de costo</span><strong>{{ $appliedCostCenters->implode(' · ') ?: '—' }}</strong></div>@endif
                                 @if($wasCorrected)<div><span>Corregida</span><strong>{{ optional($application->corregida_en)->format('d/m/Y H:i') ?: '-' }}</strong></div>@endif
                                 @if($application->estado === 'REVERSADA')<div><span>Reversada</span><strong>{{ optional($application->revertida_en)->format('d/m/Y H:i') ?: '-' }}</strong></div>@endif
                             </div>
                             @if($needsReview)
-                                <div class="inventory-source-warning"><i class="bi bi-exclamation-triangle-fill"></i><span>{{ $application->correccion_pendiente_motivo ?: ($delivery->alerta_fuente ?: 'Esta entrega fue modificada en Kizeo y no se pudo conciliar automáticamente. Revisa el detalle y reversa la salida solo si ya no corresponde.') }}</span></div>
+                                <div class="inventory-source-warning"><i class="bi bi-exclamation-triangle-fill"></i><span>{{ $application->correccion_pendiente_motivo ?: ($delivery->alerta_fuente ?: 'Este comprobante fue modificado en Kizeo y no se pudo conciliar automáticamente. Revisa el detalle y revérsalo solo si ya no corresponde.') }}</span></div>
                             @endif
                             <div class="inventory-kizeo-application-lines">
                                 <section class="inventory-kizeo-line-panel">
                                     <div class="inventory-kizeo-line-panel-heading">
                                         <div>
-                                            <strong><i class="bi bi-box-arrow-up-right"></i>Salida descontada en SAEP</strong>
-                                            <span>Esta es la copia exacta que se usó para descontar el stock. No cambia aunque Kizeo sea editado después.</span>
+                                            <strong><i class="bi {{ $isReturn ? 'bi-box-arrow-in-down' : 'bi-box-arrow-up-right' }}"></i>{{ $isReturn ? 'Devolución ingresada en SAEP' : 'Salida descontada en SAEP' }}</strong>
+                                            <span>{{ $isReturn ? 'Esta es la copia exacta que se usó para reingresar el stock e imputarlo al centro de costo seleccionado.' : 'Esta es la copia exacta que se usó para descontar el stock. No cambia aunque Kizeo sea editado después.' }}</span>
                                         </div>
                                         <small>{{ $application->lineas->count() }} {{ $application->lineas->count() === 1 ? 'línea' : 'líneas' }}</small>
                                     </div>
-                                    <div class="inventory-table-wrap inventory-kizeo-applied-lines-table"><table class="inventory-table inventory-table-compact"><thead><tr><th>Artículo informado al descontar</th><th>Artículo descontado en SAEP</th><th>Talla</th><th class="text-end">Cantidad</th></tr></thead><tbody>
+                                    <div class="inventory-table-wrap inventory-kizeo-applied-lines-table"><table class="inventory-table inventory-table-compact"><thead><tr><th>{{ $isReturn ? 'Artículo informado al devolver' : 'Artículo informado al descontar' }}</th><th>{{ $isReturn ? 'Artículo ingresado en SAEP' : 'Artículo descontado en SAEP' }}</th><th>Talla</th><th class="text-end">Cantidad</th></tr></thead><tbody>
                                         @foreach($application->lineas as $line)
                                             @php
                                                 $discountedVariant = $line->variante;
@@ -739,7 +773,7 @@
                                                 <td><strong>{{ $line->articulo_fuente ?: 'Sin artículo informado' }}</strong><small>Línea {{ $line->linea_fuente }}</small></td>
                                                 <td>@if($discountedProduct)<strong>{{ $discountedProduct->nombre }}</strong><small>{{ $discountedProduct->codigo }}</small>@else <span class="inventory-muted">Artículo histórico no disponible</span> @endif</td>
                                                 <td>{{ $discountedVariant?->talla ?: ($line->talla_fuente ?: '—') }}</td>
-                                                <td class="text-end"><strong class="inventory-kizeo-discounted-quantity">−{{ rtrim(rtrim(number_format($discountedQuantity, 3, ',', '.'), '0'), ',') }}</strong></td>
+                                                <td class="text-end"><strong class="{{ $isReturn ? 'inventory-kizeo-restocked-quantity' : 'inventory-kizeo-discounted-quantity' }}">{{ $isReturn ? '+' : '−' }}{{ rtrim(rtrim(number_format($discountedQuantity, 3, ',', '.'), '0'), ',') }}</strong></td>
                                             </tr>
                                         @endforeach
                                     </tbody></table></div>
@@ -749,7 +783,7 @@
                                         <div class="inventory-kizeo-line-panel-heading">
                                             <div>
                                                 <strong><i class="bi bi-check2-circle"></i>Corrección aplicada en SAEP</strong>
-                                                <span>Estos son los movimientos adicionales que ajustaron el stock. La salida original se conserva sin cambios.</span>
+                                                <span>Estos son los movimientos adicionales que ajustaron el stock. La aplicación original se conserva sin cambios.</span>
                                             </div>
                                             <small>{{ $correctionMovements->count() }} {{ $correctionMovements->count() === 1 ? 'movimiento' : 'movimientos' }}</small>
                                         </div>
@@ -777,7 +811,7 @@
                                         <div class="inventory-kizeo-line-panel-heading">
                                             <div>
                                                 <strong><i class="bi bi-arrow-repeat"></i>Lo que Kizeo informa ahora</strong>
-                                                <span>{{ $needsReview ? 'Compara estas líneas con la salida descontada antes de decidir si corresponde reversar.' : 'Estas son las líneas vigentes que ya fueron conciliadas automáticamente con el stock.' }}</span>
+                                                <span>{{ $needsReview ? 'Compara estas líneas con la aplicación registrada antes de decidir si corresponde reversarla.' : 'Estas son las líneas vigentes que ya fueron conciliadas automáticamente con el stock.' }}</span>
                                             </div>
                                             @if($delivery->kizeo_updated_at)<small>Actualizado {{ $delivery->kizeo_updated_at->timezone(config('app.timezone'))->format('d/m/Y H:i') }}</small>@endif
                                         </div>
@@ -792,7 +826,7 @@
                                 @endif
                             </div>
                             @if(in_array($application->estado, ['APLICADA', 'CORREGIDA'], true) && $canEdit)
-                                <details class="inventory-reverse-details"><summary><i class="bi bi-arrow-counterclockwise"></i>Corregir esta aplicacion</summary><form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.revertir', $application) }}" class="inventory-reverse-form">@csrf<label>Motivo del reverso<input name="motivo_reversion" class="form-control" minlength="5" maxlength="500" required placeholder="Ej. entrega anulada o cantidades corregidas en Kizeo"></label><button type="submit" class="btn btn-light inventory-btn" onclick="return confirm('Se repondra el stock con movimientos nuevos. ¿Continuar?')"><i class="bi bi-arrow-counterclockwise"></i>Reversar salida</button></form></details>
+                                <details class="inventory-reverse-details"><summary><i class="bi bi-arrow-counterclockwise"></i>Corregir esta aplicación</summary><form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.revertir', $application) }}" class="inventory-reverse-form">@csrf<label>Motivo del reverso<input name="motivo_reversion" class="form-control" minlength="5" maxlength="500" required placeholder="Ej. comprobante anulado o cantidades corregidas en Kizeo"></label><button type="submit" class="btn btn-light inventory-btn" onclick="return confirm(@js($isReturn ? 'Se descontará la devolución previamente ingresada. ¿Continuar?' : 'Se repondrá el stock con movimientos nuevos. ¿Continuar?'))"><i class="bi bi-arrow-counterclockwise"></i>{{ $isReturn ? 'Reversar devolución' : 'Reversar salida' }}</button></form></details>
                             @endif
                         @endif
                     </div>

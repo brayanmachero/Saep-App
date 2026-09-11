@@ -268,6 +268,7 @@ class InventarioBodegaController extends Controller
                 ->with([
                     'items',
                     'inventarioAplicacion.ubicacion',
+                    'inventarioAplicacion.lineas.movimiento.centroCosto',
                     'inventarioAplicacion.lineas.variante.producto',
                     'inventarioAplicacion.movimientosCorreccion.producto',
                     'inventarioAplicacion.movimientosCorreccion.variante',
@@ -290,8 +291,12 @@ class InventarioBodegaController extends Controller
                 ->withQueryString()
             : collect();
         $kizeoSuggestions = [];
+        $kizeoReturnCostCenterSuggestions = [];
         foreach ($kizeoDeliveries as $delivery) {
             $kizeoSuggestions[$delivery->id] = $this->stock->suggestedKizeoVariants($delivery, $variantOptions);
+            if ($delivery->flujo_inventario === 'ENTRADA') {
+                $kizeoReturnCostCenterSuggestions[$delivery->id] = $this->stock->suggestedKizeoCostCenterId($delivery, $inventoryCostCenters);
+            }
         }
         $centralKizeoLocation = $activeLocations->firstWhere('codigo', InventarioStockService::KIZEO_ORIGIN_LOCATION_CODE);
         $kizeoCentralStockByVariant = $centralKizeoLocation
@@ -347,20 +352,24 @@ class InventarioBodegaController extends Controller
                     ->count(),
             ];
             $kizeoAppliedDeliveryIds = $this->currentKizeoDeliveryForms(clone $kizeoPeriodQuery)
-                ->where('flujo_inventario', 'SALIDA')
                 ->whereHas('inventarioAplicacion', fn (Builder $query) => $query->whereIn('estado', ['APLICADA', 'CORREGIDA']))
                 ->select('entregas_bodega.id');
-            $kizeoDeliveredArticles = DB::table('inventario_entrega_kizeo_lineas as lineas')
+            $kizeoDeliveredArticles = DB::table('inventario_movimientos as movimientos')
+                ->join('inventario_entrega_kizeo_lineas as lineas', 'lineas.movimiento_id', '=', 'movimientos.id')
                 ->join('inventario_entrega_kizeo_aplicaciones as aplicaciones', 'aplicaciones.id', '=', 'lineas.aplicacion_id')
                 ->join('inventario_variantes as variantes', 'variantes.id', '=', 'lineas.variante_id')
                 ->join('inventario_productos as productos', 'productos.id', '=', 'lineas.producto_id')
                 ->whereIn('aplicaciones.estado', ['APLICADA', 'CORREGIDA'])
                 ->whereIn('aplicaciones.entrega_bodega_id', $kizeoAppliedDeliveryIds->toBase())
+                ->whereIn('movimientos.origen', ['KIZEO_EPP', 'KIZEO_EPP_DEVOLUCION'])
                 ->select('lineas.variante_id', 'productos.codigo as producto_codigo', 'productos.nombre as producto_nombre', 'variantes.talla')
-                ->selectRaw('SUM(lineas.cantidad_fuente) as cantidad')
-                ->selectRaw('COUNT(DISTINCT aplicaciones.entrega_bodega_id) as entregas')
+                ->selectRaw('SUM(CASE WHEN movimientos.cantidad < 0 THEN -movimientos.cantidad ELSE 0 END) as entregadas')
+                ->selectRaw('SUM(CASE WHEN movimientos.cantidad > 0 THEN movimientos.cantidad ELSE 0 END) as devueltas')
+                ->selectRaw('SUM(-movimientos.cantidad) as cantidad_neta')
+                ->selectRaw('COUNT(DISTINCT CASE WHEN movimientos.cantidad < 0 THEN aplicaciones.entrega_bodega_id END) as entregas')
+                ->selectRaw('COUNT(DISTINCT CASE WHEN movimientos.cantidad > 0 THEN aplicaciones.entrega_bodega_id END) as devoluciones')
                 ->groupBy('lineas.variante_id', 'productos.codigo', 'productos.nombre', 'variantes.talla')
-                ->orderByDesc('cantidad')
+                ->orderByDesc('cantidad_neta')
                 ->orderBy('productos.nombre')
                 ->get();
             $lastSync = EntregaBodega::query()->max('synced_at');
@@ -430,6 +439,7 @@ class InventarioBodegaController extends Controller
                 ->get(),
             'kizeoDeliveries' => $kizeoDeliveries,
             'kizeoSuggestions' => $kizeoSuggestions,
+            'kizeoReturnCostCenterSuggestions' => $kizeoReturnCostCenterSuggestions,
             'kizeoStats' => $kizeoStats,
             'kizeoDeliveredArticles' => $kizeoDeliveredArticles,
             'centralKizeoLocation' => $centralKizeoLocation,
@@ -801,6 +811,25 @@ class InventarioBodegaController extends Controller
             ->with('success', "Entrega Kizeo aplicada desde {$application->ubicacion->nombre}. El descuento quedó vinculado al comprobante original.");
     }
 
+    public function applyKizeoReturn(Request $request, EntregaBodega $entrega): RedirectResponse
+    {
+        $data = $request->validate([
+            'centro_costo_id' => ['required', Rule::exists('inventario_centros_costo', 'id')->where('activo', true)],
+            'lineas' => ['required', 'array', 'min:1'],
+            'lineas.*.variante_id' => ['required', 'exists:inventario_variantes,id'],
+        ]);
+
+        $application = $this->stock->applyKizeoReturnFromCentral(
+            $entrega->load('items'),
+            (int) $data['centro_costo_id'],
+            $data['lineas'],
+            $request->user(),
+        );
+
+        return redirect()->route('inventario-bodega.index', ['vista' => 'kizeo'])
+            ->with('success', "Devolución Kizeo ingresada en {$application->ubicacion->nombre} e imputada al centro de costo seleccionado.");
+    }
+
     public function applyKizeoDeliveriesBatch(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -860,7 +889,7 @@ class InventarioBodegaController extends Controller
         $this->stock->reverseKizeoDelivery($aplicacion, $data['motivo_reversion'], $request->user());
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'kizeo'])
-            ->with('success', 'La salida fue reversada. Se repuso el stock con movimientos nuevos y se conservo la trazabilidad.');
+            ->with('success', 'La aplicación Kizeo fue reversada. Se creó el movimiento inverso y se conservó toda la trazabilidad.');
     }
 
     public function importProducts(Request $request): RedirectResponse

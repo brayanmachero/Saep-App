@@ -418,6 +418,95 @@ class InventarioBodegaStockTest extends TestCase
         ], $user);
     }
 
+    public function test_kizeo_return_enters_central_stock_and_is_imputed_to_the_selected_cost_center(): void
+    {
+        [$user, $central, , $variant] = $this->inventoryContextWithCentralStock(8);
+        $service = app(InventarioStockService::class);
+        $costCenter = InventarioCentroCosto::create([
+            'numero_maestro' => 'RET-01',
+            'nombre' => 'CLIENTE PRUEBA EST.',
+            'nombre_normalizado' => 'cliente prueba est',
+            'activo' => true,
+        ]);
+        $return = $this->newKizeoDelivery('kizeo-return-central', $variant, 3, now());
+        $return->update([
+            'flujo_inventario' => 'ENTRADA',
+            'centro' => 'CLIENTE PRUEBA EST.',
+        ]);
+        $item = $return->items()->firstOrFail();
+
+        $application = $service->applyKizeoReturnFromCentral($return->fresh('items'), $costCenter->id, [
+            $item->id => ['variante_id' => $variant->id],
+        ], $user);
+
+        $this->assertSame('APLICADA', $application->estado);
+        $this->assertSame(11.0, $service->stockActual($central->id, $variant->id));
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'tipo' => 'DEVOLUCION_EPP',
+            'origen' => 'KIZEO_EPP_DEVOLUCION',
+            'ubicacion_id' => $central->id,
+            'variante_id' => $variant->id,
+            'cantidad' => 3,
+            'centro_costo_id' => $costCenter->id,
+            'centro_costo' => $costCenter->nombre,
+        ]);
+
+        try {
+            $service->applyKizeoReturnFromCentral($return->fresh('items'), $costCenter->id, [
+                $item->id => ['variante_id' => $variant->id],
+            ], $user);
+            $this->fail('Una devolución Kizeo no puede aplicarse dos veces.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('entrega', $exception->errors());
+        }
+
+        $service->reverseKizeoDelivery($application->fresh(), 'Devolución registrada por error.', $user);
+
+        $this->assertSame('REVERSADA', $application->fresh()->estado);
+        $this->assertSame(8.0, $service->stockActual($central->id, $variant->id));
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'tipo' => 'REVERSO',
+            'origen' => 'REVERSO_KIZEO_EPP',
+            'cantidad' => -3,
+            'centro_costo_id' => $costCenter->id,
+        ]);
+    }
+
+    public function test_kizeo_return_change_is_reconciled_with_the_return_sign_and_cost_center(): void
+    {
+        [$user, $central, , $variant] = $this->inventoryContextWithCentralStock(8);
+        $service = app(InventarioStockService::class);
+        $costCenter = InventarioCentroCosto::create([
+            'numero_maestro' => 'RET-02',
+            'nombre' => 'CENTRO DEVOLUCIÓN',
+            'nombre_normalizado' => 'centro devolucion',
+            'activo' => true,
+        ]);
+        $return = $this->newKizeoDelivery('kizeo-return-correction', $variant, 2, now());
+        $return->update(['flujo_inventario' => 'ENTRADA']);
+        $item = $return->items()->firstOrFail();
+
+        $application = $service->applyKizeoReturnFromCentral($return->fresh('items'), $costCenter->id, [
+            $item->id => ['variante_id' => $variant->id],
+        ], $user);
+        $item->update(['cantidad' => 5]);
+        $return->update(['kizeo_updated_at' => now()->addMinute()]);
+
+        $corrected = $service->tryAutoReconcileUpdatedKizeoDelivery($return->fresh(['items', 'inventarioAplicacion.lineas']));
+
+        $this->assertNotNull($corrected);
+        $this->assertSame('CORREGIDA', $corrected->estado);
+        $this->assertSame(13.0, $service->stockActual($central->id, $variant->id));
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'origen' => 'CORRECCION_KIZEO_EPP',
+            'tipo' => 'DEVOLUCION_EPP',
+            'cantidad' => 3,
+            'centro_costo_id' => $costCenter->id,
+        ]);
+
+        $this->assertNotNull($application->fresh());
+    }
+
     public function test_kizeo_applied_delivery_shows_the_discounted_snapshot_and_current_source_when_modified(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContextWithCentralStock(8);
