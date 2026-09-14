@@ -29,16 +29,22 @@
     </div>
 
     {{-- Loading --}}
-    <div id="loading-zone" class="glass-card" style="text-align:center;padding:3rem">
-        <div class="kizeo-spinner"></div>
-        <p id="loading-text" style="color:var(--text-muted);margin-top:1rem;font-size:.9rem">Conectando con Kizeo Forms...</p>
+    <div id="loading-zone" class="saep-data-state is-loading" role="status" aria-live="polite" aria-busy="true">
+        <i class="bi bi-arrow-repeat saep-data-state__icon saep-data-state__spinner" aria-hidden="true"></i>
+        <div class="saep-data-state__body">
+            <h3 class="saep-data-state__title">Cargando indicadores de Prevención de Riesgos</h3>
+            <p id="loading-text" class="saep-data-state__message">Conectando con Kizeo Forms...</p>
+        </div>
     </div>
 
     {{-- Error --}}
-    <div id="error-zone" class="glass-card" style="display:none;text-align:center;padding:2rem;border-left:4px solid var(--danger)">
-        <i class="bi bi-exclamation-triangle-fill" style="font-size:2rem;color:var(--danger)"></i>
-        <p id="error-text" style="color:var(--danger);margin-top:.5rem;font-weight:600"></p>
-        <button onclick="loadDashboard()" class="btn-ghost" style="margin-top:1rem"><i class="bi bi-arrow-clockwise"></i> Reintentar</button>
+    <div id="error-zone" class="saep-data-state is-error" style="display:none" role="alert" aria-live="assertive">
+        <i class="bi bi-exclamation-triangle saep-data-state__icon" aria-hidden="true"></i>
+        <div class="saep-data-state__body">
+            <h3 class="saep-data-state__title">No fue posible cargar los indicadores</h3>
+            <p id="error-text" class="saep-data-state__message"></p>
+            <button onclick="loadDashboard()" class="btn-ghost saep-data-state__action"><i class="bi bi-arrow-clockwise"></i> Reintentar</button>
+        </div>
     </div>
 
     {{-- Dashboard Content --}}
@@ -286,9 +292,12 @@
             </div>
 
             {{-- Deep loading --}}
-            <div id="deep-loading" style="display:none;text-align:center;padding:2rem">
-                <div class="kizeo-spinner"></div>
-                <p id="deep-loading-text" style="color:var(--text-muted);margin-top:.75rem;font-size:.85rem">Cargando análisis profundo de todos los formularios...</p>
+            <div id="deep-loading" class="saep-data-state saep-data-state--compact is-loading" style="display:none" role="status" aria-live="polite" aria-busy="true">
+                <i class="bi bi-arrow-repeat saep-data-state__icon saep-data-state__spinner" aria-hidden="true"></i>
+                <div class="saep-data-state__body">
+                    <h3 class="saep-data-state__title">Cargando análisis profundo</h3>
+                    <p id="deep-loading-text" class="saep-data-state__message">Cargando análisis profundo de todos los formularios...</p>
+                </div>
             </div>
 
             {{-- Deep KPIs --}}
@@ -340,8 +349,12 @@
                 </div>
             </div>
 
-            <div id="deep-empty" style="display:none;text-align:center;padding:2rem;color:var(--text-muted);font-style:italic">
-                Sin registros profundos en este periodo.
+            <div id="deep-empty" class="saep-data-state saep-data-state--compact is-empty" style="display:none" role="status" aria-live="polite">
+                <i class="bi bi-inbox saep-data-state__icon" aria-hidden="true"></i>
+                <div class="saep-data-state__body">
+                    <h3 class="saep-data-state__title">Sin registros profundos</h3>
+                    <p class="saep-data-state__message">No hay registros para los filtros seleccionados.</p>
+                </div>
             </div>
         </div>
 
@@ -976,6 +989,45 @@ let deepCurrentPage = 1;
 const deepPageSize = 25;
 let activeSegmenter = 'all';
 
+function showDeepFeedback(state, message) {
+    const feedback = document.getElementById('deep-empty');
+    if (!feedback) return;
+
+    const isError = state === 'error';
+    const icon = document.createElement('i');
+    icon.className = `bi bi-${isError ? 'exclamation-triangle' : 'inbox'} saep-data-state__icon`;
+    icon.setAttribute('aria-hidden', 'true');
+
+    const body = document.createElement('div');
+    body.className = 'saep-data-state__body';
+
+    const title = document.createElement('h3');
+    title.className = 'saep-data-state__title';
+    title.textContent = isError
+        ? 'No fue posible cargar el análisis profundo'
+        : 'No hay registros para mostrar';
+
+    const detail = document.createElement('p');
+    detail.className = 'saep-data-state__message';
+    detail.textContent = message;
+    body.append(title, detail);
+
+    if (isError) {
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'btn-ghost saep-data-state__action';
+        retry.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Reintentar';
+        retry.addEventListener('click', () => loadDeepDataAll());
+        body.append(retry);
+    }
+
+    feedback.className = `saep-data-state saep-data-state--compact is-${isError ? 'error' : 'empty'}`;
+    feedback.setAttribute('role', isError ? 'alert' : 'status');
+    feedback.setAttribute('aria-live', isError ? 'assertive' : 'polite');
+    feedback.replaceChildren(icon, body);
+    feedback.style.display = 'flex';
+}
+
 async function loadDeepDataAll(forceRefresh = false) {
     const requestId = ++deepRequestSeq;
     const startDate = document.getElementById('filter-start').value;
@@ -1010,8 +1062,7 @@ async function loadDeepDataAll(forceRefresh = false) {
         renderDeepAll(json.data);
     } catch (e) {
         if (requestId !== deepRequestSeq) return;
-        document.getElementById('deep-empty').style.display = 'block';
-        document.getElementById('deep-empty').textContent = 'Error al cargar deep analytics: ' + e.message;
+        showDeepFeedback('error', `No se pudo completar la consulta. ${e.message || 'Inténtalo nuevamente.'}`);
     } finally {
         if (requestId === deepRequestSeq) {
             document.getElementById('deep-loading').style.display = 'none';
@@ -1042,8 +1093,7 @@ function renderDeepAll(data) {
     sel.onchange = () => { deepCurrentPage = 1; filterDeepTable(); };
 
     if (!records.length) {
-        document.getElementById('deep-empty').style.display = 'block';
-        document.getElementById('deep-empty').textContent = 'Sin registros profundos en este periodo.';
+        showDeepFeedback('empty', 'No hay registros profundos en el período seleccionado.');
         return;
     }
 
@@ -1154,8 +1204,7 @@ function renderDeepTablePage() {
         document.getElementById('deep-table-container').style.display = 'none';
         document.getElementById('deep-pagination').style.display = 'none';
         document.getElementById('deep-results-info').style.display = 'none';
-        document.getElementById('deep-empty').style.display = 'block';
-        document.getElementById('deep-empty').textContent = 'Sin registros para este filtro.';
+        showDeepFeedback('empty', 'No hay registros para este filtro. Ajusta la búsqueda o los filtros rápidos.');
         return;
     }
 

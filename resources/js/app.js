@@ -1,5 +1,6 @@
 import './bootstrap';
 import '../css/app.css';
+import './saep-ui-states';
 
 document.addEventListener('DOMContentLoaded', () => {
     const sidebar = document.getElementById('sidebar');
