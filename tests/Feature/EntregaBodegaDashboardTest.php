@@ -14,6 +14,7 @@ use App\Services\EntregaBodegaAnalyticsService;
 use App\Services\EntregaBodegaExcelExport;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class EntregaBodegaDashboardTest extends TestCase
@@ -150,6 +151,12 @@ class EntregaBodegaDashboardTest extends TestCase
             $filters,
         );
         $this->assertFileExists($path);
+        $book = IOFactory::load($path);
+        $this->assertSame(['Resumen neto', 'Operaciones Kizeo', 'Detalle EPP'], $book->getSheetNames());
+        $this->assertSame('Unidades devueltas', $book->getSheetByName('Resumen neto')->getCell('C4')->getValue());
+        $this->assertSame(3.0, $book->getSheetByName('Resumen neto')->getCell('D5')->getValue());
+        $this->assertSame('Devuelto', $book->getSheetByName('Operaciones Kizeo')->getCell('H1')->getValue());
+        $this->assertSame('Neto', $book->getSheetByName('Detalle EPP')->getCell('J1')->getValue());
         @unlink($path);
     }
 
