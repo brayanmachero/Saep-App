@@ -753,6 +753,18 @@
                             @if($needsReview)
                                 <div class="inventory-source-warning"><i class="bi bi-exclamation-triangle-fill"></i><span>{{ $application->correccion_pendiente_motivo ?: ($delivery->alerta_fuente ?: 'Este comprobante fue modificado en Kizeo y no se pudo conciliar automáticamente. Revisa el detalle y revérsalo solo si ya no corresponde.') }}</span></div>
                             @endif
+                            @if($isReturn && $application->historialImputacion->isNotEmpty())
+                                <section class="inventory-kizeo-line-panel inventory-kizeo-imputation-history">
+                                    <div class="inventory-kizeo-line-panel-heading">
+                                        <div>
+                                            <strong><i class="bi bi-clock-history"></i>Historial de imputación</strong>
+                                            <span>Cambios de centro de costo realizados sin afectar el saldo físico.</span>
+                                        </div>
+                                        <small>{{ $application->historialImputacion->count() }} {{ $application->historialImputacion->count() === 1 ? 'cambio' : 'cambios' }}</small>
+                                    </div>
+                                    <div class="inventory-table-wrap"><table class="inventory-table inventory-table-compact"><thead><tr><th>Fecha</th><th>Centro anterior</th><th>Centro actual</th><th>Actualizado por</th></tr></thead><tbody>@foreach($application->historialImputacion as $history)<tr><td>{{ optional($history->created_at)->format('d/m/Y H:i') ?: '—' }}</td><td>{{ $history->centro_costo_anterior ?: 'Sin imputación previa' }}</td><td><strong>{{ $history->centro_costo_nuevo }}</strong></td><td>{{ $history->registrado_por_nombre ?: ($history->registradoPor?->name ?: 'No disponible') }}</td></tr>@endforeach</tbody></table></div>
+                                </section>
+                            @endif
                             <div class="inventory-kizeo-application-lines">
                                 <section class="inventory-kizeo-line-panel">
                                     <div class="inventory-kizeo-line-panel-heading">
@@ -825,6 +837,15 @@
                                     </section>
                                 @endif
                             </div>
+                            @if($isReturn && in_array($application->estado, ['APLICADA', 'CORREGIDA'], true) && $canEdit)
+                                @php
+                                    $currentReturnCostCenterId = $application->lineas
+                                        ->map(fn ($line) => $line->movimiento?->centro_costo_id)
+                                        ->filter()
+                                        ->first();
+                                @endphp
+                                <details class="inventory-reverse-details inventory-kizeo-cost-center-editor"><summary><i class="bi bi-diagram-3"></i>Editar imputación de centro de costo</summary><form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.devoluciones.actualizar-centro-costo', $application) }}" class="inventory-reverse-form">@csrf<label>Centro de costo<select name="centro_costo_id" class="form-select" required data-inventory-search-select data-search-placeholder="Buscar centro de costo"><option value="">Selecciona el centro de costo</option>@foreach($inventoryCostCenters as $costCenter)<option value="{{ $costCenter->id }}" @selected((int) old('centro_costo_id', $currentReturnCostCenterId) === $costCenter->id)>{{ $costCenter->nombre }}{{ $costCenter->comuna ? ' · ' . $costCenter->comuna : '' }}</option>@endforeach</select></label><div class="inventory-kizeo-cost-center-help">Solo se actualiza la imputación de esta devolución y sus correcciones asociadas; el stock de Sede Central no cambia.</div><button type="submit" class="btn btn-light inventory-btn" onclick="return confirm('Se actualizará solo la imputación del centro de costo; las cantidades y el stock no cambiarán. ¿Continuar?')"><i class="bi bi-check2"></i>Guardar imputación</button></form></details>
+                            @endif
                             @if(in_array($application->estado, ['APLICADA', 'CORREGIDA'], true) && $canEdit)
                                 <details class="inventory-reverse-details"><summary><i class="bi bi-arrow-counterclockwise"></i>Corregir esta aplicación</summary><form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.revertir', $application) }}" class="inventory-reverse-form">@csrf<label>Motivo del reverso<input name="motivo_reversion" class="form-control" minlength="5" maxlength="500" required placeholder="Ej. comprobante anulado o cantidades corregidas en Kizeo"></label><button type="submit" class="btn btn-light inventory-btn" onclick="return confirm(@js($isReturn ? 'Se descontará la devolución previamente ingresada. ¿Continuar?' : 'Se repondrá el stock con movimientos nuevos. ¿Continuar?'))"><i class="bi bi-arrow-counterclockwise"></i>{{ $isReturn ? 'Reversar devolución' : 'Reversar salida' }}</button></form></details>
                             @endif
@@ -1288,6 +1309,7 @@
     @container (max-width: 1100px) { .inventory-history-filter { grid-template-columns:repeat(3,minmax(0,1fr)); }.inventory-history-filter .inventory-history-search { grid-column:span 2; } }
     @container (max-width: 700px) { .inventory-history-filter { grid-template-columns:1fr 1fr; }.inventory-history-filter .inventory-history-search { grid-column:1 / -1; }.inventory-history-filter-actions { grid-column:1 / -1; }.inventory-history-filter-actions .inventory-btn { flex:1; } }
     @container (max-width: 430px) { .inventory-history-filter { grid-template-columns:1fr; }.inventory-history-filter .inventory-history-search,.inventory-history-filter-actions { grid-column:auto; } }
+    .inventory-reverse-form .form-select { min-height:2.42rem; font-size:.88rem; letter-spacing:0; text-transform:none; }.inventory-kizeo-cost-center-editor { border-color:#c9d8f8; background:#f5f8ff; }.inventory-kizeo-cost-center-help { color:#657593; font-size:.76rem; line-height:1.35; }.inventory-kizeo-imputation-history { margin:.8rem 1rem 0; }
 </style>
 
 @if($vista === 'resumen')

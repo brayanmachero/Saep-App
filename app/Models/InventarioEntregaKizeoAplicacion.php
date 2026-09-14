@@ -56,6 +56,13 @@ class InventarioEntregaKizeoAplicacion extends Model
             ->orderBy('id');
     }
 
+    /** Cambios manuales de imputación, sin efecto sobre las unidades de stock. */
+    public function historialImputacion(): HasMany
+    {
+        return $this->hasMany(InventarioKizeoImputacionHistorial::class, 'aplicacion_id')
+            ->latest('id');
+    }
+
     public function aplicadaPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'aplicada_por');

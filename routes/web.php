@@ -612,6 +612,9 @@ Route::middleware('auth')->group(function () {
           Route::post('entregas-kizeo/{entrega}/registrar-devolucion', [InventarioBodegaController::class, 'applyKizeoReturn'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('entregas-kizeo.devoluciones.registrar');
+          Route::post('entregas-kizeo/{aplicacion}/actualizar-centro-costo', [InventarioBodegaController::class, 'updateKizeoReturnCostCenter'])
+              ->middleware('modulo:inventario_bodega,puede_editar')
+              ->name('entregas-kizeo.devoluciones.actualizar-centro-costo');
           Route::post('entregas-kizeo/aplicar-masivo', [InventarioBodegaController::class, 'applyKizeoDeliveriesBatch'])
               ->middleware('modulo:inventario_bodega,puede_crear')
               ->name('entregas-kizeo.aplicar-masivo');

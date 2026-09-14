@@ -272,6 +272,7 @@ class InventarioBodegaController extends Controller
                     'inventarioAplicacion.lineas.variante.producto',
                     'inventarioAplicacion.movimientosCorreccion.producto',
                     'inventarioAplicacion.movimientosCorreccion.variante',
+                    'inventarioAplicacion.historialImputacion.registradoPor',
                 ])
                 ->when(
                     $kizeoQueue === 'historico',
@@ -890,6 +891,17 @@ class InventarioBodegaController extends Controller
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'kizeo'])
             ->with('success', 'La aplicación Kizeo fue reversada. Se creó el movimiento inverso y se conservó toda la trazabilidad.');
+    }
+
+    public function updateKizeoReturnCostCenter(Request $request, InventarioEntregaKizeoAplicacion $aplicacion): RedirectResponse
+    {
+        $data = $request->validate([
+            'centro_costo_id' => ['required', Rule::exists('inventario_centros_costo', 'id')->where('activo', true)],
+        ]);
+        $this->stock->updateKizeoReturnCostCenter($aplicacion, (int) $data['centro_costo_id'], $request->user());
+
+        return redirect()->route('inventario-bodega.index', ['vista' => 'kizeo'])
+            ->with('success', 'Centro de costo actualizado. El stock de Sede Central no se modificó y el cambio quedó registrado en la trazabilidad.');
     }
 
     public function importProducts(Request $request): RedirectResponse

@@ -14,6 +14,7 @@ use App\Models\InventarioHistorialCosto;
 use App\Models\InventarioImportacionMovimiento;
 use App\Models\InventarioIngreso;
 use App\Models\InventarioIngresoItem;
+use App\Models\InventarioKizeoImputacionHistorial;
 use App\Models\InventarioMovimiento;
 use App\Models\InventarioProducto;
 use App\Models\InventarioProveedor;
@@ -1271,6 +1272,101 @@ class InventarioStockService
             }
 
             return $application->load(['ubicacion', 'lineas.variante.producto']);
+        });
+    }
+
+    /**
+     * Corrige la imputación de una devolución Kizeo ya registrada. Nunca crea
+     * movimientos ni cambia cantidades: solo reclasifica los existentes y deja
+     * una bitácora de la modificación para la trazabilidad contable.
+     */
+    public function updateKizeoReturnCostCenter(
+        InventarioEntregaKizeoAplicacion $application,
+        int $costCenterId,
+        User $user,
+    ): InventarioEntregaKizeoAplicacion {
+        return DB::transaction(function () use ($application, $costCenterId, $user) {
+            $application = InventarioEntregaKizeoAplicacion::query()
+                ->with(['entrega', 'lineas.movimiento'])
+                ->lockForUpdate()
+                ->findOrFail($application->id);
+
+            if (! in_array($application->estado, ['APLICADA', 'CORREGIDA'], true)) {
+                throw ValidationException::withMessages([
+                    'aplicacion' => 'Solo se puede corregir la imputación de una devolución Kizeo vigente.',
+                ]);
+            }
+
+            if (($application->entrega?->flujo_inventario !== 'ENTRADA') || ! $this->isKizeoReturnApplication($application)) {
+                throw ValidationException::withMessages([
+                    'aplicacion' => 'Esta aplicación no corresponde a una devolución Kizeo.',
+                ]);
+            }
+
+            $costCenter = InventarioCentroCosto::query()
+                ->where('activo', true)
+                ->lockForUpdate()
+                ->find($costCenterId);
+            if (! $costCenter) {
+                throw ValidationException::withMessages([
+                    'centro_costo_id' => 'Selecciona un centro de costo activo para imputar la devolución.',
+                ]);
+            }
+
+            $movementIds = $application->lineas
+                ->pluck('movimiento_id')
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->merge(
+                    InventarioMovimiento::query()
+                        ->where('referencia_tipo', InventarioEntregaKizeoAplicacion::class)
+                        ->where('referencia_id', $application->id)
+                        ->where('origen', 'CORRECCION_KIZEO_EPP')
+                        ->pluck('id'),
+                )
+                ->unique()
+                ->values();
+
+            $movements = InventarioMovimiento::query()
+                ->whereIn('id', $movementIds)
+                ->lockForUpdate()
+                ->get();
+            if ($movements->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'aplicacion' => 'La devolución no tiene movimientos disponibles para imputar.',
+                ]);
+            }
+
+            $previous = $movements->first();
+            $alreadyAssigned = $movements->every(fn (InventarioMovimiento $movement) => (int) $movement->centro_costo_id === $costCenter->id);
+            if ($alreadyAssigned) {
+                return $application->load(['ubicacion', 'lineas.variante.producto', 'historialImputacion.registradoPor']);
+            }
+
+            InventarioMovimiento::query()
+                ->whereIn('id', $movements->pluck('id'))
+                ->update([
+                    'centro_costo' => $costCenter->nombre,
+                    'centro_costo_id' => $costCenter->id,
+                    'coordinador_id' => $costCenter->coordinador_id,
+                ]);
+
+            InventarioKizeoImputacionHistorial::create([
+                'aplicacion_id' => $application->id,
+                'centro_costo_anterior_id' => $previous->centro_costo_id,
+                'centro_costo_anterior' => $previous->centro_costo,
+                'centro_costo_nuevo_id' => $costCenter->id,
+                'centro_costo_nuevo' => $costCenter->nombre,
+                'registrado_por' => $user->id,
+                'registrado_por_nombre' => trim($user->name.' '.($user->apellido_paterno ?? '')),
+            ]);
+
+            return $application->fresh([
+                'ubicacion',
+                'lineas.movimiento.centroCosto',
+                'lineas.variante.producto',
+                'historialImputacion.registradoPor',
+            ]);
         });
     }
 

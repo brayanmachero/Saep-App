@@ -154,6 +154,8 @@ class InventarioBodegaStockTest extends TestCase
         $kizeoMigration->up();
         $kizeoReconciliationMigration = require dirname(__DIR__, 2).'/database/migrations/2026_09_01_120000_add_kizeo_reconciliation_fields_to_inventory_applications.php';
         $kizeoReconciliationMigration->up();
+        $kizeoImputationHistoryMigration = require dirname(__DIR__, 2).'/database/migrations/2026_09_14_120000_create_inventario_kizeo_imputacion_historial_table.php';
+        $kizeoImputationHistoryMigration->up();
     }
 
     public function test_receipt_and_transfer_update_stock_without_losing_traceability(): void
@@ -472,6 +474,52 @@ class InventarioBodegaStockTest extends TestCase
         ]);
     }
 
+    public function test_kizeo_return_cost_center_can_be_reassigned_without_affecting_stock(): void
+    {
+        [$user, $central, , $variant] = $this->inventoryContextWithCentralStock(8);
+        $service = app(InventarioStockService::class);
+        $initialCostCenter = InventarioCentroCosto::create([
+            'numero_maestro' => 801,
+            'nombre' => 'CENTRO ORIGINAL',
+            'nombre_normalizado' => 'centro original',
+            'activo' => true,
+        ]);
+        $replacementCostCenter = InventarioCentroCosto::create([
+            'numero_maestro' => 802,
+            'nombre' => 'CENTRO CORREGIDO',
+            'nombre_normalizado' => 'centro corregido',
+            'activo' => true,
+        ]);
+        $return = $this->newKizeoDelivery('kizeo-return-reassignment', $variant, 3, now());
+        $return->update(['flujo_inventario' => 'ENTRADA']);
+        $item = $return->items()->firstOrFail();
+        $application = $service->applyKizeoReturnFromCentral($return->fresh('items'), $initialCostCenter->id, [
+            $item->id => ['variante_id' => $variant->id],
+        ], $user);
+        $stockBefore = $service->stockActual($central->id, $variant->id);
+
+        $updated = $service->updateKizeoReturnCostCenter($application, $replacementCostCenter->id, $user);
+
+        $this->assertSame($stockBefore, $service->stockActual($central->id, $variant->id));
+        $this->assertSame($replacementCostCenter->id, $updated->lineas->first()->movimiento->centro_costo_id);
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'id' => $application->lineas()->firstOrFail()->movimiento_id,
+            'centro_costo_id' => $replacementCostCenter->id,
+            'centro_costo' => $replacementCostCenter->nombre,
+        ]);
+        $this->assertDatabaseHas('inventario_kizeo_imputacion_historial', [
+            'aplicacion_id' => $application->id,
+            'centro_costo_anterior_id' => $initialCostCenter->id,
+            'centro_costo_anterior' => $initialCostCenter->nombre,
+            'centro_costo_nuevo_id' => $replacementCostCenter->id,
+            'centro_costo_nuevo' => $replacementCostCenter->nombre,
+            'registrado_por' => $user->id,
+        ]);
+
+        $service->updateKizeoReturnCostCenter($application->fresh(), $replacementCostCenter->id, $user);
+        $this->assertDatabaseCount('inventario_kizeo_imputacion_historial', 1);
+    }
+
     public function test_kizeo_return_change_is_reconciled_with_the_return_sign_and_cost_center(): void
     {
         [$user, $central, , $variant] = $this->inventoryContextWithCentralStock(8);
@@ -502,6 +550,25 @@ class InventarioBodegaStockTest extends TestCase
             'tipo' => 'DEVOLUCION_EPP',
             'cantidad' => 3,
             'centro_costo_id' => $costCenter->id,
+        ]);
+
+        $replacementCostCenter = InventarioCentroCosto::create([
+            'numero_maestro' => 803,
+            'nombre' => 'CENTRO DEVOLUCIÓN CORREGIDO',
+            'nombre_normalizado' => 'centro devolucion corregido',
+            'activo' => true,
+        ]);
+        $stockBeforeReassignment = $service->stockActual($central->id, $variant->id);
+        $service->updateKizeoReturnCostCenter($corrected, $replacementCostCenter->id, $user);
+
+        $this->assertSame($stockBeforeReassignment, $service->stockActual($central->id, $variant->id));
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'origen' => 'KIZEO_EPP_DEVOLUCION',
+            'centro_costo_id' => $replacementCostCenter->id,
+        ]);
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'origen' => 'CORRECCION_KIZEO_EPP',
+            'centro_costo_id' => $replacementCostCenter->id,
         ]);
 
         $this->assertNotNull($application->fresh());
