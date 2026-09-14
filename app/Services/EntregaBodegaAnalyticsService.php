@@ -3,22 +3,34 @@
 namespace App\Services;
 
 use App\Models\EntregaBodega;
-use App\Models\EntregaBodegaItem;
-use App\Models\InventarioVariante;
+use App\Models\InventarioEntregaKizeoAplicacion;
+use App\Models\InventarioEntregaKizeoLinea;
+use App\Models\InventarioMovimiento;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
+use stdClass;
 
+/**
+ * Read model for the EPP dashboard.
+ *
+ * Kizeo remains the source document, while stock, imputations and corrections
+ * are confirmed in inventario_movimientos. The dashboard intentionally uses
+ * that ledger as its source of truth.
+ */
 class EntregaBodegaAnalyticsService
 {
+    /** @var Collection<int, stdClass>|null */
+    private ?Collection $unfilteredEntries = null;
+
     public function hasSyncedData(): bool
     {
-        return $this->currentDeliveries()->exists();
+        return $this->appliedKizeoMovements()->exists();
     }
 
     public function getSyncInfo(): ?array
     {
-        $summary = $this->currentDeliveries()
+        $summary = EntregaBodega::query()
+            ->whereIn('kizeo_form_id', EntregaBodegaSyncService::currentFormIds())
             ->selectRaw('COUNT(*) as total, MAX(synced_at) as last_sync, MAX(fecha_pedido) as latest_delivery')
             ->first();
 
@@ -31,293 +43,347 @@ class EntregaBodegaAnalyticsService
 
     public function getFilteredAnalytics(array $filters = []): array
     {
-        $rows = $this->getFilteredRecords($filters);
-        $items = $rows->flatMap(fn (EntregaBodega $entrega) => $entrega->items);
-        $people = $rows->filter(fn (EntregaBodega $entrega) => filled($entrega->nombre));
-        $valuedItems = $items->filter(fn (EntregaBodegaItem $item) => $item->tiene_precio_referencia);
-        $unvaluedItems = $items->reject(fn (EntregaBodegaItem $item) => $item->tiene_precio_referencia);
-        $referenceValue = $this->referenceValue($items);
-        $valuedUnits = (int) $valuedItems->sum('cantidad');
+        $entries = $this->getFilteredEntries($filters);
+        $records = $this->recordsFromEntries($entries);
+        $valuedEntries = $entries->filter(fn (stdClass $entry) => $entry->precio_referencia !== null);
+        $unvaluedEntries = $entries->reject(fn (stdClass $entry) => $entry->precio_referencia !== null);
+        $valuedNetUnits = $this->absoluteSum($valuedEntries, 'netas');
 
         return [
-            'total' => $rows->count(),
-            'unidades' => (int) $rows->sum('unidades_total'),
-            'lineas' => (int) $rows->sum('lineas_count'),
-            'valor_referencial' => $referenceValue,
-            'unidades_valorizadas' => $valuedUnits,
-            'unidades_sin_precio' => (int) $unvaluedItems->sum('cantidad'),
-            'lineas_sin_precio' => $unvaluedItems->count(),
-            'precio_referencia_promedio' => $valuedUnits > 0 ? round($referenceValue / $valuedUnits, 2) : null,
-            'personas' => $people->pluck('nombre')->unique()->count(),
-            'centros_activos' => $rows->pluck('centro')->filter()->unique()->count(),
-            'promedio_unidades' => $rows->isNotEmpty() ? round($rows->avg('unidades_total'), 1) : 0,
-            'by_day' => $this->dailyBreakdown($rows),
-            'by_month' => $this->monthlyBreakdown($rows),
-            'centros' => $this->groupCount($rows, 'centro', 10),
-            'articulos' => $this->groupItemUnits($items, 'articulo', 8),
-            'articulos_valor' => $this->groupItemReferenceValues($items, 'articulo', 8),
-            'tallas' => $this->groupItemUnits($items, 'talla', 8),
-            'personas_top' => $this->peopleBreakdown($people),
-            'relaciones' => $this->centerPeopleBreakdown($people),
-            'recent' => $rows->take(14)->values(),
+            'total' => $entries->pluck('aplicacion_id')->unique()->count(),
+            'entregadas' => $this->sum($entries, 'entregadas'),
+            'devueltas' => $this->sum($entries, 'devueltas'),
+            'netas' => $this->sum($entries, 'netas'),
+            'lineas' => $entries->count(),
+            'valor_entregado' => $this->sum($entries, 'valor_entregado'),
+            'valor_devuelto' => $this->sum($entries, 'valor_devuelto'),
+            'valor_neto' => $this->sum($entries, 'valor_neto'),
+            'unidades_valorizadas' => $valuedNetUnits,
+            'unidades_sin_precio' => $this->absoluteSum($unvaluedEntries, 'netas'),
+            'precio_referencia_promedio' => $valuedNetUnits > 0
+                ? round(abs($this->sum($valuedEntries, 'valor_neto')) / $valuedNetUnits, 2)
+                : null,
+            'personas' => $entries->pluck('persona')->filter()->unique()->count(),
+            'centros_activos' => $entries->pluck('centro')
+                ->reject(fn (string $center) => $center === 'Sin centro imputado')
+                ->unique()
+                ->count(),
+            'by_day' => $this->dailyBreakdown($entries),
+            'centros' => $this->centerBreakdown($entries),
+            'articulos' => $this->articleBreakdown($entries, 'articulo'),
+            'tallas' => $this->articleBreakdown($entries, 'talla'),
+            'articulos_distribucion' => $this->positiveNetDistribution($entries, 'articulo'),
+            'tallas_distribucion' => $this->positiveNetDistribution($entries, 'talla'),
+            'personas_top' => $this->peopleBreakdown($entries),
+            'relaciones' => $this->centerPeopleBreakdown($entries),
+            'recent' => $records->take(14)->values(),
             'filter_options' => $this->getFilterOptions(),
         ];
     }
 
+    /**
+     * One visible operation per Kizeo application, operational date and
+     * assigned cost centre. Corrections remain visible on the date when they
+     * affected stock, while retaining the original Kizeo document.
+     *
+     * @return Collection<int, stdClass>
+     */
     public function getFilteredRecords(array $filters = []): Collection
     {
-        $query = $this->currentDeliveries()->with([
-            'items',
-            'inventarioAplicacion.lineas.variante',
-        ]);
-        $this->applyFilters($query, $filters);
-
-        $rows = $query->orderByDesc('fecha_pedido')->orderByDesc('id')->get();
-        $this->attachReferenceValues($rows);
-
-        return $rows;
+        return $this->recordsFromEntries($this->getFilteredEntries($filters));
     }
 
     public function getFilterOptions(): array
     {
+        $entries = $this->allEntries();
+
         return [
-            'centros' => $this->distinctValues($this->currentDeliveries(), 'centro'),
-            'trabajadores' => $this->distinctValues($this->currentDeliveries(), 'nombre'),
-            'articulos' => $this->distinctValues(
-                EntregaBodegaItem::query()->whereHas('entrega', fn (Builder $query) => $this->onlyCurrentForms($query)),
-                'articulo',
-            ),
-            'tallas' => $this->distinctValues(
-                EntregaBodegaItem::query()->whereHas('entrega', fn (Builder $query) => $this->onlyCurrentForms($query)),
-                'talla',
-            ),
+            'centros' => $entries->pluck('centro')->filter()->unique()->sort()->values()->all(),
+            'trabajadores' => $entries->pluck('persona')->filter()->unique()->sort()->values()->all(),
+            'articulos' => $entries->pluck('articulo')->filter()->unique()->sort()->values()->all(),
+            'tallas' => $entries->pluck('talla')->filter()->unique()->sort()->values()->all(),
         ];
     }
 
-    private function currentDeliveries(): Builder
+    /** @return Collection<int, stdClass> */
+    private function getFilteredEntries(array $filters): Collection
     {
-        return $this->onlyCurrentForms(EntregaBodega::query());
+        $query = $this->appliedKizeoMovements()->with([
+            'centroCosto',
+            'producto',
+            'variante',
+            'entregaKizeoLinea.aplicacion.entrega',
+            'entregaKizeoAplicacion.entrega',
+        ]);
+        $this->applyFilters($query, $filters);
+
+        return $query->orderByDesc('ocurrido_en')->orderByDesc('id')->get()
+            ->map(fn (InventarioMovimiento $movement) => $this->entryFromMovement($movement))
+            ->filter()
+            ->values();
     }
 
-    private function onlyCurrentForms(Builder $query): Builder
+    /** @return Collection<int, stdClass> */
+    private function allEntries(): Collection
     {
-        return $query->whereIn('kizeo_form_id', EntregaBodegaSyncService::currentFormIds());
+        return $this->unfilteredEntries ??= $this->getFilteredEntries([]);
+    }
+
+    private function appliedKizeoMovements(): Builder
+    {
+        $formIds = EntregaBodegaSyncService::currentFormIds();
+        $activeApplication = static function (Builder $query) use ($formIds): void {
+            $query->whereIn('estado', ['APLICADA', 'CORREGIDA'])
+                ->whereHas('entrega', fn (Builder $delivery) => $delivery->whereIn('kizeo_form_id', $formIds));
+        };
+
+        return InventarioMovimiento::query()
+            ->whereIn('origen', [
+                'KIZEO_EPP',
+                'KIZEO_EPP_DEVOLUCION',
+                'CORRECCION_KIZEO_EPP',
+                'REVERSO_KIZEO_EPP',
+            ])
+            ->where(function (Builder $query) use ($activeApplication): void {
+                $query->where(function (Builder $lineReference) use ($activeApplication): void {
+                    $lineReference
+                        ->where('referencia_tipo', InventarioEntregaKizeoLinea::class)
+                        ->whereHas('entregaKizeoLinea.aplicacion', $activeApplication);
+                })->orWhere(function (Builder $applicationReference) use ($activeApplication): void {
+                    $applicationReference
+                        ->where('referencia_tipo', InventarioEntregaKizeoAplicacion::class)
+                        ->whereHas('entregaKizeoAplicacion', $activeApplication);
+                });
+            });
     }
 
     private function applyFilters(Builder $query, array $filters): void
     {
-        foreach (['centro', 'trabajador'] as $field) {
-            if (! empty($filters[$field])) {
-                $query->where($field === 'trabajador' ? 'nombre' : $field, $filters[$field]);
-            }
+        if (! empty($filters['centro'])) {
+            $query->where('centro_costo', $filters['centro']);
         }
-
-        foreach (['articulo', 'talla'] as $field) {
-            if (! empty($filters[$field])) {
-                $query->whereHas('items', fn (Builder $items) => $items->where($field, $filters[$field]));
-            }
+        if (! empty($filters['trabajador'])) {
+            $query->where('destinatario_nombre', $filters['trabajador']);
         }
-
+        if (! empty($filters['articulo'])) {
+            $query->whereHas('producto', fn (Builder $product) => $product->where('nombre', $filters['articulo']));
+        }
+        if (! empty($filters['talla'])) {
+            $query->whereHas('variante', fn (Builder $variant) => $variant->where('talla', $filters['talla']));
+        }
         if (! empty($filters['fecha_desde'])) {
-            $query->whereDate('fecha_pedido', '>=', $filters['fecha_desde']);
+            $query->whereDate('ocurrido_en', '>=', $filters['fecha_desde']);
         }
         if (! empty($filters['fecha_hasta'])) {
-            $query->whereDate('fecha_pedido', '<=', $filters['fecha_hasta']);
+            $query->whereDate('ocurrido_en', '<=', $filters['fecha_hasta']);
         }
     }
 
-    private function distinctValues(Builder $query, string $field): array
+    private function entryFromMovement(InventarioMovimiento $movement): ?stdClass
     {
-        return $query->whereNotNull($field)->where($field, '!=', '')
-            ->distinct()->orderBy($field)->pluck($field)->all();
+        $application = match ($movement->referencia_tipo) {
+            InventarioEntregaKizeoLinea::class => $movement->entregaKizeoLinea?->aplicacion,
+            InventarioEntregaKizeoAplicacion::class => $movement->entregaKizeoAplicacion,
+            default => null,
+        };
+        $delivery = $application?->entrega;
+        if (! $application || ! $delivery) {
+            return null;
+        }
+
+        $isReturn = $delivery->flujo_inventario === 'ENTRADA';
+        $quantity = round((float) $movement->cantidad, 3);
+        $delivered = $isReturn ? 0.0 : -$quantity;
+        $returned = $isReturn ? $quantity : 0.0;
+        $net = $delivered - $returned;
+        $price = $movement->costo_unitario !== null && (float) $movement->costo_unitario > 0
+            ? round((float) $movement->costo_unitario, 2)
+            : (($movement->variante && (float) $movement->variante->costo_referencia > 0)
+                ? round((float) $movement->variante->costo_referencia, 2)
+                : null);
+
+        $entry = new stdClass;
+        $entry->movimiento_id = $movement->id;
+        $entry->aplicacion_id = $application->id;
+        $entry->entrega = $delivery;
+        $entry->fecha = $movement->ocurrido_en?->toDateString() ?: $delivery->fecha_pedido?->toDateString();
+        $entry->orden = $movement->id;
+        $entry->tipo = $isReturn ? 'Devolución' : 'Entrega';
+        $entry->persona = $movement->destinatario_nombre ?: $delivery->nombre ?: 'Sin identificar';
+        $entry->rut = $movement->destinatario_rut ?: $delivery->rut;
+        $entry->centro = $movement->centroCosto?->nombre ?: ($movement->centro_costo ?: 'Sin centro imputado');
+        $entry->centro_id = $movement->centro_costo_id;
+        $entry->articulo = $movement->producto?->nombre ?: 'Artículo sin catálogo';
+        $entry->talla = $movement->variante?->talla ?: 'Sin talla';
+        $entry->entregadas = round($delivered, 3);
+        $entry->devueltas = round($returned, 3);
+        $entry->netas = round($net, 3);
+        $entry->precio_referencia = $price;
+        $entry->origen_precio = $price === null
+            ? null
+            : ($movement->costo_unitario !== null ? 'Costo registrado en movimiento' : 'Precio vigente de catálogo');
+        $entry->valor_entregado = $price === null ? 0.0 : round($delivered * $price, 2);
+        $entry->valor_devuelto = $price === null ? 0.0 : round($returned * $price, 2);
+        $entry->valor_neto = $price === null ? 0.0 : round($net * $price, 2);
+        $entry->tiene_precio = $price !== null;
+        $entry->origen = $movement->origen;
+        $entry->registrado_por = $movement->registrado_por_nombre ?: 'Kizeo automático';
+
+        return $entry;
     }
 
-    private function groupCount(Collection $rows, string $field, int $limit): array
+    /** @param Collection<int, stdClass> $entries @return Collection<int, stdClass> */
+    private function recordsFromEntries(Collection $entries): Collection
     {
-        return $rows->pluck($field)->filter()->countBy()->sortDesc()->take($limit)->all();
+        return $entries
+            ->groupBy(fn (stdClass $entry) => implode('|', [$entry->aplicacion_id, $entry->fecha, $entry->centro_id ?: $entry->centro]))
+            ->map(function (Collection $group): stdClass {
+                /** @var stdClass $first */
+                $first = $group->first();
+                $items = $group->groupBy(fn (stdClass $entry) => $entry->articulo.'|'.$entry->talla)
+                    ->map(function (Collection $itemGroup): stdClass {
+                        /** @var stdClass $item */
+                        $item = $itemGroup->first();
+                        $summary = new stdClass;
+                        $summary->articulo = $item->articulo;
+                        $summary->talla = $item->talla;
+                        $summary->entregadas = $this->sum($itemGroup, 'entregadas');
+                        $summary->devueltas = $this->sum($itemGroup, 'devueltas');
+                        $summary->netas = $this->sum($itemGroup, 'netas');
+                        $summary->precio_referencia = $item->precio_referencia;
+                        $summary->origen_precio = $item->origen_precio;
+                        $summary->valor_neto = $this->sum($itemGroup, 'valor_neto');
+                        $summary->tiene_precio = $itemGroup->contains(fn (stdClass $entry) => $entry->tiene_precio);
+
+                        return $summary;
+                    })->values();
+
+                $record = new stdClass;
+                $record->aplicacion_id = $first->aplicacion_id;
+                $record->entrega = $first->entrega;
+                $record->fecha = $first->fecha;
+                $record->orden = $group->max('orden');
+                $record->tipo = $first->tipo;
+                $record->persona = $first->persona;
+                $record->rut = $first->rut;
+                $record->centro = $first->centro;
+                $record->registrado_por = $first->registrado_por;
+                $record->entregadas = $this->sum($group, 'entregadas');
+                $record->devueltas = $this->sum($group, 'devueltas');
+                $record->netas = $this->sum($group, 'netas');
+                $record->valor_neto = $this->sum($group, 'valor_neto');
+                $record->unidades_valorizadas = $this->absoluteSum($group->filter(fn (stdClass $entry) => $entry->tiene_precio), 'netas');
+                $record->unidades_sin_precio = $this->absoluteSum($group->reject(fn (stdClass $entry) => $entry->tiene_precio), 'netas');
+                $record->items = $items;
+
+                return $record;
+            })
+            ->sortByDesc(fn (stdClass $record) => ($record->fecha ?: '').'|'.str_pad((string) $record->orden, 12, '0', STR_PAD_LEFT))
+            ->values();
     }
 
-    private function groupItemUnits(Collection $items, string $field, int $limit): array
+    /** @param Collection<int, stdClass> $entries */
+    private function dailyBreakdown(Collection $entries): array
     {
-        return $items->filter(fn (EntregaBodegaItem $item) => filled($item->{$field}))
-            ->groupBy($field)
-            ->map(fn (Collection $group) => (int) $group->sum('cantidad'))
-            ->sortDesc()
-            ->take($limit)
-            ->all();
+        return $entries->filter(fn (stdClass $entry) => filled($entry->fecha))
+            ->groupBy(fn (stdClass $entry) => $entry->fecha)
+            ->sortKeys()
+            ->map(fn (Collection $group, string $date) => [
+                'label' => $date,
+                'documentos' => $group->pluck('aplicacion_id')->unique()->count(),
+                'entregadas' => $this->sum($group, 'entregadas'),
+                'devueltas' => $this->sum($group, 'devueltas'),
+                'netas' => $this->sum($group, 'netas'),
+                'valor_neto' => $this->sum($group, 'valor_neto'),
+            ])->values()->all();
     }
 
-    private function groupItemReferenceValues(Collection $items, string $field, int $limit): array
+    /** @param Collection<int, stdClass> $entries */
+    private function centerBreakdown(Collection $entries): array
     {
-        return $items
-            ->filter(fn (EntregaBodegaItem $item) => filled($item->{$field}) && $item->tiene_precio_referencia)
-            ->groupBy($field)
-            ->map(fn (Collection $group) => round($this->referenceValue($group), 2))
-            ->sortDesc()
-            ->take($limit)
-            ->all();
-    }
-
-    private function peopleBreakdown(Collection $rows): array
-    {
-        return $rows->groupBy('nombre')->map(function (Collection $group, string $name) {
+        return $entries->groupBy('centro')->map(function (Collection $group, string $center): array {
             return [
-                'nombre' => $name,
-                'entregas' => $group->count(),
-                'unidades' => (int) $group->sum('unidades_total'),
-                'valor_referencial' => round((float) $group->sum('valor_referencial'), 2),
-                'centro' => (string) $group->pluck('centro')->filter()->countBy()->sortDesc()->keys()->first(),
+                'centro' => $center,
+                'comprobantes' => $group->pluck('aplicacion_id')->unique()->count(),
+                'entregadas' => $this->sum($group, 'entregadas'),
+                'devueltas' => $this->sum($group, 'devueltas'),
+                'netas' => $this->sum($group, 'netas'),
+                'valor_neto' => $this->sum($group, 'valor_neto'),
             ];
-        })->sortByDesc('unidades')->take(10)->values()->all();
+        })->sortByDesc('netas')->take(10)->values()->all();
     }
 
-    private function centerPeopleBreakdown(Collection $rows): array
+    /** @param Collection<int, stdClass> $entries */
+    private function articleBreakdown(Collection $entries, string $field): array
     {
-        return $rows->groupBy(fn (EntregaBodega $entrega) => ($entrega->centro ?: 'Sin centro').'|'.($entrega->nombre ?: 'Sin identificar'))
-            ->map(function (Collection $group, string $key) {
-                [$centro, $nombre] = array_pad(explode('|', $key, 2), 2, '');
+        return $entries->groupBy($field)->map(function (Collection $group, string $label) use ($field): array {
+            return [
+                'label' => $label ?: ($field === 'talla' ? 'Sin talla' : 'Artículo sin catálogo'),
+                'entregadas' => $this->sum($group, 'entregadas'),
+                'devueltas' => $this->sum($group, 'devueltas'),
+                'netas' => $this->sum($group, 'netas'),
+                'valor_neto' => $this->sum($group, 'valor_neto'),
+            ];
+        })->sortByDesc('netas')->take(8)->values()->all();
+    }
+
+    /** @param Collection<int, stdClass> $entries */
+    private function positiveNetDistribution(Collection $entries, string $field): array
+    {
+        return $entries->groupBy($field)
+            ->map(fn (Collection $group, string $label) => [
+                'label' => $label ?: ($field === 'talla' ? 'Sin talla' : 'Artículo sin catálogo'),
+                'netas' => $this->sum($group, 'netas'),
+            ])
+            ->filter(fn (array $row) => $row['netas'] > 0)
+            ->sortByDesc('netas')
+            ->take(8)
+            ->values()
+            ->all();
+    }
+
+    /** @param Collection<int, stdClass> $entries */
+    private function peopleBreakdown(Collection $entries): array
+    {
+        return $entries->groupBy('persona')->map(function (Collection $group, string $person): array {
+            return [
+                'nombre' => $person,
+                'centro' => (string) $group->pluck('centro')->countBy()->sortDesc()->keys()->first(),
+                'entregadas' => $this->sum($group, 'entregadas'),
+                'devueltas' => $this->sum($group, 'devueltas'),
+                'netas' => $this->sum($group, 'netas'),
+                'valor_neto' => $this->sum($group, 'valor_neto'),
+            ];
+        })->sortByDesc('netas')->take(10)->values()->all();
+    }
+
+    /** @param Collection<int, stdClass> $entries */
+    private function centerPeopleBreakdown(Collection $entries): array
+    {
+        return $entries->groupBy(fn (stdClass $entry) => $entry->centro.'|'.$entry->persona)
+            ->map(function (Collection $group, string $key): array {
+                [$center, $person] = array_pad(explode('|', $key, 2), 2, '');
 
                 return [
-                    'centro' => $centro,
-                    'nombre' => $nombre,
-                    'entregas' => $group->count(),
-                    'unidades' => (int) $group->sum('unidades_total'),
-                    'valor_referencial' => round((float) $group->sum('valor_referencial'), 2),
+                    'centro' => $center,
+                    'nombre' => $person,
+                    'entregadas' => $this->sum($group, 'entregadas'),
+                    'devueltas' => $this->sum($group, 'devueltas'),
+                    'netas' => $this->sum($group, 'netas'),
+                    'valor_neto' => $this->sum($group, 'valor_neto'),
                 ];
-            })->sortByDesc('unidades')->take(10)->values()->all();
+            })->sortByDesc('netas')->take(12)->values()->all();
     }
 
-    private function monthlyBreakdown(Collection $rows): array
+    /** @param Collection<int, stdClass> $entries */
+    private function sum(Collection $entries, string $field): float
     {
-        return $rows->filter(fn (EntregaBodega $entrega) => $entrega->fecha_pedido)
-            ->groupBy(fn (EntregaBodega $entrega) => $entrega->fecha_pedido->format('Y-m'))
-            ->sortKeys()
-            ->map(fn (Collection $monthRows, string $month) => [
-                'label' => $month,
-                'entregas' => $monthRows->count(),
-                'unidades' => (int) $monthRows->sum('unidades_total'),
-                'valor_referencial' => round((float) $monthRows->sum('valor_referencial'), 2),
-            ])->values()->all();
+        return round((float) $entries->sum(fn (stdClass $entry) => (float) $entry->{$field}), 3);
     }
 
-    private function dailyBreakdown(Collection $rows): array
+    /** @param Collection<int, stdClass> $entries */
+    private function absoluteSum(Collection $entries, string $field): float
     {
-        return $rows->filter(fn (EntregaBodega $entrega) => $entrega->fecha_pedido)
-            ->groupBy(fn (EntregaBodega $entrega) => $entrega->fecha_pedido->toDateString())
-            ->sortKeys()
-            ->map(fn (Collection $dayRows, string $day) => [
-                'label' => $day,
-                'entregas' => $dayRows->count(),
-                'unidades' => (int) $dayRows->sum('unidades_total'),
-                'valor_referencial' => round((float) $dayRows->sum('valor_referencial'), 2),
-            ])->values()->all();
-    }
-
-    /** Adds a current catalog reference cost while preserving how it was matched. */
-    private function attachReferenceValues(Collection $rows): void
-    {
-        $snapshotVariantIds = $rows
-            ->map(fn (EntregaBodega $delivery) => $delivery->inventarioAplicacion?->correccion_snapshot ?? [])
-            ->flatten(1)
-            ->filter(fn ($line) => is_array($line) && filled($line['variante_id'] ?? null))
-            ->pluck('variante_id')
-            ->map(fn ($id) => (int) $id)
-            ->filter()
-            ->unique()
-            ->values();
-
-        $snapshotVariants = $snapshotVariantIds->isEmpty()
-            ? collect()
-            : InventarioVariante::query()->whereKey($snapshotVariantIds)->get()->keyBy('id');
-        $catalogueVariants = $this->catalogueVariantLookup();
-
-        foreach ($rows as $delivery) {
-            $application = $delivery->inventarioAplicacion;
-            $snapshot = collect($application?->correccion_snapshot ?? [])
-                ->filter(fn ($line) => is_array($line) && filled($line['linea_fuente'] ?? null) && filled($line['variante_id'] ?? null))
-                ->mapWithKeys(fn (array $line) => [(int) $line['linea_fuente'] => $snapshotVariants->get((int) $line['variante_id'])]);
-
-            $lineVariants = $snapshot->isNotEmpty()
-                ? $snapshot
-                : ($application?->lineas ?? collect())->mapWithKeys(
-                    fn ($line) => [(int) $line->linea_fuente => $line->variante],
-                );
-
-            $valuedUnits = 0;
-            $unvaluedUnits = 0;
-            $referenceValue = 0.0;
-
-            foreach ($delivery->items as $item) {
-                /** @var InventarioVariante|null $variant */
-                $mappedVariant = $lineVariants->get((int) $item->linea);
-                $variant = $mappedVariant ?: $catalogueVariants->get($this->catalogueVariantKey($item->articulo, $item->talla));
-                $price = $variant && (float) $variant->costo_referencia > 0
-                    ? round((float) $variant->costo_referencia, 2)
-                    : null;
-                $quantity = (int) $item->cantidad;
-                $value = $price === null ? null : round($quantity * $price, 2);
-
-                $item->setAttribute('variante_id_referencia', $variant?->id);
-                $item->setAttribute('precio_referencia', $price);
-                $item->setAttribute('valor_referencial', $value);
-                $item->setAttribute('tiene_precio_referencia', $price !== null);
-                $item->setAttribute('origen_precio_referencia', $price === null ? null : ($mappedVariant ? 'Vínculo de inventario' : 'Coincidencia exacta de catálogo'));
-
-                if ($value === null) {
-                    $unvaluedUnits += $quantity;
-                    continue;
-                }
-
-                $valuedUnits += $quantity;
-                $referenceValue += $value;
-            }
-
-            $delivery->setAttribute('unidades_valorizadas', $valuedUnits);
-            $delivery->setAttribute('unidades_sin_precio', $unvaluedUnits);
-            $delivery->setAttribute('valor_referencial', round($referenceValue, 2));
-        }
-    }
-
-    private function referenceValue(Collection $items): float
-    {
-        return round((float) $items->sum(fn (EntregaBodegaItem $item) => (float) ($item->valor_referencial ?? 0)), 2);
-    }
-
-    /**
-     * Exact product/talla matches allow old dashboard records to be valued
-     * without inferring an article from similar wording. Ambiguous labels are
-     * intentionally excluded from the lookup.
-     */
-    private function catalogueVariantLookup(): Collection
-    {
-        $lookup = [];
-
-        InventarioVariante::query()->with('producto:id,codigo,nombre')->get()->each(function (InventarioVariante $variant) use (&$lookup) {
-            foreach ([$variant->producto?->nombre, $variant->producto?->codigo] as $article) {
-                $key = $this->catalogueVariantKey($article, $variant->talla);
-                if ($key === null) {
-                    continue;
-                }
-
-                if (! array_key_exists($key, $lookup)) {
-                    $lookup[$key] = $variant;
-                    continue;
-                }
-
-                if ($lookup[$key]?->id !== $variant->id) {
-                    $lookup[$key] = null;
-                }
-            }
-        });
-
-        return collect($lookup);
-    }
-
-    private function catalogueVariantKey(?string $article, ?string $size): ?string
-    {
-        $article = Str::lower(preg_replace('/\s+/', ' ', trim((string) $article)) ?: '');
-        $size = Str::lower(preg_replace('/\s+/', ' ', trim((string) $size)) ?: '');
-
-        return $article !== '' && $size !== '' ? $article.'|'.$size : null;
+        return round((float) $entries->sum(fn (stdClass $entry) => abs((float) $entry->{$field})), 3);
     }
 }

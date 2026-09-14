@@ -83,4 +83,22 @@ class InventarioMovimiento extends Model
     {
         return $this->hasMany(self::class, 'reverso_de_id');
     }
+
+    /**
+     * Línea de Kizeo que originó el movimiento. Solo aplica cuando la
+     * referencia se guarda como InventarioEntregaKizeoLinea.
+     */
+    public function entregaKizeoLinea(): BelongsTo
+    {
+        return $this->belongsTo(InventarioEntregaKizeoLinea::class, 'referencia_id');
+    }
+
+    /**
+     * Aplicación de Kizeo que originó una corrección o un reverso. Solo aplica
+     * cuando la referencia se guarda como InventarioEntregaKizeoAplicacion.
+     */
+    public function entregaKizeoAplicacion(): BelongsTo
+    {
+        return $this->belongsTo(InventarioEntregaKizeoAplicacion::class, 'referencia_id');
+    }
 }
