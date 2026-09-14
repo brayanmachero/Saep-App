@@ -1063,6 +1063,21 @@
                                         <div><h3>Desglose por talla</h3><p id="product-variant-editor-copy">Selecciona un producto y una ubicación para editar solo la talla que corresponda.</p></div>
                                         <label>Ubicación para los saldos<select id="product-variant-location" class="form-select"><option value="">Selecciona una ubicación</option>@foreach($activeLocations as $location)<option value="{{ $location->id }}" @selected($selectedLocation === $location->id)>{{ $location->nombre }}</option>@endforeach</select></label>
                                     </div>
+                                    @if($canCreate)
+                                        <form method="POST" id="product-variant-create" data-action-base="{{ url('inventario-bodega/productos') }}" class="inventory-variant-create" hidden>
+                                            @csrf
+                                            <div class="inventory-variant-create-heading"><div><h4>Agregar nueva talla</h4><p>Registra la talla una sola vez, con su costo de referencia y saldo inicial. El saldo genera un movimiento trazable de stock inicial.</p></div><span class="inventory-variant-create-location" data-variant-create-location>Selecciona una ubicación</span></div>
+                                            <div class="inventory-variant-create-fields">
+                                                <label>Talla o variante<input name="talla" type="text" class="form-control" maxlength="80" placeholder="Ej.: 47 o XL" required data-variant-create-input></label>
+                                                <label>Stock mínimo<input name="stock_minimo" type="number" min="0" step="0.001" inputmode="decimal" class="form-control" required data-variant-create-minimum data-variant-create-input></label>
+                                                <label>Costo de referencia<input name="costo_referencia" type="number" min="0.01" step="0.01" inputmode="decimal" class="form-control" required data-variant-create-input></label>
+                                                <label>Stock inicial<input name="stock_inicial" type="number" min="0" step="0.001" inputmode="decimal" class="form-control" value="0" required data-variant-create-input></label>
+                                                <label class="inventory-variant-create-reason">Motivo del alta<input name="observacion" type="text" minlength="5" maxlength="500" class="form-control" value="Alta de nueva talla en catálogo" required data-variant-create-input></label>
+                                                <input type="hidden" name="ubicacion_id" data-variant-create-location-input><input type="hidden" name="productos_pagina" value="{{ $products->currentPage() }}"><input type="hidden" name="producto_buscar" value="{{ $productSearch }}"><input type="hidden" name="producto_estado" value="{{ $productStatus }}">
+                                                <button class="btn btn-primary inventory-btn" type="submit" data-variant-create-submit disabled><i class="bi bi-plus-lg"></i>Crear talla y registrar saldo</button>
+                                            </div>
+                                        </form>
+                                    @endif
                                     <div id="product-variant-editor-rows" class="inventory-variant-editor-rows"></div>
                                 </section>
                             @endif
@@ -1277,10 +1292,10 @@
     .inventory-receipt-import { margin:.85rem 0 1rem; background:#f6f4ff; }.inventory-receipt-import h3,.inventory-variant-stock-editor h3 { margin:0; font-size:.92rem; font-weight:800; }.inventory-receipt-import p,.inventory-variant-stock-editor p { margin:.2rem 0 0; color:#665b84; font-size:.8rem; line-height:1.45; }.inventory-import-receipt-form { display:grid; grid-template-columns:auto minmax(220px,1fr) auto; gap:.65rem; align-items:end; }.inventory-import-receipt-form label { display:grid; gap:.28rem; min-width:0; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-import-receipt-form .form-control { min-height:2.42rem; font-size:.88rem; letter-spacing:0; text-transform:none; }.inventory-import-hint { color:#68758b; font-size:.75rem; line-height:1.4; }.inventory-receipt-reverse { position:relative; min-width:2.45rem; }.inventory-receipt-reverse > summary { list-style:none; cursor:pointer; }.inventory-receipt-reverse > summary::-webkit-details-marker { display:none; }.inventory-receipt-reverse[open] { min-width:22rem; }.inventory-receipt-reverse[open] > summary { margin-bottom:.45rem; }.inventory-receipt-reverse .inventory-reverse-form { padding:.7rem; background:#fff8f8; border:1px solid #f2c8cc; border-radius:.5rem; grid-template-columns:1fr; }.inventory-receipt-reverse .inventory-confirm-reverse { align-items:flex-start; padding-top:0; color:#7d3440; font-size:.76rem!important; line-height:1.35; }.inventory-muted { color:#94a3b8; }.dark-mode .inventory-receipt-import,.dark-mode .inventory-receipt-reverse .inventory-reverse-form { background:rgba(255,255,255,.035); border-color:#374151; }.dark-mode .inventory-import-hint { color:#aeb9cc; }.dark-mode .inventory-receipt-import p,.dark-mode .inventory-variant-stock-editor p { color:#d8cff7; }
     .inventory-import-master-form { display:grid; grid-template-columns:minmax(220px,1fr) auto; gap:.65rem; align-items:end; margin-top:.8rem; }.inventory-import-master-form label { display:grid; gap:.28rem; min-width:0; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-import-master-form .form-control { min-height:2.42rem; font-size:.88rem; letter-spacing:0; text-transform:none; }
     @container (max-width: 760px) { .inventory-import-receipt-form,.inventory-import-master-form { grid-template-columns:1fr; }.inventory-import-receipt-form .inventory-btn,.inventory-import-master-form .inventory-btn { width:100%; }.inventory-receipt-reverse[open] { min-width:min(22rem, calc(100vw - 3rem)); } }
-    .inventory-product-management { display:grid; gap:.85rem; margin-top:1rem; padding:1rem; background:#f5f3ff; border:1px solid #ded5ff; border-radius:.6rem; }.inventory-product-management .inventory-product-general { margin:0; padding:0; background:transparent; border:0; }.inventory-product-management .inventory-variant-editor { margin:0; padding:1rem 0 0; background:transparent; border:0; border-top:1px solid #ded5ff; border-radius:0; }.inventory-variant-editor { display:grid; gap:.85rem; }.inventory-variant-editor-heading { display:grid; grid-template-columns:minmax(0,1fr) minmax(230px,340px); gap:1rem; align-items:end; }.inventory-variant-editor h3 { margin:0; color:#2e1a68; font-size:1rem; font-weight:800; }.inventory-variant-editor p { margin:.22rem 0 0; color:#665b84; font-size:.81rem; line-height:1.45; }.inventory-variant-editor-heading > label { display:grid; gap:.28rem; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-variant-editor-rows { display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:.7rem; }.inventory-variant-card { display:grid; gap:.72rem; padding:.85rem; background:#fff; border:1px solid #ded5ff; border-radius:.55rem; box-shadow:0 .18rem .65rem rgba(53,36,112,.06); }.inventory-variant-card.is-inactive { opacity:.72; }.inventory-variant-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:.65rem; }.inventory-variant-card-header strong { display:block; color:#21114f; font-size:.95rem; }.inventory-variant-card-header small { display:block; max-width:24ch; margin-top:.12rem; color:#718096; font-size:.7rem; overflow-wrap:anywhere; }.inventory-variant-card-stock { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:.5rem; padding:.65rem; background:#f8fafc; border-radius:.45rem; }.inventory-variant-card-stock span { display:block; color:#748198; font-size:.68rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-variant-card-stock strong { display:block; margin-top:.12rem; color:#17213a; font-size:1.05rem; }.inventory-variant-card label { display:grid; gap:.28rem; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-variant-card .inventory-btn { width:100%; }.dark-mode .inventory-product-management { background:rgba(135,87,236,.12); border-color:rgba(167,139,250,.25); }.dark-mode .inventory-product-management .inventory-variant-editor { border-color:#4c3e77; }.dark-mode .inventory-variant-card { background:#141b2b; border-color:#4c3e77; box-shadow:none; }.dark-mode .inventory-variant-card-header strong,.dark-mode .inventory-variant-card-stock strong { color:#f3f5fb; }.dark-mode .inventory-variant-card-stock { background:#111827; }.dark-mode .inventory-variant-editor h3 { color:#e7ddff; }.dark-mode .inventory-variant-editor p { color:#d8cff7; }
+    .inventory-product-management { display:grid; gap:.85rem; margin-top:1rem; padding:1rem; background:#f5f3ff; border:1px solid #ded5ff; border-radius:.6rem; }.inventory-product-management .inventory-product-general { margin:0; padding:0; background:transparent; border:0; }.inventory-product-management .inventory-variant-editor { margin:0; padding:1rem 0 0; background:transparent; border:0; border-top:1px solid #ded5ff; border-radius:0; }.inventory-variant-editor { display:grid; gap:.85rem; }.inventory-variant-editor-heading { display:grid; grid-template-columns:minmax(0,1fr) minmax(230px,340px); gap:1rem; align-items:end; }.inventory-variant-editor h3 { margin:0; color:#2e1a68; font-size:1rem; font-weight:800; }.inventory-variant-editor p { margin:.22rem 0 0; color:#665b84; font-size:.81rem; line-height:1.45; }.inventory-variant-editor-heading > label { display:grid; gap:.28rem; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-variant-create { display:grid; gap:.7rem; padding:.85rem; background:#fff; border:1px solid #cfc0ff; border-left:4px solid #7151c8; border-radius:.55rem; }.inventory-variant-create-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem; }.inventory-variant-create h4 { margin:0; color:#2e1a68; font-size:.92rem; font-weight:800; }.inventory-variant-create-heading p { max-width:72ch; }.inventory-variant-create-location { flex:0 0 auto; padding:.3rem .5rem; border-radius:999px; background:#f0ebff; color:#5a3ca8; font-size:.72rem; font-weight:800; text-align:center; }.inventory-variant-create-fields { display:grid; grid-template-columns:repeat(4,minmax(135px,1fr)); gap:.65rem; align-items:end; }.inventory-variant-create-fields label { display:grid; gap:.28rem; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-variant-create-reason { grid-column:span 2; }.inventory-variant-create-fields .inventory-btn { min-height:2.42rem; }.inventory-variant-editor-rows { display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:.7rem; }.inventory-variant-card { display:grid; gap:.72rem; padding:.85rem; background:#fff; border:1px solid #ded5ff; border-radius:.55rem; box-shadow:0 .18rem .65rem rgba(53,36,112,.06); }.inventory-variant-card.is-inactive { opacity:.72; }.inventory-variant-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:.65rem; }.inventory-variant-card-header strong { display:block; color:#21114f; font-size:.95rem; }.inventory-variant-card-header small { display:block; max-width:24ch; margin-top:.12rem; color:#718096; font-size:.7rem; overflow-wrap:anywhere; }.inventory-variant-card-stock { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:.5rem; padding:.65rem; background:#f8fafc; border-radius:.45rem; }.inventory-variant-card-stock span { display:block; color:#748198; font-size:.68rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-variant-card-stock strong { display:block; margin-top:.12rem; color:#17213a; font-size:1.05rem; }.inventory-variant-card label { display:grid; gap:.28rem; color:#53627d; font-size:.72rem; font-weight:800; letter-spacing:.035em; text-transform:uppercase; }.inventory-variant-card .inventory-btn { width:100%; }.dark-mode .inventory-product-management { background:rgba(135,87,236,.12); border-color:rgba(167,139,250,.25); }.dark-mode .inventory-product-management .inventory-variant-editor { border-color:#4c3e77; }.dark-mode .inventory-variant-create { background:#141b2b; border-color:#5d468c; }.dark-mode .inventory-variant-create h4 { color:#e7ddff; }.dark-mode .inventory-variant-create-location { background:rgba(167,139,250,.18); color:#dbcfff; }.dark-mode .inventory-variant-card { background:#141b2b; border-color:#4c3e77; box-shadow:none; }.dark-mode .inventory-variant-card-header strong,.dark-mode .inventory-variant-card-stock strong { color:#f3f5fb; }.dark-mode .inventory-variant-card-stock { background:#111827; }.dark-mode .inventory-variant-editor h3 { color:#e7ddff; }.dark-mode .inventory-variant-editor p { color:#d8cff7; }
     .inventory-variant-state-form { display:flex; align-items:center; justify-content:flex-end; min-height:1.7rem; }.inventory-variant-state-switch { display:inline-flex!important; align-items:center; gap:.45rem; color:#4b556b!important; font-size:.7rem!important; font-weight:800!important; letter-spacing:.02em!important; text-transform:none!important; cursor:pointer; }.inventory-variant-state-toggle { position:relative; width:2.2rem; height:1.25rem; margin:0; appearance:none; -webkit-appearance:none; border:1px solid #cbd5e1; border-radius:999px; background:#cbd5e1; cursor:pointer; transition:background .16s ease,border-color .16s ease; }.inventory-variant-state-toggle::before { position:absolute; top:50%; left:.14rem; width:.88rem; height:.88rem; border-radius:50%; background:#fff; box-shadow:0 .05rem .18rem rgba(15,23,42,.25); content:""; transform:translateY(-50%); transition:transform .16s ease; }.inventory-variant-state-toggle:checked { border-color:#169b6b; background:#169b6b; }.inventory-variant-state-toggle:checked::before { transform:translate(0.94rem,-50%); }.inventory-variant-state-toggle:focus-visible { outline:3px solid rgba(114,80,202,.28); outline-offset:2px; }.inventory-variant-stock-adjustment { display:grid; gap:.72rem; }.dark-mode .inventory-variant-state-switch { color:#cbd5e1!important; }.dark-mode .inventory-variant-state-toggle { border-color:#4b5563; background:#4b5563; }.dark-mode .inventory-variant-state-toggle:checked { border-color:#34d399; background:#167a57; }
     .inventory-variant-card.is-target { border-color:#6f49c7; box-shadow:0 0 0 .2rem rgba(111,73,199,.14),0 .22rem .75rem rgba(53,36,112,.1); }.dark-mode .inventory-variant-card.is-target { border-color:#b9a4f5; box-shadow:0 0 0 .2rem rgba(185,164,245,.16); }
-    @container (max-width: 700px) { .inventory-variant-editor-heading { grid-template-columns:1fr; }.inventory-variant-editor-rows { grid-template-columns:1fr; } }
+    @container (max-width: 700px) { .inventory-variant-editor-heading { grid-template-columns:1fr; }.inventory-variant-create-heading { display:grid; }.inventory-variant-create-fields { grid-template-columns:1fr; }.inventory-variant-create-reason { grid-column:auto; }.inventory-variant-editor-rows { grid-template-columns:1fr; } }
     .inventory-movement-receipt-actions { grid-template-columns:minmax(0,1fr) auto; align-items:end; margin-bottom:1rem; background:#f6f4ff; }.inventory-movement-receipt-actions h3 { margin:0; font-size:.92rem; font-weight:800; }.inventory-movement-receipt-actions p { margin:.22rem 0 0; color:#665b84; font-size:.8rem; line-height:1.45; }.inventory-movement-receipt-actions .inventory-import-actions { justify-content:flex-end; }.inventory-receipt-reverse-trigger { white-space:nowrap; }.dark-mode .inventory-movement-receipt-actions { background:rgba(135,87,236,.12); }.dark-mode .inventory-movement-receipt-actions p { color:#d8cff7; }
     @container (max-width: 760px) { .inventory-movement-receipt-actions { grid-template-columns:1fr; }.inventory-movement-receipt-actions .inventory-import-actions { justify-content:stretch; }.inventory-movement-receipt-actions .inventory-import-actions .inventory-btn { flex:1; } }
     .inventory-receipt-section { display:grid; gap:.9rem; margin-bottom:1.25rem; }.inventory-receipt-note,.inventory-ribbon-note { display:grid; grid-template-columns:auto minmax(0,1fr); column-gap:.7rem; row-gap:.14rem; align-items:start; max-width:none; padding:.85rem 1rem; }.inventory-receipt-note i,.inventory-ribbon-note i { grid-row:1 / span 2; }.inventory-receipt-note strong,.inventory-ribbon-note strong { margin:0; }.inventory-receipt-note span,.inventory-ribbon-note span { width:auto; max-width:none; }.inventory-ribbon-note { margin-top:.85rem; }
@@ -1468,6 +1483,11 @@ document.addEventListener('DOMContentLoaded', function () {
     var productVariantRows = document.getElementById('product-variant-editor-rows');
     var productVariantLocation = document.getElementById('product-variant-location');
     var productVariantCopy = document.getElementById('product-variant-editor-copy');
+    var productVariantCreateForm = document.getElementById('product-variant-create');
+    var productVariantCreateLocation = document.querySelector('[data-variant-create-location]');
+    var productVariantCreateLocationInput = document.querySelector('[data-variant-create-location-input]');
+    var productVariantCreateMinimum = document.querySelector('[data-variant-create-minimum]');
+    var productVariantCreateSubmit = document.querySelector('[data-variant-create-submit]');
     var highlightedVariantId = productVariantPanel ? productVariantPanel.dataset.highlightVariant : '';
     var didFocusHighlightedVariant = false;
 
@@ -1505,6 +1525,39 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!productSelect || !productSelect.value) return [];
         try { return JSON.parse(productSelect.options[productSelect.selectedIndex].dataset.variants || '[]'); }
         catch (error) { return []; }
+    }
+
+    function refreshVariantCreateForm() {
+        if (!productVariantCreateForm || !productSelect) return;
+        var option = productSelect.options[productSelect.selectedIndex];
+        var hasProduct = Boolean(option && option.value);
+        if (!hasProduct) {
+            productVariantCreateForm.hidden = true;
+            return;
+        }
+
+        productVariantCreateForm.hidden = false;
+        var locationId = productVariantLocation ? productVariantLocation.value : '';
+        var productIsActive = option.dataset.active === '1';
+        var canCreate = productIsActive && Boolean(locationId);
+        productVariantCreateForm.action = productVariantCreateForm.dataset.actionBase + '/' + option.value + '/variantes';
+
+        if (productVariantCreateLocationInput) productVariantCreateLocationInput.value = locationId;
+        if (productVariantCreateLocation) {
+            productVariantCreateLocation.textContent = !productIsActive
+                ? 'Reactiva el producto para agregar tallas'
+                : (locationId
+                    ? 'Saldo inicial en ' + productVariantLocation.options[productVariantLocation.selectedIndex].text
+                    : 'Selecciona una ubicación para registrar el saldo');
+        }
+        if (productVariantCreateMinimum && productVariantCreateMinimum.dataset.productId !== option.value) {
+            productVariantCreateMinimum.value = option.dataset.stock_minimo || '0';
+            productVariantCreateMinimum.dataset.productId = option.value;
+        }
+        productVariantCreateForm.querySelectorAll('[data-variant-create-input]').forEach(function (input) {
+            input.disabled = !canCreate;
+        });
+        if (productVariantCreateSubmit) productVariantCreateSubmit.disabled = !canCreate;
     }
 
     function renderProductVariantCards() {
@@ -1634,8 +1687,14 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    if (productSelect) productSelect.addEventListener('change', renderProductVariantCards);
-    if (productVariantLocation) productVariantLocation.addEventListener('change', renderProductVariantCards);
+    if (productSelect) productSelect.addEventListener('change', function () {
+        renderProductVariantCards();
+        refreshVariantCreateForm();
+    });
+    if (productVariantLocation) productVariantLocation.addEventListener('change', function () {
+        renderProductVariantCards();
+        refreshVariantCreateForm();
+    });
     function syncProductSubcategoryOptions(scope) {
         var category = scope.querySelector('[data-product-category-select]');
         var subcategory = scope.querySelector('[data-product-subcategory-select]');
@@ -1685,6 +1744,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (refreshProductEditor) refreshProductEditor();
     if (productSelect) syncProductSubcategoryOptions(productSelect.closest('form'));
     renderProductVariantCards();
+    refreshVariantCreateForm();
 
     function normalizedSearch(value) {
         return (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();

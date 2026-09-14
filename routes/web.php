@@ -569,6 +569,9 @@ Route::middleware('auth')->group(function () {
           Route::put('productos/{producto}', [InventarioBodegaController::class, 'updateProduct'])
               ->middleware('modulo:inventario_bodega,puede_editar')
               ->name('productos.update');
+          Route::post('productos/{producto}/variantes', [InventarioBodegaController::class, 'storeVariant'])
+              ->middleware('modulo:inventario_bodega,puede_crear')
+              ->name('variantes.store');
           Route::patch('variantes/{variante}/estado', [InventarioBodegaController::class, 'updateVariantStatus'])
               ->middleware('modulo:inventario_bodega,puede_editar')
               ->name('variantes.estado.update');

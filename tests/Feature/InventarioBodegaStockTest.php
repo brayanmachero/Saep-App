@@ -217,6 +217,52 @@ class InventarioBodegaStockTest extends TestCase
         ], $user);
     }
 
+    public function test_new_variant_stores_reference_cost_and_initial_stock_without_touching_existing_variants(): void
+    {
+        [$user, $location, , $existingVariant] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+
+        $variant = $service->createVariant($existingVariant->producto, [
+            'talla' => '47',
+            'stock_minimo' => 3,
+            'costo_referencia' => 41990,
+            'ubicacion_id' => $location->id,
+            'stock_inicial' => 8,
+            'observacion' => 'Alta de talla para reposición',
+        ], $user);
+
+        $this->assertSame('47', $variant->talla);
+        $this->assertTrue((bool) $variant->activo);
+        $this->assertSame(8.0, $service->stockActual($location->id, $variant->id));
+        $this->assertSame(0.0, $service->stockActual($location->id, $existingVariant->id));
+        $this->assertSame(41990.0, (float) $variant->fresh()->costo_referencia);
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'variante_id' => $variant->id,
+            'tipo' => 'STOCK_INICIAL',
+            'origen' => 'ALTA_VARIANTE_CATALOGO',
+            'cantidad' => 8,
+        ]);
+        $this->assertDatabaseHas('inventario_historial_costos', [
+            'variante_id' => $variant->id,
+            'costo_unitario' => 41990,
+            'origen' => 'ALTA_VARIANTE_CATALOGO',
+        ]);
+
+        try {
+            $service->createVariant($existingVariant->producto, [
+                'talla' => '47',
+                'stock_minimo' => 0,
+                'costo_referencia' => 41990,
+                'ubicacion_id' => $location->id,
+                'stock_inicial' => 0,
+                'observacion' => 'Intento duplicado de talla',
+            ], $user);
+            $this->fail('La talla duplicada debió ser rechazada.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('talla', $exception->errors());
+        }
+    }
+
     public function test_approved_stocktake_registers_only_the_adjustment_difference(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContext();

@@ -587,6 +587,36 @@ class InventarioBodegaController extends Controller
         return back()->with('success', $message);
     }
 
+    /**
+     * Crea una talla nueva sin reutilizar una variante existente ni alterar su
+     * historial. El saldo inicial se registra como movimiento trazable.
+     */
+    public function storeVariant(Request $request, InventarioProducto $producto): RedirectResponse
+    {
+        $data = $request->validate([
+            'talla' => ['required', 'string', 'max:80'],
+            'stock_minimo' => ['nullable', 'numeric', 'gte:0'],
+            'costo_referencia' => ['required', 'numeric', 'gt:0'],
+            'ubicacion_id' => [
+                'required',
+                Rule::exists('inventario_ubicaciones', 'id')->where(fn ($query) => $query->where('activo', true)),
+            ],
+            'stock_inicial' => ['required', 'numeric', 'gte:0'],
+            'observacion' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        $variant = $this->stock->createVariant($producto, $data, $request->user());
+        $stock = rtrim(rtrim(number_format((float) $data['stock_inicial'], 3, ',', '.'), '0'), ',');
+
+        return redirect()->route(
+            'inventario-bodega.index',
+            $this->catalogEditorQuery($request, $producto->id, (int) $data['ubicacion_id']),
+        )->with(
+            'success',
+            "Talla {$variant->talla} creada con saldo inicial {$stock}. El alta y el costo de referencia quedaron registrados en el historial.",
+        );
+    }
+
     public function updateVariantStatus(Request $request, InventarioVariante $variante): RedirectResponse
     {
         $data = $request->validate([

@@ -82,6 +82,73 @@ class InventarioStockService
     }
 
     /**
+     * Alta explícita de una talla para un producto existente. A diferencia de
+     * la edición masiva de "tallas", aquí se guardan el costo y el saldo
+     * inicial en sus registros trazables desde el primer momento.
+     */
+    public function createVariant(InventarioProducto $product, array $data, User $user): InventarioVariante
+    {
+        return DB::transaction(function () use ($product, $data, $user): InventarioVariante {
+            $product = InventarioProducto::query()->lockForUpdate()->findOrFail($product->id);
+            if (! $product->activo) {
+                throw ValidationException::withMessages([
+                    'talla' => 'Reactiva el producto antes de agregar una talla nueva.',
+                ]);
+            }
+
+            $size = Str::upper(trim((string) $data['talla']));
+            if ($product->variantes()->where('talla', $size)->exists()) {
+                throw ValidationException::withMessages([
+                    'talla' => "La talla {$size} ya existe para este producto. Puedes editar su saldo o reactivarla si estaba inhabilitada.",
+                ]);
+            }
+
+            $location = InventarioUbicacion::query()->where('activo', true)->find($data['ubicacion_id']);
+            if (! $location) {
+                throw ValidationException::withMessages([
+                    'ubicacion_id' => 'Selecciona una ubicación activa para registrar el saldo inicial.',
+                ]);
+            }
+
+            $variant = $product->variantes()->create([
+                'codigo' => $this->availableVariantCode($product->codigo, $size),
+                'talla' => $size,
+                'stock_minimo' => $this->decimal($data['stock_minimo'] ?? $product->stock_minimo),
+                'activo' => true,
+            ]);
+
+            $referenceCost = $data['costo_referencia'] ?? null;
+            $this->syncReferenceCost(
+                $variant,
+                $referenceCost,
+                $user,
+                'ALTA_VARIANTE_CATALOGO',
+                InventarioVariante::class,
+                $variant->id,
+            );
+
+            $initialStock = $this->decimal($data['stock_inicial']);
+            if ($initialStock > 0) {
+                $this->createMovement([
+                    'tipo' => 'STOCK_INICIAL',
+                    'origen' => 'ALTA_VARIANTE_CATALOGO',
+                    'ubicacion_id' => $location->id,
+                    'producto_id' => $product->id,
+                    'variante_id' => $variant->id,
+                    'cantidad' => $initialStock,
+                    'costo_unitario' => $referenceCost && (float) $referenceCost > 0 ? $referenceCost : null,
+                    'documento_tipo' => 'OTRO',
+                    'documento_numero' => $variant->codigo,
+                    'observacion' => "Alta de nueva talla {$size} desde Catálogo: ".trim($data['observacion']),
+                    'ocurrido_en' => now(),
+                ], $user);
+            }
+
+            return $variant;
+        });
+    }
+
+    /**
      * Activa o inhabilita una talla sin alterar las otras variantes ni su
      * kardex. Un producto solo puede quedar vigente si conserva al menos una
      * talla vigente.
