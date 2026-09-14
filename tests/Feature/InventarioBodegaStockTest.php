@@ -156,6 +156,8 @@ class InventarioBodegaStockTest extends TestCase
         $kizeoReconciliationMigration->up();
         $kizeoImputationHistoryMigration = require dirname(__DIR__, 2).'/database/migrations/2026_09_14_120000_create_inventario_kizeo_imputacion_historial_table.php';
         $kizeoImputationHistoryMigration->up();
+        $kizeoImputationForeignKeysMigration = require dirname(__DIR__, 2).'/database/migrations/2026_09_14_120100_complete_inventario_kizeo_imputacion_foreign_keys.php';
+        $kizeoImputationForeignKeysMigration->up();
     }
 
     public function test_receipt_and_transfer_update_stock_without_losing_traceability(): void
