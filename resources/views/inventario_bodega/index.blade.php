@@ -1645,6 +1645,17 @@ document.addEventListener('DOMContentLoaded', function () {
             finalStock.value = locationId ? String(stock) : '';
             finalStock.disabled = !locationId || !variant.activo;
 
+            var referenceCostInput = document.createElement('input');
+            referenceCostInput.type = 'number';
+            referenceCostInput.name = 'costo_referencia';
+            referenceCostInput.className = 'form-control';
+            referenceCostInput.min = '0.01';
+            referenceCostInput.step = '0.01';
+            referenceCostInput.inputMode = 'decimal';
+            referenceCostInput.placeholder = 'Mantener valor actual';
+            referenceCostInput.value = Number(variant.costo_referencia || 0) > 0 ? String(variant.costo_referencia) : '';
+            referenceCostInput.disabled = !locationId || !variant.activo;
+
             var reason = document.createElement('input');
             reason.type = 'text';
             reason.name = 'observacion';
@@ -1652,7 +1663,7 @@ document.addEventListener('DOMContentLoaded', function () {
             reason.minLength = 5;
             reason.maxLength = 500;
             reason.required = true;
-            reason.placeholder = 'Ej.: conteo físico';
+            reason.placeholder = 'Ej.: conteo o valor proveedor';
             reason.disabled = !locationId || !variant.activo;
 
             var button = inventoryElement('button', 'btn btn-primary inventory-btn');
@@ -1672,7 +1683,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 inventoryHiddenInput('producto_buscar', productVariantPanel.dataset.productSearch || ''),
                 inventoryHiddenInput('producto_estado', productVariantPanel.dataset.productStatus || ''),
                 inventoryLabel('Nuevo saldo', finalStock),
-                inventoryLabel('Motivo del ajuste', reason),
+                inventoryLabel('Nuevo costo referencia', referenceCostInput),
+                inventoryLabel('Motivo del cambio', reason),
                 button
             );
             card.append(header, statusForm, stockSummary, stockForm);

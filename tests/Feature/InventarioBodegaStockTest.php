@@ -263,6 +263,44 @@ class InventarioBodegaStockTest extends TestCase
         }
     }
 
+    public function test_variant_adjustment_updates_stock_and_reference_cost_with_separate_traceability(): void
+    {
+        [$user, $location, , $variant] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+
+        $result = $service->adjustVariant([
+            'ubicacion_id' => $location->id,
+            'variante_id' => $variant->id,
+            'stock_final' => 6,
+            'costo_referencia' => 28750,
+            'observacion' => 'Conteo y valor confirmado por proveedor',
+        ], $user);
+
+        $this->assertSame(6.0, $result['stock']);
+        $this->assertTrue($result['stock_changed']);
+        $this->assertTrue($result['cost_changed']);
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'variante_id' => $variant->id,
+            'tipo' => 'AJUSTE_POSITIVO',
+            'cantidad' => 6,
+        ]);
+        $this->assertDatabaseHas('inventario_historial_costos', [
+            'variante_id' => $variant->id,
+            'costo_unitario' => 28750,
+            'origen' => 'ACTUALIZACION_CATALOGO',
+        ]);
+
+        $sameValues = $service->adjustVariant([
+            'ubicacion_id' => $location->id,
+            'variante_id' => $variant->id,
+            'stock_final' => 6,
+            'costo_referencia' => 28750,
+            'observacion' => 'Verificación sin cambios',
+        ], $user);
+        $this->assertFalse($sameValues['stock_changed']);
+        $this->assertFalse($sameValues['cost_changed']);
+    }
+
     public function test_approved_stocktake_registers_only_the_adjustment_difference(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContext();

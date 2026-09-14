@@ -684,13 +684,23 @@ class InventarioBodegaController extends Controller
             'ubicacion_id' => ['required', 'exists:inventario_ubicaciones,id'],
             'variante_id' => ['required', 'exists:inventario_variantes,id'],
             'stock_final' => ['required', 'numeric', 'gte:0'],
+            'costo_referencia' => ['nullable', 'numeric', 'gt:0'],
             'observacion' => ['required', 'string', 'min:5', 'max:500'],
         ]);
         $variant = InventarioVariante::query()->findOrFail($data['variante_id']);
-        $stock = $this->stock->setVariantStock($data, $request->user());
+        $result = $this->stock->adjustVariant($data, $request->user());
+        $stock = $result['stock'];
+        $stockChanged = $result['stock_changed'];
+        $costChanged = $result['cost_changed'];
+        $message = match (true) {
+            $stockChanged && $costChanged => 'Saldo y costo de referencia actualizados. Ambos cambios quedaron registrados en el kardex e historial.',
+            $stockChanged => 'Saldo actualizado. El ajuste quedó registrado en el kardex.',
+            $costChanged => 'Costo de referencia actualizado. El saldo se mantiene y el valor anterior queda en el historial.',
+            default => 'No hubo cambios: el saldo y el costo informado ya eran los vigentes.',
+        };
 
         return redirect()->route('inventario-bodega.index', $this->catalogEditorQuery($request, $variant->producto_id, $data['ubicacion_id']))
-            ->with('success', 'Saldo de la talla actualizado a '.rtrim(rtrim(number_format($stock, 3, ',', '.'), '0'), ',').'. El ajuste quedo registrado en el kardex.');
+            ->with('success', $message.' Saldo actual: '.rtrim(rtrim(number_format($stock, 3, ',', '.'), '0'), ',').'.');
     }
 
     public function storeMovement(Request $request): RedirectResponse

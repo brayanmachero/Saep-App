@@ -432,6 +432,36 @@ class InventarioStockService
         });
     }
 
+    /**
+     * Ajusta los dos valores que se administran desde la ficha de una talla.
+     * El stock queda en el kardex y el costo en su historial, en una única
+     * transacción para evitar aplicar solo una parte del cambio.
+     *
+     * @return array{stock: float, stock_changed: bool, cost_changed: bool}
+     */
+    public function adjustVariant(array $data, User $user): array
+    {
+        return DB::transaction(function () use ($data, $user): array {
+            $beforeStock = $this->stockActual((int) $data['ubicacion_id'], (int) $data['variante_id']);
+            $stock = $this->setVariantStock($data, $user);
+            $variant = InventarioVariante::query()->lockForUpdate()->findOrFail($data['variante_id']);
+            $costChanged = $this->syncReferenceCost(
+                $variant,
+                $data['costo_referencia'] ?? null,
+                $user,
+                'ACTUALIZACION_CATALOGO',
+                InventarioVariante::class,
+                $variant->id,
+            );
+
+            return [
+                'stock' => $stock,
+                'stock_changed' => abs($stock - $beforeStock) >= 0.0001,
+                'cost_changed' => $costChanged,
+            ];
+        });
+    }
+
     public function registerManualMovement(array $data, User $user): InventarioMovimiento
     {
         return DB::transaction(function () use ($data, $user) {
