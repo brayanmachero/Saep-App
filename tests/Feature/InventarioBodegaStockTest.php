@@ -158,6 +158,8 @@ class InventarioBodegaStockTest extends TestCase
         $kizeoImputationHistoryMigration->up();
         $kizeoImputationForeignKeysMigration = require dirname(__DIR__, 2).'/database/migrations/2026_09_14_120100_complete_inventario_kizeo_imputacion_foreign_keys.php';
         $kizeoImputationForeignKeysMigration->up();
+        $manualReturnCostCenterMigration = require dirname(__DIR__, 2).'/database/migrations/2026_09_15_090000_add_return_cost_center_to_inventario_ingresos.php';
+        $manualReturnCostCenterMigration->up();
     }
 
     public function test_receipt_and_transfer_update_stock_without_losing_traceability(): void
@@ -215,6 +217,58 @@ class InventarioBodegaStockTest extends TestCase
             'costo_unitario' => null,
             'observacion' => null,
         ], $user);
+    }
+
+    public function test_manual_return_receipt_is_imputed_to_a_cost_center_and_keeps_it_when_reversed(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+        $costCenter = InventarioCentroCosto::create([
+            'numero_maestro' => 77,
+            'nombre' => 'Centro devolución Bodega',
+            'nombre_normalizado' => 'centro devolucion bodega',
+            'activo' => true,
+        ]);
+
+        $receipt = $service->registerReceipt([
+            'ubicacion_id' => $origin->id,
+            'proveedor_id' => null,
+            'tipo_ingreso' => 'DEVOLUCION_EPP',
+            'centro_costo_id' => $costCenter->id,
+            'tipo_documento' => 'OTRO',
+            'numero_documento' => 'DEV-77',
+            'fecha_documento' => '2026-09-15',
+            'fecha_recepcion' => '2026-09-15',
+            'observacion' => 'Devolución de EPP desde el centro.',
+        ], [[
+            'variante_id' => $variant->id,
+            'cantidad' => 2,
+            'costo_unitario' => null,
+        ]], $user);
+
+        $this->assertSame('DEVOLUCION_EPP', $receipt->tipo_ingreso);
+        $this->assertSame($costCenter->id, $receipt->centro_costo_id);
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'tipo' => 'DEVOLUCION_EPP',
+            'origen' => 'DEVOLUCION_BODEGA',
+            'referencia_id' => $receipt->id,
+            'centro_costo_id' => $costCenter->id,
+            'centro_costo' => $costCenter->nombre,
+            'cantidad' => 2,
+        ]);
+        $this->assertSame(2.0, $service->stockActual($origin->id, $variant->id));
+
+        $service->reverseReceipt($receipt, 'Devolución ingresada por error.', $user);
+
+        $this->assertSame(0.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseHas('inventario_movimientos', [
+            'tipo' => 'REVERSO',
+            'origen' => 'REVERSO_INGRESO_BODEGA',
+            'referencia_id' => $receipt->id,
+            'centro_costo_id' => $costCenter->id,
+            'centro_costo' => $costCenter->nombre,
+            'cantidad' => -2,
+        ]);
     }
 
     public function test_new_variant_stores_reference_cost_and_initial_stock_without_touching_existing_variants(): void

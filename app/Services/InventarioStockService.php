@@ -203,6 +203,22 @@ class InventarioStockService
     public function registerReceipt(array $data, array $items, User $user): InventarioIngreso
     {
         return DB::transaction(function () use ($data, $items, $user) {
+            $tipoIngreso = $data['tipo_ingreso'] ?? 'COMPRA';
+            $isReturn = $tipoIngreso === 'DEVOLUCION_EPP';
+            $costCenter = null;
+
+            if ($isReturn) {
+                $costCenter = InventarioCentroCosto::query()
+                    ->where('activo', true)
+                    ->find($data['centro_costo_id'] ?? null);
+
+                if (! $costCenter) {
+                    throw ValidationException::withMessages([
+                        'centro_costo_id' => 'Selecciona un centro de costo activo para registrar una devolución.',
+                    ]);
+                }
+            }
+
             // La fecha de recepción es el dato documental; el kardex debe reflejar
             // cuándo Bodega registró realmente la operación para ordenar el día.
             $registeredAt = now();
@@ -210,6 +226,9 @@ class InventarioStockService
                 'codigo' => $this->code('ING'),
                 'ubicacion_id' => $data['ubicacion_id'],
                 'proveedor_id' => $data['proveedor_id'] ?: null,
+                'tipo_ingreso' => $tipoIngreso,
+                'centro_costo_id' => $costCenter?->id,
+                'centro_costo' => $costCenter?->nombre,
                 'tipo_documento' => $data['tipo_documento'],
                 'numero_documento' => $data['numero_documento'] ?: null,
                 'fecha_documento' => $data['fecha_documento'] ?: null,
@@ -231,8 +250,8 @@ class InventarioStockService
                 ]);
 
                 $this->createMovement([
-                    'tipo' => 'INGRESO_COMPRA',
-                    'origen' => 'INGRESO_BODEGA',
+                    'tipo' => $isReturn ? 'DEVOLUCION_EPP' : 'INGRESO_COMPRA',
+                    'origen' => $isReturn ? 'DEVOLUCION_BODEGA' : 'INGRESO_BODEGA',
                     'ubicacion_id' => $ingreso->ubicacion_id,
                     'producto_id' => $variante->producto_id,
                     'variante_id' => $variante->id,
@@ -242,6 +261,8 @@ class InventarioStockService
                     'referencia_id' => $ingreso->id,
                     'documento_tipo' => $ingreso->tipo_documento,
                     'documento_numero' => $ingreso->numero_documento,
+                    'centro_costo_id' => $costCenter?->id,
+                    'centro_costo' => $costCenter?->nombre,
                     'observacion' => $ingreso->observacion,
                     'ocurrido_en' => $registeredAt,
                 ], $user);
@@ -285,7 +306,7 @@ class InventarioStockService
             $originalMovements = InventarioMovimiento::query()
                 ->where('referencia_tipo', InventarioIngreso::class)
                 ->where('referencia_id', $receipt->id)
-                ->where('tipo', 'INGRESO_COMPRA')
+                ->whereIn('tipo', ['INGRESO_COMPRA', 'DEVOLUCION_EPP'])
                 ->orderBy('id')
                 ->get()
                 ->groupBy('variante_id');
@@ -311,6 +332,8 @@ class InventarioStockService
                     'referencia_id' => $receipt->id,
                     'documento_tipo' => $receipt->tipo_documento,
                     'documento_numero' => $receipt->numero_documento,
+                    'centro_costo_id' => $original->centro_costo_id,
+                    'centro_costo' => $original->centro_costo,
                     'observacion' => 'Anulacion de ingreso '.$receipt->codigo.': '.$reason,
                     'ocurrido_en' => now(),
                     'reverso_de_id' => $original->id,

@@ -14,10 +14,15 @@ class InventarioIngreso extends Model
         'OTRO' => 'Otro respaldo',
     ];
 
+    public const TIPOS_INGRESO = [
+        'COMPRA' => 'Compra / reposición',
+        'DEVOLUCION_EPP' => 'Devolución de EPP',
+    ];
+
     protected $table = 'inventario_ingresos';
 
     protected $fillable = [
-        'codigo', 'ubicacion_id', 'proveedor_id', 'tipo_documento', 'numero_documento',
+        'codigo', 'ubicacion_id', 'proveedor_id', 'tipo_ingreso', 'centro_costo_id', 'centro_costo', 'tipo_documento', 'numero_documento',
         'fecha_documento', 'fecha_recepcion', 'observacion', 'registrado_por',
         'reversado_por', 'reversado_en', 'motivo_reversion',
     ];
@@ -36,6 +41,11 @@ class InventarioIngreso extends Model
     public function proveedor(): BelongsTo
     {
         return $this->belongsTo(InventarioProveedor::class, 'proveedor_id');
+    }
+
+    public function centroCosto(): BelongsTo
+    {
+        return $this->belongsTo(InventarioCentroCosto::class, 'centro_costo_id');
     }
 
     public function items(): HasMany

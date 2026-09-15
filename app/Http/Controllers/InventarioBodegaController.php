@@ -420,7 +420,7 @@ class InventarioBodegaController extends Controller
             'ingresos' => $view === 'ingresos'
                 ? $this->applyReceiptHistoryFilters(
                     InventarioIngreso::query()
-                        ->with(['ubicacion', 'proveedor', 'items.producto', 'items.variante', 'reversadoPor', 'registradoPor']),
+                        ->with(['ubicacion', 'proveedor', 'centroCosto', 'items.producto', 'items.variante', 'reversadoPor', 'registradoPor']),
                     $receiptHistoryFilters,
                 )
                     ->latest('fecha_recepcion')
@@ -650,6 +650,8 @@ class InventarioBodegaController extends Controller
         $data = $request->validate([
             'ubicacion_id' => ['required', 'exists:inventario_ubicaciones,id'],
             'proveedor_id' => ['nullable', 'exists:inventario_proveedores,id'],
+            'tipo_ingreso' => ['required', Rule::in(array_keys(InventarioIngreso::TIPOS_INGRESO))],
+            'centro_costo_id' => ['nullable', 'required_if:tipo_ingreso,DEVOLUCION_EPP', Rule::exists('inventario_centros_costo', 'id')->where('activo', true)],
             'tipo_documento' => ['required', Rule::in(array_keys(InventarioIngreso::TIPOS_DOCUMENTO))],
             'numero_documento' => ['nullable', 'string', 'max:100'],
             'fecha_documento' => ['nullable', 'date'],
@@ -663,8 +665,12 @@ class InventarioBodegaController extends Controller
 
         $ingreso = $this->stock->registerReceipt($data, $data['items'], $request->user());
 
+        $message = $ingreso->tipo_ingreso === 'DEVOLUCION_EPP'
+            ? "Devolución {$ingreso->codigo} registrada e imputada a {$ingreso->centro_costo}. El stock se actualizó en la ubicación seleccionada."
+            : "Ingreso {$ingreso->codigo} registrado. El stock se actualizó en la ubicación seleccionada.";
+
         return redirect()->route('inventario-bodega.index', ['vista' => 'ingresos'])
-            ->with('success', "Ingreso {$ingreso->codigo} registrado. El stock se actualizo en la ubicacion seleccionada.");
+            ->with('success', $message);
     }
 
     public function reverseReceipt(Request $request, InventarioIngreso $ingreso): RedirectResponse
@@ -1426,8 +1432,10 @@ class InventarioBodegaController extends Controller
                         ->orWhere('numero_documento', 'like', $term)
                         ->orWhere('tipo_documento', 'like', $term)
                         ->orWhere('observacion', 'like', $term)
+                        ->orWhere('centro_costo', 'like', $term)
                         ->orWhereHas('ubicacion', fn (Builder $locations) => $locations->where('nombre', 'like', $term)->orWhere('codigo', 'like', $term))
                         ->orWhereHas('proveedor', fn (Builder $providers) => $providers->where('nombre', 'like', $term)->orWhere('rut', 'like', $term))
+                        ->orWhereHas('centroCosto', fn (Builder $costCenters) => $costCenters->where('nombre', 'like', $term)->orWhere('numero_maestro', 'like', $term))
                         ->orWhereHas('registradoPor', fn (Builder $users) => $users->where('name', 'like', $term))
                         ->orWhereHas('items.producto', fn (Builder $products) => $products->where('nombre', 'like', $term)->orWhere('codigo', 'like', $term))
                         ->orWhereHas('items.variante', fn (Builder $variants) => $variants->where('talla', 'like', $term)->orWhere('codigo', 'like', $term));
