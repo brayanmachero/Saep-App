@@ -105,6 +105,12 @@ class CotizacionController
 
     public function create()
     {
+        return view('comercial::cotizador.create', $this->datosFormularioCotizacion());
+    }
+
+    /** @return array<string, mixed> */
+    private function datosFormularioCotizacion(): array
+    {
         $clientes = Cliente::activos()->orderBy('nombre')->get();
         $modalidades = Modalidad::activas()->orderBy('codigo')->get();
         $parametrosPorCategoria = Parametro::editables()
@@ -132,14 +138,14 @@ class CotizacionController
             ->map(fn ($items) => $items->values())
             ->toArray();
 
-        return view('comercial::cotizador.create', compact(
+        return compact(
             'clientes',
             'modalidades',
             'centrosCostoAgrupados',
             'parametrosPorCategoria',
             'uniformesCatalogo',
             'sueldoMinimoLegal',
-        ));
+        );
     }
 
     public function store(Request $request)
@@ -423,20 +429,11 @@ class CotizacionController
         }
 
         $cotizacion->load(['cliente', 'centroCosto', 'modalidad', 'detalles', 'uniformes']);
-        $uniformesCatalogo = Parametro::editables()
-            ->porCategoria('UNIFORMES')
-            ->orderBy('nombre')
-            ->get()
-            ->map(fn (Parametro $parametro) => [
-                'id' => $parametro->id,
-                'clave' => $parametro->clave,
-                'nombre' => $parametro->nombre,
-                'valor' => (float) $parametro->valor_actual,
-                'valor_visual' => $parametro->formatearValorVisual(),
-            ])
-            ->values();
 
-        return view('comercial::cotizador.edit', compact('cotizacion', 'uniformesCatalogo'));
+        return view('comercial::cotizador.create', array_merge(
+            $this->datosFormularioCotizacion(),
+            compact('cotizacion'),
+        ));
     }
 
     public function update(Request $request, Cotizacion $cotizacion)

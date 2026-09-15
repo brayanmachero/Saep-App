@@ -174,6 +174,26 @@ class ComercialCotizacionFlowTest extends TestCase
             ->exists());
     }
 
+    public function test_editar_una_version_abre_el_editor_completo_de_cotizaciones(): void
+    {
+        $admin = $this->createAdminUser();
+        ['cliente' => $cliente, 'centro' => $centro, 'modalidad' => $modalidad] = $this->createCommercialFixture();
+        $this->actingAs($admin);
+
+        $this->post(route('comercial.cotizaciones.store'), $this->quotePayload($cliente, $centro, $modalidad, 700000))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $cotizacion = Cotizacion::firstOrFail();
+
+        $this->get(route('comercial.cotizaciones.edit', $cotizacion))
+            ->assertOk()
+            ->assertViewIs('comercial::cotizador.create')
+            ->assertViewHas('cotizacion', fn (Cotizacion $vista) => $vista->is($cotizacion))
+            ->assertViewHas('parametrosPorCategoria')
+            ->assertViewHas('uniformesCatalogo');
+    }
+
     public function test_calculo_resiste_lote_local_de_cotizaciones_sin_errores(): void
     {
         $this->createCommercialFixture();

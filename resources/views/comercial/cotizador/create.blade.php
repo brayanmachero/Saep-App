@@ -1,5 +1,47 @@
 @extends('layouts.app')
-@section('title', 'Nueva Cotización')
+@php
+    $cotizacion = $cotizacion ?? null;
+    $esEdicion = $cotizacion !== null;
+    $valorFormulario = function (string $campo, mixed $predeterminado = null) use ($esEdicion, $cotizacion) {
+        return old($campo, $esEdicion ? data_get($cotizacion, $campo, $predeterminado) : $predeterminado);
+    };
+    $detalleInicial = function (string $concepto, mixed $predeterminado = 0) use ($esEdicion, $cotizacion) {
+        if (! $esEdicion) {
+            return $predeterminado;
+        }
+
+        return optional($cotizacion->detalles->firstWhere('concepto', $concepto))->valor ?? $predeterminado;
+    };
+    $remuneracionesIniciales = $esEdicion
+        ? $cotizacion->detalles
+            ->where('tipo', 'remuneracion')
+            ->reject(function ($detalle) {
+                $concepto = mb_strtolower((string) $detalle->concepto);
+
+                return str_contains($concepto, 'gratific')
+                    || str_contains($concepto, 'moviliz')
+                    || str_contains($concepto, 'colaci')
+                    || str_contains($concepto, 'colacion');
+            })
+            ->map(fn ($detalle) => [
+                'concepto' => $detalle->concepto,
+                'valor' => (float) $detalle->valor_base,
+            ])
+            ->values()
+            ->all()
+        : [];
+    $uniformesIniciales = $esEdicion
+        ? $cotizacion->uniformes
+            ->map(fn ($uniforme) => [
+                'descripcion' => $uniforme->descripcion,
+                'cantidad' => (int) $uniforme->cantidad,
+                'precio_unitario' => (float) $uniforme->precio_unitario,
+            ])
+            ->values()
+            ->all()
+        : [];
+@endphp
+@section('title', $esEdicion ? 'Editar Cotización ' . $cotizacion->numero : 'Nueva Cotización')
 @push('styles')
 <style>
     .quote-form .glass-card {
@@ -374,57 +416,60 @@
 <div class="page-container">
     <div class="page-header">
         <div>
-            <h2 class="page-heading">Nueva Cotización</h2>
-            <p class="page-subheading">Crear nueva cotización de servicios</p>
+            <h2 class="page-heading">{{ $esEdicion ? 'Editar Cotización' : 'Nueva Cotización' }}</h2>
+            <p class="page-subheading">
+                {{ $esEdicion ? $cotizacion->numero . ' · edición completa de la versión en preparación' : 'Crear nueva cotización de servicios' }}
+            </p>
         </div>
-        <a href="{{ route('comercial.cotizaciones.index') }}" class="btn-secondary">
+        <a href="{{ $esEdicion ? route('comercial.cotizaciones.show', $cotizacion) : route('comercial.cotizaciones.index') }}" class="btn-secondary">
             <i class="bi bi-arrow-left"></i> Volver
         </a>
     </div>
 
     @include('partials._alerts')
 
-    <form method="POST" action="{{ route('comercial.cotizaciones.store') }}" id="cotizacionForm" class="quote-form">
+    <form method="POST" action="{{ $esEdicion ? route('comercial.cotizaciones.update', $cotizacion) : route('comercial.cotizaciones.store') }}" id="cotizacionForm" class="quote-form">
         @csrf
+        @if($esEdicion) @method('PATCH') @endif
 
         <div class="quote-summary-bar" aria-label="Resumen de cotización">
             <div class="quote-summary-cell is-price">
                 <span>Precio venta</span>
-                <strong id="previewPrecioVenta">$0</strong>
-                <input type="hidden" id="precioVenta" name="precio_venta" value="0">
+                <strong id="previewPrecioVenta">${{ number_format($esEdicion ? $cotizacion->precio_venta : 0, 0, ',', '.') }}</strong>
+                <input type="hidden" id="precioVenta" name="precio_venta" value="{{ $esEdicion ? $cotizacion->precio_venta : 0 }}">
             </div>
             <div class="quote-summary-cell">
                 <span>Total haberes</span>
-                <strong id="previewTotalRemuneraciones">$0</strong>
-                <input type="hidden" id="totalRemuneraciones" value="0">
+                <strong id="previewTotalRemuneraciones">${{ number_format($esEdicion ? $cotizacion->total_remuneraciones : 0, 0, ',', '.') }}</strong>
+                <input type="hidden" id="totalRemuneraciones" value="{{ $esEdicion ? $cotizacion->total_remuneraciones : 0 }}">
             </div>
             <div class="quote-summary-cell">
                 <span>Cotizaciones (ISES)</span>
-                <strong id="previewTotalCotizaciones">$0</strong>
-                <input type="hidden" id="totalCotizaciones" value="0">
+                <strong id="previewTotalCotizaciones">${{ number_format($esEdicion ? $cotizacion->total_cotizaciones : 0, 0, ',', '.') }}</strong>
+                <input type="hidden" id="totalCotizaciones" value="{{ $esEdicion ? $cotizacion->total_cotizaciones : 0 }}">
             </div>
             <div class="quote-summary-cell">
                 <span>Provisiones</span>
-                <strong id="previewTotalProvisiones">$0</strong>
-                <input type="hidden" id="totalProvisiones" value="0">
+                <strong id="previewTotalProvisiones">${{ number_format($esEdicion ? $cotizacion->total_provisiones : 0, 0, ',', '.') }}</strong>
+                <input type="hidden" id="totalProvisiones" value="{{ $esEdicion ? $cotizacion->total_provisiones : 0 }}">
             </div>
             <div class="quote-summary-cell">
                 <span>Gastos op.</span>
-                <strong id="previewTotalGastos">$0</strong>
-                <input type="hidden" id="totalGastos" value="0">
+                <strong id="previewTotalGastos">${{ number_format($esEdicion ? $cotizacion->total_gastos : 0, 0, ',', '.') }}</strong>
+                <input type="hidden" id="totalGastos" value="{{ $esEdicion ? $cotizacion->total_gastos : 0 }}">
             </div>
             <div class="quote-summary-cell">
                 <span>Margen</span>
-                <strong><span id="previewMargenPorcentaje">0%</span> / <span id="previewMargenValor">$0</span></strong>
-                <input type="hidden" id="margenPorcentaje" value="0">
-                <input type="hidden" id="margenValor" value="0">
-                <input type="hidden" id="subtotal" value="0">
-                <span id="previewSubtotal" style="display:none">$0</span>
+                <strong><span id="previewMargenPorcentaje">{{ number_format((float) data_get($cotizacion ?? null, 'datos_calculo.margen_porcentaje', 0), 2, ',', '.') }}%</span> / <span id="previewMargenValor">${{ number_format($esEdicion ? $cotizacion->margen : 0, 0, ',', '.') }}</span></strong>
+                <input type="hidden" id="margenPorcentaje" value="{{ data_get($cotizacion ?? null, 'datos_calculo.margen_porcentaje', 0) }}">
+                <input type="hidden" id="margenValor" value="{{ $esEdicion ? $cotizacion->margen : 0 }}">
+                <input type="hidden" id="subtotal" value="{{ $esEdicion ? $cotizacion->subtotal : 0 }}">
+                <span id="previewSubtotal" style="display:none">${{ number_format($esEdicion ? $cotizacion->subtotal : 0, 0, ',', '.') }}</span>
             </div>
             <div class="quote-summary-actions">
-                <a href="{{ route('comercial.cotizaciones.index') }}" class="btn-secondary">Cancelar</a>
+                <a href="{{ $esEdicion ? route('comercial.cotizaciones.show', $cotizacion) : route('comercial.cotizaciones.index') }}" class="btn-secondary">Cancelar</a>
                 <button type="submit" class="btn-premium">
-                    <i class="bi bi-check-lg"></i> Crear
+                    <i class="bi bi-check-lg"></i> {{ $esEdicion ? 'Guardar cambios' : 'Crear' }}
                 </button>
             </div>
         </div>
@@ -438,7 +483,7 @@
             <div class="form-grid">
                 <div class="form-group">
                     <label>Título de Cotización</label>
-                    <input type="text" name="titulo" value="{{ old('titulo') }}"
+                    <input type="text" name="titulo" value="{{ $valorFormulario('titulo') }}"
                            class="form-control @error('titulo') is-invalid @enderror"
                            placeholder="Ej: Tarifa Operario Enero 2026">
                     @error('titulo')<span class="form-error">{{ $message }}</span>@enderror
@@ -446,7 +491,7 @@
 
                 <div class="form-group">
                     <label>Cargo / Puesto <span class="required">*</span></label>
-                    <input type="text" name="cargo" value="{{ old('cargo') }}"
+                    <input type="text" name="cargo" value="{{ $valorFormulario('cargo') }}"
                            class="form-control @error('cargo') is-invalid @enderror"
                            placeholder="Ej: Analista de Inventarios" required>
                     @error('cargo')<span class="form-error">{{ $message }}</span>@enderror
@@ -458,7 +503,7 @@
                         <select name="cliente_id" id="clienteSelect" class="form-control @error('cliente_id') is-invalid @enderror" required onchange="cargarCentrosCosto()" data-quote-search-select data-search-placeholder="Buscar cliente" data-search-label="cliente">
                             <option value="">-- Seleccionar Cliente --</option>
                             @foreach($clientes as $cliente)
-                            <option value="{{ $cliente->id }}" {{ old('cliente_id') == $cliente->id ? 'selected' : '' }}>
+                            <option value="{{ $cliente->id }}" {{ (string) $valorFormulario('cliente_id') === (string) $cliente->id ? 'selected' : '' }}>
                                 {{ $cliente->nombre_comercial ?? $cliente->nombre }}
                             </option>
                             @endforeach
@@ -512,7 +557,7 @@
                     <select name="modalidad_id" id="modalidadSelect" class="form-control @error('modalidad_id') is-invalid @enderror" required onchange="actualizarCalculos()">
                         <option value="">-- Seleccionar Modalidad --</option>
                         @foreach($modalidades as $modalidad)
-                        <option value="{{ $modalidad->id }}" {{ old('modalidad_id') == $modalidad->id ? 'selected' : '' }}>
+                        <option value="{{ $modalidad->id }}" {{ (string) $valorFormulario('modalidad_id') === (string) $modalidad->id ? 'selected' : '' }}>
                             {{ $modalidad->codigo }} - {{ $modalidad->nombre }}
                         </option>
                         @endforeach
@@ -523,8 +568,21 @@
 
             <div class="form-group">
                 <label>Observaciones</label>
-                <textarea name="observaciones" class="form-control" rows="2" placeholder="Notas o comentarios sobre esta cotización">{{ old('observaciones') }}</textarea>
+                <textarea name="observaciones" class="form-control" rows="2" placeholder="Notas o comentarios sobre esta cotización">{{ $valorFormulario('observaciones') }}</textarea>
             </div>
+
+            @if($esEdicion)
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Vigencia desde</label>
+                    <input type="date" name="fecha_vigencia_desde" class="form-control" value="{{ old('fecha_vigencia_desde', optional($cotizacion->fecha_vigencia_desde)->format('Y-m-d')) }}">
+                </div>
+                <div class="form-group">
+                    <label>Vigencia hasta</label>
+                    <input type="date" name="fecha_vigencia_hasta" class="form-control" value="{{ old('fecha_vigencia_hasta', optional($cotizacion->fecha_vigencia_hasta)->format('Y-m-d')) }}">
+                </div>
+            </div>
+            @endif
         </div>
 
         @if(auth()->user()->tieneAcceso('comercial', 'puede_editar'))
@@ -624,27 +682,27 @@
             <div class="form-grid">
                 <div class="form-group">
                     <label>Asignación Movilización</label>
-                    <input type="text" name="asignacion_movilizacion" value="{{ old('asignacion_movilizacion', 0) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
+                    <input type="text" name="asignacion_movilizacion" value="{{ old('asignacion_movilizacion', $detalleInicial('Asignación Movilización')) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
                 </div>
                 <div class="form-group">
                     <label>Asignación Colación</label>
-                    <input type="text" name="asignacion_colacion" value="{{ old('asignacion_colacion', 0) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
+                    <input type="text" name="asignacion_colacion" value="{{ old('asignacion_colacion', $detalleInicial('Asignación Colación')) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
                 </div>
                 <div class="form-group">
                     <label>Servicios de Casino</label>
-                    <input type="text" name="servicios_casino" value="{{ old('servicios_casino', 0) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
+                    <input type="text" name="servicios_casino" value="{{ old('servicios_casino', $detalleInicial('Servicios de Casino')) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
                 </div>
                 <div class="form-group">
                     <label>Seguro Accidentes Personales</label>
-                    <input type="text" name="seguro_accidentes" value="{{ old('seguro_accidentes', 0) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
+                    <input type="text" name="seguro_accidentes" value="{{ old('seguro_accidentes', $detalleInicial('Seguro Accidentes Personales')) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
                 </div>
                 <div class="form-group">
                     <label>Otros Gastos</label>
-                    <input type="text" name="otros_gastos" value="{{ old('otros_gastos', 0) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
+                    <input type="text" name="otros_gastos" value="{{ old('otros_gastos', $detalleInicial('Otros Gastos')) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
                 </div>
                 <div class="form-group">
                     <label>Otros Beneficios / Aguinaldos</label>
-                    <input type="text" name="otros_beneficios" value="{{ old('otros_beneficios', 5000) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
+                    <input type="text" name="otros_beneficios" value="{{ old('otros_beneficios', $detalleInicial('Otros Beneficios', 5000)) }}" class="form-control quote-money-input" inputmode="numeric" data-money-input>
                 </div>
             </div>
         </div>
@@ -741,9 +799,9 @@
 
         {{-- Botones de Acción --}}
         <div style="display:flex;gap:1rem;justify-content:flex-end">
-            <a href="{{ route('comercial.cotizaciones.index') }}" class="btn-secondary">Cancelar</a>
+            <a href="{{ $esEdicion ? route('comercial.cotizaciones.show', $cotizacion) : route('comercial.cotizaciones.index') }}" class="btn-secondary">Cancelar</a>
             <button type="submit" class="btn-premium">
-                <i class="bi bi-check-lg"></i> Crear Cotización
+                <i class="bi bi-check-lg"></i> {{ $esEdicion ? 'Guardar cambios' : 'Crear Cotización' }}
             </button>
         </div>
     </form>
@@ -754,7 +812,9 @@
 const centrosCostoData = {!! json_encode($centrosCostoAgrupados ?? []) !!};
 const modalidadCodes = @json($modalidades->pluck('codigo', 'id'));
 let uniformesCatalogo = @json($uniformesCatalogo ?? []);
-const selectedCentroCostoId = @json(old('centro_costo_id'));
+const selectedCentroCostoId = @json(old('centro_costo_id', $esEdicion ? $cotizacion->centro_costo_id : null));
+const remuneracionesIniciales = @json($remuneracionesIniciales);
+const uniformesIniciales = @json($uniformesIniciales);
 const previewUrl = @json(route('comercial.cotizaciones.preview'));
 const quickClienteUrl = @json(route('comercial.clientes.store'));
 const quickCentroUrl = @json(route('comercial.centros-costo.store'));
@@ -1505,16 +1565,18 @@ function schedulePreview() {
     previewTimer = setTimeout(actualizarCalculos, 250);
 }
 
-function agregarRemuneracion() {
+function agregarRemuneracion(item = null) {
     const tabla = document.getElementById('remuneracionesTable');
     const fila = document.createElement('tr');
     const idx = tabla.children.length;
+    const concepto = escapeHtml(item?.concepto || '');
+    const valor = item?.valor ?? '';
     fila.innerHTML = `
         <td>
-            <input type="text" name="remuneraciones[${idx}][concepto]" class="form-control" placeholder="Sueldo Base, Bono, etc" required>
+            <input type="text" name="remuneraciones[${idx}][concepto]" class="form-control" placeholder="Sueldo Base, Bono, etc" required value="${concepto}">
         </td>
         <td>
-            <input type="text" name="remuneraciones[${idx}][valor]" class="form-control quote-money-input" placeholder="0" inputmode="numeric" data-money-input required>
+            <input type="text" name="remuneraciones[${idx}][valor]" class="form-control quote-money-input" placeholder="0" inputmode="numeric" data-money-input required value="${formatMoneyValue(valor)}">
         </td>
         <td>
             <button type="button" class="icon-btn danger" onclick="this.parentElement.parentElement.remove(); schedulePreview()">
@@ -1568,19 +1630,22 @@ function agregarUniforme(item = null) {
     const tabla = document.getElementById('uniformesTable');
     const fila = document.createElement('tr');
     const idx = tabla.children.length;
+    const precio = item?.precio_unitario ?? item?.valor ?? '';
+    const cantidad = item?.cantidad ?? 1;
+    const descripcion = item?.descripcion ?? item?.nombre ?? '';
     fila.innerHTML = `
         <td>
             <select class="form-control" style="margin-bottom:.45rem" data-uniforme-catalogo onchange="seleccionarUniformeCatalogo(this)">
                 <option value="">-- Item libre / catálogo --</option>
                 ${uniformCatalogOptions(item?.id)}
             </select>
-            <input type="text" name="uniformes[${idx}][descripcion]" class="form-control" placeholder="Ej: Casco de Seguridad" value="${escapeHtml(item?.nombre || '')}">
+            <input type="text" name="uniformes[${idx}][descripcion]" class="form-control" placeholder="Ej: Casco de Seguridad" value="${escapeHtml(descripcion)}">
         </td>
         <td>
-            <input type="number" name="uniformes[${idx}][cantidad]" class="form-control" placeholder="0" min="0" value="1" oninput="actualizarUniformeFila(this.closest('tr'))" onchange="schedulePreview()">
+            <input type="number" name="uniformes[${idx}][cantidad]" class="form-control" placeholder="0" min="0" value="${escapeHtml(cantidad)}" oninput="actualizarUniformeFila(this.closest('tr'))" onchange="schedulePreview()">
         </td>
         <td>
-            <input type="text" name="uniformes[${idx}][precio_unitario]" class="form-control quote-money-input" placeholder="0" inputmode="numeric" data-money-input value="${item?.valor ? formatMoneyValue(item.valor) : ''}">
+            <input type="text" name="uniformes[${idx}][precio_unitario]" class="form-control quote-money-input" placeholder="0" inputmode="numeric" data-money-input value="${formatMoneyValue(precio)}">
         </td>
         <td>
             <input type="text" class="form-control quote-money-input" data-uniforme-total disabled placeholder="Total">
@@ -1636,6 +1701,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if(clienteId) {
         cargarCentrosCosto();
     }
+    if (document.getElementById('remuneracionesTable').children.length === 0 && remuneracionesIniciales.length > 0) {
+        remuneracionesIniciales.forEach((item) => agregarRemuneracion(item));
+    }
     if (document.getElementById('remuneracionesTable').children.length === 0) {
         ['Sueldo Base', 'Bono Asistencia', 'Bono Compromiso', 'Otros Haberes'].forEach(concepto => {
             agregarRemuneracion();
@@ -1645,6 +1713,9 @@ document.addEventListener('DOMContentLoaded', function() {
             valorInput.value = concepto === 'Sueldo Base' ? (sueldoMinimoLegal || '') : 0;
             valorInput.value = formatMoneyValue(valorInput.value);
         });
+    }
+    if (uniformesIniciales.length > 0 && document.getElementById('uniformesTable').children.length === 0) {
+        uniformesIniciales.forEach((item) => agregarUniforme(item));
     }
     document.querySelectorAll('[data-money-input]').forEach(initMoneyInput);
     document.querySelectorAll('[data-parametro-quick]').forEach((input) => {
