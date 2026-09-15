@@ -235,6 +235,103 @@ class CotizacionController
         }
     }
 
+    public function reajustarIpc(Request $request, Cotizacion $cotizacion)
+    {
+        $validated = $request->validate([
+            'ipc_porcentaje' => ['required', 'numeric', 'gt:0', 'lte:100'],
+        ], [
+            'ipc_porcentaje.gt' => 'Ingresa un IPC mayor que 0%.',
+            'ipc_porcentaje.lte' => 'El IPC no puede superar 100%.',
+        ]);
+
+        $estado = $cotizacion->estadoOperativo();
+        if (! in_array($estado, [Cotizacion::ESTADO_EN_COTIZACION, Cotizacion::ESTADO_VIGENTE], true)) {
+            return back()->with('error', 'Solo se pueden reajustar cotizaciones en preparación o vigentes.');
+        }
+
+        $cotizacion->load(['detalles', 'uniformes']);
+        $ipcPorcentaje = round((float) $validated['ipc_porcentaje'], 4);
+
+        try {
+            $nuevaCotizacion = DB::transaction(function () use ($cotizacion, $ipcPorcentaje) {
+                $datosCalculo = $this->calculador->recalcularPorIpc(
+                    $this->datosDesdeCotizacion($cotizacion),
+                    $ipcPorcentaje,
+                    (float) $cotizacion->precio_venta,
+                    (array) data_get($cotizacion->datos_calculo, 'resumen_excel', []),
+                    (array) data_get($cotizacion->datos_calculo, 'horas', []),
+                );
+
+                $factor = round(1 + ($ipcPorcentaje / 100), 6);
+                $datosCalculo['reajuste'] = [
+                    'tipo' => 'ipc',
+                    'porcentaje' => $ipcPorcentaje,
+                    'factor' => $factor,
+                    'fecha' => now()->toIso8601String(),
+                    'origen' => [
+                        'id' => $cotizacion->id,
+                        'numero' => $cotizacion->numero,
+                        'version' => $cotizacion->version,
+                        'precio_venta' => (float) $cotizacion->precio_venta,
+                    ],
+                    'resultado' => [
+                        'subtotal' => (float) $datosCalculo['subtotal'],
+                        'margen' => (float) $datosCalculo['margen'],
+                        'precio_venta' => (float) $datosCalculo['precio_venta'],
+                    ],
+                ];
+
+                $notaReajuste = 'Versión reajustada por IPC de '.number_format($ipcPorcentaje, 4, ',', '.').'% desde '.$cotizacion->numero.'.';
+                $observaciones = trim(implode("\n\n", array_filter([
+                    $cotizacion->observaciones,
+                    $notaReajuste,
+                ])));
+
+                $nueva = new Cotizacion([
+                    'titulo' => $cotizacion->titulo,
+                    'cargo' => $cotizacion->cargo,
+                    'cliente_id' => $cotizacion->cliente_id,
+                    'centro_costo_id' => $cotizacion->centro_costo_id,
+                    'modalidad_id' => $cotizacion->modalidad_id,
+                    'usuario_id' => auth()->id(),
+                    'estado' => Cotizacion::ESTADO_EN_COTIZACION,
+                    'version' => ((int) $cotizacion->version) + 1,
+                    'cotizacion_anterior_id' => $cotizacion->id,
+                    'fecha_cotizacion' => now(),
+                    'fecha_vigencia_desde' => now(),
+                    'fecha_vigencia_hasta' => now()->addDays(config('comercial.quotation.default_validity_days', 30)),
+                    'observaciones' => $observaciones ?: null,
+                    'total_remuneraciones' => $datosCalculo['total_remuneraciones'],
+                    'total_cotizaciones' => $datosCalculo['total_cotizaciones'],
+                    'total_provisiones' => $datosCalculo['total_provisiones'],
+                    'total_gastos' => $datosCalculo['total_gastos'],
+                    'subtotal' => $datosCalculo['subtotal'],
+                    'margen' => $datosCalculo['margen'],
+                    'precio_venta' => $datosCalculo['precio_venta'],
+                ]);
+
+                $nueva = $this->calculador->guardar($nueva, $datosCalculo);
+                $this->registrarAuditoria($nueva, 'reajustada_ipc', "Cotización reajustada por IPC de {$ipcPorcentaje}% desde {$cotizacion->numero}", [
+                    'cotizacion_origen_id' => $cotizacion->id,
+                    'cotizacion_origen_numero' => $cotizacion->numero,
+                    'ipc_porcentaje' => $ipcPorcentaje,
+                    'factor_aplicado' => $factor,
+                    'precio_origen' => (float) $cotizacion->precio_venta,
+                    'precio_nuevo' => (float) $nueva->precio_venta,
+                ]);
+
+                return $nueva;
+            });
+
+            return redirect()->route('comercial.cotizaciones.edit', $nuevaCotizacion)
+                ->with('success', "Se creó {$nuevaCotizacion->numero} como nueva versión con IPC de {$ipcPorcentaje}%. La cotización de origen se mantiene intacta.");
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'No fue posible crear el reajuste IPC: '.$e->getMessage());
+        }
+    }
+
     public function previsualizar(Request $request)
     {
         $validated = $request->validate([

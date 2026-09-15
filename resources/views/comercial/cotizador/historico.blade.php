@@ -71,7 +71,20 @@
                     </div>
 
                     {{-- Cambios realizados --}}
-                    @if($version->auditorias->where('accion', 'versionada')->first())
+                    @php
+                        $reajusteIpc = data_get($version->datos_calculo, 'reajuste');
+                    @endphp
+                    @if(data_get($reajusteIpc, 'tipo') === 'ipc')
+                    <div style="background:var(--bg-tertiary);padding:1rem;border-radius:.5rem;border-left:4px solid var(--accent-primary);margin-bottom:1rem">
+                        <div style="font-size:.85rem;font-weight:600;margin-bottom:.35rem"><i class="bi bi-graph-up-arrow"></i> Reajuste IPC</div>
+                        <div style="font-size:.9rem;color:var(--text-muted)">
+                            {{ number_format((float) data_get($reajusteIpc, 'porcentaje'), 4, ',', '.') }}% aplicado desde
+                            {{ data_get($reajusteIpc, 'origen.numero', 'la versión anterior') }}.
+                            Precio: ${{ number_format((float) data_get($reajusteIpc, 'origen.precio_venta'), 0, ',', '.') }}
+                            → ${{ number_format((float) data_get($reajusteIpc, 'resultado.precio_venta'), 0, ',', '.') }}.
+                        </div>
+                    </div>
+                    @elseif($version->auditorias->where('accion', 'versionada')->first())
                     <div style="background:var(--bg-tertiary);padding:1rem;border-radius:.5rem;border-left:4px solid var(--accent-secondary);margin-bottom:1rem">
                         <div style="font-size:.85rem;font-weight:600;margin-bottom:.5rem"><i class="bi bi-arrow-repeat"></i> Cambios en esta versión:</div>
                         <ul style="margin:0;padding-left:1.5rem;font-size:.9rem;color:var(--text-muted)">

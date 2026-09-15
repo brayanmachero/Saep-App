@@ -151,6 +151,133 @@ class CalculadoraCotizacionService
         return $this->calcular($datos);
     }
 
+    /**
+     * Recalcula una cotización aplicando IPC únicamente al sueldo base.
+     *
+     * La matriz histórica utilizada por Comercial reajusta también el precio
+     * de venta en el mismo factor de IPC. Se conserva esa política para que
+     * la versión creada en SAEP sea comparable con la planilla de origen.
+     *
+     * @param  array<string, mixed>  $datos
+     * @param  array<string, mixed>  $resumenOrigen
+     * @param  array<string, mixed>  $horasOrigen
+     * @return array<string, mixed>
+     */
+    public function recalcularPorIpc(
+        array $datos,
+        float $ipcPorcentaje,
+        float $precioVentaOrigen,
+        array $resumenOrigen = [],
+        array $horasOrigen = [],
+    ): array {
+        if ($ipcPorcentaje <= 0 || $ipcPorcentaje > 100) {
+            throw new \InvalidArgumentException('El IPC debe ser mayor que 0 y no superar 100%.');
+        }
+
+        if ($precioVentaOrigen <= 0) {
+            throw new \InvalidArgumentException('La cotización de origen no tiene un precio de venta válido para reajustar.');
+        }
+
+        $factor = 1 + ($ipcPorcentaje / 100);
+        $sueldoBaseReajustado = false;
+
+        foreach ($datos['remuneraciones'] ?? [] as $indice => $remuneracion) {
+            if (! $this->esSueldoBase((string) ($remuneracion['concepto'] ?? ''))) {
+                continue;
+            }
+
+            $datos['remuneraciones'][$indice]['valor'] = round(((float) ($remuneracion['valor'] ?? 0)) * $factor, 2);
+            $sueldoBaseReajustado = true;
+        }
+
+        if (! $sueldoBaseReajustado) {
+            throw new \InvalidArgumentException('No se encontró un sueldo base en la cotización de origen.');
+        }
+
+        $calculo = $this->calcular($datos);
+        $precioVenta = round($precioVentaOrigen * $factor, 2);
+        $margen = round($precioVenta - (float) $calculo['subtotal'], 2);
+        $margenPorcentaje = (float) $calculo['subtotal'] > 0
+            ? round(($margen / (float) $calculo['subtotal']) * 100, 4)
+            : 0.0;
+
+        $calculo['precio_venta'] = $precioVenta;
+        $calculo['margen'] = $margen;
+        $calculo['margen_porcentaje'] = $margenPorcentaje;
+
+        $resumen = $calculo['resumen_excel'] ?? [];
+        $resumen['margen'] = $margen;
+        $resumen['precioVenta'] = $precioVenta;
+
+        $precioVentaHheeOrigen = (float) ($resumenOrigen['precioVentaHhee'] ?? 0);
+        if ($precioVentaHheeOrigen > 0) {
+            $precioVentaHhee = round($precioVentaHheeOrigen * $factor, 2);
+            $resumen['precioVentaHhee'] = $precioVentaHhee;
+            $resumen['margenHhee'] = round($precioVentaHhee - (float) ($resumen['costoBrutoHhee'] ?? 0), 2);
+        }
+
+        $calculo['resumen_excel'] = $resumen;
+        $calculo['horas'] = $this->reajustarHoras(
+            $calculo['horas'] ?? [],
+            $horasOrigen,
+            $precioVentaOrigen,
+            $precioVenta,
+            $precioVentaHheeOrigen,
+            (float) ($resumen['precioVentaHhee'] ?? 0),
+        );
+
+        foreach ($calculo['detalles'] ?? [] as $indice => $detalle) {
+            if (($detalle['tipo'] ?? null) !== 'margen') {
+                continue;
+            }
+
+            $calculo['detalles'][$indice]['valor_base'] = round((float) $calculo['subtotal'], 2);
+            $calculo['detalles'][$indice]['porcentaje'] = $margenPorcentaje;
+            $calculo['detalles'][$indice]['valor'] = $margen;
+            $calculo['detalles'][$indice]['formula'] = [
+                'descripcion' => 'Precio de venta de origen reajustado por IPC; margen resultante sobre el costo recalculado.',
+            ];
+        }
+
+        return $calculo;
+    }
+
+    /** @param array<string, mixed> $horasCalculadas @param array<string, mixed> $horasOrigen */
+    private function reajustarHoras(
+        array $horasCalculadas,
+        array $horasOrigen,
+        float $precioVentaOrigen,
+        float $precioVenta,
+        float $precioVentaHheeOrigen,
+        float $precioVentaHhee,
+    ): array {
+        $factorNormal = $precioVentaOrigen > 0 && isset($horasOrigen['normal'])
+            ? (float) $horasOrigen['normal'] / $precioVentaOrigen
+            : ((float) ($horasCalculadas['normal'] ?? 0) / max($precioVenta, 1));
+        $horasCalculadas['normal'] = round($precioVenta * $factorNormal, 2);
+
+        if ($precioVentaHheeOrigen > 0 && isset($horasOrigen['normal_hhee'])) {
+            $factorHhee = (float) $horasOrigen['normal_hhee'] / $precioVentaHheeOrigen;
+            $horasCalculadas['normal_hhee'] = round($precioVentaHhee * $factorHhee, 2);
+        }
+
+        $horaNormalHhee = (float) ($horasCalculadas['normal_hhee'] ?? 0);
+        if ($horaNormalHhee > 0) {
+            $horasCalculadas['extra_50'] = round($horaNormalHhee * 1.5, 2);
+            $horasCalculadas['extra_100'] = round($horaNormalHhee * 2, 2);
+        }
+
+        return $horasCalculadas;
+    }
+
+    private function esSueldoBase(string $concepto): bool
+    {
+        $concepto = mb_strtolower($concepto, 'UTF-8');
+
+        return str_contains($concepto, 'sueldo')
+            && (str_contains($concepto, 'base') || trim($concepto) === 'sueldo');
+    }
+
     private function sincronizarDetalles(Cotizacion $cotizacion, array $datosCalculo): void
     {
         foreach ($datosCalculo['detalles'] ?? [] as $detalle) {

@@ -33,6 +33,7 @@ Route::middleware(['auth', 'consentimiento', 'force.password', 'modulo:comercial
     Route::post('cotizaciones', [CotizacionController::class, 'store'])->middleware('modulo:comercial,puede_crear')->name('cotizaciones.store');
     Route::post('cotizaciones/previsualizar', [CotizacionController::class, 'previsualizar'])->name('cotizaciones.preview');
     Route::post('cotizaciones/{cotizacion}/duplicar', [CotizacionController::class, 'duplicar'])->middleware('modulo:comercial,puede_crear')->name('cotizaciones.duplicar');
+    Route::post('cotizaciones/{cotizacion}/reajustar-ipc', [CotizacionController::class, 'reajustarIpc'])->middleware('modulo:comercial,puede_crear')->name('cotizaciones.reajustar-ipc');
     Route::get('cotizaciones/{cotizacion}', [CotizacionController::class, 'show'])->name('cotizaciones.show');
     Route::get('cotizaciones/{cotizacion}/edit', [CotizacionController::class, 'edit'])->middleware('modulo:comercial,puede_editar')->name('cotizaciones.edit');
     Route::match(['put', 'patch'], 'cotizaciones/{cotizacion}', [CotizacionController::class, 'update'])->middleware('modulo:comercial,puede_editar')->name('cotizaciones.update');

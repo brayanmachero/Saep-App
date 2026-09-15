@@ -17,6 +17,7 @@ use App\Modules\Comercial\Services\CalculadoraCotizacionService;
 use App\Modules\Comercial\Services\GeneradorPDFService;
 use App\Modules\Comercial\Services\ImportadorHistoricoCotizacionesService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -33,6 +34,7 @@ class ComercialCotizacionFlowTest extends TestCase
 
         Config::set('database.default', 'sqlite');
         Config::set('database.connections.sqlite.database', ':memory:');
+        Config::set('session.driver', 'array');
         Config::set('app.key', 'base64:' . base64_encode(str_repeat('a', 32)));
         DB::purge('sqlite');
         DB::reconnect('sqlite');
@@ -40,6 +42,7 @@ class ComercialCotizacionFlowTest extends TestCase
         $this->withoutMiddleware([
             VerificarConsentimientoDatos::class,
             ForcePasswordChange::class,
+            VerifyCsrfToken::class,
         ]);
 
         $this->mock(GeneradorPDFService::class, function (MockInterface $mock) {
@@ -126,6 +129,49 @@ class ComercialCotizacionFlowTest extends TestCase
         $this->assertSame(Cotizacion::ESTADO_NO_VIGENTE, Cotizacion::normalizarEstado('rechazada'));
         $this->assertSame(Cotizacion::ESTADO_NO_VIGENTE, Cotizacion::normalizarEstado('cancelada'));
         $this->assertSame(Cotizacion::ESTADO_EN_COTIZACION, Cotizacion::normalizarEstado('en_cotizacion'));
+    }
+
+    public function test_reajuste_ipc_crea_una_nueva_version_y_conserva_la_cotizacion_origen(): void
+    {
+        $admin = $this->createAdminUser();
+        ['cliente' => $cliente, 'centro' => $centro, 'modalidad' => $modalidad] = $this->createCommercialFixture();
+        $this->actingAs($admin);
+
+        $this->post(route('comercial.cotizaciones.store'), $this->quotePayload($cliente, $centro, $modalidad, 700000))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $origen = Cotizacion::firstOrFail();
+        $precioOrigen = (float) $origen->precio_venta;
+        $sueldoOrigen = (float) $origen->detalles()
+            ->where('concepto', 'Sueldo Base')
+            ->value('valor');
+
+        $this->post(route('comercial.cotizaciones.reajustar-ipc', $origen), [
+            'ipc_porcentaje' => 2.8,
+        ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success');
+
+        $reajustada = Cotizacion::latest('id')->firstOrFail();
+        $origen->refresh();
+
+        $this->assertNotSame($origen->id, $reajustada->id);
+        $this->assertSame(Cotizacion::ESTADO_EN_COTIZACION, $reajustada->estado);
+        $this->assertSame($origen->id, $reajustada->cotizacion_anterior_id);
+        $this->assertSame(((int) $origen->version) + 1, (int) $reajustada->version);
+        $this->assertSame(Cotizacion::ESTADO_EN_COTIZACION, $origen->estado);
+        $this->assertEqualsWithDelta(round($precioOrigen * 1.028, 2), (float) $reajustada->precio_venta, 0.01);
+        $this->assertEqualsWithDelta(round($sueldoOrigen * 1.028, 2), (float) $reajustada->detalles()
+            ->where('concepto', 'Sueldo Base')
+            ->value('valor'), 0.01);
+        $this->assertSame('ipc', data_get($reajustada->datos_calculo, 'reajuste.tipo'));
+        $this->assertSame(2.8, (float) data_get($reajustada->datos_calculo, 'reajuste.porcentaje'));
+        $this->assertTrue(CotizacionAuditoria::query()
+            ->where('cotizacion_id', $reajustada->id)
+            ->where('accion', 'reajustada_ipc')
+            ->exists());
     }
 
     public function test_calculo_resiste_lote_local_de_cotizaciones_sin_errores(): void

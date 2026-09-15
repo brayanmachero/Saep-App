@@ -130,6 +130,8 @@
         && auth()->user()->tieneAcceso('comercial', 'puede_eliminar');
     $origenHistorico = data_get($cotizacion->datos_calculo, 'origen');
     $esHistoricoImportado = data_get($cotizacion->datos_calculo, 'es_fotografia_historica', false) === true;
+    $reajusteIpc = data_get($cotizacion->datos_calculo, 'reajuste');
+    $puedeReajustarIpc = $puedeCrearComercial && in_array($cotizacion->estadoOperativo(), ['en_cotizacion', 'vigente'], true);
 @endphp
 <div class="page-container">
     <div class="page-header">
@@ -153,6 +155,11 @@
                     <i class="bi bi-files"></i> Duplicar
                 </button>
             </form>
+            @if($puedeReajustarIpc)
+            <button type="button" class="btn-secondary" onclick="document.getElementById('reajusteIpcModal').showModal()">
+                <i class="bi bi-graph-up-arrow"></i> Reajustar IPC
+            </button>
+            @endif
             @endif
             @if($cotizacion->estado === 'vigente' && $puedeEditarComercial)
             <button type="button" class="btn-secondary" onclick="enviarPorEmail()">
@@ -183,6 +190,20 @@
             Archivo: {{ data_get($origenHistorico, 'ruta_relativa', 'No disponible') }}
             · Hoja: {{ data_get($origenHistorico, 'hoja', '-') }}
             · Celda de precio: {{ data_get($origenHistorico, 'celda_precio', '-') }}
+        </p>
+    </div>
+    @endif
+    @if(data_get($reajusteIpc, 'tipo') === 'ipc')
+    <div class="glass-card" style="margin-bottom:1rem;border-left:4px solid var(--accent-secondary);padding:1rem">
+        <strong><i class="bi bi-graph-up-arrow"></i> Versión reajustada por IPC</strong>
+        <p style="margin:.4rem 0 0;color:var(--text-muted);font-size:.86rem">
+            {{ number_format((float) data_get($reajusteIpc, 'porcentaje'), 4, ',', '.') }}% aplicado desde
+            {{ data_get($reajusteIpc, 'origen.numero', 'la cotización de origen') }}.
+            Precio de venta: {{ '$' . number_format((float) data_get($reajusteIpc, 'origen.precio_venta'), 0, ',', '.') }}
+            → {{ '$' . number_format((float) data_get($reajusteIpc, 'resultado.precio_venta'), 0, ',', '.') }}.
+        </p>
+        <p style="margin:.3rem 0 0;color:var(--text-muted);font-size:.8rem">
+            Se creó como una versión independiente: la cotización de origen no fue modificada.
         </p>
     </div>
     @endif
@@ -623,6 +644,31 @@
     </div>
     @endif
 </div>
+
+@if($puedeReajustarIpc)
+<dialog id="reajusteIpcModal" style="border:1px solid var(--surface-border);border-radius:14px;padding:0;max-width:460px;width:calc(100% - 2rem);box-shadow:0 18px 55px rgba(0,0,0,.28);color:var(--text-primary);background:var(--surface-color)">
+    <form method="POST" action="{{ route('comercial.cotizaciones.reajustar-ipc', $cotizacion) }}" style="padding:1.35rem">
+        @csrf
+        <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;margin-bottom:.8rem">
+            <div>
+                <h3 style="margin:0;font-size:1.08rem"><i class="bi bi-graph-up-arrow"></i> Reajustar por IPC</h3>
+                <p style="margin:.35rem 0 0;color:var(--text-muted);font-size:.86rem">Se creará una nueva versión en preparación. Esta cotización no se modifica.</p>
+            </div>
+            <button type="button" onclick="document.getElementById('reajusteIpcModal').close()" aria-label="Cerrar" style="border:0;background:transparent;font-size:1.35rem;cursor:pointer;color:var(--text-muted)">&times;</button>
+        </div>
+        <label for="ipc_porcentaje" style="display:block;font-weight:700;font-size:.86rem;margin-bottom:.35rem">IPC a aplicar (%)</label>
+        <input id="ipc_porcentaje" name="ipc_porcentaje" type="number" min="0.0001" max="100" step="0.0001" inputmode="decimal" required autofocus
+               placeholder="Ej.: 2,8" style="width:100%;box-sizing:border-box;padding:.68rem .75rem;border:1px solid var(--surface-border);border-radius:8px;background:var(--surface-color);color:var(--text-primary)">
+        <p style="margin:.7rem 0 1rem;font-size:.8rem;color:var(--text-muted)">
+            El sueldo base y el precio de venta se reajustan en el mismo porcentaje, siguiendo la matriz de cálculo utilizada actualmente.
+        </p>
+        <div style="display:flex;justify-content:flex-end;gap:.6rem">
+            <button type="button" class="btn-secondary" onclick="document.getElementById('reajusteIpcModal').close()">Cancelar</button>
+            <button type="submit" class="btn-primary"><i class="bi bi-check2-circle"></i> Crear versión reajustada</button>
+        </div>
+    </form>
+</dialog>
+@endif
 
 {{-- Modal para Enviar Email --}}
 <div id="emailModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:1rem">
