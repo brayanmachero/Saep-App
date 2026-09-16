@@ -156,7 +156,7 @@
                 </button>
             </form>
             @if($puedeReajustarIpc)
-            <button type="button" class="btn-secondary" onclick="document.getElementById('reajusteIpcModal').showModal()">
+            <button type="button" class="btn-secondary" onclick="abrirModalReajusteIpc()">
                 <i class="bi bi-graph-up-arrow"></i> Reajustar IPC
             </button>
             @endif
@@ -646,15 +646,17 @@
 </div>
 
 @if($puedeReajustarIpc)
-<dialog id="reajusteIpcModal" style="border:1px solid var(--surface-border);border-radius:14px;padding:0;max-width:460px;width:calc(100% - 2rem);box-shadow:0 18px 55px rgba(0,0,0,.28);color:var(--text-primary);background:var(--surface-color)">
-    <form method="POST" action="{{ route('comercial.cotizaciones.reajustar-ipc', $cotizacion) }}" style="padding:1.35rem">
+<div id="reajusteIpcModal" role="dialog" aria-modal="true" aria-labelledby="reajusteIpcTitulo" aria-hidden="true"
+     style="display:none;position:fixed;inset:0;z-index:1200;align-items:center;justify-content:center;padding:1rem;background:rgba(15,23,42,.52);backdrop-filter:blur(2px)"
+     onclick="if(event.target === this) cerrarModalReajusteIpc()">
+    <form method="POST" action="{{ route('comercial.cotizaciones.reajustar-ipc', $cotizacion) }}" style="box-sizing:border-box;max-width:460px;width:100%;padding:1.35rem;border:1px solid var(--surface-border);border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.28);color:var(--text-primary);background:var(--surface-color)">
         @csrf
         <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;margin-bottom:.8rem">
             <div>
-                <h3 style="margin:0;font-size:1.08rem"><i class="bi bi-graph-up-arrow"></i> Reajustar por IPC</h3>
+                <h3 id="reajusteIpcTitulo" style="margin:0;font-size:1.08rem"><i class="bi bi-graph-up-arrow"></i> Reajustar por IPC</h3>
                 <p style="margin:.35rem 0 0;color:var(--text-muted);font-size:.86rem">Se creará una nueva versión en preparación. Esta cotización no se modifica.</p>
             </div>
-            <button type="button" onclick="document.getElementById('reajusteIpcModal').close()" aria-label="Cerrar" style="border:0;background:transparent;font-size:1.35rem;cursor:pointer;color:var(--text-muted)">&times;</button>
+            <button type="button" onclick="cerrarModalReajusteIpc()" aria-label="Cerrar" style="border:0;background:transparent;font-size:1.35rem;cursor:pointer;color:var(--text-muted)">&times;</button>
         </div>
         <label for="ipc_porcentaje" style="display:block;font-weight:700;font-size:.86rem;margin-bottom:.35rem">IPC a aplicar (%)</label>
         <input id="ipc_porcentaje" name="ipc_porcentaje" type="number" min="0.0001" max="100" step="0.0001" inputmode="decimal" required autofocus
@@ -663,11 +665,11 @@
             El sueldo base y el precio de venta se reajustan en el mismo porcentaje, siguiendo la matriz de cálculo utilizada actualmente.
         </p>
         <div style="display:flex;justify-content:flex-end;gap:.6rem">
-            <button type="button" class="btn-secondary" onclick="document.getElementById('reajusteIpcModal').close()">Cancelar</button>
+            <button type="button" class="btn-secondary" onclick="cerrarModalReajusteIpc()">Cancelar</button>
             <button type="submit" class="btn-primary"><i class="bi bi-check2-circle"></i> Crear versión reajustada</button>
         </div>
     </form>
-</dialog>
+</div>
 @endif
 
 {{-- Modal para Enviar Email --}}
@@ -705,6 +707,29 @@
 </div>
 
 <script>
+function abrirModalReajusteIpc() {
+    const modal = document.getElementById('reajusteIpcModal');
+    if (!modal) return;
+
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+    window.setTimeout(() => modal.querySelector('input[name="ipc_porcentaje"]')?.focus(), 0);
+}
+
+function cerrarModalReajusteIpc() {
+    const modal = document.getElementById('reajusteIpcModal');
+    if (!modal) return;
+
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+}
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && document.getElementById('reajusteIpcModal')?.style.display === 'flex') {
+        cerrarModalReajusteIpc();
+    }
+});
+
 function enviarPorEmail() {
     document.getElementById('emailModal').style.display = 'flex';
 }
