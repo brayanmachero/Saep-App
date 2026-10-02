@@ -12,7 +12,18 @@ class ProgramaSst extends Model
     protected $fillable = [
         'anio', 'titulo', 'descripcion', 'estado',
         'codigo', 'centro_costo_id', 'responsable_id', 'creado_por',
+        'vista_inicial', 'mes_inicial',
     ];
+
+    public static function vistasInicialesMap(): array
+    {
+        return [
+            'ANUAL' => 'Anual',
+            'SEMESTRAL' => 'Semestral',
+            'MENSUAL' => 'Mensual',
+            'SEMANAL' => 'Semanal',
+        ];
+    }
 
     // Alias: views usan $prog->nombre
     public function getNombreAttribute(): string { return $this->titulo ?? ''; }
@@ -22,6 +33,28 @@ class ProgramaSst extends Model
     public function responsable() { return $this->belongsTo(User::class, 'responsable_id'); }
     public function categorias()  { return $this->hasMany(SstCategoria::class, 'programa_id'); }
     public function creador()     { return $this->belongsTo(User::class, 'creado_por'); }
+    public function asignados()
+    {
+        return $this->belongsToMany(User::class, 'programa_sst_asignados', 'programa_sst_id', 'user_id')
+            ->withTimestamps();
+    }
+
+    public function estaAsignadoA(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ((int) $this->responsable_id === (int) $user->id) {
+            return true;
+        }
+
+        if ($this->relationLoaded('asignados')) {
+            return $this->asignados->contains('id', $user->id);
+        }
+
+        return $this->asignados()->where('users.id', $user->id)->exists();
+    }
 
     // === Auto-código ===
     protected static function booted(): void
@@ -38,19 +71,27 @@ class ProgramaSst extends Model
     // === Stats ===
     public function getPorcentajeRealizadoAttribute(): int
     {
-        $seguimientos = SstSeguimiento::whereHas('actividad', fn($q) =>
-            $q->whereHas('categoria', fn($q2) => $q2->where('programa_id', $this->id))
-        )->where('programado', true)
-         ->with('actividad')
-         ->get();
-
         $totalProg = 0;
         $totalReal = 0;
-        foreach ($seguimientos as $s) {
-            $cant = max(1, (int) ($s->actividad->cantidad_programada ?? 1));
-            $totalProg += $cant;
-            $totalReal += $s->realizado ? $cant : ((int) $s->cantidad_realizada > 0 ? (int) $s->cantidad_realizada : 0);
+
+        $actividades = SstActividad::whereHas('categoria', fn ($q) => $q->where('programa_id', $this->id))
+            ->with(['seguimiento', 'ocurrencias'])
+            ->get();
+
+        foreach ($actividades as $actividad) {
+            foreach ($actividad->seguimiento_por_mes as $seguimiento) {
+                if (!$seguimiento['programado']) {
+                    continue;
+                }
+
+                $cantidad = max(1, (int) ($seguimiento['cantidad_programada'] ?? $actividad->cantidad_programada ?? 1));
+                $totalProg += $cantidad;
+                $totalReal += $seguimiento['realizado']
+                    ? $cantidad
+                    : min($cantidad, (int) ($seguimiento['cantidad_realizada'] ?? 0));
+            }
         }
+
         return $totalProg > 0 ? (int) round($totalReal / $totalProg * 100) : 0;
     }
 

@@ -3,6 +3,9 @@
 @section('content')
 @php
     $mesActual = (int) date('n');
+    $vistaInicial = strtolower((string) ($cartaGantt->vista_inicial ?? 'ANUAL'));
+    if (!in_array($vistaInicial, ['anual', 'semestral', 'mensual', 'semanal'], true)) $vistaInicial = 'anual';
+    $mesVistaInicial = (int) ($cartaGantt->mes_inicial ?: $mesActual);
     $semanaActual = (int) date('W');
     $diaActual = (int) date('j');
     $anioPrograma = (int) $cartaGantt->anio;
@@ -39,10 +42,21 @@
             'prioridad' => $a->prioridad,
             'estado' => $a->estado,
             'periodicidad' => $a->periodicidad,
+            'seguimiento_por_ocurrencia' => $a->usaSeguimientoPorOcurrencia(),
             'cantidad_programada' => (int) ($a->cantidad_programada ?? 1),
             'fecha_inicio' => $a->fecha_inicio ? $a->fecha_inicio->format('Y-m-d') : null,
             'fecha_fin' => $a->fecha_fin ? $a->fecha_fin->format('Y-m-d') : null,
             'seguimiento' => $a->seguimiento_por_mes,
+            'ocurrencias' => $a->ocurrencias
+                ->where('programado', true)
+                ->map(fn($o) => [
+                    'id' => $o->id,
+                    'tipo' => $o->tipo,
+                    'fecha_programada' => $o->fecha_programada->format('Y-m-d'),
+                    'fecha_inicio' => $o->fecha_inicio->format('Y-m-d'),
+                    'fecha_fin' => $o->fecha_fin->format('Y-m-d'),
+                    'realizado' => (bool) $o->realizado,
+                ])->values(),
             'reprogramaciones' => $a->reprogramaciones->map(fn($r) => [
                 'mes_original' => $r->mes_original,
                 'mes_nuevo' => $r->mes_nuevo,
@@ -62,7 +76,7 @@
                     <i class="bi bi-funnel-fill" style="font-size:.8rem;color:var(--text-muted)"></i>
                     <select id="mesFilterSelect" onchange="filterByMonth(this.value)" class="form-input" style="padding:.3rem .6rem;font-size:.8rem;min-width:auto;width:auto;border-radius:8px;font-weight:600">
                         @for($m = 1; $m <= 12; $m++)
-                        <option value="{{ $m }}" {{ $m === $mesActual ? 'selected' : '' }}>{{ $mesesNombres[$m] }}</option>
+                        <option value="{{ $m }}" {{ $m === $mesVistaInicial ? 'selected' : '' }}>{{ $mesesNombres[$m] }}</option>
                         @endfor
                     </select>
                 </div>
@@ -72,18 +86,24 @@
                 <span><i class="bi bi-calendar3"></i> {{ $cartaGantt->anio }}</span>
                 @if($cartaGantt->centroCosto)<span><i class="bi bi-building"></i> {{ $cartaGantt->centroCosto->nombre }}</span>@endif
                 @if($cartaGantt->responsable)<span><i class="bi bi-person-fill"></i> {{ $cartaGantt->responsable->nombre_completo }}</span>@endif
+                @if($cartaGantt->asignados->isNotEmpty())
+                <span title="{{ $cartaGantt->asignados->pluck('email')->filter()->join(', ') }}">
+                    <i class="bi bi-people-fill"></i>
+                    Equipo: {{ $cartaGantt->asignados->pluck('nombre_completo')->filter()->take(3)->join(', ') }}{{ $cartaGantt->asignados->count() > 3 ? ' +' . ($cartaGantt->asignados->count() - 3) : '' }}
+                </span>
+                @endif
             </div>
         </div>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
             <a href="{{ route('carta-gantt.reporte-pdf', $cartaGantt) }}" class="sst-btn sst-btn-outline" target="_blank">
                 <i class="bi bi-file-earmark-pdf"></i> Reporte PDF
             </a>
-            @if($puedeCrear || $puedeEditar)
+            @if($puedeCrear)
             <button class="sst-btn sst-btn-outline" onclick="document.getElementById('importModal').style.display='flex'">
                 <i class="bi bi-cloud-upload"></i> Importar CSV
             </button>
             @endif
-            @if($puedeEditar)
+            @if($puedeAdministrarPrograma)
             <a href="{{ route('carta-gantt.edit', $cartaGantt) }}" class="sst-btn sst-btn-outline"><i class="bi bi-pencil"></i> Editar</a>
             @endif
             <a href="{{ route('carta-gantt.index') }}" class="sst-btn sst-btn-outline"><i class="bi bi-arrow-left"></i> Volver</a>
@@ -106,7 +126,13 @@
             $mesProgTotal = 0; $mesRealTotal = 0;
             foreach ($allActividades as $a) {
                 $sMes = $a->seguimiento_por_mes[$mesActual] ?? null;
-                if ($sMes && $sMes['programado']) { $mesProgTotal++; if ($sMes['realizado']) $mesRealTotal++; }
+            if ($sMes && $sMes['programado']) {
+                $cantidadMes = max(1, (int) ($sMes['cantidad_programada'] ?? $a->cantidad_programada ?? 1));
+                $mesProgTotal += $cantidadMes;
+                $mesRealTotal += $sMes['realizado']
+                    ? $cantidadMes
+                    : min($cantidadMes, (int) ($sMes['cantidad_realizada'] ?? 0));
+            }
             }
             $mesPct = $mesProgTotal > 0 ? (int) round($mesRealTotal / $mesProgTotal * 100) : 0;
             $totalReprogramaciones = 0;
@@ -162,16 +188,16 @@
     {{-- ========== TOOLBAR: VISTA + LEYENDA ========== --}}
     <div class="sst-toolbar">
         <div class="sst-view-switcher">
-            <button class="sst-view-btn active" data-view="anual" onclick="switchView('anual')">
+            <button class="sst-view-btn {{ $vistaInicial === 'anual' ? 'active' : '' }}" data-view="anual" onclick="switchView('anual')">
                 <i class="bi bi-calendar3-range"></i> Anual
             </button>
-            <button class="sst-view-btn" data-view="semestral" onclick="switchView('semestral')">
+            <button class="sst-view-btn {{ $vistaInicial === 'semestral' ? 'active' : '' }}" data-view="semestral" onclick="switchView('semestral')">
                 <i class="bi bi-calendar3-event"></i> Semestre
             </button>
-            <button class="sst-view-btn" data-view="mensual" onclick="switchView('mensual')">
+            <button class="sst-view-btn {{ $vistaInicial === 'mensual' ? 'active' : '' }}" data-view="mensual" onclick="switchView('mensual')">
                 <i class="bi bi-calendar-month"></i> Mes
             </button>
-            <button class="sst-view-btn" data-view="semanal" onclick="switchView('semanal')">
+            <button class="sst-view-btn {{ $vistaInicial === 'semanal' ? 'active' : '' }}" data-view="semanal" onclick="switchView('semanal')">
                 <i class="bi bi-calendar-week"></i> Semana
             </button>
         </div>
@@ -199,10 +225,14 @@
         $catActs = $categoria->actividades;
         $catProg = 0; $catReal = 0;
         foreach ($catActs as $a) {
-            $cp = max(1, (int) ($a->cantidad_programada ?? 1));
             foreach ($a->seguimiento as $s) {
-                if ($s->programado) $catProg += $cp;
-                $catReal += (int) ($s->cantidad_realizada ?? ($s->realizado ? $cp : 0));
+                if (!$s->programado) continue;
+                $resumenMes = $a->seguimiento_por_mes[$s->mes] ?? [];
+                $cantidadMes = max(1, (int) ($resumenMes['cantidad_programada'] ?? $a->cantidad_programada ?? 1));
+                $catProg += $cantidadMes;
+                $catReal += $s->realizado
+                    ? $cantidadMes
+                    : min($cantidadMes, (int) ($s->cantidad_realizada ?? 0));
             }
         }
         $catPct = $catProg > 0 ? (int) round($catReal / $catProg * 100) : 0;
@@ -218,7 +248,7 @@
                 <div class="sst-cat-progress"><div class="sst-cat-progress-fill" style="width:{{ $catPct }}%"></div></div>
             </div>
             <div style="display:flex;gap:.35rem">
-                @if($puedeCrear || $puedeEditar)
+                @if($puedeCrear)
                 <button class="sst-btn sst-btn-sm sst-btn-primary" onclick="toggleAddActividad({{ $categoria->id }})">
                     <i class="bi bi-plus-lg"></i> Actividad
                 </button>
@@ -247,7 +277,7 @@
                         <select name="prioridad" class="form-input">@foreach(\App\Models\SstActividad::prioridadesMap() as $k => $v)<option value="{{ $k }}" {{ $k === 'MEDIA' ? 'selected' : '' }}>{{ $v }}</option>@endforeach</select></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Periodicidad</label>
                         <select name="periodicidad" class="form-input"><option value="">— Ninguna —</option>@foreach(\App\Models\SstActividad::periodicidadesMap() as $k => $v)<option value="{{ $k }}">{{ $v }}</option>@endforeach</select></div>
-                    <div class="form-group" style="margin:0"><label class="sst-label">Cantidad <small style="text-transform:none;font-weight:400">(repeticiones/mes)</small></label><input type="number" name="cantidad_programada" class="form-input" value="1" min="1" max="999" placeholder="1"></div>
+                    <div class="form-group" style="margin:0"><label class="sst-label">Cantidad <small style="text-transform:none;font-weight:400">(repeticiones/mes)</small></label><input type="number" name="cantidad_programada" class="form-input" value="1" min="1" max="999" placeholder="1"><small style="display:block;margin-top:.2rem;color:var(--text-muted);font-size:.66rem">Para actividades diarias o semanales, los checks se calculan automáticamente según las fechas.</small></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha inicio</label><input type="date" name="fecha_inicio" class="form-input"></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha fin</label><input type="date" name="fecha_fin" class="form-input"></div>
                     <div class="form-group" style="margin:0;grid-column:1/-1"><label class="sst-label">Descripción</label><textarea name="descripcion" class="form-input" rows="2" placeholder="Descripción o instrucciones..."></textarea></div>
@@ -285,7 +315,7 @@
             @include('carta_gantt._activity_row', ['act' => $act, 'mesActual' => $mesActual])
             @empty
             <tr><td colspan="17" style="padding:2rem;color:var(--text-muted);font-style:italic;text-align:center">
-                Sin actividades. @if($puedeCrear || $puedeEditar)<button class="sst-link" onclick="toggleAddActividad({{ $categoria->id }})">Agregar primera actividad</button>@endif
+                Sin actividades. @if($puedeCrear)<button class="sst-link" onclick="toggleAddActividad({{ $categoria->id }})">Agregar primera actividad</button>@endif
             </td></tr>
             @endforelse
             </tbody>
@@ -296,7 +326,7 @@
     </div>
 
     {{-- ========== AGREGAR CATEGORÍA ========== --}}
-    @if($puedeCrear || $puedeEditar)
+    @if($puedeCrear)
     <div class="sst-add-cat-card">
         <button class="sst-btn sst-btn-outline" onclick="toggleAddCat()" style="width:100%">
             <i class="bi bi-folder-plus"></i> Agregar Categoría
@@ -337,7 +367,7 @@
                         <select name="estado" id="edit-estado" class="form-input">@foreach(\App\Models\SstActividad::estadosMap() as $k => $v)<option value="{{ $k }}">{{ $v }}</option>@endforeach</select></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Periodicidad</label>
                         <select name="periodicidad" id="edit-periodicidad" class="form-input"><option value="">— Ninguna —</option>@foreach(\App\Models\SstActividad::periodicidadesMap() as $k => $v)<option value="{{ $k }}">{{ $v }}</option>@endforeach</select></div>
-                    <div class="form-group" style="margin:0"><label class="sst-label">Cantidad <small style="text-transform:none;font-weight:400">(repeticiones/mes)</small></label><input type="number" name="cantidad_programada" id="edit-cantidad" class="form-input" value="1" min="1" max="999"></div>
+                    <div class="form-group" style="margin:0"><label class="sst-label">Cantidad <small style="text-transform:none;font-weight:400">(repeticiones/mes)</small></label><input type="number" name="cantidad_programada" id="edit-cantidad" class="form-input" value="1" min="1" max="999"><small style="display:block;margin-top:.2rem;color:var(--text-muted);font-size:.66rem">Para actividades diarias o semanales, los checks se calculan automáticamente según las fechas.</small></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha inicio</label><input type="date" name="fecha_inicio" id="edit-fecha-inicio" class="form-input"></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha fin</label><input type="date" name="fecha_fin" id="edit-fecha-fin" class="form-input"></div>
                     <div class="form-group" style="margin:0;grid-column:1/-1"><label class="sst-label">Descripción</label><textarea name="descripcion" id="edit-descripcion" class="form-input" rows="2" placeholder="Descripción o instrucciones..."></textarea></div>
@@ -437,7 +467,7 @@
                         <tr style="border-bottom:1px solid var(--surface-border)">
                             <td style="padding:.35rem .6rem;font-weight:600;color:var(--text-main)">cantidad</td>
                             <td style="padding:.35rem .6rem;text-align:center"><span style="background:rgba(99,102,241,.1);color:#6366f1;padding:.1rem .35rem;border-radius:4px;font-size:.6rem;font-weight:700">Opc.</span></td>
-                            <td style="padding:.35rem .6rem;color:var(--text-muted)">Repeticiones por mes. Si la tarea se debe hacer 4 veces al mes, poner 4. Por defecto: 1.</td>
+                            <td style="padding:.35rem .6rem;color:var(--text-muted)">Repeticiones por mes para actividades mensuales. En actividades diarias o semanales, el sistema calcula las ocurrencias desde las fechas.</td>
                             <td style="padding:.35rem .6rem;font-family:monospace;color:var(--accent-color);font-size:.68rem">4</td>
                         </tr>
                         <tr style="border-bottom:1px solid var(--surface-border)">

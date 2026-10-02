@@ -250,6 +250,8 @@ Route::middleware('auth')->group(function () {
         // Seguimiento AJAX
         Route::patch('carta-gantt/actividades/{actividad}/seguimiento', [CartaGanttController::class, 'updateSeguimiento'])
             ->name('carta-gantt.seguimiento.update');
+        Route::patch('carta-gantt/actividades/{actividad}/ocurrencias/{ocurrencia}/toggle', [CartaGanttController::class, 'toggleOcurrencia'])
+            ->name('carta-gantt.ocurrencias.toggle');
         // Plan de Acción
         Route::post('carta-gantt/actividades/{actividad}/plan-accion', [CartaGanttController::class, 'storePlanAccion'])
             ->name('carta-gantt.plan-accion.store');

@@ -8,7 +8,7 @@ use App\Models\Configuracion;
 use App\Models\SstCategoria;
 use App\Models\SstActividad;
 use App\Models\SstNotificacionLog;
-use App\Models\SstSeguimiento;
+use App\Models\SstSeguimientoOcurrencia;
 use App\Models\SstPlanAccion;
 use App\Models\SstReprogramacion;
 use App\Models\CentroCosto;
@@ -30,7 +30,9 @@ class CartaGanttController extends Controller
 
     public function index(Request $request)
     {
-        $query = ProgramaSst::with(['creador', 'centroCosto', 'responsable']);
+        $user = $request->user();
+        $query = ProgramaSst::with(['creador', 'centroCosto', 'responsable', 'asignados']);
+        $this->scopeVisibleProgramas($query, $user);
 
         if ($request->filled('anio')) {
             $query->where('anio', $request->anio);
@@ -44,22 +46,35 @@ class CartaGanttController extends Controller
 
         $programas = $query->orderByDesc('anio')->orderByDesc('created_at')->get();
 
+        $programasVisibles = ProgramaSst::query();
+        $this->scopeVisibleProgramas($programasVisibles, $user);
+
+        $actividadesVisibles = SstActividad::whereHas('categoria.programa', function ($q) use ($user) {
+            $this->scopeVisibleProgramas($q, $user);
+        });
+
         $stats = [
-            'total'   => ProgramaSst::count(),
-            'activos' => ProgramaSst::where('estado', 'ACTIVO')->count(),
-            'vencidas' => SstActividad::where('fecha_fin', '<', now())
+            'total'   => (clone $programasVisibles)->count(),
+            'activos' => (clone $programasVisibles)->where('estado', 'ACTIVO')->count(),
+            'vencidas' => (clone $actividadesVisibles)
+                            ->where('fecha_fin', '<', now())
                             ->where('estado', '!=', 'COMPLETADA')
                             ->where('estado', '!=', 'CANCELADA')->count(),
         ];
 
         $centros = CentroCosto::orderBy('nombre')->get();
-        $anios   = ProgramaSst::distinct()->orderByDesc('anio')->pluck('anio');
+        $aniosQuery = ProgramaSst::query();
+        $this->scopeVisibleProgramas($aniosQuery, $user);
+        $anios = $aniosQuery->distinct()->orderByDesc('anio')->pluck('anio');
+        $puedeAccesoGlobal = $this->canAccessAllProgramas($user);
 
-        return view('carta_gantt.index', compact('programas', 'stats', 'centros', 'anios'));
+        return view('carta_gantt.index', compact('programas', 'stats', 'centros', 'anios', 'puedeAccesoGlobal'));
     }
 
     public function create()
     {
+        abort_unless(auth()->user()?->tieneAcceso('carta_gantt', 'puede_crear'), 403);
+
         $centros  = CentroCosto::where('activo', true)->orderBy('nombre')->get();
         $usuarios = User::orderBy('name')->get();
         return view('carta_gantt.create', compact('centros', 'usuarios'));
@@ -67,13 +82,19 @@ class CartaGanttController extends Controller
 
     public function store(Request $request)
     {
+        abort_unless($request->user()?->tieneAcceso('carta_gantt', 'puede_crear'), 403);
+
         $request->validate([
             'anio'            => 'required|integer|min:2020|max:2099',
             'nombre'          => 'required|string|max:300',
             'descripcion'     => 'nullable|string',
             'estado'          => 'required|string|in:BORRADOR,ACTIVO,CERRADO',
+            'vista_inicial'   => 'required|string|in:' . implode(',', array_keys(ProgramaSst::vistasInicialesMap())),
+            'mes_inicial'     => 'nullable|integer|min:1|max:12',
             'centro_costo_id' => 'nullable|exists:centros_costo,id',
             'responsable_id'  => 'nullable|exists:users,id',
+            'asignados'       => 'nullable|array',
+            'asignados.*'     => 'integer|exists:users,id',
         ]);
 
         $programa = ProgramaSst::create([
@@ -81,10 +102,14 @@ class CartaGanttController extends Controller
             'titulo'          => $request->nombre,
             'descripcion'     => $request->descripcion,
             'estado'          => $request->estado,
+            'vista_inicial'   => $request->vista_inicial,
+            'mes_inicial'     => $request->mes_inicial,
             'centro_costo_id' => $request->centro_costo_id,
             'responsable_id'  => $request->responsable_id,
             'creado_por'      => auth()->id(),
         ]);
+
+        $this->syncProgramaAsignados($programa, $request);
 
         return redirect()->route('carta-gantt.show', $programa)
             ->with('success', "Programa SST creado — Código: {$programa->codigo}");
@@ -92,31 +117,48 @@ class CartaGanttController extends Controller
 
     public function show(ProgramaSst $cartaGantt)
     {
+        $this->abortUnlessCanViewPrograma($cartaGantt);
+
         $cartaGantt->load([
             'categorias.actividades.seguimiento',
+            'categorias.actividades.ocurrencias',
             'categorias.actividades.responsableUser',
             'categorias.actividades.planesAccion',
             'categorias.actividades.reprogramaciones.usuario',
-            'centroCosto', 'responsable', 'creador',
+            'centroCosto', 'responsable', 'creador', 'asignados',
         ]);
         $usuarios = User::orderBy('name')->get();
 
-        $user = auth()->user();
-        $puedeCrear   = $user->tieneAcceso('carta_gantt', 'puede_crear');
-        $puedeEditar  = $user->tieneAcceso('carta_gantt', 'puede_editar');
-        $puedeEliminar = $user->tieneAcceso('carta_gantt', 'puede_eliminar');
+        $puedeCrear = $this->canManageProgramaStructure($cartaGantt, 'puede_crear');
+        $puedeEditar = $this->canManageProgramaStructure($cartaGantt, 'puede_editar');
+        $puedeEliminar = $this->canManageProgramaStructure($cartaGantt, 'puede_eliminar');
+        $puedeAdministrarPrograma = $this->canAdministratePrograma($cartaGantt, 'puede_editar');
+        $puedeGestionarActividades = $puedeEditar;
+        $puedeEliminarEstructura = $puedeEliminar;
 
-        return view('carta_gantt.show', compact('cartaGantt', 'usuarios', 'puedeCrear', 'puedeEditar', 'puedeEliminar'));
+        return view('carta_gantt.show', compact(
+            'cartaGantt',
+            'usuarios',
+            'puedeCrear',
+            'puedeEditar',
+            'puedeEliminar',
+            'puedeAdministrarPrograma',
+            'puedeGestionarActividades',
+            'puedeEliminarEstructura'
+        ));
     }
 
     public function exportPdf(ProgramaSst $cartaGantt)
     {
+        $this->abortUnlessCanViewPrograma($cartaGantt);
+
         $cartaGantt->load([
             'categorias.actividades.seguimiento',
+            'categorias.actividades.ocurrencias',
             'categorias.actividades.responsableUser',
             'categorias.actividades.planesAccion',
             'categorias.actividades.reprogramaciones.usuario',
-            'centroCosto', 'responsable', 'creador',
+            'centroCosto', 'responsable', 'creador', 'asignados',
         ]);
 
         $mesActual   = (int) date('n');
@@ -140,12 +182,11 @@ class CartaGanttController extends Controller
         for ($m = 1; $m <= 12; $m++) {
             $prog = 0; $real = 0;
             foreach ($todasActividades as $act) {
-                $cantProg = max(1, (int) $act->cantidad_programada);
-                foreach ($act->seguimiento as $seg) {
-                    if ($seg->mes === $m && $seg->programado) {
-                        $prog += $cantProg;
-                        $real += $seg->realizado ? $cantProg : ((int) $seg->cantidad_realizada > 0 ? (int) $seg->cantidad_realizada : 0);
-                    }
+                $seg = $act->seguimiento_por_mes[$m] ?? null;
+                if ($seg && $seg['programado']) {
+                    $cantProg = max(1, (int) ($seg['cantidad_programada'] ?? $act->cantidad_programada ?? 1));
+                    $prog += $cantProg;
+                    $real += $seg['realizado'] ? $cantProg : min($cantProg, (int) ($seg['cantidad_realizada'] ?? 0));
                 }
             }
             $mesesData[$m] = ['prog' => $prog, 'real' => $real, 'pct' => $prog > 0 ? round(($real / $prog) * 100) : 0];
@@ -185,6 +226,9 @@ class CartaGanttController extends Controller
 
     public function edit(ProgramaSst $cartaGantt)
     {
+        $this->abortUnlessCanAdministratePrograma($cartaGantt);
+
+        $cartaGantt->load('asignados');
         $centros  = CentroCosto::where('activo', true)->orderBy('nombre')->get();
         $usuarios = User::orderBy('name')->get();
         return view('carta_gantt.edit', compact('cartaGantt', 'centros', 'usuarios'));
@@ -192,12 +236,18 @@ class CartaGanttController extends Controller
 
     public function update(Request $request, ProgramaSst $cartaGantt)
     {
+        $this->abortUnlessCanAdministratePrograma($cartaGantt);
+
         $request->validate([
             'nombre'          => 'required|string|max:300',
             'anio'            => 'required|integer|min:2020|max:2099',
             'estado'          => 'required|string|in:BORRADOR,ACTIVO,CERRADO',
+            'vista_inicial'   => 'required|string|in:' . implode(',', array_keys(ProgramaSst::vistasInicialesMap())),
+            'mes_inicial'     => 'nullable|integer|min:1|max:12',
             'centro_costo_id' => 'nullable|exists:centros_costo,id',
             'responsable_id'  => 'nullable|exists:users,id',
+            'asignados'       => 'nullable|array',
+            'asignados.*'     => 'integer|exists:users,id',
         ]);
 
         $cartaGantt->update([
@@ -205,9 +255,13 @@ class CartaGanttController extends Controller
             'anio'            => $request->anio,
             'descripcion'     => $request->descripcion,
             'estado'          => $request->estado,
+            'vista_inicial'   => $request->vista_inicial,
+            'mes_inicial'     => $request->mes_inicial,
             'centro_costo_id' => $request->centro_costo_id,
             'responsable_id'  => $request->responsable_id,
         ]);
+
+        $this->syncProgramaAsignados($cartaGantt, $request);
 
         return redirect()->route('carta-gantt.show', $cartaGantt)
             ->with('success', 'Programa actualizado.');
@@ -215,6 +269,8 @@ class CartaGanttController extends Controller
 
     public function destroy(ProgramaSst $cartaGantt)
     {
+        $this->abortUnlessCanAdministratePrograma($cartaGantt, 'puede_eliminar');
+
         $cartaGantt->update(['estado' => 'CERRADO']);
         return redirect()->route('carta-gantt.index')
             ->with('success', 'Programa cerrado correctamente.');
@@ -226,6 +282,8 @@ class CartaGanttController extends Controller
 
     public function storeCategoria(Request $request, ProgramaSst $cartaGantt)
     {
+        $this->abortUnlessCanManageProgramaStructure($cartaGantt, 'puede_crear');
+
         $request->validate([
             'nombre' => 'required|string|max:200',
             'orden'  => 'nullable|integer|min:1',
@@ -239,6 +297,9 @@ class CartaGanttController extends Controller
 
     public function destroyCategoria(SstCategoria $categoria)
     {
+        $categoria->loadMissing('programa');
+        $this->abortUnlessCanManageProgramaStructure($categoria->programa, 'puede_eliminar');
+
         $categoria->delete();
         return back()->with('success', 'Categoría eliminada.');
     }
@@ -249,6 +310,9 @@ class CartaGanttController extends Controller
 
     public function storeActividad(Request $request, SstCategoria $categoria)
     {
+        $categoria->loadMissing('programa');
+        $this->abortUnlessCanManageProgramaStructure($categoria->programa, 'puede_crear');
+
         $request->validate([
             'nombre'              => 'required|string|max:300',
             'responsable_id'      => 'nullable|exists:users,id',
@@ -308,6 +372,8 @@ class CartaGanttController extends Controller
             );
         }
 
+        $actividad->sincronizarOcurrencias();
+
         // Notificar al responsable + CC jefe del programa + superadmins
         $this->enviarNotificacionActividad($actividad, 'asignacion');
 
@@ -316,6 +382,8 @@ class CartaGanttController extends Controller
 
     public function updateActividad(Request $request, SstActividad $actividad)
     {
+        $this->abortUnlessCanManageActividadStructure($actividad, 'puede_editar');
+
         $request->validate([
             'nombre'              => 'required|string|max:300',
             'responsable_id'      => 'nullable|exists:users,id',
@@ -328,6 +396,8 @@ class CartaGanttController extends Controller
             'meses_prog.*'        => 'integer|min:1|max:12',
             'cantidad_programada' => 'nullable|integer|min:1|max:999',
         ]);
+
+        $usaSeguimientoGranularAntes = $actividad->usaSeguimientoPorOcurrencia();
 
         $actividad->update([
             'nombre'              => $request->nombre,
@@ -364,6 +434,12 @@ class CartaGanttController extends Controller
             }
         }
 
+        if ($actividad->usaSeguimientoPorOcurrencia()) {
+            $actividad->sincronizarOcurrencias();
+        } elseif ($usaSeguimientoGranularAntes) {
+            $actividad->ocurrencias()->where('programado', true)->update(['programado' => false]);
+        }
+
         $this->recalcularEstadoActividad($actividad);
 
         return back()->with('success', 'Actividad actualizada.');
@@ -371,6 +447,8 @@ class CartaGanttController extends Controller
 
     public function destroyActividad(SstActividad $actividad)
     {
+        $this->abortUnlessCanManageActividadStructure($actividad, 'puede_eliminar');
+
         $actividad->delete();
         return back()->with('success', 'Actividad eliminada.');
     }
@@ -381,10 +459,14 @@ class CartaGanttController extends Controller
 
     public function updateSeguimiento(Request $request, SstActividad $actividad)
     {
-        // Solo puede editar seguimiento si tiene permiso de edición
-        $user = auth()->user();
-        if (!$user->tieneAcceso('carta_gantt', 'puede_editar')) {
+        if (!$this->canManageActividadStructure($actividad, 'puede_editar')) {
             return response()->json(['error' => 'No tiene permiso para editar seguimiento.'], 403);
+        }
+
+        if ($actividad->usaSeguimientoPorOcurrencia()) {
+            return response()->json([
+                'error' => 'Esta actividad se controla por ocurrencias diarias o semanales.',
+            ], 422);
         }
 
         $request->validate([
@@ -429,12 +511,50 @@ class CartaGanttController extends Controller
         ]);
     }
 
+    public function toggleOcurrencia(SstActividad $actividad, SstSeguimientoOcurrencia $ocurrencia)
+    {
+        if (!$this->canManageActividadStructure($actividad, 'puede_editar')) {
+            return response()->json(['error' => 'No tiene permiso para editar seguimiento.'], 403);
+        }
+
+        abort_unless(
+            $actividad->usaSeguimientoPorOcurrencia()
+            && (int) $ocurrencia->actividad_id === (int) $actividad->id
+            && $ocurrencia->programado,
+            404
+        );
+
+        $ocurrencia->update([
+            'realizado' => !$ocurrencia->realizado,
+            'actualizado_por' => auth()->id(),
+            'fecha_actualizacion' => now(),
+        ]);
+
+        $mes = (int) $ocurrencia->fecha_programada->month;
+        $actividad->sincronizarResumenDesdeOcurrencias($mes, auth()->id());
+        $this->recalcularEstadoActividad($actividad);
+
+        $resumen = $actividad->fresh(['seguimiento', 'ocurrencias'])->seguimiento_por_mes[$mes];
+
+        return response()->json([
+            'success' => true,
+            'ocurrencia' => [
+                'id' => $ocurrencia->id,
+                'realizado' => (bool) $ocurrencia->fresh()->realizado,
+            ],
+            'resumen' => array_merge(['mes' => $mes], $resumen),
+            'estado' => $actividad->fresh()->estado,
+        ]);
+    }
+
     // =====================================================
     // PLAN DE ACCIÓN
     // =====================================================
 
     public function storePlanAccion(Request $request, SstActividad $actividad)
     {
+        $this->abortUnlessCanManageActividadStructure($actividad, 'puede_editar');
+
         $request->validate([
             'accion'            => 'required|string|max:500',
             'responsable'       => 'nullable|string|max:200',
@@ -455,6 +575,9 @@ class CartaGanttController extends Controller
 
     public function updatePlanAccion(Request $request, SstPlanAccion $plan)
     {
+        $plan->loadMissing('actividad.categoria.programa');
+        $this->abortUnlessCanManageActividadStructure($plan->actividad, 'puede_editar');
+
         $request->validate([
             'estado'      => 'required|string|in:' . implode(',', array_keys(SstPlanAccion::estadosMap())),
             'observacion' => 'nullable|string',
@@ -470,6 +593,9 @@ class CartaGanttController extends Controller
 
     public function destroyPlanAccion(SstPlanAccion $plan)
     {
+        $plan->loadMissing('actividad.categoria.programa');
+        $this->abortUnlessCanManageActividadStructure($plan->actividad, 'puede_editar');
+
         $plan->delete();
         return back()->with('success', 'Plan de acción eliminado.');
     }
@@ -480,6 +606,8 @@ class CartaGanttController extends Controller
 
     public function reprogramarActividad(Request $request, SstActividad $actividad)
     {
+        $this->abortUnlessCanManageActividadStructure($actividad, 'puede_editar');
+
         $mesActual = (int) date('n');
 
         $request->validate([
@@ -530,6 +658,130 @@ class CartaGanttController extends Controller
     // =====================================================
     // HELPERS
     // =====================================================
+
+    private function syncProgramaAsignados(ProgramaSst $programa, Request $request): void
+    {
+        $asignados = collect($request->input('asignados', []))
+            ->push($request->input('responsable_id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $programa->asignados()->sync($asignados);
+    }
+
+    private function canAccessAllProgramas(?User $user): bool
+    {
+        if (!$user || !$user->rol) {
+            return false;
+        }
+
+        if ($user->esSuperAdmin() || $user->esAdminSistema()) {
+            return true;
+        }
+
+        $codigo = strtoupper((string) ($user->rol->codigo ?? ''));
+        $nombre = strtoupper((string) ($user->rol->nombre ?? ''));
+
+        return str_contains($codigo, 'COORDIN')
+            || str_contains($nombre, 'COORDIN')
+            || str_contains($codigo, 'JEFE')
+            || str_contains($nombre, 'JEFE')
+            || str_contains($codigo, 'PREVENCION')
+            || str_contains($nombre, 'PREVENCION');
+    }
+
+    private function scopeVisibleProgramas($query, User $user): void
+    {
+        if ($this->canAccessAllProgramas($user)) {
+            return;
+        }
+
+        $query->where(function ($q) use ($user) {
+            $q->where('creado_por', $user->id)
+                ->orWhere('responsable_id', $user->id)
+                ->orWhereHas('asignados', fn ($asignados) => $asignados->where('users.id', $user->id));
+        });
+    }
+
+    private function canViewPrograma(ProgramaSst $programa): bool
+    {
+        $user = auth()->user();
+
+        if (!$user || !$user->tieneAcceso('carta_gantt', 'puede_ver')) {
+            return false;
+        }
+
+        return $this->canAccessAllProgramas($user)
+            || (int) $programa->creado_por === (int) $user->id
+            || $programa->estaAsignadoA($user);
+    }
+
+    private function abortUnlessCanViewPrograma(ProgramaSst $programa): void
+    {
+        abort_unless($this->canViewPrograma($programa), 403);
+    }
+
+    private function canAdministratePrograma(ProgramaSst $programa, string $accion = 'puede_editar'): bool
+    {
+        $user = auth()->user();
+
+        if (!$user || !$user->tieneAcceso('carta_gantt', $accion)) {
+            return false;
+        }
+
+        return $this->canAccessAllProgramas($user)
+            || (int) $programa->creado_por === (int) $user->id;
+    }
+
+    private function abortUnlessCanAdministratePrograma(ProgramaSst $programa, string $accion = 'puede_editar'): void
+    {
+        abort_unless($this->canAdministratePrograma($programa, $accion), 403);
+    }
+
+    private function canManageProgramaStructure(?ProgramaSst $programa, string $accion = 'puede_editar'): bool
+    {
+        if (!$programa) {
+            return false;
+        }
+
+        $user = auth()->user();
+
+        if (!$user || !$user->tieneAcceso('carta_gantt', $accion)) {
+            return false;
+        }
+
+        if ($accion === 'puede_eliminar') {
+            return $this->canAdministratePrograma($programa, $accion);
+        }
+
+        return $this->canAccessAllProgramas($user)
+            || (int) $programa->creado_por === (int) $user->id
+            || $programa->estaAsignadoA($user);
+    }
+
+    private function abortUnlessCanManageProgramaStructure(?ProgramaSst $programa, string $accion = 'puede_editar'): void
+    {
+        abort_unless($this->canManageProgramaStructure($programa, $accion), 403);
+    }
+
+    private function canManageActividadStructure(?SstActividad $actividad, string $accion = 'puede_editar'): bool
+    {
+        if (!$actividad) {
+            return false;
+        }
+
+        $actividad->loadMissing('categoria.programa.asignados');
+
+        return $this->canManageProgramaStructure($actividad->categoria?->programa, $accion);
+    }
+
+    private function abortUnlessCanManageActividadStructure(?SstActividad $actividad, string $accion = 'puede_editar'): void
+    {
+        abort_unless($this->canManageActividadStructure($actividad, $accion), 403);
+    }
 
     /**
      * Envía email de actividad al responsable con CC al jefe del programa y superadmins.
@@ -688,6 +940,8 @@ class CartaGanttController extends Controller
 
     public function importarActividades(Request $request, ProgramaSst $cartaGantt)
     {
+        $this->abortUnlessCanManageProgramaStructure($cartaGantt, 'puede_crear');
+
         $request->validate([
             'archivo' => 'required|file|mimes:csv,txt|max:5120',
         ]);
@@ -809,6 +1063,8 @@ class CartaGanttController extends Controller
                     $anio = $cartaGantt->anio ?? date('Y');
                     $actividad->update(['fecha_fin' => \Carbon\Carbon::create($anio, max($mesesProg))->endOfMonth()->toDateString()]);
                 }
+
+                $actividad->fresh()->sincronizarOcurrencias();
 
                 $creadas++;
             }

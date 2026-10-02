@@ -52,19 +52,27 @@
         </span>
     </td>
     {{-- 12 meses Gantt --}}
-    @php $cantProg = max(1, (int) ($act->cantidad_programada ?? 1)); $rolPuedeEditar = $puedeEditar ?? false; @endphp
+    @php
+        $rolPuedeEditar = $puedeGestionarActividades ?? ($puedeEditar ?? false);
+    @endphp
     @for($m = 1; $m <= 12; $m++)
     @php
         $s = $seg[$m] ?? null;
         $prog = $s ? $s['programado'] : false;
         $real = $s ? $s['realizado'] : false;
+        $cantProg = max(1, (int) ($s['cantidad_programada'] ?? $act->cantidad_programada ?? 1));
         $cantReal = $s ? (int) ($s['cantidad_realizada'] ?? 0) : 0;
         $vencido = $prog && !$real && $m < $mesActual;
         $parcial = $prog && !$real && $cantReal > 0;
     @endphp
     <td class="sst-td-mes {{ $m === $mesActual ? 'sst-mes-actual' : '' }}">
         @if($prog)
-        @if($rolPuedeEditar)
+        @if($act->usaSeguimientoPorOcurrencia())
+        <span class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : ($parcial ? 'gantt-partial' : 'gantt-plan')) }}" style="cursor:default;"
+              title="{{ $cantReal }}/{{ $cantProg }} ocurrencias — use la vista mensual o semanal para registrar el avance">
+            {{ $real ? '✓' : ($cantReal > 0 ? $cantReal.'/'.$cantProg : '0/'.$cantProg) }}
+        </span>
+        @elseif($rolPuedeEditar)
         @if($cantProg > 1)
         <button class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : ($parcial ? 'gantt-partial' : 'gantt-plan')) }}"
                 onclick="toggleSeguimiento({{ $act->id }}, {{ $m }}, this)"
@@ -101,8 +109,8 @@
         $esSuperAdmin = $user->rol && $user->rol->codigo === 'SUPER_ADMIN';
         $esCreador = $user->id === $cartaGantt->creado_por;
         $esResponsable = $user->id === $act->responsable_id;
-        $puedeEditarLocal = ($esSuperAdmin || $esCreador) && ($puedeEditar ?? false);
-        $puedeEliminarLocal = ($esSuperAdmin || $esCreador) && ($puedeEliminar ?? false);
+        $puedeEditarLocal = $puedeGestionarActividades ?? (($esSuperAdmin || $esCreador) && ($puedeEditar ?? false));
+        $puedeEliminarLocal = $puedeEliminarEstructura ?? (($esSuperAdmin || $esCreador) && ($puedeEliminar ?? false));
         // Meses vencidos (programado, no realizado, mes pasado)
         $mesesVencidos = collect($seg)->filter(fn($s, $m) => $s['programado'] && !$s['realizado'] && $m < $mesActual)->keys()->all();
     @endphp
@@ -116,7 +124,7 @@
             <button class="sst-icon-btn sst-icon-btn-xs" onclick="togglePlanes({{ $act->id }})" title="Planes de acción">
                 <i class="bi bi-clipboard-check"></i>
             </button>
-            @if(count($mesesVencidos) > 0 && ($esResponsable || $puedeEditarLocal))
+            @if(count($mesesVencidos) > 0 && $puedeEditarLocal)
             <button class="sst-icon-btn sst-icon-btn-xs" style="color:#6366f1" onclick="openReprogramar({{ $act->id }}, {{ json_encode($mesesVencidos) }})" title="Reprogramar">
                 <i class="bi bi-calendar2-range"></i>
             </button>
