@@ -40,6 +40,8 @@ let periodoSem = MES_ACTUAL <= 6 ? 1 : 2;
 let periodoMes = MES_INICIAL;
 let periodoSemana = 0;
 let currentActivityFilter = 'all';
+let occurrenceModalContext = null;
+let occurrenceModalBusy = false;
 
 function isPastProgramMonth(mes) {
     return ANIO < ANIO_ACTUAL || (ANIO === ANIO_ACTUAL && mes < MES_ACTUAL);
@@ -281,11 +283,99 @@ function buildOccurrenceControl(actData, occurrences, done, total, target, col) 
     const el = document.createElement(PUEDE_EDITAR ? 'button' : 'span');
     el.className = 'gantt-cell ' + (complete ? 'gantt-done' : (done > 0 ? 'gantt-partial' : 'gantt-plan'));
     el.textContent = total > 1 ? done + '/' + total : (complete ? '✓' : '○');
-    el.title = actData.nombre + ': ' + done + '/' + total + ' ocurrencia(s) realizada(s).' + (PUEDE_EDITAR ? ' Clic para actualizar.' : ' Solo lectura.');
+    el.title = actData.nombre + ': ' + done + '/' + total + ' fecha(s) realizadas.' + (PUEDE_EDITAR ? (total > 1 ? ' Clic para revisar cada fecha.' : ' Clic para actualizar.') : ' Solo lectura.');
     el.setAttribute('aria-label', el.title);
-    if (PUEDE_EDITAR) el.onclick = () => toggleOcurrencia(actData.id, target.id, el);
+    if (PUEDE_EDITAR) el.onclick = () => total > 1
+        ? openOccurrenceModal(actData.id, occurrences, col.label)
+        : toggleOcurrencia(actData.id, target.id, el);
     else el.style.cursor = 'default';
     return el;
+}
+
+function openOccurrenceModal(actId, occurrences, periodLabel) {
+    occurrenceModalContext = {actId, ids: occurrences.map(o => Number(o.id)), periodLabel};
+    document.getElementById('occurrenceModal').style.display = 'flex';
+    renderOccurrenceModal();
+}
+
+function closeOccurrenceModal() {
+    document.getElementById('occurrenceModal').style.display = 'none';
+    occurrenceModalContext = null;
+}
+
+function renderOccurrenceModal() {
+    if (!occurrenceModalContext) return;
+    const {actId, ids, periodLabel} = occurrenceModalContext;
+    const actData = getActividadData(actId);
+    if (!actData) return;
+    const occurrences = (actData.ocurrencias || [])
+        .filter(o => ids.includes(Number(o.id)))
+        .sort((a, b) => a.fecha_programada.localeCompare(b.fecha_programada));
+    const done = occurrences.filter(o => o.realizado).length;
+
+    document.getElementById('occurrenceModalTitle').textContent = actData.nombre + ' · ' + periodLabel;
+    document.getElementById('occurrenceModalSummary').textContent = done + '/' + occurrences.length + ' fechas realizadas. Selecciona una fecha para marcarla o desmarcarla.';
+
+    const list = document.getElementById('occurrenceModalList');
+    list.replaceChildren();
+    occurrences.forEach(occurrence => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'sst-occurrence-item' + (occurrence.realizado ? ' is-done' : '');
+        button.disabled = occurrenceModalBusy;
+        button.setAttribute('aria-pressed', occurrence.realizado ? 'true' : 'false');
+
+        const date = document.createElement('span');
+        date.textContent = new Date(occurrence.fecha_programada + 'T12:00:00')
+            .toLocaleDateString('es-CL', {weekday: 'long', day: 'numeric', month: 'long'});
+        const status = document.createElement('strong');
+        status.textContent = occurrence.realizado ? '✓ Realizado' : '○ Pendiente';
+        button.append(date, status);
+        button.onclick = () => toggleOcurrencia(actId, occurrence.id, button);
+        list.appendChild(button);
+    });
+
+    const resetButton = document.getElementById('occurrenceResetButton');
+    resetButton.disabled = occurrenceModalBusy || done === 0;
+    resetButton.title = done === 0 ? 'No hay marcas que quitar en este período' : 'Quitar todas las marcas de este período';
+}
+
+async function resetOccurrencePeriod() {
+    if (!occurrenceModalContext || occurrenceModalBusy) return;
+    const {actId, ids} = occurrenceModalContext;
+    const actData = getActividadData(actId);
+    const done = (actData?.ocurrencias || []).filter(o => ids.includes(Number(o.id)) && o.realizado);
+    if (!done.length || !confirm('¿Desmarcar las ' + done.length + ' fechas realizadas de este período?')) return;
+
+    occurrenceModalBusy = true;
+    renderOccurrenceModal();
+    try {
+        const response = await fetch("{{ url('carta-gantt/actividades') }}/" + actId + "/ocurrencias/reset", {
+            method: 'PATCH',
+            headers: {'Content-Type':'application/json','X-CSRF-TOKEN':'{{ csrf_token() }}','Accept':'application/json'},
+            body: JSON.stringify({ocurrencia_ids: ids})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'HTTP ' + response.status);
+
+        (data.ocurrencias || []).forEach(updated => {
+            const occurrence = (actData.ocurrencias || []).find(o => Number(o.id) === Number(updated.id));
+            if (occurrence) occurrence.realizado = !!updated.realizado;
+        });
+        Object.entries(data.resumenes || {}).forEach(([month, summary]) => {
+            actData.seguimiento[month] = summary;
+        });
+        actData.estado = data.estado || actData.estado;
+        rebuildAllTables();
+        updateStats();
+        applyActivityFilter();
+    } catch (error) {
+        console.error(error);
+        alert('No se pudo reiniciar el período. ' + error.message);
+    } finally {
+        occurrenceModalBusy = false;
+        renderOccurrenceModal();
+    }
 }
 
 function buildLegacyControl(actData, col, done, cantReal, cantProg) {
@@ -453,6 +543,9 @@ function toggleSeguimiento(actId, mes, el) {
 }
 
 function toggleOcurrencia(actId, occurrenceId, el) {
+    if (occurrenceModalBusy) return;
+    occurrenceModalBusy = true;
+    renderOccurrenceModal();
     el.style.opacity = '.5';
     el.style.pointerEvents = 'none';
     fetch("{{ url('carta-gantt/actividades') }}/" + actId + "/ocurrencias/" + occurrenceId + "/toggle", {
@@ -474,9 +567,15 @@ function toggleOcurrencia(actId, occurrenceId, el) {
         rebuildAllTables();
         updateStats();
         applyActivityFilter();
+        renderOccurrenceModal();
     })
     .catch(err => { console.error(err); alert('Error al actualizar la ocurrencia.'); })
-    .finally(() => { el.style.opacity = '1'; el.style.pointerEvents = ''; });
+    .finally(() => {
+        occurrenceModalBusy = false;
+        el.style.opacity = '1';
+        el.style.pointerEvents = '';
+        renderOccurrenceModal();
+    });
 }
 
 // ============ PLANES DE ACCIÓN ============

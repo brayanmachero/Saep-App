@@ -790,6 +790,24 @@
 </div>
 @endif
 
+{{-- ========== MODAL AVANCE POR FECHA ========== --}}
+<div id="occurrenceModal" class="sst-modal-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="occurrenceModalTitle" onclick="if(event.target===this)closeOccurrenceModal()">
+    <div class="sst-modal" style="max-width:460px">
+        <div class="sst-modal-header">
+            <h3 id="occurrenceModalTitle" style="margin:0;font-size:1rem;font-weight:700">Avance por fecha</h3>
+            <button type="button" onclick="closeOccurrenceModal()" class="sst-icon-btn" title="Cerrar" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="sst-modal-body">
+            <p id="occurrenceModalSummary" style="margin:0 0 .85rem;color:var(--text-muted);font-size:.8rem"></p>
+            <div id="occurrenceModalList" class="sst-occurrence-list"></div>
+            <div style="display:flex;gap:.5rem;justify-content:flex-end;flex-wrap:wrap;margin-top:1rem">
+                <button id="occurrenceResetButton" type="button" class="sst-btn sst-btn-danger" onclick="resetOccurrencePeriod()">Desmarcar este período</button>
+                <button type="button" class="sst-btn sst-btn-outline" onclick="closeOccurrenceModal()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {{-- ========== MODAL DETALLE ACTIVIDAD ========== --}}
 <div id="detailModal" class="sst-modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
     <div class="sst-modal" style="max-width:700px">

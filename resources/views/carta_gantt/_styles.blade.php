@@ -134,6 +134,12 @@ body.dark-mode .sst-mes-actual{background:rgba(99,102,241,.1)!important}
 .sst-modal{background:var(--surface-color);border:1px solid var(--surface-border);border-radius:14px;width:100%;max-width:550px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
 .sst-modal-header{display:flex;align-items:center;justify-content:space-between;padding:.85rem 1.1rem;border-bottom:1px solid var(--surface-border)}
 .sst-modal-body{padding:1.1rem}
+.sst-occurrence-list{display:grid;gap:.45rem;max-height:55vh;overflow-y:auto}
+.sst-occurrence-item{display:flex;align-items:center;justify-content:space-between;gap:.75rem;width:100%;padding:.65rem .8rem;border:1px solid var(--surface-border);border-radius:8px;background:var(--surface-color);color:var(--text-main);font-size:.8rem;text-align:left;cursor:pointer}
+.sst-occurrence-item:hover{border-color:var(--accent-color,#6366f1);background:rgba(99,102,241,.05)}
+.sst-occurrence-item.is-done{border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.08)}
+.sst-occurrence-item:focus-visible{outline:2px solid var(--accent-color,#6366f1);outline-offset:2px}
+.sst-occurrence-item:disabled{opacity:.6;cursor:wait}
 
 /* ===== PLANS ROW ===== */
 .sst-planes-row td{border-bottom:2px solid var(--surface-border)}

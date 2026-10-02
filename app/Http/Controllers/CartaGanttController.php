@@ -958,6 +958,64 @@ class CartaGanttController extends Controller
         ]);
     }
 
+    public function resetOcurrencias(Request $request, SstActividad $actividad)
+    {
+        if (!$this->canManageActividadStructure($actividad)) {
+            return response()->json(['error' => 'No tiene permiso para editar seguimiento.'], 403);
+        }
+
+        abort_unless($actividad->usaSeguimientoPorOcurrencia(), 404);
+
+        $datos = $request->validate([
+            'ocurrencia_ids' => 'required|array|min:1|max:31',
+            'ocurrencia_ids.*' => 'required|integer|distinct',
+        ]);
+
+        return DB::transaction(function () use ($actividad, $datos, $request) {
+            $ocurrencias = $actividad->ocurrencias()
+                ->whereIn('id', $datos['ocurrencia_ids'])
+                ->where('programado', true)
+                ->lockForUpdate()
+                ->get();
+
+            if ($ocurrencias->count() !== count($datos['ocurrencia_ids'])) {
+                return response()->json(['error' => 'Una o más fechas ya no pertenecen a esta actividad.'], 422);
+            }
+
+            $marcadas = $ocurrencias->where('realizado', true);
+            if ($marcadas->isNotEmpty()) {
+                $actividad->ocurrencias()->whereIn('id', $marcadas->pluck('id'))->update([
+                    'realizado' => false,
+                    'actualizado_por' => $request->user()->id,
+                    'fecha_actualizacion' => now(),
+                ]);
+
+                $meses = $ocurrencias->map(fn ($o) => $o->fecha_programada->month)->unique();
+                foreach ($meses as $mes) {
+                    $actividad->sincronizarResumenDesdeOcurrencias($mes, $request->user()->id);
+                }
+                $this->recalcularEstadoActividad($actividad);
+
+                $this->registrarActividadLog($actividad, 'ocurrencias_reiniciadas', 'Avance del período reiniciado.', [
+                    'fechas_desmarcadas' => $marcadas->pluck('fecha_programada')->map(fn ($fecha) => $fecha->toDateString())->values()->all(),
+                ], $request);
+            }
+
+            $actividadActual = $actividad->fresh(['ocurrencias', 'seguimiento']);
+            $resumenes = [];
+            foreach ($ocurrencias->map(fn ($o) => $o->fecha_programada->month)->unique() as $mes) {
+                $resumenes[$mes] = $actividadActual->seguimiento_por_mes[$mes];
+            }
+
+            return response()->json([
+                'success' => true,
+                'ocurrencias' => $ocurrencias->pluck('id')->map(fn ($id) => ['id' => $id, 'realizado' => false])->values(),
+                'resumenes' => $resumenes,
+                'estado' => $actividadActual->estado,
+            ]);
+        });
+    }
+
     // =====================================================
     // PLAN DE ACCIÓN
     // =====================================================

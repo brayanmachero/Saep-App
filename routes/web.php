@@ -416,6 +416,8 @@ Route::middleware('auth')->group(function () {
             ->name('carta-gantt.seguimiento.update');
         Route::patch('carta-gantt/actividades/{actividad}/ocurrencias/{ocurrencia}/toggle', [CartaGanttController::class, 'toggleOcurrencia'])
             ->name('carta-gantt.ocurrencias.toggle');
+        Route::patch('carta-gantt/actividades/{actividad}/ocurrencias/reset', [CartaGanttController::class, 'resetOcurrencias'])
+            ->name('carta-gantt.ocurrencias.reset');
         // Plan de Acción
         Route::post('carta-gantt/actividades/{actividad}/plan-accion', [CartaGanttController::class, 'storePlanAccion'])
             ->name('carta-gantt.plan-accion.store');
