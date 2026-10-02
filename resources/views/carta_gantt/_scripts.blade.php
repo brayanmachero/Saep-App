@@ -3,6 +3,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     updateStats();
     applyActivityFilter();
+    switchView(VISTA_INICIAL);
 
     // CSV file input: toggle placeholder/file info
     const csvInput = document.getElementById('csvFileInput');
@@ -25,6 +26,8 @@ document.addEventListener('DOMContentLoaded', function() {
 const ANIO = {{ $anioPrograma }};
 const ANIO_ACTUAL = new Date().getFullYear();
 const MES_ACTUAL = {{ $mesActual }};
+const VISTA_INICIAL = @json($vistaInicial);
+const MES_INICIAL = {{ $mesVistaInicial }};
 const PUEDE_EDITAR = {{ ($puedeEditar ?? false) ? 'true' : 'false' }};
 const CURRENT_USER_ID = {{ auth()->id() ?? 0 }};
 const USER_HAS_PROGRAM_SCOPE = {{ ($usuarioTieneAlcancePrograma ?? false) ? 'true' : 'false' }};
@@ -32,9 +35,10 @@ const MESES = @json($mesesNombres);
 const MESES_CORTO = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const actividadesData = @json($actividadesJson);
 
-let currentView = 'anual';
+let currentView = VISTA_INICIAL;
 let periodoSem = MES_ACTUAL <= 6 ? 1 : 2;
-let periodoMes = MES_ACTUAL;
+let periodoMes = MES_INICIAL;
+let periodoSemana = 0;
 let currentActivityFilter = 'all';
 
 function isPastProgramMonth(mes) {
@@ -55,6 +59,10 @@ function switchView(view) {
         periodNav.style.display = 'flex';
     }
 
+    if (view === 'semanal') {
+        periodoSemana = Math.min(periodoSemana, Math.max(0, buildSemanasCalendario(periodoMes).length - 1));
+    }
+
     rebuildAllTables();
 }
 
@@ -63,9 +71,20 @@ function navigatePeriod(dir) {
         periodoSem = Math.max(1, Math.min(2, periodoSem + dir));
     } else if (currentView === 'mensual') {
         periodoMes = Math.max(1, Math.min(12, periodoMes + dir));
+        periodoSemana = 0;
     } else if (currentView === 'semanal') {
-        // Move by month (each semanal view shows one full month)
-        periodoMes = Math.max(1, Math.min(12, periodoMes + dir));
+        const semanas = buildSemanasCalendario(periodoMes);
+        if (dir > 0 && periodoSemana < semanas.length - 1) {
+            periodoSemana++;
+        } else if (dir < 0 && periodoSemana > 0) {
+            periodoSemana--;
+        } else if (dir > 0 && periodoMes < 12) {
+            periodoMes++;
+            periodoSemana = 0;
+        } else if (dir < 0 && periodoMes > 1) {
+            periodoMes--;
+            periodoSemana = buildSemanasCalendario(periodoMes).length - 1;
+        }
     }
     rebuildAllTables();
 }
@@ -73,6 +92,7 @@ function navigatePeriod(dir) {
 function navigateToToday() {
     periodoSem = MES_ACTUAL <= 6 ? 1 : 2;
     periodoMes = MES_ACTUAL;
+    periodoSemana = 0;
     rebuildAllTables();
 }
 
@@ -90,8 +110,9 @@ function rebuildAllTables() {
         columns = buildMensualColumns(periodoMes);
         label.textContent = MESES[periodoMes] + ' ' + ANIO;
     } else if (currentView === 'semanal') {
-        columns = buildSemanalColumns(periodoMes);
-        label.textContent = MESES[periodoMes] + ' ' + ANIO + ' — Vista diaria';
+        columns = buildSemanalColumns(periodoMes, periodoSemana);
+        const semana = buildSemanasCalendario(periodoMes)[periodoSemana];
+        label.textContent = semana ? 'Semana ' + semana.dayStart + '–' + semana.dayEnd + ' · ' + MESES[periodoMes] + ' ' + ANIO : MESES[periodoMes] + ' ' + ANIO;
     }
 
     // Update each gantt table
@@ -122,51 +143,51 @@ function buildSemestralColumns() {
 }
 
 function buildMensualColumns(mes) {
-    // Expand a month into its weeks (Sem 1, Sem 2, Sem 3, Sem 4, Sem 5)
-    const daysInMonth = new Date(ANIO, mes, 0).getDate();
-    const cols = [];
-    const today = new Date();
-    const isCurrentMonth = today.getFullYear() === ANIO && (today.getMonth() + 1) === mes;
-    const todayDay = isCurrentMonth ? today.getDate() : -1;
-
-    let weekNum = 1;
-    let weekStart = 1;
-    while (weekStart <= daysInMonth) {
-        const weekEnd = Math.min(weekStart + 6, daysInMonth);
-        const containsToday = todayDay >= weekStart && todayDay <= weekEnd;
-        cols.push({
-            type: 'week',
-            mes: mes,
-            weekNum: weekNum,
-            dayStart: weekStart,
-            dayEnd: weekEnd,
-            label: 'S' + weekNum + ' (' + weekStart + '-' + weekEnd + ')',
-            highlight: containsToday
-        });
-        weekStart = weekEnd + 1;
-        weekNum++;
-    }
-    return cols;
+    return buildSemanasCalendario(mes).map((semana, index) => ({
+        type: 'week', mes, weekNum: index + 1,
+        ...semana,
+        label: 'S' + (index + 1) + ' (' + semana.dayStart + '-' + semana.dayEnd + ')',
+        highlight: semana.containsToday,
+    }));
 }
 
-function buildSemanalColumns(mes) {
-    // Expand a month into individual days
-    const daysInMonth = new Date(ANIO, mes, 0).getDate();
+function buildSemanasCalendario(mes) {
+    const lastDay = new Date(ANIO, mes, 0).getDate();
+    const today = new Date();
+    const weeks = [];
+    let start = 1;
+    while (start <= lastDay) {
+        const dayOfWeek = new Date(ANIO, mes - 1, start).getDay();
+        const daysUntilSunday = (7 - dayOfWeek) % 7;
+        const end = Math.min(lastDay, start + daysUntilSunday);
+        weeks.push({
+            dayStart: start,
+            dayEnd: end,
+            startKey: dateKey(ANIO, mes, start),
+            endKey: dateKey(ANIO, mes, end),
+            containsToday: today.getFullYear() === ANIO && today.getMonth() + 1 === mes && today.getDate() >= start && today.getDate() <= end,
+        });
+        start = end + 1;
+    }
+    return weeks;
+}
+
+function dateKey(year, month, day) {
+    return year + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+}
+
+function buildSemanalColumns(mes, semanaIndex) {
+    const semana = buildSemanasCalendario(mes)[semanaIndex] || buildSemanasCalendario(mes)[0];
     const dayNames = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
     const cols = [];
-    const today = new Date();
-    const isCurrentMonth = today.getFullYear() === ANIO && (today.getMonth() + 1) === mes;
-    const todayDay = isCurrentMonth ? today.getDate() : -1;
-
-    for (let d = 1; d <= daysInMonth; d++) {
+    if (!semana) return cols;
+    for (let d = semana.dayStart; d <= semana.dayEnd; d++) {
         const dow = new Date(ANIO, mes - 1, d).getDay();
         cols.push({
-            type: 'day',
-            mes: mes,
-            day: d,
-            dow: dow,
+            type: 'day', mes, day: d, dow,
+            dateKey: dateKey(ANIO, mes, d),
             label: dayNames[dow] + ' ' + d,
-            highlight: d === todayDay
+            highlight: semana.containsToday && new Date().getDate() === d
         });
     }
     return cols;
@@ -205,80 +226,76 @@ function rebuildTableRows(table, columns) {
         const actId = parseInt(row.dataset.actividadId);
         const actData = actividadesData.find(a => a.id === actId);
         if (!actData) return;
-
-        // Remove existing time-cells (keep first 4 td + actions td at end)
         const fixedCols = 4;
         const tds = Array.from(row.children);
         const actionsTd = tds[tds.length - 1];
-
-        // Remove all time columns
         while (row.children.length > fixedCols + 1) {
             row.removeChild(row.children[fixedCols]);
         }
 
-        // Insert new cells before actions
         columns.forEach(col => {
             const td = document.createElement('td');
             td.className = 'sst-td-mes' + (col.highlight ? ' sst-mes-actual' : '');
             td.style.textAlign = 'center';
 
-            const seg = actData.seguimiento[col.mes];
-            const prog = seg && seg.programado;
-            const real = seg && seg.realizado;
-            const cantProg = actData.cantidad_programada || 1;
-            const cantReal = (seg && seg.cantidad_realizada) ? seg.cantidad_realizada : 0;
-            const parcial = prog && !real && cantReal > 0;
-            const mesNombre = MESES[col.mes] || MESES_CORTO[col.mes] || ('Mes ' + col.mes);
-            const estadoMes = real ? 'realizado' : (parcial ? 'parcial' : 'programado');
-            const readOnlySuffix = PUEDE_EDITAR ? '' : ' Solo lectura.';
+            const granular = ['DIARIA', 'SEMANAL'].includes(actData.periodicidad);
+            const seg = getSeguimientoMes(actData, col.mes);
+            const occurrences = (actData.ocurrencias || []);
+            let selected = [];
+            if (col.type === 'week') {
+                selected = occurrences.filter(o => o.fecha_inicio <= col.endKey && o.fecha_fin >= col.startKey);
+            } else if (col.type === 'day') {
+                selected = occurrences.filter(o => o.fecha_programada === col.dateKey);
+            } else {
+                selected = occurrences.filter(o => Number((o.fecha_programada || '').slice(5, 7)) === Number(col.mes));
+            }
 
-            if (col.type === 'month' && prog) {
-                const vencido = !real && isPastProgramMonth(col.mes);
-                const btn = document.createElement(PUEDE_EDITAR ? 'button' : 'span');
-                if (cantProg > 1) {
-                    btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : (parcial ? 'gantt-partial' : 'gantt-plan')));
-                    btn.textContent = real ? '✓' : (cantReal > 0 ? cantReal+'/'+cantProg : '0/'+cantProg);
-                    btn.title = actData.nombre + ' - ' + mesNombre + ': ' + (vencido ? 'vencido' : estadoMes) + '. Avance ' + cantReal + '/' + cantProg + '.' + (PUEDE_EDITAR ? (' Clic para ' + (real ? 'resetear avance.' : 'avanzar una repetición.')) : readOnlySuffix);
-                    btn.setAttribute('aria-label', actData.nombre + ' - ' + mesNombre + ': ' + (vencido ? 'vencido' : estadoMes) + '. Avance ' + cantReal + ' de ' + cantProg + '.');
-                } else {
-                    btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : 'gantt-plan'));
-                    btn.textContent = real ? '✓' : (vencido ? '!' : '○');
-                    btn.title = actData.nombre + ' - ' + mesNombre + ': ' + (real ? 'realizado' : (vencido ? 'vencido' : 'programado')) + '.' + (PUEDE_EDITAR ? (real ? ' Clic para desmarcar.' : ' Clic para marcar realizado.') : readOnlySuffix);
-                    btn.setAttribute('aria-label', btn.title);
+            if (granular && selected.length) {
+                if (col.type === 'day' && actData.periodicidad === 'SEMANAL' && selected[0].fecha_programada !== col.dateKey) {
+                    row.insertBefore(td, actionsTd);
+                    return;
                 }
-                if (PUEDE_EDITAR) btn.onclick = function() { toggleSeguimiento(actId, col.mes, btn); };
-                else btn.style.cursor = 'default';
-                td.appendChild(btn);
-            } else if (col.type === 'week' && prog) {
-                const vencido = !real && isPastProgramMonth(col.mes);
-                const btn = document.createElement(PUEDE_EDITAR ? 'button' : 'span');
-                if (cantProg > 1) {
-                    btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : (parcial ? 'gantt-partial' : 'gantt-plan')));
-                    btn.textContent = real ? '✓' : (cantReal > 0 ? cantReal+'/'+cantProg : '0/'+cantProg);
-                    btn.title = actData.nombre + ' - ' + mesNombre + ': ' + (vencido ? 'vencido' : estadoMes) + '. Avance ' + cantReal + '/' + cantProg + '.' + (PUEDE_EDITAR ? ' Clic para actualizar avance.' : readOnlySuffix);
-                } else {
-                    btn.className = 'gantt-cell ' + (real ? 'gantt-done' : (vencido ? 'gantt-overdue' : 'gantt-plan'));
-                    btn.textContent = real ? '✓' : (vencido ? '!' : '○');
-                    btn.title = actData.nombre + ' - ' + mesNombre + ': ' + (real ? 'realizado' : (vencido ? 'vencido' : 'programado')) + '.' + (PUEDE_EDITAR ? ' Clic para actualizar seguimiento.' : readOnlySuffix);
+                const done = selected.filter(o => o.realizado).length;
+                const total = selected.length;
+                const target = done < total ? selected.find(o => !o.realizado) : selected[selected.length - 1];
+                td.appendChild(buildOccurrenceControl(actData, selected, done, total, target, col));
+            } else if (!granular && seg?.programado) {
+                const anchor = actData.fecha_inicio || dateKey(ANIO, col.mes, 1);
+                const shouldShow = col.type === 'month' || (col.type === 'week' && col.dayStart === 1) || (col.type === 'day' && col.dateKey === anchor);
+                if (shouldShow) {
+                    const cantProg = Number(seg.cantidad_programada || actData.cantidad_programada || 1);
+                    const cantReal = Number(seg.cantidad_realizada || 0);
+                    const done = !!seg.realizado;
+                    const control = buildLegacyControl(actData, col, done, cantReal, cantProg);
+                    td.appendChild(control);
                 }
-                btn.setAttribute('aria-label', btn.title);
-                if (PUEDE_EDITAR) btn.onclick = function() { toggleSeguimiento(actId, col.mes, btn); };
-                else btn.style.cursor = 'default';
-                td.appendChild(btn);
-            } else if (col.type === 'day' && prog) {
-                const vencido = !real && isPastProgramMonth(col.mes);
-                const dot = document.createElement('span');
-                dot.style.cssText = 'display:inline-block;width:10px;height:10px;border-radius:50%;' + (PUEDE_EDITAR ? 'cursor:pointer;' : 'cursor:default;');
-                dot.style.background = real ? '#10b981' : (vencido ? '#ef4444' : (parcial ? '#f59e0b' : '#6366f1'));
-                dot.title = actData.nombre + ' - ' + mesNombre + ': ' + (real ? 'realizado' : (vencido ? 'vencido' : (parcial ? 'parcial' : 'programado'))) + (cantProg > 1 ? ('. Avance ' + cantReal + '/' + cantProg + '.') : '.');
-                dot.setAttribute('aria-label', dot.title);
-                if (PUEDE_EDITAR) dot.onclick = function() { toggleSeguimiento(actId, col.mes, dot); };
-                td.appendChild(dot);
             }
 
             row.insertBefore(td, actionsTd);
         });
     });
+}
+
+function buildOccurrenceControl(actData, occurrences, done, total, target, col) {
+    const complete = done === total;
+    const el = document.createElement(PUEDE_EDITAR ? 'button' : 'span');
+    el.className = 'gantt-cell ' + (complete ? 'gantt-done' : (done > 0 ? 'gantt-partial' : 'gantt-plan'));
+    el.textContent = total > 1 ? done + '/' + total : (complete ? '✓' : '○');
+    el.title = actData.nombre + ': ' + done + '/' + total + ' ocurrencia(s) realizada(s).' + (PUEDE_EDITAR ? ' Clic para actualizar.' : ' Solo lectura.');
+    el.setAttribute('aria-label', el.title);
+    if (PUEDE_EDITAR) el.onclick = () => toggleOcurrencia(actData.id, target.id, el);
+    else el.style.cursor = 'default';
+    return el;
+}
+
+function buildLegacyControl(actData, col, done, cantReal, cantProg) {
+    const el = document.createElement(PUEDE_EDITAR ? 'button' : 'span');
+    el.className = 'gantt-cell ' + (done ? 'gantt-done' : (cantReal > 0 ? 'gantt-partial' : 'gantt-plan'));
+    el.textContent = cantProg > 1 ? (done ? '✓' : cantReal + '/' + cantProg) : (done ? '✓' : '○');
+    el.title = actData.nombre + ': ' + (done ? 'realizado' : 'programado') + '.';
+    if (PUEDE_EDITAR) el.onclick = () => toggleSeguimiento(actData.id, col.mes, el);
+    else el.style.cursor = 'default';
+    return el;
 }
 
 // ============ ACTIVITY FILTERS ============
@@ -435,6 +452,33 @@ function toggleSeguimiento(actId, mes, el) {
     .finally(() => { el.style.opacity = '1'; el.style.pointerEvents = ''; });
 }
 
+function toggleOcurrencia(actId, occurrenceId, el) {
+    el.style.opacity = '.5';
+    el.style.pointerEvents = 'none';
+    fetch("{{ url('carta-gantt/actividades') }}/" + actId + "/ocurrencias/" + occurrenceId + "/toggle", {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json','X-CSRF-TOKEN':'{{ csrf_token() }}','Accept':'application/json'},
+        body: JSON.stringify({})
+    })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(data => {
+        const actData = getActividadData(actId);
+        if (!actData) return;
+        const occurrence = (actData.ocurrencias || []).find(o => Number(o.id) === Number(occurrenceId));
+        if (occurrence) occurrence.realizado = !!data.ocurrencia.realizado;
+        const month = Number((data.ocurrencia.fecha_programada || '').slice(5, 7));
+        if (actData.seguimiento[month]) {
+            actData.seguimiento[month] = data.resumen;
+        }
+        actData.estado = data.estado || actData.estado;
+        rebuildAllTables();
+        updateStats();
+        applyActivityFilter();
+    })
+    .catch(err => { console.error(err); alert('Error al actualizar la ocurrencia.'); })
+    .finally(() => { el.style.opacity = '1'; el.style.pointerEvents = ''; });
+}
+
 // ============ PLANES DE ACCIÓN ============
 function togglePlanes(actId) {
     const row = document.getElementById('planes-' + actId);
@@ -568,7 +612,7 @@ function openDetail(row) {
     body += detailItem('Estado', estLabels[act.estado] || '—');
     body += detailItem('Periodicidad', perLabels[act.periodicidad] || '—');
     const cantProg = act.cantidad_programada || 1;
-    body += detailItem('Cantidad/mes', cantProg > 1 ? cantProg + ' repeticiones' : '1 (estándar)');
+    body += detailItem('Cantidad/mes', ['DIARIA', 'SEMANAL'].includes(act.periodicidad) ? 'Derivada de las fechas calendario' : (cantProg > 1 ? cantProg + ' repeticiones' : '1 (estándar)'));
     body += detailItem('Fecha Inicio', act.fecha_inicio || '—');
     body += detailItem('Fecha Fin', act.fecha_fin || '—');
     body += '</div>';
@@ -584,10 +628,11 @@ function openDetail(row) {
         let cls = 'sst-seg-none';
         let txt = MESES_CORTO[m];
         if (s && s.programado) {
-            const cantReal = s.realizado ? cantProg : (s.cantidad_realizada > 0 ? s.cantidad_realizada : 0);
-            if (s.realizado) { cls = 'sst-seg-done'; txt += cantProg > 1 ? ' ' + cantProg+'/'+cantProg : ' ✓'; }
-            else if (isPastProgramMonth(m)) { cls = 'sst-seg-late'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' !'; }
-            else { cls = 'sst-seg-prog'; txt += cantProg > 1 ? ' ' + cantReal+'/'+cantProg : ' ○'; }
+            const cantidadMes = s.cantidad_programada || cantProg;
+            const cantReal = s.realizado ? cantidadMes : (s.cantidad_realizada > 0 ? s.cantidad_realizada : 0);
+            if (s.realizado) { cls = 'sst-seg-done'; txt += cantidadMes > 1 ? ' ' + cantidadMes+'/'+cantidadMes : ' ✓'; }
+            else if (isPastProgramMonth(m)) { cls = 'sst-seg-late'; txt += cantidadMes > 1 ? ' ' + cantReal+'/'+cantidadMes : ' !'; }
+            else { cls = 'sst-seg-prog'; txt += cantidadMes > 1 ? ' ' + cantReal+'/'+cantidadMes : ' ○'; }
         }
         body += '<div class="sst-seg-cell ' + cls + '">' + txt + '</div>';
     }
@@ -614,6 +659,9 @@ let selectedStatMonth = MES_ACTUAL;
 
 function filterByMonth(mes) {
     selectedStatMonth = parseInt(mes);
+    periodoMes = selectedStatMonth;
+    periodoSemana = 0;
+    if (currentView === 'mensual' || currentView === 'semanal') rebuildAllTables();
     updateStats();
     applyActivityFilter();
 }
@@ -633,10 +681,10 @@ function updateStats() {
     }
 
     actividadesData.forEach(a => {
-        const cantProg = a.cantidad_programada || 1;
         for (let m = 1; m <= 12; m++) {
             const s = a.seguimiento[m];
             if (s && s.programado) {
+                const cantProg = s.cantidad_programada || a.cantidad_programada || 1;
                 const cantReal = getCantReal(s, cantProg);
                 progTotal += cantProg;
                 realTotal += cantReal;

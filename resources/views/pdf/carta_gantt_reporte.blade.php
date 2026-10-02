@@ -482,7 +482,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                         $prog = $s['programado'] ?? false;
                         $real = $s['realizado'] ?? false;
                         $cantR = $s['cantidad_realizada'] ?? 0;
-                        $cantP = $act->cantidad_programada;
+                        $cantP = $s['cantidad_programada'] ?? $act->cantidad_programada;
                         $isReprog = in_array($m, $reprogMeses);
                     @endphp
                     <td class="@if($isReprog && $prog) g-reprog
@@ -561,9 +561,12 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
         <tbody>
             @foreach($vencidas as $act)
             @php
-                $cantProg = max(1, (int) $act->cantidad_programada);
-                $actProg = $act->seguimiento->where('programado', true)->count() * $cantProg;
-                $actReal = $act->seguimiento->where('programado', true)->sum(fn($s) => $s->realizado ? $cantProg : ((int) $s->cantidad_realizada > 0 ? (int) $s->cantidad_realizada : 0));
+                $seguimientosProgramados = collect($act->seguimientoPorMes)->filter(fn($s) => $s['programado']);
+                $actProg = $seguimientosProgramados->sum(fn($s) => max(1, (int) ($s['cantidad_programada'] ?? $act->cantidad_programada ?? 1)));
+                $actReal = $seguimientosProgramados->sum(function ($s) use ($act) {
+                    $cantidad = max(1, (int) ($s['cantidad_programada'] ?? $act->cantidad_programada ?? 1));
+                    return $s['realizado'] ? $cantidad : min($cantidad, (int) ($s['cantidad_realizada'] ?? 0));
+                });
                 $actPct  = $actProg > 0 ? round(($actReal / $actProg) * 100) : 0;
             @endphp
             <tr>
@@ -647,9 +650,12 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
             @foreach($cartaGantt->categorias->sortBy('orden') as $cat)
                 @foreach($cat->actividades->sortBy('orden') as $act)
                 @php
-                    $cantProg = max(1, (int) $act->cantidad_programada);
-                    $actProg = $act->seguimiento->where('programado', true)->count() * $cantProg;
-                    $actReal = $act->seguimiento->where('programado', true)->sum(fn($s) => $s->realizado ? $cantProg : ((int) $s->cantidad_realizada > 0 ? (int) $s->cantidad_realizada : 0));
+                    $seguimientosProgramados = collect($act->seguimientoPorMes)->filter(fn($s) => $s['programado']);
+                    $actProg = $seguimientosProgramados->sum(fn($s) => max(1, (int) ($s['cantidad_programada'] ?? $act->cantidad_programada ?? 1)));
+                    $actReal = $seguimientosProgramados->sum(function ($s) use ($act) {
+                        $cantidad = max(1, (int) ($s['cantidad_programada'] ?? $act->cantidad_programada ?? 1));
+                        return $s['realizado'] ? $cantidad : min($cantidad, (int) ($s['cantidad_realizada'] ?? 0));
+                    });
                     $actPct  = $actProg > 0 ? round(($actReal / $actProg) * 100) : 0;
                     $fillCls = $act->estado === 'COMPLETADA' ? 'fill-green' : ($actPct >= 50 ? 'fill-blue' : ($actPct > 0 ? 'fill-orange' : 'fill-gray'));
                     $estadoCls = match($act->estado) {

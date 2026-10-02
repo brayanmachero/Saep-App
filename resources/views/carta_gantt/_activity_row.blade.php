@@ -58,6 +58,7 @@
     {{-- 12 meses Gantt --}}
     @php
         $cantProg = max(1, (int) ($act->cantidad_programada ?? 1));
+        $seguimientoGranular = $act->usaSeguimientoPorOcurrencia();
         $rolPuedeEditar = $puedeGestionarActividades ?? ($puedeEditar ?? false);
     @endphp
     @for($m = 1; $m <= 12; $m++)
@@ -66,24 +67,25 @@
         $prog = $s ? $s['programado'] : false;
         $real = $s ? $s['realizado'] : false;
         $cantReal = $s ? (int) ($s['cantidad_realizada'] ?? 0) : 0;
+        $cantProgMes = max(1, (int) ($s['cantidad_programada'] ?? $cantProg));
         $vencido = $prog && !$real && $esMesVencido($m);
         $parcial = $prog && !$real && $cantReal > 0;
         $mesNombre = $mesesCorto[$m] ?? "Mes {$m}";
         $estadoMes = $real ? 'realizado' : ($vencido ? 'vencido' : ($parcial ? 'parcial' : 'programado'));
-        $accionMes = $rolPuedeEditar
+        $accionMes = ($rolPuedeEditar && !$seguimientoGranular)
             ? ($cantProg > 1 ? ($real ? 'Clic para resetear avance' : 'Clic para avanzar una repetición') : ($real ? 'Clic para desmarcar' : 'Clic para marcar realizado'))
-            : 'Solo lectura';
+            : ($seguimientoGranular ? 'Seguimiento por día o semana en las vistas de calendario' : 'Solo lectura');
         $tituloMes = "{$act->nombre} - {$mesNombre}: {$estadoMes}. {$accionMes}.";
     @endphp
     <td class="sst-td-mes {{ $m === $mesActual ? 'sst-mes-actual' : '' }}">
         @if($prog)
-        @if($rolPuedeEditar)
-        @if($cantProg > 1)
+        @if($rolPuedeEditar && !$seguimientoGranular)
+        @if($cantProgMes > 1)
         <button class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : ($parcial ? 'gantt-partial' : 'gantt-plan')) }}"
                 onclick="toggleSeguimiento({{ $act->id }}, {{ $m }}, this)"
-                title="{{ $tituloMes }} Avance {{ $cantReal }}/{{ $cantProg }}."
-                aria-label="{{ $tituloMes }} Avance {{ $cantReal }} de {{ $cantProg }}.">
-            {{ $real ? '✓' : ($cantReal > 0 ? $cantReal.'/'.$cantProg : '0/'.$cantProg) }}
+                title="{{ $tituloMes }} Avance {{ $cantReal }}/{{ $cantProgMes }}."
+                aria-label="{{ $tituloMes }} Avance {{ $cantReal }} de {{ $cantProgMes }}.">
+            {{ $real ? '✓' : ($cantReal > 0 ? $cantReal.'/'.$cantProgMes : '0/'.$cantProgMes) }}
         </button>
         @else
         <button class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : 'gantt-plan') }}"
@@ -95,11 +97,11 @@
         @endif
         @else
         {{-- Solo vista: sin onclick --}}
-        @if($cantProg > 1)
+        @if($cantProgMes > 1)
         <span class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : ($parcial ? 'gantt-partial' : 'gantt-plan')) }}" style="cursor:default;"
-              title="{{ $tituloMes }} Avance {{ $cantReal }}/{{ $cantProg }}."
-              aria-label="{{ $tituloMes }} Avance {{ $cantReal }} de {{ $cantProg }}.">
-            {{ $real ? '✓' : ($cantReal > 0 ? $cantReal.'/'.$cantProg : '0/'.$cantProg) }}
+              title="{{ $tituloMes }} Avance {{ $cantReal }}/{{ $cantProgMes }}."
+              aria-label="{{ $tituloMes }} Avance {{ $cantReal }} de {{ $cantProgMes }}.">
+            {{ $real ? '✓' : ($cantReal > 0 ? $cantReal.'/'.$cantProgMes : '0/'.$cantProgMes) }}
         </span>
         @else
         <span class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : 'gantt-plan') }}" style="cursor:default;"

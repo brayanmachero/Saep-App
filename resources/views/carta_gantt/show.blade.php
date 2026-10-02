@@ -7,6 +7,8 @@
     $diaActual = (int) date('j');
     $anioPrograma = (int) $cartaGantt->anio;
     $anioActual = (int) date('Y');
+    $vistaInicial = strtolower($cartaGantt->vista_inicial ?: 'ANUAL');
+    $mesVistaInicial = (int) ($cartaGantt->mes_inicial ?: $mesActual);
     $totalAct = $cartaGantt->actividadesTotales;
     $pct = $cartaGantt->porcentajeRealizado;
     $completadas = 0; $enProgreso = 0; $pendientes = 0; $porVencer = 0; $vencidosMes = 0;
@@ -44,6 +46,14 @@
             'fecha_inicio' => $a->fecha_inicio ? $a->fecha_inicio->format('Y-m-d') : null,
             'fecha_fin' => $a->fecha_fin ? $a->fecha_fin->format('Y-m-d') : null,
             'seguimiento' => $a->seguimiento_por_mes,
+            'ocurrencias' => $a->ocurrencias->where('programado', true)->map(fn($o) => [
+                'id' => $o->id,
+                'tipo' => $o->tipo,
+                'fecha_programada' => $o->fecha_programada?->format('Y-m-d'),
+                'fecha_inicio' => $o->fecha_inicio?->format('Y-m-d'),
+                'fecha_fin' => $o->fecha_fin?->format('Y-m-d'),
+                'realizado' => (bool) $o->realizado,
+            ])->values()->all(),
             'reprogramaciones' => $a->reprogramaciones->map(fn($r) => [
                 'mes_original' => $r->mes_original,
                 'mes_nuevo' => $r->mes_nuevo,
@@ -302,7 +312,11 @@
             $mesProgTotal = 0; $mesRealTotal = 0;
             foreach ($allActividades as $a) {
                 $sMes = $a->seguimiento_por_mes[$mesActual] ?? null;
-                if ($sMes && $sMes['programado']) { $mesProgTotal++; if ($sMes['realizado']) $mesRealTotal++; }
+                if ($sMes && $sMes['programado']) {
+                    $esperadas = max(1, (int) ($sMes['cantidad_programada'] ?? $a->cantidad_programada ?? 1));
+                    $mesProgTotal += $esperadas;
+                    $mesRealTotal += $sMes['realizado'] ? $esperadas : min($esperadas, (int) ($sMes['cantidad_realizada'] ?? 0));
+                }
             }
             $mesPct = $mesProgTotal > 0 ? (int) round($mesRealTotal / $mesProgTotal * 100) : 0;
             $totalReprogramaciones = 0;
@@ -358,16 +372,16 @@
     {{-- ========== TOOLBAR: VISTA + LEYENDA ========== --}}
     <div class="sst-toolbar">
         <div class="sst-view-switcher">
-            <button class="sst-view-btn active" data-view="anual" onclick="switchView('anual')" title="Ver los 12 meses del año" aria-label="Ver los 12 meses del año">
+            <button class="sst-view-btn {{ $vistaInicial === 'anual' ? 'active' : '' }}" data-view="anual" onclick="switchView('anual')" title="Ver los 12 meses del año" aria-label="Ver los 12 meses del año">
                 <i class="bi bi-calendar3-range"></i> Anual
             </button>
-            <button class="sst-view-btn" data-view="semestral" onclick="switchView('semestral')" title="Ver el semestre seleccionado" aria-label="Ver el semestre seleccionado">
+            <button class="sst-view-btn {{ $vistaInicial === 'semestral' ? 'active' : '' }}" data-view="semestral" onclick="switchView('semestral')" title="Ver el semestre seleccionado" aria-label="Ver el semestre seleccionado">
                 <i class="bi bi-calendar3-event"></i> Semestre
             </button>
-            <button class="sst-view-btn" data-view="mensual" onclick="switchView('mensual')" title="Ver solo el mes seleccionado" aria-label="Ver solo el mes seleccionado">
+            <button class="sst-view-btn {{ $vistaInicial === 'mensual' ? 'active' : '' }}" data-view="mensual" onclick="switchView('mensual')" title="Ver solo el mes seleccionado" aria-label="Ver solo el mes seleccionado">
                 <i class="bi bi-calendar-month"></i> Mes
             </button>
-            <button class="sst-view-btn" data-view="semanal" onclick="switchView('semanal')" title="Ver semanas del mes seleccionado" aria-label="Ver semanas del mes seleccionado">
+            <button class="sst-view-btn {{ $vistaInicial === 'semanal' ? 'active' : '' }}" data-view="semanal" onclick="switchView('semanal')" title="Ver semanas del mes seleccionado" aria-label="Ver semanas del mes seleccionado">
                 <i class="bi bi-calendar-week"></i> Semana
             </button>
         </div>
@@ -417,10 +431,11 @@
         $catActs = $categoria->actividades;
         $catProg = 0; $catReal = 0;
         foreach ($catActs as $a) {
-            $cp = max(1, (int) ($a->cantidad_programada ?? 1));
-            foreach ($a->seguimiento as $s) {
-                if ($s->programado) $catProg += $cp;
-                $catReal += (int) ($s->cantidad_realizada ?? ($s->realizado ? $cp : 0));
+            foreach ($a->seguimiento_por_mes as $s) {
+                if (!($s['programado'] ?? false)) continue;
+                $cp = max(1, (int) ($s['cantidad_programada'] ?? $a->cantidad_programada ?? 1));
+                $catProg += $cp;
+                $catReal += ($s['realizado'] ?? false) ? $cp : min($cp, (int) ($s['cantidad_realizada'] ?? 0));
             }
         }
         $catPct = $catProg > 0 ? (int) round($catReal / $catProg * 100) : 0;

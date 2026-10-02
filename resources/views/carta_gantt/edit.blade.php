@@ -36,6 +36,28 @@
                     </select>
                 </div>
             </div>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label>Vista inicial *</label>
+                    <select name="vista_inicial" class="form-input" required>
+                        @foreach(\App\Models\ProgramaSst::vistasInicialesMap() as $codigoVista => $nombreVista)
+                        <option value="{{ $codigoVista }}" {{ old('vista_inicial', $cartaGantt->vista_inicial ?? 'ANUAL') === $codigoVista ? 'selected' : '' }}>{{ $nombreVista }}</option>
+                        @endforeach
+                    </select>
+                    <small style="color:var(--text-muted)">Define cómo se abrirá el programa para su equipo.</small>
+                </div>
+                <div class="form-group">
+                    <label>Mes inicial</label>
+                    <select name="mes_inicial" class="form-input">
+                        @php($mesInicialSeleccionado = old('mes_inicial', $cartaGantt->mes_inicial))
+                        <option value="" {{ $mesInicialSeleccionado === null || $mesInicialSeleccionado === '' ? 'selected' : '' }}>Mes actual</option>
+                        @foreach(['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'] as $indiceMes => $nombreMes)
+                        <option value="{{ $indiceMes + 1 }}" {{ (int) $mesInicialSeleccionado === $indiceMes + 1 ? 'selected' : '' }}>{{ $nombreMes }}</option>
+                        @endforeach
+                    </select>
+                    <small style="color:var(--text-muted)">Útil para programas mensuales o semanales.</small>
+                </div>
+            </div>
             <div class="form-group">
                 <label>Nombre *</label>
                 <input type="text" name="nombre" value="{{ old('nombre', $cartaGantt->nombre) }}"

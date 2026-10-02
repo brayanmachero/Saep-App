@@ -9,6 +9,7 @@ use App\Models\SstCategoria;
 use App\Models\SstActividad;
 use App\Models\SstNotificacionLog;
 use App\Models\SstSeguimiento;
+use App\Models\SstSeguimientoOcurrencia;
 use App\Models\SstPlanAccion;
 use App\Models\SstReprogramacion;
 use App\Models\SstActividadComentario;
@@ -337,6 +338,8 @@ class CartaGanttController extends Controller
             'estado'          => 'required|string|in:BORRADOR,ACTIVO,CERRADO',
             'centro_costo_id' => 'nullable|exists:centros_costo,id',
             'responsable_id'  => 'nullable|exists:users,id',
+            'vista_inicial'   => 'required|string|in:ANUAL,SEMESTRAL,MENSUAL,SEMANAL',
+            'mes_inicial'     => 'nullable|integer|min:1|max:12',
             'asignados'       => 'nullable|array',
             'asignados.*'     => 'integer|exists:users,id',
         ]);
@@ -348,6 +351,8 @@ class CartaGanttController extends Controller
             'estado'          => $request->estado,
             'centro_costo_id' => $request->centro_costo_id,
             'responsable_id'  => $request->responsable_id,
+            'vista_inicial'   => $request->vista_inicial,
+            'mes_inicial'     => $request->mes_inicial,
             'creado_por'      => auth()->id(),
         ]);
 
@@ -367,6 +372,7 @@ class CartaGanttController extends Controller
 
         $cartaGantt->load([
             'categorias.actividades.seguimiento',
+            'categorias.actividades.ocurrencias',
             'categorias.actividades.responsableUser',
             'categorias.actividades.planesAccion',
             'categorias.actividades.reprogramaciones.usuario',
@@ -421,6 +427,8 @@ class CartaGanttController extends Controller
                 'estado' => 'BORRADOR',
                 'centro_costo_id' => $cartaGantt->centro_costo_id,
                 'responsable_id' => $cartaGantt->responsable_id,
+                'vista_inicial' => $cartaGantt->vista_inicial,
+                'mes_inicial' => $cartaGantt->mes_inicial,
                 'creado_por' => $request->user()->id,
             ]);
 
@@ -464,6 +472,8 @@ class CartaGanttController extends Controller
                         $summary['meses_programados']++;
                     }
 
+                    $newActivity->sincronizarOcurrencias();
+
                     foreach ($actividad->planesAccion as $plan) {
                         $newActivity->planesAccion()->create([
                             'accion' => $plan->accion,
@@ -503,6 +513,7 @@ class CartaGanttController extends Controller
 
         $cartaGantt->load([
             'categorias.actividades.seguimiento',
+            'categorias.actividades.ocurrencias',
             'categorias.actividades.responsableUser',
             'categorias.actividades.planesAccion',
             'categorias.actividades.reprogramaciones.usuario',
@@ -530,12 +541,11 @@ class CartaGanttController extends Controller
         for ($m = 1; $m <= 12; $m++) {
             $prog = 0; $real = 0;
             foreach ($todasActividades as $act) {
-                $cantProg = max(1, (int) $act->cantidad_programada);
-                foreach ($act->seguimiento as $seg) {
-                    if ($seg->mes === $m && $seg->programado) {
-                        $prog += $cantProg;
-                        $real += $seg->realizado ? $cantProg : ((int) $seg->cantidad_realizada > 0 ? (int) $seg->cantidad_realizada : 0);
-                    }
+                $seg = $act->seguimiento_por_mes[$m] ?? null;
+                if ($seg && $seg['programado']) {
+                    $cantProg = max(1, (int) ($seg['cantidad_programada'] ?? $act->cantidad_programada));
+                    $prog += $cantProg;
+                    $real += $seg['realizado'] ? $cantProg : min($cantProg, (int) ($seg['cantidad_realizada'] ?? 0));
                 }
             }
             $mesesData[$m] = ['prog' => $prog, 'real' => $real, 'pct' => $prog > 0 ? round(($real / $prog) * 100) : 0];
@@ -595,6 +605,8 @@ class CartaGanttController extends Controller
             'estado'          => 'required|string|in:BORRADOR,ACTIVO,CERRADO',
             'centro_costo_id' => 'nullable|exists:centros_costo,id',
             'responsable_id'  => 'nullable|exists:users,id',
+            'vista_inicial'   => 'required|string|in:ANUAL,SEMESTRAL,MENSUAL,SEMANAL',
+            'mes_inicial'     => 'nullable|integer|min:1|max:12',
             'asignados'       => 'nullable|array',
             'asignados.*'     => 'integer|exists:users,id',
         ]);
@@ -606,6 +618,8 @@ class CartaGanttController extends Controller
             'estado'          => $request->estado,
             'centro_costo_id' => $request->centro_costo_id,
             'responsable_id'  => $request->responsable_id,
+            'vista_inicial'   => $request->vista_inicial,
+            'mes_inicial'     => $request->mes_inicial,
         ]);
 
         $asignacion = $this->syncProgramaAsignados($cartaGantt, $request);
@@ -738,6 +752,8 @@ class CartaGanttController extends Controller
             );
         }
 
+        $actividad->fresh()->sincronizarOcurrencias();
+
         // Notificar al responsable + CC jefe del programa + superadmins
         $this->enviarNotificacionActividad($actividad, 'asignacion');
         $this->registrarActividadLog($actividad, 'actividad_creada', 'Actividad creada.', [
@@ -752,6 +768,7 @@ class CartaGanttController extends Controller
     {
         $this->abortUnlessCanManageActividadStructure($actividad);
         $actividad->loadMissing('seguimiento');
+        $usabaSeguimientoPorOcurrencia = $actividad->usaSeguimientoPorOcurrencia();
         $antes = $this->actividadSnapshot($actividad);
         $mesesAntes = $actividad->seguimiento
             ->where('programado', true)
@@ -808,6 +825,13 @@ class CartaGanttController extends Controller
             }
         }
 
+        $actividad->refresh();
+        if ($actividad->usaSeguimientoPorOcurrencia()) {
+            $actividad->sincronizarOcurrencias();
+        } elseif ($usabaSeguimientoPorOcurrencia) {
+            $actividad->ocurrencias()->where('programado', true)->update(['programado' => false]);
+        }
+
         $this->recalcularEstadoActividad($actividad);
         $actividad->refresh()->load('seguimiento');
         $despues = $this->actividadSnapshot($actividad);
@@ -846,6 +870,12 @@ class CartaGanttController extends Controller
     {
         if (!$this->canManageActividadStructure($actividad)) {
             return response()->json(['error' => 'No tiene permiso para editar seguimiento.'], 403);
+        }
+
+        if ($actividad->usaSeguimientoPorOcurrencia()) {
+            return response()->json([
+                'error' => 'Las actividades diarias y semanales se actualizan por cada ocurrencia del calendario.',
+            ], 422);
         }
 
         $request->validate([
@@ -893,6 +923,38 @@ class CartaGanttController extends Controller
             'cantidad_realizada' => $nuevaCantReal,
             'cantidad_programada'=> $cantProg,
             'estado'             => $actividad->fresh()->estado,
+        ]);
+    }
+
+    public function toggleOcurrencia(Request $request, SstActividad $actividad, SstSeguimientoOcurrencia $ocurrencia)
+    {
+        if (!$this->canManageActividadStructure($actividad)) {
+            return response()->json(['error' => 'No tiene permiso para editar seguimiento.'], 403);
+        }
+
+        abort_unless($ocurrencia->actividad_id === $actividad->id && $ocurrencia->programado && $actividad->usaSeguimientoPorOcurrencia(), 404);
+
+        $ocurrencia->update([
+            'realizado' => !$ocurrencia->realizado,
+            'actualizado_por' => $request->user()->id,
+            'fecha_actualizacion' => now(),
+        ]);
+
+        $actividad->sincronizarResumenDesdeOcurrencias($ocurrencia->fecha_programada->month, $request->user()->id);
+        $this->recalcularEstadoActividad($actividad);
+        $resumen = $actividad->fresh(['ocurrencias', 'seguimiento'])->seguimiento_por_mes[$ocurrencia->fecha_programada->month];
+
+        $this->registrarActividadLog($actividad, 'ocurrencia_actualizada', 'Seguimiento de ocurrencia actualizado.', [
+            'fecha' => $ocurrencia->fecha_programada->toDateString(),
+            'tipo' => $ocurrencia->tipo,
+            'realizado' => (bool) $ocurrencia->fresh()->realizado,
+        ], $request);
+
+        return response()->json([
+            'success' => true,
+            'ocurrencia' => $ocurrencia->fresh(),
+            'resumen' => $resumen,
+            'estado' => $actividad->fresh()->estado,
         ]);
     }
 
@@ -2008,6 +2070,8 @@ class CartaGanttController extends Controller
                     $anio = $cartaGantt->anio ?? date('Y');
                     $actividad->update(['fecha_fin' => \Carbon\Carbon::create($anio, max($mesesProg))->endOfMonth()->toDateString()]);
                 }
+
+                $actividad->fresh()->sincronizarOcurrencias();
 
                 $this->registrarActividadLog($actividad->fresh(['seguimiento']), 'actividad_importada', 'Actividad importada desde CSV.', [
                     'actividad' => $this->actividadSnapshot($actividad->fresh(['seguimiento'])),
