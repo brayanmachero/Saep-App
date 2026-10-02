@@ -112,6 +112,11 @@ body.dark-mode .sst-mes-actual{background:rgba(99,102,241,.1)!important}
 @keyframes pulse-overdue{0%,100%{opacity:1}50%{opacity:.65}}
 .gantt-partial{background:rgba(245,158,11,.12);color:#f59e0b;border:1.5px solid rgba(245,158,11,.3);font-size:.55rem}
 .gantt-partial:hover{background:rgba(245,158,11,.2);transform:scale(1.1)}
+.sst-monthly-row-summary{display:block;margin:.2rem 0 0 1.6rem;color:var(--text-muted);font-size:.67rem;font-weight:600}
+.sst-weekly-control{display:inline-flex;align-items:center;gap:2px;white-space:nowrap}
+.sst-week-minus{width:17px;height:22px;padding:0;border:1px solid rgba(239,68,68,.25);border-radius:5px;background:rgba(239,68,68,.07);color:#dc2626;font-size:.7rem;font-weight:700;cursor:pointer}
+.sst-week-minus:hover{background:rgba(239,68,68,.16)}
+.sst-week-minus:disabled,.sst-weekly-control .gantt-cell:disabled{opacity:.55;cursor:not-allowed;transform:none}
 
 /* Activity row hover */
 .sst-act-row:hover td{background-color:rgba(99,102,241,.03)}

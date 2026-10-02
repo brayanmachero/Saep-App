@@ -46,6 +46,11 @@
             'fecha_inicio' => $a->fecha_inicio ? $a->fecha_inicio->format('Y-m-d') : null,
             'fecha_fin' => $a->fecha_fin ? $a->fecha_fin->format('Y-m-d') : null,
             'seguimiento' => $a->seguimiento_por_mes,
+            'semanas' => $a->seguimientoSemanas->map(fn($semana) => [
+                'mes' => (int) $semana->mes,
+                'semana_inicio' => $semana->semana_inicio?->format('Y-m-d'),
+                'cantidad_realizada' => (int) $semana->cantidad_realizada,
+            ])->values()->all(),
             'ocurrencias' => $a->ocurrencias->where('programado', true)->map(fn($o) => [
                 'id' => $o->id,
                 'tipo' => $o->tipo,

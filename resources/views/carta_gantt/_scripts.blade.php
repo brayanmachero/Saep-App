@@ -42,6 +42,7 @@ let periodoSemana = 0;
 let currentActivityFilter = 'all';
 let occurrenceModalContext = null;
 let occurrenceModalBusy = false;
+let monthlyProgressBusy = false;
 
 function isPastProgramMonth(mes) {
     return ANIO < ANIO_ACTUAL || (ANIO === ANIO_ACTUAL && mes < MES_ACTUAL);
@@ -66,6 +67,16 @@ function switchView(view) {
     }
 
     rebuildAllTables();
+}
+
+function goToMonthlyProgress(mes) {
+    periodoMes = Number(mes);
+    periodoSemana = 0;
+    selectedStatMonth = periodoMes;
+    const monthSelect = document.getElementById('mesFilterSelect');
+    if (monthSelect) monthSelect.value = String(periodoMes);
+    switchView('mensual');
+    updateStats();
 }
 
 function navigatePeriod(dir) {
@@ -228,6 +239,7 @@ function rebuildTableRows(table, columns) {
         const actId = parseInt(row.dataset.actividadId);
         const actData = actividadesData.find(a => a.id === actId);
         if (!actData) return;
+        updateMonthlyRowSummary(row, actData, columns[0]?.mes);
         const fixedCols = 4;
         const tds = Array.from(row.children);
         const actionsTd = tds[tds.length - 1];
@@ -261,6 +273,11 @@ function rebuildTableRows(table, columns) {
                 const total = selected.length;
                 const target = done < total ? selected.find(o => !o.realizado) : selected[selected.length - 1];
                 td.appendChild(buildOccurrenceControl(actData, selected, done, total, target, col));
+            } else if (actData.periodicidad === 'MENSUAL' && seg?.programado && (col.type === 'week' || col.type === 'day')) {
+                const week = col.type === 'week'
+                    ? col
+                    : buildSemanasCalendario(col.mes).find(item => col.day >= item.dayStart && col.day <= item.dayEnd);
+                if (week) td.appendChild(buildMonthlyWeekControl(actData, seg, col, week));
             } else if (!granular && seg?.programado) {
                 const anchor = actData.fecha_inicio || dateKey(ANIO, col.mes, 1);
                 const shouldShow = col.type === 'month' || (col.type === 'week' && col.dayStart === 1) || (col.type === 'day' && col.dateKey === anchor);
@@ -276,6 +293,71 @@ function rebuildTableRows(table, columns) {
             row.insertBefore(td, actionsTd);
         });
     });
+}
+
+function monthlyProgressTotal(seg, target) {
+    return seg?.realizado ? Math.max(target, Number(seg.cantidad_realizada || 0)) : Number(seg?.cantidad_realizada || 0);
+}
+
+function updateMonthlyRowSummary(row, actData, mes) {
+    let summary = row.querySelector('.sst-monthly-row-summary');
+    if (actData.periodicidad !== 'MENSUAL' || !['mensual', 'semanal'].includes(currentView) || !mes) {
+        if (summary) summary.remove();
+        return;
+    }
+    if (!summary) {
+        summary = document.createElement('small');
+        summary.className = 'sst-monthly-row-summary';
+        row.firstElementChild.appendChild(summary);
+    }
+    const seg = getSeguimientoMes(actData, mes);
+    if (!seg?.programado) {
+        summary.textContent = '';
+        return;
+    }
+    const target = Number(seg.cantidad_programada || actData.cantidad_programada || 1);
+    const total = monthlyProgressTotal(seg, target);
+    const attributed = (actData.semanas || [])
+        .filter(item => Number(item.mes) === Number(mes))
+        .reduce((sum, item) => sum + Number(item.cantidad_realizada || 0), 0);
+    const unassigned = Math.max(0, total - attributed);
+    summary.textContent = MESES_CORTO[mes] + ': ' + total + '/' + target + (unassigned ? ' · ' + unassigned + ' sin semana' : '');
+}
+
+function buildMonthlyWeekControl(actData, seg, col, week) {
+    const target = Number(seg.cantidad_programada || actData.cantidad_programada || 1);
+    const total = monthlyProgressTotal(seg, target);
+    const weekRecord = (actData.semanas || []).find(item => Number(item.mes) === Number(col.mes) && item.semana_inicio === week.startKey);
+    const weekDone = Number(weekRecord?.cantidad_realizada || 0);
+    const single = target === 1;
+    const complete = total >= target;
+    const wrapper = document.createElement('span');
+    wrapper.className = 'sst-weekly-control';
+
+    const main = document.createElement(PUEDE_EDITAR ? 'button' : 'span');
+    main.className = 'gantt-cell ' + (single && complete ? 'gantt-done' : (weekDone > 0 ? 'gantt-partial' : 'gantt-plan'));
+    main.textContent = single ? (complete ? '✓' : '○') : (weekDone > 0 ? String(weekDone) : (complete ? '·' : '+'));
+    main.title = actData.nombre + ' · semana ' + week.dayStart + '–' + week.dayEnd + ': ' + weekDone + ' registro(s). Total del mes ' + total + '/' + target + '.' + (PUEDE_EDITAR ? (single ? ' Clic para marcar o desmarcar el mes.' : ' Clic para sumar uno en esta semana.') : ' Solo lectura.');
+    main.setAttribute('aria-label', main.title);
+    if (PUEDE_EDITAR) {
+        main.type = 'button';
+        main.disabled = monthlyProgressBusy || (!single && complete);
+        main.onclick = () => updateMonthlyWeekProgress(actData.id, col.mes, week.startKey, 1, main);
+    }
+    wrapper.appendChild(main);
+
+    if (PUEDE_EDITAR && !single && weekDone > 0) {
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'sst-week-minus';
+        remove.textContent = '−';
+        remove.title = 'Quitar un registro de esta semana';
+        remove.setAttribute('aria-label', remove.title + ' para ' + actData.nombre);
+        remove.disabled = monthlyProgressBusy;
+        remove.onclick = () => updateMonthlyWeekProgress(actData.id, col.mes, week.startKey, -1, remove);
+        wrapper.appendChild(remove);
+    }
+    return wrapper;
 }
 
 function buildOccurrenceControl(actData, occurrences, done, total, target, col) {
@@ -382,8 +464,10 @@ function buildLegacyControl(actData, col, done, cantReal, cantProg) {
     const el = document.createElement(PUEDE_EDITAR ? 'button' : 'span');
     el.className = 'gantt-cell ' + (done ? 'gantt-done' : (cantReal > 0 ? 'gantt-partial' : 'gantt-plan'));
     el.textContent = cantProg > 1 ? (done ? '✓' : cantReal + '/' + cantProg) : (done ? '✓' : '○');
-    el.title = actData.nombre + ': ' + (done ? 'realizado' : 'programado') + '.';
-    if (PUEDE_EDITAR) el.onclick = () => toggleSeguimiento(actData.id, col.mes, el);
+    el.title = actData.nombre + ': ' + (done ? 'realizado' : 'programado') + '.' + (actData.periodicidad === 'MENSUAL' ? ' Clic para ver las semanas del mes.' : '');
+    if (PUEDE_EDITAR) el.onclick = () => actData.periodicidad === 'MENSUAL'
+        ? goToMonthlyProgress(col.mes)
+        : toggleSeguimiento(actData.id, col.mes, el);
     else el.style.cursor = 'default';
     return el;
 }
@@ -512,6 +596,36 @@ function applyActivityFilter() {
 }
 
 // ============ SEGUIMIENTO AJAX ============
+async function updateMonthlyWeekProgress(actId, mes, weekStart, direction, button) {
+    if (monthlyProgressBusy) return;
+    monthlyProgressBusy = true;
+    button.disabled = true;
+    try {
+        const response = await fetch("{{ url('carta-gantt/actividades') }}/" + actId + "/seguimiento/semana", {
+            method: 'PATCH',
+            headers: {'Content-Type':'application/json','X-CSRF-TOKEN':'{{ csrf_token() }}','Accept':'application/json'},
+            body: JSON.stringify({mes, semana_inicio: weekStart, direccion: direction})
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'HTTP ' + response.status);
+
+        const actData = getActividadData(actId);
+        if (!actData) return;
+        actData.seguimiento[mes] = data.seguimiento;
+        actData.semanas = (actData.semanas || []).filter(item => Number(item.mes) !== Number(mes))
+            .concat(data.semanas || []);
+        actData.estado = data.estado || actData.estado;
+    } catch (error) {
+        console.error(error);
+        alert('No se pudo actualizar el avance semanal. ' + error.message);
+    } finally {
+        monthlyProgressBusy = false;
+        rebuildAllTables();
+        updateStats();
+        applyActivityFilter();
+    }
+}
+
 function toggleSeguimiento(actId, mes, el) {
     el.style.opacity = '.5';
     el.style.pointerEvents = 'none';

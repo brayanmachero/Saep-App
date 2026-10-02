@@ -109,6 +109,7 @@ class SstActividad extends Model
     public function categoria()      { return $this->belongsTo(SstCategoria::class, 'categoria_id'); }
     public function responsableUser() { return $this->belongsTo(User::class, 'responsable_id'); }
     public function seguimiento()    { return $this->hasMany(SstSeguimiento::class, 'actividad_id')->orderBy('mes'); }
+    public function seguimientoSemanas() { return $this->hasMany(SstSeguimientoSemana::class, 'actividad_id')->orderBy('semana_inicio'); }
     public function ocurrencias()    { return $this->hasMany(SstSeguimientoOcurrencia::class, 'actividad_id')->orderBy('fecha_programada'); }
     public function planesAccion()   { return $this->hasMany(SstPlanAccion::class, 'actividad_id'); }
     public function reprogramaciones() { return $this->hasMany(SstReprogramacion::class, 'actividad_id'); }

@@ -73,7 +73,7 @@
         $mesNombre = $mesesCorto[$m] ?? "Mes {$m}";
         $estadoMes = $real ? 'realizado' : ($vencido ? 'vencido' : ($parcial ? 'parcial' : 'programado'));
         $accionMes = ($rolPuedeEditar && !$seguimientoGranular)
-            ? ($cantProg > 1 ? ($real ? 'Clic para resetear avance' : 'Clic para avanzar una repetición') : ($real ? 'Clic para desmarcar' : 'Clic para marcar realizado'))
+            ? ($act->periodicidad === 'MENSUAL' ? 'Clic para ver y registrar el avance por semana' : ($cantProg > 1 ? ($real ? 'Clic para resetear avance' : 'Clic para avanzar una repetición') : ($real ? 'Clic para desmarcar' : 'Clic para marcar realizado')))
             : ($seguimientoGranular ? 'Seguimiento por día o semana en las vistas de calendario' : 'Solo lectura');
         $tituloMes = "{$act->nombre} - {$mesNombre}: {$estadoMes}. {$accionMes}.";
     @endphp
@@ -82,14 +82,14 @@
         @if($rolPuedeEditar && !$seguimientoGranular)
         @if($cantProgMes > 1)
         <button class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : ($parcial ? 'gantt-partial' : 'gantt-plan')) }}"
-                onclick="toggleSeguimiento({{ $act->id }}, {{ $m }}, this)"
+                onclick="@if($act->periodicidad === 'MENSUAL')goToMonthlyProgress({{ $m }})@else toggleSeguimiento({{ $act->id }}, {{ $m }}, this)@endif"
                 title="{{ $tituloMes }} Avance {{ $cantReal }}/{{ $cantProgMes }}."
                 aria-label="{{ $tituloMes }} Avance {{ $cantReal }} de {{ $cantProgMes }}.">
             {{ $real ? '✓' : ($cantReal > 0 ? $cantReal.'/'.$cantProgMes : '0/'.$cantProgMes) }}
         </button>
         @else
         <button class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : 'gantt-plan') }}"
-                onclick="toggleSeguimiento({{ $act->id }}, {{ $m }}, this)"
+                onclick="@if($act->periodicidad === 'MENSUAL')goToMonthlyProgress({{ $m }})@else toggleSeguimiento({{ $act->id }}, {{ $m }}, this)@endif"
                 title="{{ $tituloMes }}"
                 aria-label="{{ $tituloMes }}">
             {{ $real ? '✓' : ($vencido ? '!' : '○') }}

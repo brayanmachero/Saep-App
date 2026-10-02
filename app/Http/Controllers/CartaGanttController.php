@@ -372,6 +372,7 @@ class CartaGanttController extends Controller
 
         $cartaGantt->load([
             'categorias.actividades.seguimiento',
+            'categorias.actividades.seguimientoSemanas',
             'categorias.actividades.ocurrencias',
             'categorias.actividades.responsableUser',
             'categorias.actividades.planesAccion',
@@ -878,6 +879,12 @@ class CartaGanttController extends Controller
             ], 422);
         }
 
+        if ($actividad->periodicidad === 'MENSUAL') {
+            return response()->json([
+                'error' => 'Las actividades mensuales se registran desde la semana en que se realizaron.',
+            ], 422);
+        }
+
         $request->validate([
             'mes'         => 'required|integer|min:1|max:12',
             'observacion' => 'nullable|string|max:1000',
@@ -924,6 +931,128 @@ class CartaGanttController extends Controller
             'cantidad_programada'=> $cantProg,
             'estado'             => $actividad->fresh()->estado,
         ]);
+    }
+
+    public function updateSeguimientoSemana(Request $request, SstActividad $actividad)
+    {
+        if (!$this->canManageActividadStructure($actividad)) {
+            return response()->json(['error' => 'No tiene permiso para editar seguimiento.'], 403);
+        }
+
+        abort_unless($actividad->periodicidad === 'MENSUAL', 404);
+
+        $datos = $request->validate([
+            'mes' => 'required|integer|min:1|max:12',
+            'semana_inicio' => 'required|date_format:Y-m-d',
+            'direccion' => 'required|integer|in:-1,1',
+        ]);
+
+        $mes = (int) $datos['mes'];
+        $inicio = Carbon::createFromFormat('Y-m-d', $datos['semana_inicio'])->startOfDay();
+        $actividad->loadMissing('categoria.programa');
+        $anio = (int) $actividad->categoria->programa->anio;
+        if ($inicio->year !== $anio || $inicio->month !== $mes || ($inicio->day !== 1 && $inicio->dayOfWeek !== Carbon::MONDAY)) {
+            return response()->json(['error' => 'La semana seleccionada no corresponde a este mes.'], 422);
+        }
+
+        return DB::transaction(function () use ($actividad, $datos, $mes, $inicio, $request) {
+            $seguimiento = $actividad->seguimiento()->where('mes', $mes)->lockForUpdate()->first();
+            if (!$seguimiento?->programado) {
+                return response()->json(['error' => 'Esta actividad no está programada para el mes seleccionado.'], 422);
+            }
+
+            $meta = max(1, (int) $actividad->cantidad_programada);
+            $totalAnterior = max((int) $seguimiento->cantidad_realizada, $seguimiento->realizado ? $meta : 0);
+            $semana = $actividad->seguimientoSemanas()
+                ->where('mes', $mes)
+                ->whereDate('semana_inicio', $inicio->toDateString())
+                ->lockForUpdate()
+                ->first();
+            $avanceSemanaAnterior = (int) ($semana?->cantidad_realizada ?? 0);
+
+            if ($meta === 1) {
+                if ($totalAnterior > 0) {
+                    $actividad->seguimientoSemanas()->where('mes', $mes)->update([
+                        'cantidad_realizada' => 0,
+                        'actualizado_por' => $request->user()->id,
+                        'fecha_actualizacion' => now(),
+                    ]);
+                    $totalNuevo = 0;
+                } else {
+                    $actividad->seguimientoSemanas()->where('mes', $mes)->update([
+                        'cantidad_realizada' => 0,
+                        'actualizado_por' => $request->user()->id,
+                        'fecha_actualizacion' => now(),
+                    ]);
+                    $semana ??= $actividad->seguimientoSemanas()->firstOrNew([
+                        'mes' => $mes,
+                        'semana_inicio' => $inicio->toDateString(),
+                    ]);
+                    $semana->fill([
+                        'cantidad_realizada' => 1,
+                        'actualizado_por' => $request->user()->id,
+                        'fecha_actualizacion' => now(),
+                    ])->save();
+                    $totalNuevo = 1;
+                }
+            } elseif ((int) $datos['direccion'] === 1) {
+                if ($totalAnterior >= $meta) {
+                    return response()->json(['error' => 'La meta mensual ya está completa.'], 422);
+                }
+                $semana ??= $actividad->seguimientoSemanas()->firstOrNew([
+                    'mes' => $mes,
+                    'semana_inicio' => $inicio->toDateString(),
+                ]);
+                $semana->fill([
+                    'cantidad_realizada' => $avanceSemanaAnterior + 1,
+                    'actualizado_por' => $request->user()->id,
+                    'fecha_actualizacion' => now(),
+                ])->save();
+                $totalNuevo = $totalAnterior + 1;
+            } else {
+                if (!$semana || $avanceSemanaAnterior === 0) {
+                    return response()->json(['error' => 'No hay avances registrados en esta semana para quitar.'], 422);
+                }
+                $semana->update([
+                    'cantidad_realizada' => $avanceSemanaAnterior - 1,
+                    'actualizado_por' => $request->user()->id,
+                    'fecha_actualizacion' => now(),
+                ]);
+                $totalNuevo = max(0, $totalAnterior - 1);
+            }
+
+            $seguimiento->update([
+                'cantidad_realizada' => $totalNuevo,
+                'realizado' => $totalNuevo >= $meta,
+                'actualizado_por' => $request->user()->id,
+                'fecha_actualizacion' => now(),
+            ]);
+            $this->recalcularEstadoActividad($actividad);
+
+            $this->registrarActividadLog($actividad, 'seguimiento_semanal_actualizado', 'Avance mensual registrado por semana.', [
+                'mes' => $mes,
+                'semana_inicio' => $inicio->toDateString(),
+                'total_antes' => $totalAnterior,
+                'total_despues' => $totalNuevo,
+                'semana_antes' => $avanceSemanaAnterior,
+                'semana_despues' => $meta === 1 && $totalNuevo === 0 ? 0 : (int) $semana?->fresh()?->cantidad_realizada,
+            ], $request);
+
+            $actividadActual = $actividad->fresh(['seguimiento', 'seguimientoSemanas']);
+            $semanas = $actividadActual->seguimientoSemanas->where('mes', $mes);
+
+            return response()->json([
+                'success' => true,
+                'seguimiento' => $actividadActual->seguimiento_por_mes[$mes],
+                'semanas' => $semanas->map(fn ($item) => [
+                    'mes' => $mes,
+                    'semana_inicio' => $item->semana_inicio->toDateString(),
+                    'cantidad_realizada' => (int) $item->cantidad_realizada,
+                ])->values(),
+                'sin_semana' => max(0, $totalNuevo - $semanas->sum('cantidad_realizada')),
+                'estado' => $actividadActual->estado,
+            ]);
+        });
     }
 
     public function toggleOcurrencia(Request $request, SstActividad $actividad, SstSeguimientoOcurrencia $ocurrencia)
