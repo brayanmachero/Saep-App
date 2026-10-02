@@ -169,7 +169,8 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .gantt-mini { width: 100%; border-collapse: collapse; margin-top: 6px; }
 .gantt-mini th { background: #f1f5f9; color: #475569; font-size: 7px; font-weight: 700; padding: 4px 3px; text-align: center; border: 1px solid #e2e8f0; width: 7%; }
 .gantt-mini th:first-child { width: 16%; text-align: left; padding-left: 6px; }
-.gantt-mini td { padding: 4px 3px; font-size: 7.5px; text-align: center; border: 1px solid #e2e8f0; height: 20px; vertical-align: middle; }
+.gantt-mini td { padding: 3px; font-size: 7.5px; text-align: center; border: 1px solid #e2e8f0; height: 16px; vertical-align: middle; }
+.gantt-mini thead { display: table-header-group; }
 .gantt-mini td:first-child { text-align: left; padding-left: 6px; font-weight: 600; font-size: 8px; }
 .g-prog { background: #dbeafe; }
 .g-done { background: #059669; color: #fff; font-weight: 700; font-size: 7px; }
@@ -177,6 +178,12 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .g-miss { background: #fee2e2; color: #991b1b; font-weight: 700; font-size: 7px; }
 .g-future { background: #f0fdf4; }
 .g-reprog { background: #ede9fe; color: #6d28d9; font-weight: 700; font-size: 7px; }
+.period-note { margin: 10px 0 0; padding: 8px 11px; background: #f8fafc; border-left: 3px solid #f97316; color: #475569; font-size: 8.5px; }
+.month-detail th:first-child { width: 33%; }
+.month-detail th { padding: 3px; }
+.month-detail td { padding: 3px 4px; height: 15px; font-size: 8px; }
+.month-detail td:first-child { font-size: 8px; }
+.month-detail .week-value { font-size: 9px; font-weight: 800; }
 
 .page-break { page-break-after: always; }
 .avoid-break { page-break-inside: avoid; }
@@ -212,32 +219,15 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 @php
     $maxProg = max(1, collect($mesesData)->max('prog'));
     $logoUrl = public_path('brand/wp/Logo_Saep.svg');
-
-    // Category-level stats for chart
-    $catStats = [];
-    foreach($cartaGantt->categorias->sortBy('orden') as $cat) {
-        $catTotal = $cat->actividades->count();
-        $catComp  = $cat->actividades->where('estado', 'COMPLETADA')->count();
-        $catProg  = $cat->actividades->where('estado', 'EN_PROGRESO')->count();
-        $catPend  = $catTotal - $catComp - $catProg - $cat->actividades->where('estado', 'CANCELADA')->count();
-        $catPct   = $catTotal > 0 ? round(($catComp / $catTotal) * 100) : 0;
-        $catStats[] = [
-            'nombre' => $cat->nombre,
-            'total'  => $catTotal,
-            'comp'   => $catComp,
-            'prog'   => $catProg,
-            'pend'   => $catPend,
-            'pct'    => $catPct,
-        ];
-    }
+    $maxSemana = max(1, collect($semanasReporte)->max('realizado'));
 @endphp
 
 {{-- ═══════════════ PAGE 1: EXECUTIVE SUMMARY ═══════════════ --}}
 <div class="header-band">
     <div class="hdr-logo"><img src="{{ $logoUrl }}" alt="SAEP"></div>
     <div class="hdr-center">
-        <h1>Reporte Gerencial SST</h1>
-        <p>Programa de Seguridad y Salud en el Trabajo &bull; Informe de Avance {{ $cartaGantt->anio }}</p>
+        <h1>Reporte SST {{ ucfirst($tipoReporte) }}</h1>
+        <p>Programa de Seguridad y Salud en el Trabajo &bull; {{ $periodoEtiqueta }}</p>
     </div>
     <div class="hdr-right">
         <div class="code">{{ $cartaGantt->codigo }}</div>
@@ -270,8 +260,8 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
             <div class="value">{{ $cartaGantt->estado }}</div>
         </div>
         <div class="info-item">
-            <div class="label">Mes de Corte</div>
-            <div class="value">{{ $mesesNombres[$mesActual] }} {{ date('Y') }}</div>
+            <div class="label">Periodo del informe</div>
+            <div class="value">{{ $periodoEtiqueta }}</div>
         </div>
     </div>
 
@@ -280,7 +270,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     <div class="kpi-row">
         <div class="kpi-card kpi-blue">
             <div class="kpi-num">{{ $pct }}%</div>
-            <div class="kpi-label">Avance Global</div>
+            <div class="kpi-label">Avance del periodo</div>
         </div>
         <div class="kpi-spacer"></div>
         <div class="kpi-card kpi-blue">
@@ -322,7 +312,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                 <div class="ring-circle" style="border-color: {{ $pct >= 75 ? '#059669' : ($pct >= 50 ? '#2563eb' : ($pct >= 25 ? '#f59e0b' : '#dc2626')) }};">
                     <div class="ring-inner">
                         <div class="ring-pct">{{ $pct }}%</div>
-                        <div class="ring-sub">Cumplimiento</div>
+                <div class="ring-sub">Cumplimiento del periodo</div>
                     </div>
                 </div>
             </div>
@@ -350,15 +340,27 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 
         <div class="col-right">
             <div style="font-size:9px;font-weight:800;color:#0f1b4c;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">
-                Cumplimiento Mensual (Programado vs Realizado)
+                {{ $tipoReporte === 'mensual' ? 'Ejecuciones registradas por semana' : 'Cumplimiento por mes (programado vs realizado)' }}
             </div>
+            @if($tipoReporte === 'mensual')
+            <div style="font-size:8px;color:#64748b;margin-bottom:8px;">Meta del mes: <strong>{{ $totalProgramado }}</strong> &bull; Ejecutadas: <strong>{{ $totalRealizado }}</strong></div>
+            @endif
             <div class="bar-chart">
-                @for($m = 1; $m <= 12; $m++)
+                @if($tipoReporte === 'mensual')
+                @foreach($semanasReporte as $semana)
+                    <div class="bar-row" style="margin-bottom:9px;">
+                        <div class="bar-label" style="width:70px;text-align:left;">S{{ $semana['numero'] }} ({{ $semana['desde'] }}-{{ $semana['hasta'] }})</div>
+                        <div class="bar-track"><div class="bar-bg"><div class="bar-fill-real" style="width:{{ round($semana['realizado'] / $maxSemana * 100) }}%;"></div></div></div>
+                        <div class="bar-val">{{ $semana['realizado'] }}</div>
+                    </div>
+                @endforeach
+                @else
+                @foreach($mesesSeleccionados as $m)
                     @php
                         $d = $mesesData[$m];
                         $wProg = $maxProg > 0 ? round(($d['prog'] / $maxProg) * 100) : 0;
                         $wReal = $maxProg > 0 ? round(($d['real'] / $maxProg) * 100) : 0;
-                        $isFuture = $m > $mesActual;
+                        $isFuture = \Carbon\Carbon::create($cartaGantt->anio, $m)->startOfMonth()->isFuture();
                     @endphp
                     <div class="bar-row">
                         <div class="bar-label" style="{{ $m === $mesActual ? 'color:#0f1b4c;font-weight:900;' : '' }}">{{ $mesesNombres[$m] }}</div>
@@ -372,14 +374,21 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                         </div>
                         <div class="bar-val">{{ $d['pct'] }}%</div>
                     </div>
-                @endfor
+                @endforeach
+                @endif
             </div>
+            @if($tipoReporte !== 'mensual')
             <div style="margin-top:5px;">
                 <span style="display:inline-block;width:12px;height:7px;background:#cbd5e1;border-radius:2px;"></span>
                 <span style="font-size:7.5px;color:#94a3b8;">Programado</span>&nbsp;&nbsp;
                 <span style="display:inline-block;width:12px;height:7px;background:#0f1b4c;border-radius:2px;"></span>
                 <span style="font-size:7.5px;color:#94a3b8;">Realizado</span>
             </div>
+            @else
+            <div style="margin-top:7px;font-size:8px;color:#64748b;">S1-S5: semanas reales del mes. "Sin semana" conserva avances históricos sin fecha semanal registrada.
+                @if(array_sum($sinSemanaPorActividad) > 0) {{ array_sum($sinSemanaPorActividad) }} ejecución(es) sin semana incluida(s) en el total.@endif
+            </div>
+            @endif
         </div>
     </div>
 
@@ -424,6 +433,9 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
             @endforeach
         </tbody>
     </table>
+    @if($tipoReporte === 'mensual' && $totalAct === 0)
+    <div class="period-note">No hay actividades programadas en {{ $periodoEtiqueta }}. Selecciona otro mes para consultar su avance.</div>
+    @endif
 </div>
 
 <div class="page-break"></div>
@@ -432,8 +444,8 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 <div class="header-band">
     <div class="hdr-logo"><img src="{{ $logoUrl }}" alt="SAEP"></div>
     <div class="hdr-center">
-        <h1>Detalle de Actividades por Categoría</h1>
-        <p>{{ $cartaGantt->titulo }} &bull; {{ $cartaGantt->codigo }}</p>
+        <h1>{{ $tipoReporte === 'mensual' ? 'Detalle semanal de actividades' : 'Detalle de actividades por categoría' }}</h1>
+        <p>{{ $cartaGantt->titulo }} &bull; {{ $periodoEtiqueta }}</p>
     </div>
     <div class="hdr-right">
         <div class="code">{{ $cartaGantt->codigo }}</div>
@@ -444,7 +456,9 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 
 <div class="content">
     @foreach($cartaGantt->categorias->sortBy('orden') as $categoria)
-    <div class="avoid-break" style="margin-top:10px;">
+    @php $actividadesCategoria = $categoria->actividades->filter(fn ($actividad) => isset($resumenActividades[$actividad->id])); @endphp
+    @if($actividadesCategoria->isNotEmpty())
+    <div style="margin-top:10px;">
         <div class="section">
             <div class="section-inner">
                 <div class="section-bar"></div>
@@ -452,31 +466,48 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
             </div>
         </div>
 
-        <table class="gantt-mini">
+        <table class="gantt-mini {{ $tipoReporte === 'mensual' ? 'month-detail' : '' }}">
             <thead>
                 <tr>
                     <th>Actividad</th>
-                    @for($m = 1; $m <= 12; $m++)
+                    @if($tipoReporte === 'mensual')
+                    <th>Real / Meta</th>
+                    @foreach($semanasReporte as $semana)
+                    <th>S{{ $semana['numero'] }}<br>{{ $semana['desde'] }}-{{ $semana['hasta'] }}</th>
+                    @endforeach
+                    <th>Sin semana</th>
+                    @else
+                    @foreach($mesesSeleccionados as $m)
                     <th style="{{ $m === $mesActual ? 'background:#0f1b4c;color:#fff;' : '' }}">{{ $mesesNombres[$m] }}</th>
-                    @endfor
+                    @endforeach
+                    @endif
                 </tr>
             </thead>
             <tbody>
-                @foreach($categoria->actividades->sortBy('orden') as $act)
+                @foreach($actividadesCategoria->sortBy('orden') as $act)
                 @php
                     $segPorMes = $act->seguimientoPorMes;
                     $reprogMeses = $act->reprogramaciones->pluck('mes_nuevo')->unique()->toArray();
+                    $resumen = $resumenActividades[$act->id];
                 @endphp
                 <tr>
                     <td>
-                        {{ Str::limit($act->nombre, 30) }}
-                        @if($act->estaVencida)
+                        {{ Str::limit($act->nombre, $tipoReporte === 'mensual' ? 52 : 30) }}
+                        @if($resumen['vencida'])
                             <span class="chip chip-red">V</span>
-                        @elseif($act->estado === 'COMPLETADA')
+                        @elseif($resumen['estado'] === 'COMPLETADA')
                             <span class="chip chip-green">OK</span>
                         @endif
                     </td>
-                    @for($m = 1; $m <= 12; $m++)
+                    @if($tipoReporte === 'mensual')
+                    <td style="font-weight:800;color:#0f1b4c;">{{ $resumen['realizado'] }}/{{ $resumen['programado'] }}</td>
+                    @foreach($semanasReporte as $clave => $semana)
+                    @php $avanceSemana = $semanasPorActividad[$act->id][$clave] ?? 0; @endphp
+                    <td class="{{ $avanceSemana > 0 ? ($resumen['programado'] === 1 ? 'g-done' : 'g-partial') : '' }} week-value">{{ $avanceSemana > 0 ? $avanceSemana : '·' }}</td>
+                    @endforeach
+                    <td style="color:#64748b;">{{ ($sinSemanaPorActividad[$act->id] ?? 0) ?: '·' }}</td>
+                    @else
+                    @foreach($mesesSeleccionados as $m)
                     @php
                         $s = $segPorMes[$m] ?? null;
                         $prog = $s['programado'] ?? false;
@@ -484,32 +515,36 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                         $cantR = $s['cantidad_realizada'] ?? 0;
                         $cantP = $s['cantidad_programada'] ?? $act->cantidad_programada;
                         $isReprog = in_array($m, $reprogMeses);
+                        $mesVencido = \Carbon\Carbon::create($cartaGantt->anio, $m)->endOfMonth()->isPast();
                     @endphp
                     <td class="@if($isReprog && $prog) g-reprog
                                @elseif($prog && $real) g-done
                                @elseif($prog && $cantR > 0 && !$real) g-partial
-                               @elseif($prog && $m < $mesActual && !$real && $cantR === 0) g-miss
-                               @elseif($prog && $m >= $mesActual) g-future
+                               @elseif($prog && $mesVencido && !$real && $cantR === 0) g-miss
+                               @elseif($prog && !$mesVencido) g-future
                                @elseif($prog) g-prog
                                @endif">
                         @if($prog && $real)
                             &#10003;
                         @elseif($prog && $cantR > 0)
                             {{ $cantR }}/{{ $cantP }}
-                        @elseif($prog && $m < $mesActual)
+                        @elseif($prog && $mesVencido)
                             &#10007;
                         @elseif($prog)
                             &bull;
                         @endif
                     </td>
-                    @endfor
+                    @endforeach
+                    @endif
                 </tr>
                 @endforeach
             </tbody>
         </table>
     </div>
+    @endif
     @endforeach
 
+    @if($tipoReporte !== 'mensual')
     {{-- Legend (part of page content) --}}
     <div style="margin-top:14px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;">
         <span style="font-size:8px;font-weight:800;color:#475569;text-transform:uppercase;margin-right:12px;">Leyenda:</span>
@@ -519,8 +554,33 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
         <span style="display:inline-block;width:12px;height:9px;background:#f0fdf4;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Futuro</span>&nbsp;&nbsp;&nbsp;
         <span style="display:inline-block;width:12px;height:9px;background:#ede9fe;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Reprogramado</span>
     </div>
+    @endif
+
+    @if($tipoReporte === 'mensual' && ($vencidas->isNotEmpty() || $reprogramaciones->isNotEmpty()))
+    <div class="section"><div class="section-inner"><div class="section-bar"></div><div class="section-text">Alertas del periodo</div></div></div>
+    @if($vencidas->isNotEmpty())
+    <div class="period-note">{{ $vencidas->count() }} actividad(es) con programación vencida en {{ $periodoEtiqueta }}: {{ $vencidas->take(8)->pluck('nombre')->join('; ') }}{{ $vencidas->count() > 8 ? '; y otras.' : '.' }}</div>
+    @endif
+    @if($reprogramaciones->isNotEmpty())
+    <table class="data-table">
+        <thead><tr><th>Actividad reprogramada</th><th>Mes original</th><th>Mes nuevo</th><th>Motivo</th><th>Fecha</th></tr></thead>
+        <tbody>
+            @foreach($reprogramaciones as $rep)
+            <tr>
+                <td>{{ $rep->actividad->nombre ?? '—' }}</td>
+                <td>{{ $mesesNombres[$rep->mes_original] ?? $rep->mes_original }}</td>
+                <td>{{ $mesesNombres[$rep->mes_nuevo] ?? $rep->mes_nuevo }}</td>
+                <td>{{ Str::limit($rep->motivo, 75) }}</td>
+                <td>{{ $rep->created_at->format('d/m/Y') }}</td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+    @endif
+    @endif
 </div>
 
+@if($tipoReporte !== 'mensual')
 <div class="page-break"></div>
 
 {{-- ═══════════════ PAGE 3: REPROGRAMACIONES & RESUMEN ═══════════════ --}}
@@ -648,17 +708,12 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
         </thead>
         <tbody>
             @foreach($cartaGantt->categorias->sortBy('orden') as $cat)
-                @foreach($cat->actividades->sortBy('orden') as $act)
+                @foreach($cat->actividades->sortBy('orden')->filter(fn ($actividad) => isset($resumenActividades[$actividad->id])) as $act)
                 @php
-                    $seguimientosProgramados = collect($act->seguimientoPorMes)->filter(fn($s) => $s['programado']);
-                    $actProg = $seguimientosProgramados->sum(fn($s) => max(1, (int) ($s['cantidad_programada'] ?? $act->cantidad_programada ?? 1)));
-                    $actReal = $seguimientosProgramados->sum(function ($s) use ($act) {
-                        $cantidad = max(1, (int) ($s['cantidad_programada'] ?? $act->cantidad_programada ?? 1));
-                        return $s['realizado'] ? $cantidad : min($cantidad, (int) ($s['cantidad_realizada'] ?? 0));
-                    });
-                    $actPct  = $actProg > 0 ? round(($actReal / $actProg) * 100) : 0;
-                    $fillCls = $act->estado === 'COMPLETADA' ? 'fill-green' : ($actPct >= 50 ? 'fill-blue' : ($actPct > 0 ? 'fill-orange' : 'fill-gray'));
-                    $estadoCls = match($act->estado) {
+                    $actPct = $resumenActividades[$act->id]['pct'];
+                    $estadoPeriodo = $resumenActividades[$act->id]['estado'];
+                    $fillCls = $estadoPeriodo === 'COMPLETADA' ? 'fill-green' : ($actPct >= 50 ? 'fill-blue' : ($actPct > 0 ? 'fill-orange' : 'fill-gray'));
+                    $estadoCls = match($estadoPeriodo) {
                         'COMPLETADA' => 'chip-green',
                         'EN_PROGRESO' => 'chip-blue',
                         'CANCELADA' => 'chip-red',
@@ -675,7 +730,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                         </span>
                     </td>
                     <td style="font-size:7.5px;">{{ $act->periodicidad ?? 'ÚNICA' }}</td>
-                    <td><span class="chip {{ $estadoCls }}">{{ str_replace('_', ' ', $act->estado) }}</span></td>
+                    <td><span class="chip {{ $estadoCls }}">{{ str_replace('_', ' ', $estadoPeriodo) }}</span></td>
                     <td>
                         <div class="mini-bar">
                             <div class="mini-fill {{ $fillCls }}" style="width:{{ min($actPct, 100) }}%;"></div>
@@ -691,14 +746,9 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
         </tbody>
     </table>
 
-    @if(!$vencidas->count() && !$reprogramaciones->count())
-    <div style="text-align:center;padding:30px;color:#94a3b8;">
-        <div style="font-size:14px;margin-bottom:6px;">&#10003;</div>
-        <div style="font-size:11px;font-weight:700;">Sin alertas activas</div>
-        <div style="font-size:9px;">No hay actividades vencidas ni reprogramaciones registradas.</div>
-    </div>
-    @endif
 </div>
+
+@endif
 
 {{-- DomPDF page numbering script --}}
 <script type="text/php">

@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Http\Controllers\Controller;
 use App\Mail\SstActividadAlertaMail;
 use App\Notifications\AppNotification;
+use App\Services\CartaGanttPdfReportData;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -508,12 +509,26 @@ class CartaGanttController extends Controller
             ->with('success', 'Programa duplicado como borrador. Revisa y ajusta los datos antes de activarlo.');
     }
 
-    public function exportPdf(ProgramaSst $cartaGantt)
+    public function exportPdf(Request $request, ProgramaSst $cartaGantt, CartaGanttPdfReportData $reportData)
     {
         $this->abortUnlessCanViewPrograma($cartaGantt);
 
+        $tipo = (string) $request->query('tipo', 'anual');
+        $parametros = validator([
+            'tipo' => $tipo,
+            'mes' => $request->query('mes'),
+            'semestre' => $request->query('semestre'),
+        ], [
+            'tipo' => 'required|in:anual,semestral,mensual',
+            'mes' => 'required_if:tipo,mensual|nullable|integer|between:1,12',
+            'semestre' => 'required_if:tipo,semestral|nullable|integer|between:1,2',
+        ])->validate();
+        $mes = $tipo === 'mensual' ? (int) $parametros['mes'] : null;
+        $semestre = $tipo === 'semestral' ? (int) $parametros['semestre'] : null;
+
         $cartaGantt->load([
             'categorias.actividades.seguimiento',
+            'categorias.actividades.seguimientoSemanas',
             'categorias.actividades.ocurrencias',
             'categorias.actividades.responsableUser',
             'categorias.actividades.planesAccion',
@@ -521,58 +536,35 @@ class CartaGanttController extends Controller
             'centroCosto', 'responsable', 'creador', 'asignados',
         ]);
 
-        $mesActual   = (int) date('n');
-        $mesesNombres = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-
-        // Collect all activities
-        $todasActividades = $cartaGantt->categorias->flatMap->actividades;
-        $totalAct = $todasActividades->count();
-
-        // States
-        $completadas = $todasActividades->where('estado', 'COMPLETADA')->count();
-        $enProgreso  = $todasActividades->where('estado', 'EN_PROGRESO')->count();
-        $canceladas  = $todasActividades->where('estado', 'CANCELADA')->count();
-        $pendientes  = $totalAct - $completadas - $enProgreso - $canceladas;
-
-        // Global advance
-        $pct = $cartaGantt->porcentajeRealizado;
-
-        // Monthly progress (programado vs realizado per month)
-        $mesesData = [];
-        for ($m = 1; $m <= 12; $m++) {
-            $prog = 0; $real = 0;
-            foreach ($todasActividades as $act) {
-                $seg = $act->seguimiento_por_mes[$m] ?? null;
-                if ($seg && $seg['programado']) {
-                    $cantProg = max(1, (int) ($seg['cantidad_programada'] ?? $act->cantidad_programada));
-                    $prog += $cantProg;
-                    $real += $seg['realizado'] ? $cantProg : min($cantProg, (int) ($seg['cantidad_realizada'] ?? 0));
-                }
-            }
-            $mesesData[$m] = ['prog' => $prog, 'real' => $real, 'pct' => $prog > 0 ? round(($real / $prog) * 100) : 0];
-        }
-
-        // Activities with issues
-        $vencidas   = $todasActividades->filter(fn ($a) => $a->estaVencida)->values();
-
-        // Reprogramaciones
-        $reprogramaciones = SstReprogramacion::whereIn('actividad_id', $todasActividades->pluck('id'))
+        $datosReporte = $reportData->build($cartaGantt, $tipo, $mes, $semestre);
+        $actividades = $datosReporte['actividadesPeriodo'];
+        $resumenes = $datosReporte['resumenActividades'];
+        $mesesSeleccionados = $datosReporte['mesesSeleccionados'];
+        $estados = collect($resumenes)->pluck('estado');
+        $vencidas = $actividades->filter(fn ($a) => $resumenes[$a->id]['vencida'])->values();
+        $reprogramaciones = SstReprogramacion::whereIn('actividad_id', $actividades->pluck('id'))
+            ->where(fn ($q) => $q->whereIn('mes_original', $mesesSeleccionados)->orWhereIn('mes_nuevo', $mesesSeleccionados))
             ->with(['actividad', 'usuario'])
             ->orderByDesc('created_at')
             ->get();
-
-        // Priority distribution
         $prioridades = [
-            'ALTA'  => $todasActividades->where('prioridad', 'ALTA')->count(),
-            'MEDIA' => $todasActividades->where('prioridad', 'MEDIA')->count(),
-            'BAJA'  => $todasActividades->where('prioridad', 'BAJA')->count(),
+            'ALTA' => $actividades->where('prioridad', 'ALTA')->count(),
+            'MEDIA' => $actividades->where('prioridad', 'MEDIA')->count(),
+            'BAJA' => $actividades->where('prioridad', 'BAJA')->count(),
         ];
 
-        $pdf = Pdf::loadView('pdf.carta_gantt_reporte', compact(
-            'cartaGantt', 'mesActual', 'mesesNombres', 'totalAct',
-            'completadas', 'enProgreso', 'pendientes', 'canceladas', 'pct',
-            'mesesData', 'vencidas', 'reprogramaciones', 'prioridades'
-        ))->setPaper('a4', 'landscape')->setOptions([
+        $pdf = Pdf::loadView('pdf.carta_gantt_reporte', array_merge($datosReporte, [
+            'cartaGantt' => $cartaGantt,
+            'mesActual' => (int) now()->month,
+            'totalAct' => $actividades->count(),
+            'completadas' => $estados->filter(fn ($estado) => $estado === 'COMPLETADA')->count(),
+            'enProgreso' => $estados->filter(fn ($estado) => $estado === 'EN_PROGRESO')->count(),
+            'canceladas' => $estados->filter(fn ($estado) => $estado === 'CANCELADA')->count(),
+            'pendientes' => $estados->filter(fn ($estado) => $estado === 'PENDIENTE')->count(),
+            'vencidas' => $vencidas,
+            'reprogramaciones' => $reprogramaciones,
+            'prioridades' => $prioridades,
+        ]))->setPaper('a4', 'landscape')->setOptions([
             'isRemoteEnabled'      => true,
             'isHtml5ParserEnabled' => true,
             'isPhpEnabled'         => true,
@@ -580,7 +572,12 @@ class CartaGanttController extends Controller
             'dpi'                  => 130,
         ]);
 
-        $filename = "Reporte_{$cartaGantt->codigo}_" . date('Ymd') . '.pdf';
+        $sufijo = match ($tipo) {
+            'mensual' => sprintf('Mensual_%02d', $mes),
+            'semestral' => 'Semestral_' . $semestre,
+            default => 'Anual',
+        };
+        $filename = "Reporte_{$cartaGantt->codigo}_{$sufijo}_{$cartaGantt->anio}.pdf";
         return $pdf->download($filename);
     }
 

@@ -169,7 +169,7 @@
                     <td>
                         <div style="display:flex;gap:.35rem;">
                             <a href="{{ route('carta-gantt.show', $prog) }}" class="icon-btn" title="Ver Gantt"><i class="bi bi-grid-3x3-gap-fill"></i></a>
-                            <a href="{{ route('carta-gantt.reporte-pdf', $prog) }}" class="icon-btn" title="Reporte PDF" target="_blank"><i class="bi bi-file-earmark-pdf-fill"></i></a>
+                            <a href="{{ route('carta-gantt.show', $prog) }}?reporte=1" class="icon-btn" title="Elegir formato del reporte PDF"><i class="bi bi-file-earmark-pdf-fill"></i></a>
                             @if($puedeAdministrarFila && auth()->user()->tieneAcceso('carta_gantt', 'puede_editar'))
                             <a href="{{ route('carta-gantt.edit', $prog) }}" class="icon-btn" title="Editar"><i class="bi bi-pencil-fill"></i></a>
                             @endif

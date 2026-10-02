@@ -9,6 +9,7 @@
     $anioActual = (int) date('Y');
     $vistaInicial = strtolower($cartaGantt->vista_inicial ?: 'ANUAL');
     $mesVistaInicial = (int) ($cartaGantt->mes_inicial ?: $mesActual);
+    $tipoReporteInicial = in_array($vistaInicial, ['mensual', 'semanal'], true) ? 'mensual' : ($vistaInicial === 'semestral' ? 'semestral' : 'anual');
     $totalAct = $cartaGantt->actividadesTotales;
     $pct = $cartaGantt->porcentajeRealizado;
     $completadas = 0; $enProgreso = 0; $pendientes = 0; $porVencer = 0; $vencidosMes = 0;
@@ -155,9 +156,9 @@
             <a href="{{ route('carta-gantt.mis-tareas') }}" class="sst-btn sst-btn-outline" title="Ver mis actividades pendientes en Carta Gantt">
                 <i class="bi bi-list-task"></i> Mis tareas
             </a>
-            <a href="{{ route('carta-gantt.reporte-pdf', $cartaGantt) }}" class="sst-btn sst-btn-outline" target="_blank" title="Descargar reporte PDF del programa" aria-label="Descargar reporte PDF del programa">
+            <button type="button" class="sst-btn sst-btn-outline" onclick="document.getElementById('pdfReportModal').style.display='flex'" title="Elegir periodo y descargar reporte PDF" aria-label="Configurar reporte PDF del programa">
                 <i class="bi bi-file-earmark-pdf"></i> Reporte PDF
-            </a>
+            </button>
             @if($puedeCrear)
             <button class="sst-btn sst-btn-outline" onclick="document.getElementById('importModal').style.display='flex'" title="Crear actividades nuevas desde archivo CSV">
                 <i class="bi bi-cloud-upload"></i> Importar CSV
@@ -554,6 +555,68 @@
     </div>
     @endif
 </div>
+
+{{-- ========== OPCIONES DE REPORTE PDF ========== --}}
+<div id="pdfReportModal" class="sst-modal-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="pdfReportModalTitle" onclick="if(event.target===this)this.style.display='none'">
+    <div class="sst-modal" style="max-width:470px;width:100%">
+        <div class="sst-modal-header">
+            <div>
+                <h3 id="pdfReportModalTitle"><i class="bi bi-file-earmark-pdf"></i> Exportar reporte SST</h3>
+                <p>El contenido y los indicadores se ajustarán al periodo elegido.</p>
+            </div>
+            <button type="button" class="sst-icon-btn" onclick="document.getElementById('pdfReportModal').style.display='none'" title="Cerrar" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <form method="GET" action="{{ route('carta-gantt.reporte-pdf', $cartaGantt) }}" target="_blank">
+            <div class="sst-modal-body">
+                <div class="form-group" style="margin-bottom:.9rem">
+                    <label class="sst-label" for="pdfReportType">Formato del informe</label>
+                    <select id="pdfReportType" name="tipo" class="form-input" onchange="updatePdfReportPeriodInputs()">
+                        <option value="mensual" {{ $tipoReporteInicial === 'mensual' ? 'selected' : '' }}>Mensual - detalle por semanas</option>
+                        <option value="semestral" {{ $tipoReporteInicial === 'semestral' ? 'selected' : '' }}>Semestral - seis meses</option>
+                        <option value="anual" {{ $tipoReporteInicial === 'anual' ? 'selected' : '' }}>Anual - doce meses</option>
+                    </select>
+                </div>
+                <div class="form-group" id="pdfReportMonthGroup" style="margin-bottom:.9rem">
+                    <label class="sst-label" for="pdfReportMonth">Mes del informe</label>
+                    <select id="pdfReportMonth" name="mes" class="form-input">
+                        @foreach($mesesNombres as $m => $nombreMes)
+                            @if($m > 0)<option value="{{ $m }}" {{ $m === $mesVistaInicial ? 'selected' : '' }}>{{ $nombreMes }} {{ $cartaGantt->anio }}</option>@endif
+                        @endforeach
+                    </select>
+                </div>
+                <div class="form-group" id="pdfReportSemesterGroup" style="margin-bottom:.9rem">
+                    <label class="sst-label" for="pdfReportSemester">Semestre del informe</label>
+                    <select id="pdfReportSemester" name="semestre" class="form-input">
+                        <option value="1" {{ $mesVistaInicial <= 6 ? 'selected' : '' }}>Primer semestre (enero-junio)</option>
+                        <option value="2" {{ $mesVistaInicial > 6 ? 'selected' : '' }}>Segundo semestre (julio-diciembre)</option>
+                    </select>
+                </div>
+                <p style="margin:0;color:var(--text-muted);font-size:.78rem;line-height:1.45">Solo se incluirán actividades programadas y avances del periodo seleccionado.</p>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:.5rem;padding:0 1.1rem 1.1rem">
+                <button type="button" class="sst-btn sst-btn-outline" onclick="document.getElementById('pdfReportModal').style.display='none'">Cancelar</button>
+                <button type="submit" class="sst-btn sst-btn-primary"><i class="bi bi-download"></i> Descargar PDF</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+function updatePdfReportPeriodInputs() {
+    const type = document.getElementById('pdfReportType').value;
+    const month = document.getElementById('pdfReportMonth');
+    const semester = document.getElementById('pdfReportSemester');
+    document.getElementById('pdfReportMonthGroup').style.display = type === 'mensual' ? '' : 'none';
+    document.getElementById('pdfReportSemesterGroup').style.display = type === 'semestral' ? '' : 'none';
+    month.disabled = type !== 'mensual';
+    semester.disabled = type !== 'semestral';
+}
+document.addEventListener('DOMContentLoaded', function () {
+    updatePdfReportPeriodInputs();
+    if (new URLSearchParams(window.location.search).get('reporte') === '1') {
+        document.getElementById('pdfReportModal').style.display = 'flex';
+    }
+});
+</script>
 
 {{-- ========== MODAL EDITAR ACTIVIDAD ========== --}}
 <div id="editModal" class="sst-modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
