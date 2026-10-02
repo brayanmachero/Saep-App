@@ -115,6 +115,12 @@ class CartaGanttPdfReportDataTest extends TestCase
                 'dpi' => 96,
             ]);
 
+            $pdf->render();
+            $dompdf = $pdf->getDomPDF();
+            $canvas = $dompdf->getCanvas();
+            $font = $dompdf->getFontMetrics()->getFont('DejaVu Sans', 'bold');
+            $canvas->page_text($canvas->get_width() - 105, $canvas->get_height() - 18, 'Página {PAGE_NUM} de {PAGE_COUNT}', $font, 6.5, [0.29, 0.33, 0.41]);
+
             $bytes = $pdf->output();
             $this->assertStringStartsWith('%PDF-', $bytes);
             if ($visualQaDir = getenv('SAEP_PDF_VISUAL_QA_DIR')) {

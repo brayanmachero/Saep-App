@@ -5,7 +5,7 @@
 <style>
 /* ── Reset & Page ── */
 * { margin:0; padding:0; box-sizing:border-box; }
-@page { margin: 0 0 54px 0; }
+@page { margin: 0 0 42px 0; }
 body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; background: #fff; }
 
 /* ── Content wrapper with lateral padding ── */
@@ -14,49 +14,50 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 /* ── Fixed footer (every page) ── */
 .fixed-footer {
     position: fixed;
-    bottom: -14px;
+    bottom: -10px;
     left: 0;
     width: 100%;
-    height: 46px;
-    background: #f8fafc;
-    border-top: 2px solid #f97316;
-    padding: 8px 50px;
-    font-size: 7.5px;
-    color: #475569;
+    height: 31px;
+    background: transparent;
+    border-top: 1px solid #dbe3ee;
+    padding: 8px 50px 0;
+    font-size: 7px;
+    color: #64748b;
 }
 .ff-row { display: table; width: 100%; }
 .ff-cell { display: table-cell; vertical-align: middle; }
-.ff-right { text-align: right; }
-.ff-brand { font-size: 10px; font-weight: 700; color: #0f1b4c; letter-spacing: 1px; }
-.ff-brand-sub { font-size: 7.5px; color: #64748b; }
-.ff-orange { color: #f97316; }
-.ff-divider { display: block; height: 1px; background: #e2e8f0; margin: 4px 0; }
-.ff-legal { font-size: 7px; color: #64748b; letter-spacing: 0.1px; }
+.ff-brand { font-size: 8px; font-weight: 700; color: #0f1b4c; letter-spacing: .6px; }
+.ff-separator { color: #f97316; padding: 0 6px; }
+.ff-meta { text-align: center; color: #64748b; }
 
 /* ── Header band ── */
 .header-band {
     background: #0f1b4c;
-    padding: 12px 30px;
+    padding: 11px 38px;
     display: table;
     width: 100%;
 }
-.hdr-logo { display: table-cell; vertical-align: middle; width: 140px; }
-.hdr-logo img { max-height: 34px; max-width: 130px; }
+.hdr-logo { display: table-cell; vertical-align: middle; width: 164px; }
+.hdr-logo-box { padding: 7px 12px 7px 0; }
+.hdr-logo img { max-height: 40px; max-width: 145px; }
 .hdr-center { display: table-cell; vertical-align: middle; text-align: center; }
 .hdr-center h1 { font-size: 14px; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: 1px; }
 .hdr-center p { font-size: 8px; color: rgba(255,255,255,0.6); margin-top: 2px; letter-spacing: 0.5px; }
-.hdr-right { display: table-cell; vertical-align: middle; text-align: right; width: 150px; }
+.hdr-right { display: table-cell; vertical-align: middle; text-align: right; width: 160px; }
 .hdr-right .code { font-size: 11px; font-weight: 800; color: #f97316; }
 .hdr-right .date { font-size: 7.5px; color: rgba(255,255,255,0.5); margin-top: 2px; }
 
 /* ── Orange accent line ── */
 .accent-line { height: 3px; background: #f97316; }
 
-/* ── Info grid ── */
-.info-strip { display: table; width: 100%; margin: 14px 0 0; }
-.info-item { display: table-cell; padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid #0f1b4c; }
-.info-item .label { font-size: 7px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
-.info-item .value { font-size: 9.5px; font-weight: 700; color: #0f172a; margin-top: 2px; }
+/* ── Program facts: two rows of individually spaced cards ── */
+.info-grid { margin: 13px 0 0; }
+.info-row { display: table; width: 100%; }
+.info-row + .info-row { margin-top: 7px; }
+.info-item { display: table-cell; width: 33%; vertical-align: middle; padding: 9px 11px; background: #f8fafc; border: 1px solid #e2e8f0; border-top: 2px solid #0f1b4c; }
+.info-gap { display: table-cell; width: 7px; }
+.info-item .label { font-size: 7px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.45px; }
+.info-item .value { font-size: 9px; font-weight: 700; color: #0f172a; margin-top: 4px; line-height: 1.25; }
 
 /* ── KPI cards ── */
 .kpi-row { display: table; width: 100%; margin: 16px 0 14px; }
@@ -98,10 +99,16 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .progress-fill { height: 13px; background: #f97316; }
 .progress-caption { margin-top: 5px; color: #64748b; font-size: 8px; }
 
-/* ── Status dots ── */
-.status-grid { margin-top: 10px; text-align: left; line-height: 1.8; }
-.status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 5px; margin-right: 3px; vertical-align: middle; }
-.status-label { font-size: 8px; font-weight: 700; color: #475569; }
+/* ── Status summary cards ── */
+.status-grid { margin-top: 8px; }
+.status-row { display: table; width: 100%; }
+.status-row + .status-row { margin-top: 6px; }
+.status-cell { display: table-cell; width: 49%; vertical-align: middle; padding: 6px 8px; border: 1px solid #e2e8f0; background: #fff; }
+.status-gap { display: table-cell; width: 6px; }
+.status-inner { display: table; width: 100%; }
+.status-name { display: table-cell; vertical-align: middle; font-size: 8px; color: #475569; font-weight: 700; white-space: nowrap; }
+.status-count { display: table-cell; vertical-align: middle; text-align: right; font-size: 11px; color: #0f1b4c; font-weight: 700; }
+.status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 4px; margin-right: 5px; vertical-align: middle; }
 .dot-completada  { background: #059669; }
 .dot-progreso    { background: #2563eb; }
 .dot-pendiente   { background: #94a3b8; }
@@ -197,20 +204,9 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 {{-- ═══════════ FIXED FOOTER (appears on every page) ═══════════ --}}
 <div class="fixed-footer">
     <div class="ff-row">
-        <div class="ff-cell">
-            <span class="ff-brand">SAEP</span> <span class="ff-orange">&bull;</span>
-            <span class="ff-brand-sub">Sistema de Administración Empresarial de Prevención</span>
-        </div>
-        <div class="ff-cell ff-right">
-            <span style="color:#0f1b4c;font-weight:700;">{{ $cartaGantt->codigo }}</span> &bull; {{ date('d/m/Y') }}
-        </div>
-    </div>
-    <div class="ff-divider"></div>
-    <div class="ff-row">
-        <div class="ff-cell">
-            <span class="ff-legal">SAEP Platform &bull; Documento de uso interno &bull; Datos vigentes al momento de la generación</span>
-        </div>
-        <div class="ff-cell ff-right"></div>
+        <div class="ff-cell" style="width:24%;"><span class="ff-brand">SAEP</span><span class="ff-separator">&bull;</span>Reporte SST</div>
+        <div class="ff-cell ff-meta" style="width:53%;">Documento de uso interno &bull; {{ $cartaGantt->codigo }} &bull; {{ date('d/m/Y') }}</div>
+        <div class="ff-cell" style="width:23%;"></div>
     </div>
 </div>
 
@@ -223,7 +219,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 
 {{-- ═══════════════ PAGE 1: EXECUTIVE SUMMARY ═══════════════ --}}
 <div class="header-band">
-    <div class="hdr-logo"><img src="{{ $logoUrl }}" alt="SAEP"></div>
+    <div class="hdr-logo"><div class="hdr-logo-box"><img src="{{ $logoUrl }}" alt="SAEP"></div></div>
     <div class="hdr-center">
         <h1>Reporte SST {{ ucfirst($tipoReporte) }}</h1>
         <p>Programa de Seguridad y Salud en el Trabajo &bull; {{ $periodoEtiqueta }}</p>
@@ -236,36 +232,43 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 <div class="accent-line"></div>
 
 <div class="content">
-    {{-- Info strip --}}
-    <div class="info-strip">
-        <div class="info-item">
-            <div class="label">Programa</div>
-            <div class="value">{{ $cartaGantt->titulo }}</div>
+    {{-- Program facts --}}
+    <div class="info-grid">
+        <div class="info-row">
+            <div class="info-item">
+                <div class="label">Programa</div>
+                <div class="value">{{ $cartaGantt->titulo }}</div>
+            </div>
+            <div class="info-gap"></div>
+            <div class="info-item">
+                <div class="label">Centro de costo</div>
+                <div class="value">{{ $cartaGantt->centroCosto->nombre ?? '—' }}</div>
+            </div>
+            <div class="info-gap"></div>
+            <div class="info-item">
+                <div class="label">Responsable</div>
+                <div class="value">{{ $cartaGantt->responsable->nombre_completo ?? '—' }}</div>
+            </div>
         </div>
-        <div class="info-item">
-            <div class="label">Año</div>
-            <div class="value">{{ $cartaGantt->anio }}</div>
-        </div>
-        <div class="info-item">
-            <div class="label">Centro de Costo</div>
-            <div class="value">{{ $cartaGantt->centroCosto->nombre ?? '—' }}</div>
-        </div>
-        <div class="info-item">
-            <div class="label">Responsable</div>
-            <div class="value">{{ $cartaGantt->responsable->nombre_completo ?? '—' }}</div>
-        </div>
-        <div class="info-item">
-            <div class="label">Estado</div>
-            <div class="value">{{ $cartaGantt->estado }}</div>
-        </div>
-        <div class="info-item">
-            <div class="label">Periodo del informe</div>
-            <div class="value">{{ $periodoEtiqueta }}</div>
+        <div class="info-row">
+            <div class="info-item">
+                <div class="label">Periodo del informe</div>
+                <div class="value">{{ $periodoEtiqueta }}</div>
+            </div>
+            <div class="info-gap"></div>
+            <div class="info-item">
+                <div class="label">Año</div>
+                <div class="value">{{ $cartaGantt->anio }}</div>
+            </div>
+            <div class="info-gap"></div>
+            <div class="info-item">
+                <div class="label">Estado</div>
+                <div class="value">{{ ucfirst($cartaGantt->estado) }}</div>
+            </div>
         </div>
     </div>
 
     {{-- KPIs --}}
-    <div style="height:1px;background:#e2e8f0;margin:8px 0;"></div>
     <div class="kpi-row">
         <div class="kpi-card kpi-blue">
             <div class="kpi-num">{{ $totalAct }}</div>
@@ -312,10 +315,16 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                 <div class="progress-caption">{{ $pendienteUnidades }} por ejecutar en el periodo seleccionado</div>
             </div>
             <div class="status-grid">
-                <span class="status-dot dot-completada"></span><span class="status-label">Completadas {{ $completadas }}</span>&nbsp;&nbsp;
-                <span class="status-dot dot-progreso"></span><span class="status-label">Progreso {{ $enProgreso }}</span><br style="margin-bottom:3px;">
-                <span class="status-dot dot-pendiente"></span><span class="status-label">Pendientes {{ $pendientes }}</span>&nbsp;&nbsp;
-                <span class="status-dot dot-cancelada"></span><span class="status-label">Canceladas {{ $canceladas }}</span>
+                <div class="status-row">
+                    <div class="status-cell"><div class="status-inner"><div class="status-name"><span class="status-dot dot-completada"></span>Completadas</div><div class="status-count">{{ $completadas }}</div></div></div>
+                    <div class="status-gap"></div>
+                    <div class="status-cell"><div class="status-inner"><div class="status-name"><span class="status-dot dot-progreso"></span>En progreso</div><div class="status-count">{{ $enProgreso }}</div></div></div>
+                </div>
+                <div class="status-row">
+                    <div class="status-cell"><div class="status-inner"><div class="status-name"><span class="status-dot dot-pendiente"></span>Pendientes</div><div class="status-count">{{ $pendientes }}</div></div></div>
+                    <div class="status-gap"></div>
+                    <div class="status-cell"><div class="status-inner"><div class="status-name"><span class="status-dot dot-cancelada"></span>Canceladas</div><div class="status-count">{{ $canceladas }}</div></div></div>
+                </div>
             </div>
 
             <div style="margin-top: 16px;">
@@ -745,17 +754,6 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 </div>
 
 @endif
-
-{{-- DomPDF page numbering script --}}
-<script type="text/php">
-if (isset($pdf)) {
-    $font = $fontMetrics->getFont("DejaVu Sans", "bold");
-    $size = 6.5;
-    $pageWidth = $pdf->get_width();
-    $y = $pdf->get_height() - 18;
-    $pdf->page_text($pageWidth - 105, $y, "Página {PAGE_NUM} de {PAGE_COUNT}", $font, $size, array(0.29,0.33,0.41));
-}
-</script>
 
 </body>
 </html>

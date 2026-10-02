@@ -572,6 +572,13 @@ class CartaGanttController extends Controller
             'dpi'                  => 96,
         ]);
 
+        // Apply pagination after every page has been rendered so it appears on all sheets.
+        $pdf->render();
+        $dompdf = $pdf->getDomPDF();
+        $canvas = $dompdf->getCanvas();
+        $font = $dompdf->getFontMetrics()->getFont('DejaVu Sans', 'bold');
+        $canvas->page_text($canvas->get_width() - 105, $canvas->get_height() - 18, 'Página {PAGE_NUM} de {PAGE_COUNT}', $font, 6.5, [0.29, 0.33, 0.41]);
+
         $sufijo = match ($tipo) {
             'mensual' => sprintf('Mensual_%02d', $mes),
             'semestral' => 'Semestral_' . $semestre,
