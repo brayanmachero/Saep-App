@@ -5,42 +5,33 @@
 <style>
 /* ── Reset & Page ── */
 * { margin:0; padding:0; box-sizing:border-box; }
-@page { margin: 0 0 72px 0; }
+@page { margin: 0 0 54px 0; }
 body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; background: #fff; }
 
 /* ── Content wrapper with lateral padding ── */
 .content { padding: 0 50px; }
 
-/* ── Watermark ── */
-.watermark {
-    position: fixed; top: 35%; left: 15%; width: 70%;
-    text-align: center; font-size: 72px; font-weight: 900;
-    color: rgba(15, 27, 76, 0.03); text-transform: uppercase;
-    letter-spacing: 12px; transform: rotate(-25deg);
-    z-index: 0; pointer-events: none;
-}
-
 /* ── Fixed footer (every page) ── */
 .fixed-footer {
     position: fixed;
-    bottom: -72px;
+    bottom: -14px;
     left: 0;
     width: 100%;
-    height: 64px;
-    background: #0f1b4c;
-    border-top: 3px solid #f97316;
-    padding: 10px 30px;
+    height: 46px;
+    background: #f8fafc;
+    border-top: 2px solid #f97316;
+    padding: 8px 50px;
     font-size: 7.5px;
-    color: rgba(255,255,255,0.7);
+    color: #475569;
 }
 .ff-row { display: table; width: 100%; }
 .ff-cell { display: table-cell; vertical-align: middle; }
 .ff-right { text-align: right; }
-.ff-brand { font-size: 10px; font-weight: 900; color: #fff; letter-spacing: 1px; }
-.ff-brand-sub { font-size: 7.5px; color: rgba(255,255,255,0.65); }
+.ff-brand { font-size: 10px; font-weight: 700; color: #0f1b4c; letter-spacing: 1px; }
+.ff-brand-sub { font-size: 7.5px; color: #64748b; }
 .ff-orange { color: #f97316; }
-.ff-divider { display: block; height: 1px; background: rgba(255,255,255,0.15); margin: 5px 0; }
-.ff-legal { font-size: 7px; color: rgba(255,255,255,0.5); letter-spacing: 0.3px; }
+.ff-divider { display: block; height: 1px; background: #e2e8f0; margin: 4px 0; }
+.ff-legal { font-size: 7px; color: #64748b; letter-spacing: 0.1px; }
 
 /* ── Header band ── */
 .header-band {
@@ -49,10 +40,10 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     display: table;
     width: 100%;
 }
-.hdr-logo { display: table-cell; vertical-align: middle; width: 120px; }
-.hdr-logo img { max-height: 34px; max-width: 110px; }
+.hdr-logo { display: table-cell; vertical-align: middle; width: 140px; }
+.hdr-logo img { max-height: 34px; max-width: 130px; }
 .hdr-center { display: table-cell; vertical-align: middle; text-align: center; }
-.hdr-center h1 { font-size: 14px; font-weight: 900; color: #ffffff; text-transform: uppercase; letter-spacing: 1px; }
+.hdr-center h1 { font-size: 14px; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: 1px; }
 .hdr-center p { font-size: 8px; color: rgba(255,255,255,0.6); margin-top: 2px; letter-spacing: 0.5px; }
 .hdr-right { display: table-cell; vertical-align: middle; text-align: right; width: 150px; }
 .hdr-right .code { font-size: 11px; font-weight: 800; color: #f97316; }
@@ -70,7 +61,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 /* ── KPI cards ── */
 .kpi-row { display: table; width: 100%; margin: 16px 0 14px; }
 .kpi-card { display: table-cell; text-align: center; padding: 12px 5px; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; vertical-align: middle; }
-.kpi-card .kpi-num { font-size: 22px; font-weight: 900; line-height: 1; }
+.kpi-card .kpi-num { font-size: 22px; font-weight: 700; line-height: 1; }
 .kpi-card .kpi-label { font-size: 7px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; color: #64748b; margin-top: 3px; }
 .kpi-blue .kpi-num   { color: #0f1b4c; }
 .kpi-green .kpi-num  { color: #059669; }
@@ -84,12 +75,12 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .section { margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #e2e8f0; }
 .section-inner { display: table; width: 100%; }
 .section-bar { display: table-cell; width: 4px; background: #0f1b4c; border-radius: 2px; }
-.section-text { display: table-cell; vertical-align: middle; padding-left: 8px; font-size: 11px; font-weight: 900; text-transform: uppercase; color: #1e293b; letter-spacing: 0.5px; }
+.section-text { display: table-cell; vertical-align: middle; padding-left: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #1e293b; letter-spacing: 0.5px; }
 
 /* ── Two-column layout ── */
 .two-col { display: table; width: 100%; margin: 14px 0; }
-.col-left { display: table-cell; width: 40%; vertical-align: top; padding-right: 18px; }
-.col-right { display: table-cell; width: 60%; vertical-align: top; }
+.col-left { display: table-cell; width: 38%; vertical-align: top; padding-right: 22px; }
+.col-right { display: table-cell; width: 62%; vertical-align: top; }
 
 /* ── Three-column layout ── */
 .three-col { display: table; width: 100%; margin: 8px 0; }
@@ -97,15 +88,18 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .col-33:first-child { padding-left: 0; }
 .col-33:last-child { padding-right: 0; }
 
-/* ── Progress ring ── */
-.ring-wrap { text-align: center; margin-bottom: 14px; }
-.ring-circle { width: 120px; height: 120px; border-radius: 60px; border: 15px solid #e2e8f0; position: relative; margin: 0 auto; }
-.ring-inner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
-.ring-pct { font-size: 28px; font-weight: 900; color: #0f1b4c; }
-.ring-sub { font-size: 7.5px; color: #94a3b8; text-transform: uppercase; font-weight: 700; }
+/* ── Actual progress, drawn to scale (unlike a decorative ring) ── */
+.progress-panel { padding: 13px 15px 12px; background: #f8fafc; border: 1px solid #dbe3ee; border-left: 4px solid #f97316; }
+.progress-eyebrow { color: #64748b; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+.progress-main { display: table; width: 100%; margin: 5px 0 7px; }
+.progress-number { display: table-cell; color: #0f1b4c; font-size: 31px; line-height: 1.1; font-weight: 700; }
+.progress-fraction { display: table-cell; color: #475569; font-size: 10px; text-align: right; vertical-align: bottom; padding-bottom: 5px; }
+.progress-track { height: 13px; width: 100%; background: #e2e8f0; }
+.progress-fill { height: 13px; background: #f97316; }
+.progress-caption { margin-top: 5px; color: #64748b; font-size: 8px; }
 
 /* ── Status dots ── */
-.status-grid { margin-top: 8px; text-align: center; }
+.status-grid { margin-top: 10px; text-align: left; line-height: 1.8; }
 .status-dot { display: inline-block; width: 9px; height: 9px; border-radius: 5px; margin-right: 3px; vertical-align: middle; }
 .status-label { font-size: 8px; font-weight: 700; color: #475569; }
 .dot-completada  { background: #059669; }
@@ -124,9 +118,9 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .bar-val { display: table-cell; width: 32px; font-size: 8px; font-weight: 700; color: #0f1b4c; vertical-align: middle; text-align: right; }
 
 /* ── Priority bars ── */
-.pri-row { display: table; width: 100%; margin-bottom: 5px; }
+.pri-row { display: table; width: 100%; margin-bottom: 6px; }
 .pri-label { display: table-cell; width: 50px; font-size: 8px; font-weight: 700; vertical-align: middle; }
-.pri-bar-wrap { display: table-cell; vertical-align: middle; padding: 0 6px; }
+.pri-bar-wrap { display: table-cell; vertical-align: middle; padding: 0 6px; background: #f1f5f9; }
 .pri-bar { height: 12px; border-radius: 3px; }
 .pri-count { display: table-cell; width: 26px; font-size: 8px; font-weight: 700; color: #475569; vertical-align: middle; text-align: right; }
 .pri-alta  { background: #dc2626; }
@@ -144,8 +138,10 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 /* ── Data table ── */
 .data-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
 .data-table th { background: #0f1b4c; color: #fff; font-size: 7.5px; font-weight: 700; padding: 6px 7px; text-align: left; text-transform: uppercase; letter-spacing: 0.3px; }
-.data-table td { padding: 5px 7px; font-size: 9px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+.data-table td { padding: 3px 7px; font-size: 9px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
 .data-table tr:nth-child(even) td { background: #f8fafc; }
+.data-table thead { display: table-header-group; }
+.data-table tr { page-break-inside: avoid; }
 
 /* Mini progress bar */
 .mini-bar { height: 9px; background: #e2e8f0; border-radius: 3px; overflow: hidden; width: 65px; display: inline-block; vertical-align: middle; }
@@ -169,8 +165,10 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .gantt-mini { width: 100%; border-collapse: collapse; margin-top: 6px; }
 .gantt-mini th { background: #f1f5f9; color: #475569; font-size: 7px; font-weight: 700; padding: 4px 3px; text-align: center; border: 1px solid #e2e8f0; width: 7%; }
 .gantt-mini th:first-child { width: 16%; text-align: left; padding-left: 6px; }
-.gantt-mini td { padding: 3px; font-size: 7.5px; text-align: center; border: 1px solid #e2e8f0; height: 16px; vertical-align: middle; }
+.gantt-mini .table-caption th { width: auto; text-align: left; padding: 5px 7px; background: #f8fafc; color: #0f1b4c; font-size: 8px; border-bottom: 1px solid #dbe3ee; }
+.gantt-mini td { padding: 2px 3px; font-size: 7.5px; text-align: center; border: 1px solid #e2e8f0; height: 15px; vertical-align: middle; }
 .gantt-mini thead { display: table-header-group; }
+.gantt-mini tr { page-break-inside: avoid; }
 .gantt-mini td:first-child { text-align: left; padding-left: 6px; font-weight: 600; font-size: 8px; }
 .g-prog { background: #dbeafe; }
 .g-done { background: #059669; color: #fff; font-weight: 700; font-size: 7px; }
@@ -179,7 +177,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .g-future { background: #f0fdf4; }
 .g-reprog { background: #ede9fe; color: #6d28d9; font-weight: 700; font-size: 7px; }
 .period-note { margin: 10px 0 0; padding: 8px 11px; background: #f8fafc; border-left: 3px solid #f97316; color: #475569; font-size: 8.5px; }
-.month-detail th:first-child { width: 33%; }
+.month-detail th:first-child { width: 39%; }
 .month-detail th { padding: 3px; }
 .month-detail td { padding: 3px 4px; height: 15px; font-size: 8px; }
 .month-detail td:first-child { font-size: 8px; }
@@ -191,9 +189,6 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 </head>
 <body>
 
-{{-- Watermark --}}
-<div class="watermark">SAEP</div>
-
 {{-- ═══════════ FIXED FOOTER (appears on every page) ═══════════ --}}
 <div class="fixed-footer">
     <div class="ff-row">
@@ -202,24 +197,23 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
             <span class="ff-brand-sub">Sistema de Administración Empresarial de Prevención</span>
         </div>
         <div class="ff-cell ff-right">
-            <span style="color:rgba(255,255,255,0.7);">{{ $cartaGantt->codigo }}</span> &bull; {{ date('d/m/Y') }}
+            <span style="color:#0f1b4c;font-weight:700;">{{ $cartaGantt->codigo }}</span> &bull; {{ date('d/m/Y') }}
         </div>
     </div>
     <div class="ff-divider"></div>
     <div class="ff-row">
         <div class="ff-cell">
-            <span class="ff-legal">Documento generado automáticamente por SAEP Platform &bull; saep.bmachero.com &bull; Información confidencial de uso interno &bull; &copy; {{ date('Y') }} SAEP — Todos los derechos reservados</span>
+            <span class="ff-legal">SAEP Platform &bull; Documento de uso interno &bull; Datos vigentes al momento de la generación</span>
         </div>
-        <div class="ff-cell ff-right">
-            <span class="ff-legal">Generado por: {{ auth()->user()->nombre_completo ?? 'Sistema' }}</span>
-        </div>
+        <div class="ff-cell ff-right"></div>
     </div>
 </div>
 
 @php
     $maxProg = max(1, collect($mesesData)->max('prog'));
-    $logoUrl = public_path('brand/wp/Logo_Saep.svg');
+    $logoUrl = 'data:image/png;base64,'.base64_encode(file_get_contents(public_path('brand/wp/logo-saep-email.png')));
     $maxSemana = max(1, collect($semanasReporte)->max('realizado'));
+    $pendienteUnidades = max(0, $totalProgramado - $totalRealizado);
 @endphp
 
 {{-- ═══════════════ PAGE 1: EXECUTIVE SUMMARY ═══════════════ --}}
@@ -269,11 +263,6 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     <div style="height:1px;background:#e2e8f0;margin:8px 0;"></div>
     <div class="kpi-row">
         <div class="kpi-card kpi-blue">
-            <div class="kpi-num">{{ $pct }}%</div>
-            <div class="kpi-label">Avance del periodo</div>
-        </div>
-        <div class="kpi-spacer"></div>
-        <div class="kpi-card kpi-blue">
             <div class="kpi-num">{{ $totalAct }}</div>
             <div class="kpi-label">Actividades</div>
         </div>
@@ -304,17 +293,18 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
         </div>
     </div>
 
-    {{-- Two-column: Left = Ring + Status + Priority | Right = Monthly bars --}}
+    {{-- Executive reading: precise progress, status and distribution over time --}}
     <div style="height:1px;background:#e2e8f0;margin:6px 0;"></div>
     <div class="two-col">
         <div class="col-left">
-            <div class="ring-wrap">
-                <div class="ring-circle" style="border-color: {{ $pct >= 75 ? '#059669' : ($pct >= 50 ? '#2563eb' : ($pct >= 25 ? '#f59e0b' : '#dc2626')) }};">
-                    <div class="ring-inner">
-                        <div class="ring-pct">{{ $pct }}%</div>
-                <div class="ring-sub">Cumplimiento del periodo</div>
-                    </div>
+            <div class="progress-panel">
+                <div class="progress-eyebrow">Cumplimiento del periodo</div>
+                <div class="progress-main">
+                    <div class="progress-number">{{ $pct }}%</div>
+                    <div class="progress-fraction">{{ $totalRealizado }} de {{ $totalProgramado }} ejecuciones</div>
                 </div>
+                <div class="progress-track"><div class="progress-fill" style="width:{{ min(100, max(0, $pct)) }}%;{{ $pct >= 100 ? 'background:#059669;' : '' }}"></div></div>
+                <div class="progress-caption">{{ $pendienteUnidades }} por ejecutar en el periodo seleccionado</div>
             </div>
             <div class="status-grid">
                 <span class="status-dot dot-completada"></span><span class="status-label">Completadas {{ $completadas }}</span>&nbsp;&nbsp;
@@ -325,12 +315,11 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 
             <div style="margin-top: 16px;">
                 <div style="font-size:9px;font-weight:800;color:#0f1b4c;text-transform:uppercase;margin-bottom:5px;letter-spacing:0.5px;">Distribución por Prioridad</div>
-                @php $maxPri = max(1, max($prioridades['ALTA'], $prioridades['MEDIA'], $prioridades['BAJA'])); @endphp
                 @foreach(['ALTA' => 'pri-alta', 'MEDIA' => 'pri-media', 'BAJA' => 'pri-baja'] as $pri => $cls)
                 <div class="pri-row">
                     <div class="pri-label" style="color:{{ $pri === 'ALTA' ? '#dc2626' : ($pri === 'MEDIA' ? '#d97706' : '#059669') }};">{{ $pri }}</div>
                     <div class="pri-bar-wrap">
-                        <div class="pri-bar {{ $cls }}" style="width:{{ round(($prioridades[$pri] / $maxPri) * 100) }}%;"></div>
+                        <div class="pri-bar {{ $cls }}" style="width:{{ $totalAct > 0 ? round(($prioridades[$pri] / $totalAct) * 100) : 0 }}%;"></div>
                     </div>
                     <div class="pri-count">{{ $prioridades[$pri] }}</div>
                 </div>
@@ -342,9 +331,13 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
             <div style="font-size:9px;font-weight:800;color:#0f1b4c;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">
                 {{ $tipoReporte === 'mensual' ? 'Ejecuciones registradas por semana' : 'Cumplimiento por mes (programado vs realizado)' }}
             </div>
-            @if($tipoReporte === 'mensual')
-            <div style="font-size:8px;color:#64748b;margin-bottom:8px;">Meta del mes: <strong>{{ $totalProgramado }}</strong> &bull; Ejecutadas: <strong>{{ $totalRealizado }}</strong></div>
-            @endif
+            <div style="font-size:8px;color:#64748b;margin-bottom:8px;">
+                @if($tipoReporte === 'mensual')
+                    Distribución de {{ $totalRealizado }} ejecuciones registradas en {{ $periodoEtiqueta }}.
+                @else
+                    Meta {{ $totalProgramado }} &bull; Realizado {{ $totalRealizado }}. Cada barra compara contra el mes con mayor meta.
+                @endif
+            </div>
             <div class="bar-chart">
                 @if($tipoReporte === 'mensual')
                 @foreach($semanasReporte as $semana)
@@ -360,7 +353,6 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                         $d = $mesesData[$m];
                         $wProg = $maxProg > 0 ? round(($d['prog'] / $maxProg) * 100) : 0;
                         $wReal = $maxProg > 0 ? round(($d['real'] / $maxProg) * 100) : 0;
-                        $isFuture = \Carbon\Carbon::create($cartaGantt->anio, $m)->startOfMonth()->isFuture();
                     @endphp
                     <div class="bar-row">
                         <div class="bar-label" style="{{ $m === $mesActual ? 'color:#0f1b4c;font-weight:900;' : '' }}">{{ $mesesNombres[$m] }}</div>
@@ -368,11 +360,11 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                             <div class="bar-bg" style="position:relative;">
                                 @if($d['prog'] > 0)
                                 <div class="bar-fill-prog" style="width:{{ $wProg }}%;"></div>
-                                <div class="bar-fill-real" style="width:{{ $wReal }}%;{{ $isFuture ? 'background:#94a3b8;' : '' }}"></div>
+                                <div class="bar-fill-real" style="width:{{ $wReal }}%;"></div>
                                 @endif
                             </div>
                         </div>
-                        <div class="bar-val">{{ $d['pct'] }}%</div>
+                        <div class="bar-val">{{ $d['prog'] > 0 ? $d['pct'].'%' : '—' }}</div>
                     </div>
                 @endforeach
                 @endif
@@ -385,7 +377,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                 <span style="font-size:7.5px;color:#94a3b8;">Realizado</span>
             </div>
             @else
-            <div style="margin-top:7px;font-size:8px;color:#64748b;">S1-S5: semanas reales del mes. "Sin semana" conserva avances históricos sin fecha semanal registrada.
+            <div style="margin-top:7px;font-size:8px;color:#64748b;">Barras relativas a la semana con más registros. "Sin semana" conserva avances históricos sin fecha semanal registrada.
                 @if(array_sum($sinSemanaPorActividad) > 0) {{ array_sum($sinSemanaPorActividad) }} ejecución(es) sin semana incluida(s) en el total.@endif
             </div>
             @endif
@@ -468,8 +460,9 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 
         <table class="gantt-mini {{ $tipoReporte === 'mensual' ? 'month-detail' : '' }}">
             <thead>
+                <tr class="table-caption"><th colspan="{{ $tipoReporte === 'mensual' ? count($semanasReporte) + 3 : count($mesesSeleccionados) + 1 }}">{{ $categoria->nombre }} &bull; {{ $periodoEtiqueta }} &bull; {{ $cartaGantt->codigo }}</th></tr>
                 <tr>
-                    <th>Actividad</th>
+                    <th style="width:{{ $tipoReporte === 'mensual' ? '39%' : ($tipoReporte === 'semestral' ? '28%' : '23%') }};">Actividad</th>
                     @if($tipoReporte === 'mensual')
                     <th>Real / Meta</th>
                     @foreach($semanasReporte as $semana)
@@ -492,7 +485,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                 @endphp
                 <tr>
                     <td>
-                        {{ Str::limit($act->nombre, $tipoReporte === 'mensual' ? 52 : 30) }}
+                        {{ Str::limit($act->nombre, $tipoReporte === 'mensual' ? 62 : ($tipoReporte === 'semestral' ? 52 : 38)) }}
                         @if($resumen['vencida'])
                             <span class="chip chip-red">V</span>
                         @elseif($resumen['estado'] === 'COMPLETADA')
@@ -588,7 +581,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     <div class="hdr-logo"><img src="{{ $logoUrl }}" alt="SAEP"></div>
     <div class="hdr-center">
         <h1>Reprogramaciones y Resumen de Actividades</h1>
-        <p>{{ $cartaGantt->titulo }} &bull; {{ $cartaGantt->codigo }}</p>
+        <p>{{ $cartaGantt->titulo }} &bull; {{ $periodoEtiqueta }}</p>
     </div>
     <div class="hdr-right">
         <div class="code">{{ $cartaGantt->codigo }}</div>
@@ -695,8 +688,9 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     </div>
     <table class="data-table">
         <thead>
+            <tr><th colspan="8" style="background:#f8fafc;color:#0f1b4c;font-size:8px;border-bottom:1px solid #dbe3ee;">Detalle por actividad &bull; {{ $periodoEtiqueta }} &bull; {{ $cartaGantt->codigo }}</th></tr>
             <tr>
-                <th style="width:22%;">Actividad</th>
+                <th style="width:28%;">Actividad</th>
                 <th>Categoría</th>
                 <th>Responsable</th>
                 <th>Prioridad</th>
@@ -721,7 +715,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                     };
                 @endphp
                 <tr>
-                    <td style="font-weight:600;">{{ Str::limit($act->nombre, 35) }}</td>
+                    <td style="font-weight:600;">{{ Str::limit($act->nombre, 55) }}</td>
                     <td>{{ $cat->nombre }}</td>
                     <td>{{ $act->nombreResponsable }}</td>
                     <td>
@@ -756,8 +750,8 @@ if (isset($pdf)) {
     $font = $fontMetrics->getFont("DejaVu Sans", "bold");
     $size = 6.5;
     $pageWidth = $pdf->get_width();
-    $y = $pdf->get_height() - 52;
-    $pdf->page_text($pageWidth - 100, $y, "Página {PAGE_NUM} de {PAGE_COUNT}", $font, $size, array(1,1,1));
+    $y = $pdf->get_height() - 18;
+    $pdf->page_text($pageWidth - 105, $y, "Página {PAGE_NUM} de {PAGE_COUNT}", $font, $size, array(0.29,0.33,0.41));
 }
 </script>
 

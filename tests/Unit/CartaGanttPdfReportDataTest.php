@@ -68,7 +68,8 @@ class CartaGanttPdfReportDataTest extends TestCase
         Auth::setUser(new User(['name' => 'Usuario de prueba']));
         $programa = $this->programaConActividades();
         $categoria = $programa->categorias->first();
-        for ($n = 0; $n < 24; $n++) {
+        $extraActivities = max(0, min(100, (int) getenv('SAEP_PDF_QA_EXTRA_ACTIVITIES')));
+        for ($n = 0; $n < 24 + $extraActivities; $n++) {
             $actividad = new SstActividad([
                 'nombre' => 'Actividad preventiva mensual ' . ($n + 1),
                 'periodicidad' => 'MENSUAL',
@@ -97,14 +98,31 @@ class CartaGanttPdfReportDataTest extends TestCase
                 'totalAct' => $datos['actividadesPeriodo']->count(),
                 'completadas' => $estados->filter(fn ($estado) => $estado === 'COMPLETADA')->count(),
                 'enProgreso' => $estados->filter(fn ($estado) => $estado === 'EN_PROGRESO')->count(),
-                'pendientes' => 0,
+                'pendientes' => $estados->filter(fn ($estado) => $estado === 'PENDIENTE')->count(),
                 'canceladas' => 0,
                 'vencidas' => collect(),
                 'reprogramaciones' => collect(),
-                'prioridades' => ['ALTA' => 1, 'MEDIA' => 1, 'BAJA' => 0],
-            ]))->setPaper('a4', 'landscape');
+                'prioridades' => [
+                    'ALTA' => $datos['actividadesPeriodo']->where('prioridad', 'ALTA')->count(),
+                    'MEDIA' => $datos['actividadesPeriodo']->where('prioridad', 'MEDIA')->count(),
+                    'BAJA' => $datos['actividadesPeriodo']->where('prioridad', 'BAJA')->count(),
+                ],
+            ]))->setPaper('a4', 'landscape')->setOptions([
+                'isRemoteEnabled' => true,
+                'isHtml5ParserEnabled' => true,
+                'isPhpEnabled' => true,
+                'defaultFont' => 'DejaVu Sans',
+                'dpi' => 96,
+            ]);
 
-            $this->assertStringStartsWith('%PDF-', $pdf->output());
+            $bytes = $pdf->output();
+            $this->assertStringStartsWith('%PDF-', $bytes);
+            if ($visualQaDir = getenv('SAEP_PDF_VISUAL_QA_DIR')) {
+                if (!is_dir($visualQaDir)) {
+                    mkdir($visualQaDir, 0775, true);
+                }
+                file_put_contents($visualQaDir.DIRECTORY_SEPARATOR.$tipo.'.pdf', $bytes);
+            }
         }
     }
 

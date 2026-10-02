@@ -569,7 +569,7 @@ class CartaGanttController extends Controller
             'isHtml5ParserEnabled' => true,
             'isPhpEnabled'         => true,
             'defaultFont'          => 'DejaVu Sans',
-            'dpi'                  => 130,
+            'dpi'                  => 96,
         ]);
 
         $sufijo = match ($tipo) {
