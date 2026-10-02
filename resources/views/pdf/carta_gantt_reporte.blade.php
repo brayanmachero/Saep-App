@@ -184,7 +184,6 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .month-detail .week-value { font-size: 9px; font-weight: 800; }
 .detail-content .section { margin: 8px 0 5px; }
 .detail-content .category-block { margin-top: 5px; }
-.summary-table { table-layout: fixed; }
 .summary-table td { padding: 1px 5px; font-size: 8px; line-height: 1.08; }
 .summary-table th { padding: 4px 5px; font-size: 7px; }
 .summary-table .mini-bar, .summary-table .mini-fill { height: 7px; }
@@ -692,16 +691,15 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     </div>
     <table class="data-table summary-table">
         <thead>
-            <tr><th colspan="8" style="background:#f8fafc;color:#0f1b4c;font-size:8px;border-bottom:1px solid #dbe3ee;">Detalle por actividad &bull; {{ $periodoEtiqueta }} &bull; {{ $cartaGantt->codigo }}</th></tr>
             <tr>
-                <th style="width:30%;">Actividad</th>
-                <th style="width:11%;">Categoría</th>
-                <th style="width:20%;">Responsable</th>
-                <th style="width:6%;">Prioridad</th>
-                <th style="width:8%;">Periodicidad</th>
-                <th style="width:10%;">Estado</th>
-                <th style="width:10%;">Avance</th>
-                <th style="width:5%;">Reprogs</th>
+                <th style="width:28%;">Actividad</th>
+                <th>Categoría</th>
+                <th>Responsable</th>
+                <th>Prioridad</th>
+                <th>Periodicidad</th>
+                <th>Estado</th>
+                <th>Avance</th>
+                <th>Reprogs</th>
             </tr>
         </thead>
         <tbody>
