@@ -194,6 +194,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .summary-table td { padding: 1px 5px; font-size: 8px; line-height: 1.08; }
 .summary-table th { padding: 4px 5px; font-size: 7px; }
 .summary-table .mini-bar, .summary-table .mini-fill { height: 7px; }
+.matrix-legend { margin: 8px 0 10px; padding: 7px 10px; background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; page-break-inside: avoid; }
 
 .page-break { page-break-after: always; }
 .avoid-break { page-break-inside: avoid; }
@@ -439,16 +440,6 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
             @endforeach
         </tbody>
     </table>
-    @if($tipoReporte !== 'mensual')
-    <div style="margin-top:12px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;">
-        <span style="font-size:8px;font-weight:700;color:#475569;text-transform:uppercase;margin-right:12px;">Cómo leer la matriz:</span>
-        <span style="display:inline-block;width:12px;height:9px;background:#059669;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Completado</span>&nbsp;&nbsp;
-        <span style="display:inline-block;width:12px;height:9px;background:#fef3c7;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Parcial</span>&nbsp;&nbsp;
-        <span style="display:inline-block;width:12px;height:9px;background:#fee2e2;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">No cumplido</span>&nbsp;&nbsp;
-        <span style="display:inline-block;width:12px;height:9px;background:#f0fdf4;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Futuro</span>&nbsp;&nbsp;
-        <span style="display:inline-block;width:12px;height:9px;background:#ede9fe;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Reprogramado</span>
-    </div>
-    @endif
     @if($tipoReporte === 'mensual' && $totalAct === 0)
     <div class="period-note">No hay actividades programadas en {{ $periodoEtiqueta }}. Selecciona otro mes para consultar su avance.</div>
     @endif
@@ -458,7 +449,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 
 {{-- ═══════════════ PAGE 2: GANTT DETAIL ═══════════════ --}}
 <div class="header-band">
-    <div class="hdr-logo"><img src="{{ $logoUrl }}" alt="SAEP"></div>
+    <div class="hdr-logo"><div class="hdr-logo-box"><img src="{{ $logoUrl }}" alt="SAEP"></div></div>
     <div class="hdr-center">
         <h1>{{ $tipoReporte === 'mensual' ? 'Detalle semanal de actividades' : 'Detalle de actividades por categoría' }}</h1>
         <p>{{ $cartaGantt->titulo }} &bull; {{ $periodoEtiqueta }}</p>
@@ -471,6 +462,16 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 <div class="accent-line"></div>
 
 <div class="content detail-content">
+    @if($tipoReporte !== 'mensual')
+    <div class="matrix-legend">
+        <span style="font-size:8px;font-weight:700;text-transform:uppercase;margin-right:12px;">Cómo leer la matriz:</span>
+        <span style="display:inline-block;width:12px;height:9px;background:#059669;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;">Completado</span>&nbsp;&nbsp;
+        <span style="display:inline-block;width:12px;height:9px;background:#fef3c7;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;">Parcial</span>&nbsp;&nbsp;
+        <span style="display:inline-block;width:12px;height:9px;background:#fee2e2;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;">No cumplido</span>&nbsp;&nbsp;
+        <span style="display:inline-block;width:12px;height:9px;background:#f0fdf4;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;">Futuro</span>&nbsp;&nbsp;
+        <span style="display:inline-block;width:12px;height:9px;background:#ede9fe;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;">Reprogramado</span>
+    </div>
+    @endif
     @foreach($cartaGantt->categorias->sortBy('orden') as $categoria)
     @php $actividadesCategoria = $categoria->actividades->filter(fn ($actividad) => isset($resumenActividades[$actividad->id])); @endphp
     @if($actividadesCategoria->isNotEmpty())
@@ -590,7 +591,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 
 {{-- ═══════════════ PAGE 3: REPROGRAMACIONES & RESUMEN ═══════════════ --}}
 <div class="header-band">
-    <div class="hdr-logo"><img src="{{ $logoUrl }}" alt="SAEP"></div>
+    <div class="hdr-logo"><div class="hdr-logo-box"><img src="{{ $logoUrl }}" alt="SAEP"></div></div>
     <div class="hdr-center">
         <h1>Reprogramaciones y Resumen de Actividades</h1>
         <p>{{ $cartaGantt->titulo }} &bull; {{ $periodoEtiqueta }}</p>
