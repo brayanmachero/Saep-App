@@ -49,7 +49,7 @@
                 <div class="form-group">
                     <label>Mes inicial</label>
                     <select name="mes_inicial" class="form-input">
-                        @php($mesInicialSeleccionado = old('mes_inicial', $cartaGantt->mes_inicial))
+                        @php $mesInicialSeleccionado = old('mes_inicial', $cartaGantt->mes_inicial); @endphp
                         <option value="" {{ $mesInicialSeleccionado === null || $mesInicialSeleccionado === '' ? 'selected' : '' }}>Mes actual</option>
                         @foreach(['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'] as $indiceMes => $nombreMes)
                         <option value="{{ $indiceMes + 1 }}" {{ (int) $mesInicialSeleccionado === $indiceMes + 1 ? 'selected' : '' }}>{{ $nombreMes }}</option>
