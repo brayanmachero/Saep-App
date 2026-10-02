@@ -166,7 +166,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .gantt-mini th { background: #f1f5f9; color: #475569; font-size: 7px; font-weight: 700; padding: 4px 3px; text-align: center; border: 1px solid #e2e8f0; width: 7%; }
 .gantt-mini th:first-child { width: 16%; text-align: left; padding-left: 6px; }
 .gantt-mini .table-caption th { width: auto; text-align: left; padding: 5px 7px; background: #f8fafc; color: #0f1b4c; font-size: 8px; border-bottom: 1px solid #dbe3ee; }
-.gantt-mini td { padding: 2px 3px; font-size: 7.5px; text-align: center; border: 1px solid #e2e8f0; height: 15px; vertical-align: middle; }
+.gantt-mini td { padding: 1px 3px; font-size: 7.5px; text-align: center; border: 1px solid #e2e8f0; height: 13px; vertical-align: middle; }
 .gantt-mini thead { display: table-header-group; }
 .gantt-mini tr { page-break-inside: avoid; }
 .gantt-mini td:first-child { text-align: left; padding-left: 6px; font-weight: 600; font-size: 8px; }
@@ -179,9 +179,14 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 .period-note { margin: 10px 0 0; padding: 8px 11px; background: #f8fafc; border-left: 3px solid #f97316; color: #475569; font-size: 8.5px; }
 .month-detail th:first-child { width: 39%; }
 .month-detail th { padding: 3px; }
-.month-detail td { padding: 3px 4px; height: 15px; font-size: 8px; }
+.month-detail td { padding: 1px 3px; height: 13px; font-size: 8px; }
 .month-detail td:first-child { font-size: 8px; }
 .month-detail .week-value { font-size: 9px; font-weight: 800; }
+.detail-content .section { margin: 8px 0 5px; }
+.detail-content .category-block { margin-top: 5px; }
+.summary-table td { padding: 1px 5px; font-size: 8px; line-height: 1.08; }
+.summary-table th { padding: 4px 5px; font-size: 7px; }
+.summary-table .mini-bar, .summary-table .mini-fill { height: 7px; }
 
 .page-break { page-break-after: always; }
 .avoid-break { page-break-inside: avoid; }
@@ -425,6 +430,16 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
             @endforeach
         </tbody>
     </table>
+    @if($tipoReporte !== 'mensual')
+    <div style="margin-top:12px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;">
+        <span style="font-size:8px;font-weight:700;color:#475569;text-transform:uppercase;margin-right:12px;">Cómo leer la matriz:</span>
+        <span style="display:inline-block;width:12px;height:9px;background:#059669;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Completado</span>&nbsp;&nbsp;
+        <span style="display:inline-block;width:12px;height:9px;background:#fef3c7;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Parcial</span>&nbsp;&nbsp;
+        <span style="display:inline-block;width:12px;height:9px;background:#fee2e2;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">No cumplido</span>&nbsp;&nbsp;
+        <span style="display:inline-block;width:12px;height:9px;background:#f0fdf4;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Futuro</span>&nbsp;&nbsp;
+        <span style="display:inline-block;width:12px;height:9px;background:#ede9fe;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Reprogramado</span>
+    </div>
+    @endif
     @if($tipoReporte === 'mensual' && $totalAct === 0)
     <div class="period-note">No hay actividades programadas en {{ $periodoEtiqueta }}. Selecciona otro mes para consultar su avance.</div>
     @endif
@@ -446,11 +461,11 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
 </div>
 <div class="accent-line"></div>
 
-<div class="content">
+<div class="content detail-content">
     @foreach($cartaGantt->categorias->sortBy('orden') as $categoria)
     @php $actividadesCategoria = $categoria->actividades->filter(fn ($actividad) => isset($resumenActividades[$actividad->id])); @endphp
     @if($actividadesCategoria->isNotEmpty())
-    <div style="margin-top:10px;">
+    <div class="category-block">
         <div class="section">
             <div class="section-inner">
                 <div class="section-bar"></div>
@@ -536,18 +551,6 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
     </div>
     @endif
     @endforeach
-
-    @if($tipoReporte !== 'mensual')
-    {{-- Legend (part of page content) --}}
-    <div style="margin-top:14px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;">
-        <span style="font-size:8px;font-weight:800;color:#475569;text-transform:uppercase;margin-right:12px;">Leyenda:</span>
-        <span style="display:inline-block;width:12px;height:9px;background:#059669;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Completado</span>&nbsp;&nbsp;&nbsp;
-        <span style="display:inline-block;width:12px;height:9px;background:#fef3c7;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Parcial</span>&nbsp;&nbsp;&nbsp;
-        <span style="display:inline-block;width:12px;height:9px;background:#fee2e2;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">No cumplido</span>&nbsp;&nbsp;&nbsp;
-        <span style="display:inline-block;width:12px;height:9px;background:#f0fdf4;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Futuro</span>&nbsp;&nbsp;&nbsp;
-        <span style="display:inline-block;width:12px;height:9px;background:#ede9fe;border:1px solid #e2e8f0;border-radius:2px;margin-right:3px;vertical-align:middle;"></span><span style="font-size:8px;color:#475569;">Reprogramado</span>
-    </div>
-    @endif
 
     @if($tipoReporte === 'mensual' && ($vencidas->isNotEmpty() || $reprogramaciones->isNotEmpty()))
     <div class="section"><div class="section-inner"><div class="section-bar"></div><div class="section-text">Alertas del periodo</div></div></div>
@@ -686,7 +689,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
             <div class="section-text">Resumen Completo de Actividades</div>
         </div>
     </div>
-    <table class="data-table">
+    <table class="data-table summary-table">
         <thead>
             <tr><th colspan="8" style="background:#f8fafc;color:#0f1b4c;font-size:8px;border-bottom:1px solid #dbe3ee;">Detalle por actividad &bull; {{ $periodoEtiqueta }} &bull; {{ $cartaGantt->codigo }}</th></tr>
             <tr>
