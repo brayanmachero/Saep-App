@@ -20,6 +20,7 @@ class KizeoCharlaTracking extends Model
         'estado',
         'estatus_kizeo',
         'fecha_creacion',
+        'fecha_registro_kizeo',
         'fecha_asignacion',
         'fecha_respuesta',
         'origin_answer',
@@ -31,6 +32,7 @@ class KizeoCharlaTracking extends Model
 
     protected $casts = [
         'fecha_creacion'   => 'datetime',
+        'fecha_registro_kizeo' => 'datetime',
         'fecha_asignacion' => 'datetime',
         'fecha_respuesta'  => 'datetime',
         'metadata'         => 'array',

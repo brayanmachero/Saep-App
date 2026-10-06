@@ -56,6 +56,7 @@ class KizeoSyncCharlaTracking extends Command
                 $userName     = $record['_user_name'] ?? "Usuario-{$userId}";
                 $createTime   = $record['_create_time'] ?? null;
                 $answerTime   = $record['_answer_time'] ?? '';
+                $registrationTime = $record['_registration_time'] ?? null;
                 $updateTime   = $record['_update_time'] ?? null;
                 $direction    = $record['_direction'] ?? null;
                 $recipientId  = $record['_recipient_id'] ?? null;
@@ -152,6 +153,7 @@ class KizeoSyncCharlaTracking extends Command
                     'estado'           => $estado,
                     'estatus_kizeo'    => $estatusKizeo,
                     'fecha_creacion'   => $createTime,
+                    'fecha_registro_kizeo' => $registrationTime,
                     'fecha_asignacion' => $fechaAsignacion,
                     'fecha_respuesta'  => $hasAnswer ? $answerTime : null,
                     'origin_answer'    => $originAnswer,
@@ -277,7 +279,7 @@ class KizeoSyncCharlaTracking extends Command
         return array_values($allRecords);
     }
 
-    /** data/all contiene la fecha de respuesta que muestra el histórico de Kizeo. */
+    /** data/all contiene la fecha de registro del histórico, incluso para transferidos pendientes. */
     private function mergeCanonicalDates(KizeoService $kizeo, string $formId, string $desde, array $records): array
     {
         $response = $kizeo->rawGet("forms/{$formId}/data/all", 90);
@@ -305,7 +307,7 @@ class KizeoSyncCharlaTracking extends Command
         foreach ($records as &$record) {
             $summary = $recent[(string) $record['_id']];
             $record['_create_time'] = $summary['create_time'];
-            $record['_answer_time'] = $summary['answer_time'] ?? '';
+            $record['_registration_time'] = $summary['answer_time'] ?? null;
             $record['_direction'] = $summary['direction'] ?? ($record['_direction'] ?? null);
         }
         unset($record);

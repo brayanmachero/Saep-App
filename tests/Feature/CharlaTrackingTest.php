@@ -84,38 +84,41 @@ class CharlaTrackingTest extends TestCase
         $this->assertSame('01/06/2026 al 30/06/2026', $data['periodo']);
     }
 
-    public function test_historic_mode_uses_response_date_and_creation_mode_keeps_pending_assignments(): void
+    public function test_historic_mode_uses_kizeo_registration_date_and_keeps_pending_assignments(): void
     {
         KizeoCharlaTracking::query()->delete();
         $this->createTracking('2026-08-20', 'completado', 'terminado', [
+            'fecha_registro_kizeo' => Carbon::parse('2026-09-10 12:00:00'),
             'fecha_respuesta' => Carbon::parse('2026-09-10 12:00:00'),
         ]);
         $this->createTracking('2026-09-12', 'completado', 'registrado', [
+            'fecha_registro_kizeo' => Carbon::parse('2026-09-15 12:00:00'),
             'fecha_respuesta' => Carbon::parse('2026-09-15 12:00:00'),
         ]);
         $this->createTracking('2026-09-20', 'transferido', 'transferido', [
+            'fecha_registro_kizeo' => Carbon::parse('2026-09-20 12:00:00'),
             'fecha_respuesta' => null,
         ]);
 
         $historico = KizeoCharlaWeeklyReport::buildReportDataFromFilters([
-            'desde' => '2026-09-01', 'hasta' => '2026-09-30', 'tipo_fecha' => 'respuesta',
+            'desde' => '2026-09-01', 'hasta' => '2026-09-30', 'tipo_fecha' => 'registro',
         ]);
         $asignaciones = KizeoCharlaWeeklyReport::buildReportDataFromFilters([
             'desde' => '2026-09-01', 'hasta' => '2026-09-30', 'tipo_fecha' => 'creacion',
         ]);
 
-        $this->assertSame(2, $historico['stats']['total']);
+        $this->assertSame(3, $historico['stats']['total']);
         $this->assertSame(2, $asignaciones['stats']['total']);
         $this->assertSame(1, $asignaciones['stats']['transferidos']);
-        $this->assertSame(0, $historico['stats']['transferidos']);
+        $this->assertSame(1, $historico['stats']['transferidos']);
 
         $this->actingAs($this->createSuperAdminUser())
             ->get(route('charla-tracking.index', [
-                'desde' => '2026-09-01', 'hasta' => '2026-09-30', 'tipo_fecha' => 'respuesta',
+                'desde' => '2026-09-01', 'hasta' => '2026-09-30', 'tipo_fecha' => 'registro',
             ]))
             ->assertOk()
-            ->assertSee('Histórico de respuestas')
-            ->assertSee('Respondidas en el período');
+            ->assertSee('Histórico de registros Kizeo')
+            ->assertSee('Registros Kizeo');
     }
 
     public function test_sync_rejects_incomplete_kizeo_batch_without_changing_existing_records(): void
@@ -137,7 +140,7 @@ class CharlaTrackingTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_sync_uses_answer_time_from_kizeo_history_when_advanced_omits_it(): void
+    public function test_sync_preserves_pending_state_when_history_has_registration_date(): void
     {
         Carbon::setTestNow('2026-10-06 12:00:00');
         config()->set('services.kizeo.charla_form_id', '973784');
@@ -161,8 +164,9 @@ class CharlaTrackingTest extends TestCase
 
         $this->artisan('kizeo:sync-charla-tracking', ['--months' => 0])->assertExitCode(0);
         $this->assertDatabaseHas('kizeo_charla_tracking', [
-            'kizeo_data_id' => '123', 'estado' => 'completado',
-            'fecha_respuesta' => '2026-10-02 11:00:00',
+            'kizeo_data_id' => '123', 'estado' => 'pendiente',
+            'fecha_respuesta' => null,
+            'fecha_registro_kizeo' => '2026-10-02 11:00:00',
         ]);
         Carbon::setTestNow();
     }
@@ -319,6 +323,7 @@ class CharlaTrackingTest extends TestCase
             'estado' => $estado,
             'estatus_kizeo' => $estatusKizeo,
             'fecha_creacion' => $fecha,
+            'fecha_registro_kizeo' => $fecha,
             'fecha_asignacion' => $fecha,
             'fecha_respuesta' => $estado === 'completado' ? $fecha->copy()->addHour() : null,
             'semana' => (int) $fecha->isoWeek(),

@@ -29,7 +29,7 @@ class KizeoCharlaWeeklyReport extends Command
                             {--sync : Ejecutar sincronización antes del reporte}
                             {--desde= : Fecha de inicio del reporte (YYYY-MM-DD)}
                             {--hasta= : Fecha de término del reporte (YYYY-MM-DD)}
-                            {--tipo_fecha=creacion : Fecha de creación o respuesta}
+                            {--tipo_fecha=creacion : Fecha de creación o registro Kizeo}
                             {--estado=todos : Estado a incluir: todos, completado, pendiente o transferido}
                             {--buscar= : Texto de búsqueda aplicado al reporte}';
 
@@ -173,8 +173,8 @@ class KizeoCharlaWeeklyReport extends Command
         $desde = Carbon::parse($filters['desde'])->startOfDay();
         $hasta = Carbon::parse($filters['hasta'])->endOfDay();
         $periodo = $desde->format('d/m/Y') . ' al ' . $hasta->format('d/m/Y');
-        if (($filters['tipo_fecha'] ?? 'creacion') === 'respuesta') {
-            $periodo .= ' · fecha de respuesta en Kizeo';
+        if (($filters['tipo_fecha'] ?? 'creacion') === 'registro') {
+            $periodo .= ' · fecha de registro en Kizeo';
         }
 
         $baseQuery = self::filteredQuery($filters);
@@ -218,16 +218,19 @@ class KizeoCharlaWeeklyReport extends Command
             })
             ->toArray();
 
-        $resumenSemanal = ($filters['tipo_fecha'] === 'respuesta'
-            ? (clone $baseQuery)->get(['fecha_respuesta'])->groupBy(function ($row) {
-                $date = $row->fecha_respuesta;
+        $resumenSemanal = ($filters['tipo_fecha'] === 'registro'
+            ? (clone $baseQuery)->get(['fecha_registro_kizeo', 'estado'])->groupBy(function ($row) {
+                $date = $row->fecha_registro_kizeo;
                 return $date->format('o-W');
             })->sortKeys()->map(function ($rows) {
-                $date = $rows->first()->fecha_respuesta->copy()->startOfWeek();
+                $date = $rows->first()->fecha_registro_kizeo->copy()->startOfWeek();
+                $completadas = $rows->where('estado', 'completado')->count();
+                $transferidos = $rows->where('estado', 'transferido')->count();
                 return [
                     'semana' => $date->isoWeek(), 'anio' => $date->isoWeekYear(),
                     'fecha' => $date->format('d/m'), 'total' => $rows->count(),
-                    'completadas' => $rows->count(), 'transferidos' => 0, 'tasa' => 100,
+                    'completadas' => $completadas, 'transferidos' => $transferidos,
+                    'tasa' => round($completadas / $rows->count() * 100, 1),
                 ];
             })->values()->toArray()
             : (clone $baseQuery)
@@ -319,11 +322,8 @@ class KizeoCharlaWeeklyReport extends Command
             $estado = 'todos';
         }
         $tipoFecha = $normalized['tipo_fecha'] ?? 'creacion';
-        if (!in_array($tipoFecha, ['creacion', 'respuesta'], true)) {
+        if (!in_array($tipoFecha, ['creacion', 'registro'], true)) {
             $tipoFecha = 'creacion';
-        }
-        if ($tipoFecha === 'respuesta') {
-            $estado = 'todos';
         }
 
         return array_filter([
@@ -340,8 +340,8 @@ class KizeoCharlaWeeklyReport extends Command
         $desde = Carbon::parse($filters['desde'])->startOfDay()->toDateTimeString();
         $hasta = Carbon::parse($filters['hasta'])->endOfDay()->toDateTimeString();
 
-        $dateColumn = ($filters['tipo_fecha'] ?? 'creacion') === 'respuesta'
-            ? 'fecha_respuesta'
+        $dateColumn = ($filters['tipo_fecha'] ?? 'creacion') === 'registro'
+            ? 'fecha_registro_kizeo'
             : 'fecha_creacion';
         $query = KizeoCharlaTracking::query()->whereBetween($dateColumn, [$desde, $hasta]);
 
