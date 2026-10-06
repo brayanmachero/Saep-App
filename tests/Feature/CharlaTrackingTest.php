@@ -150,14 +150,14 @@ class CharlaTrackingTest extends TestCase
         $kizeo->shouldReceive('rawPost')->once()->andReturn([
             'recordsFiltered' => 1,
             'data' => [[
-                '_id' => 123, '_create_time' => '2026-10-01 10:00:00',
+                '_id' => 123, '_create_time' => '2026-10-06 10:00:00',
                 '_answer_time' => '', '_user_name' => 'Persona de prueba',
             ]],
         ]);
         $kizeo->shouldReceive('rawGet')->once()->andReturn([
             'data' => [[
-                'id' => 123, 'create_time' => '2026-10-01 10:00:00',
-                'answer_time' => '2026-10-02 11:00:00', 'direction' => 'in',
+                'id' => 123, 'create_time' => '2026-10-06 10:00:00',
+                'answer_time' => '2026-10-06 11:00:00', 'direction' => 'in',
             ]],
         ]);
         $this->app->instance(KizeoService::class, $kizeo);
@@ -166,7 +166,7 @@ class CharlaTrackingTest extends TestCase
         $this->assertDatabaseHas('kizeo_charla_tracking', [
             'kizeo_data_id' => '123', 'estado' => 'pendiente',
             'fecha_respuesta' => null,
-            'fecha_registro_kizeo' => '2026-10-02 11:00:00',
+            'fecha_registro_kizeo' => '2026-10-06 11:00:00',
         ]);
         Carbon::setTestNow();
     }
@@ -183,6 +183,9 @@ class CharlaTrackingTest extends TestCase
                 '_answer_time' => '2026-10-06 11:00:00',
                 '_user_name' => 'SMU Sop', '_user_id' => 'user-smu',
                 '_recipient_name' => '', '_recipient_id' => null,
+                'antecedentes' => 'ACTIVIDAD',
+                'lugar_de_la_capacitacion' => 'Centro de prueba',
+                'titulo_actividad' => 'Título real de prueba',
                 '_history' => 'Transferido por Prevencion a SMU Sop el 2026-10-06 10:00:00',
             ]],
         ]);
@@ -196,6 +199,8 @@ class CharlaTrackingTest extends TestCase
         try {
             $this->artisan('kizeo:sync-charla-tracking', ['--months' => 0])->assertExitCode(0);
             $record = KizeoCharlaTracking::where('kizeo_data_id', '123')->firstOrFail();
+            $this->assertSame('Centro de prueba', $record->lugar);
+            $this->assertSame('Título real de prueba', $record->titulo_actividad);
             $this->assertNull($record->asignado_a);
             $this->assertNull($record->asignado_a_id);
             $this->assertSame('completado', $record->estado);

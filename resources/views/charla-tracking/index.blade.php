@@ -208,8 +208,8 @@
                 <i class="bi bi-arrow-left-right"></i>
             </div>
             <div>
-                <div class="stat-value" style="color:#ea580c">{{ number_format($transferidos) }}</div>
-                <div class="stat-label">Transferidas Pend.</div>
+                <div class="stat-value" style="color:#ea580c">{{ number_format($pendientes) }}</div>
+                <div class="stat-label">Pendientes totales</div>
             </div>
         </div>
         <div class="stat-item">
@@ -235,6 +235,8 @@
         </div>
     </div>
 
+    <p style="font-size:.78rem;color:var(--text-muted);margin:0 0 1rem">Terminadas y registradas cuentan como completadas. Recuperadas y transferidas siguen pendientes. Los rankings muestran grupos limitados y pueden no sumar el total del período.</p>
+
     {{-- Gráficos fila 1: Tendencia + Distribución estatus --}}
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1.5rem">
         <div class="glass-card" style="padding:1rem 1.25rem">
@@ -256,7 +258,7 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
         {{-- Quién crea/asigna --}}
         <div class="glass-card" style="padding:1rem 1.25rem">
-            <h3 class="chart-title"><i class="bi bi-send-fill" style="color:#8b5cf6"></i> Cumplimiento por creador</h3>
+            <h3 class="chart-title"><i class="bi bi-send-fill" style="color:#8b5cf6"></i> Asignadores / registradores · Top 10</h3>
             @if($topAsignadores->isEmpty())
                 <div style="text-align:center;color:var(--text-muted);padding:2rem">
                     <i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:.3rem"></i>
@@ -267,7 +269,7 @@
                 <table class="glass-table" style="font-size:.8rem">
                     <thead>
                         <tr>
-                            <th style="text-align:left">Creador</th>
+                            <th style="text-align:left">Asignador / registrador</th>
                             <th style="text-align:center;width:70px">Total</th>
                             <th style="text-align:center;width:70px">Completadas</th>
                             <th style="text-align:center;width:70px">Pendientes</th>
@@ -296,8 +298,8 @@
 
         {{-- A quién se le asigna --}}
         <div class="glass-card" style="padding:1rem 1.25rem">
-            <h3 class="chart-title"><i class="bi bi-person-check-fill" style="color:#f97316"></i> Destinatario actual en Kizeo</h3>
-            <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:.75rem">Coincide con la columna Destinatario de Kizeo. Los registros completados cuyo destinatario quedó vacío siguen incluidos en el total general.</p>
+            <h3 class="chart-title"><i class="bi bi-person-check-fill" style="color:#f97316"></i> Destinatario actual en Kizeo · Top 10 por pendientes</h3>
+            <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:.75rem">Coincide con la columna Destinatario de Kizeo. Los registros completados cuyo destinatario quedó vacío siguen incluidos en el total general. La tasa corresponde a este grupo filtrado, no al historial completo de la persona.</p>
             @if($porDestinatario->isEmpty())
                 <div style="text-align:center;color:var(--text-muted);padding:2rem">
                     <i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:.3rem"></i>
@@ -309,10 +311,10 @@
                     <thead>
                         <tr>
                             <th style="text-align:left">Destinatario</th>
-                            <th style="text-align:center;width:65px">Recibidas</th>
+                            <th style="text-align:center;width:65px">Registros</th>
                             <th style="text-align:center;width:65px">Completadas</th>
-                            <th style="text-align:center;width:65px" title="Descargadas al dispositivo, en progreso">Recuperadas</th>
-                            <th style="text-align:center;width:65px" title="Aún no descargadas">Sin descargar</th>
+                            <th style="text-align:center;width:65px" title="Descargadas al dispositivo, en progreso">Recuperadas (pend.)</th>
+                            <th style="text-align:center;width:65px" title="Aún no descargadas">Transferidas (pend.)</th>
                             <th style="text-align:center;width:55px">Tasa</th>
                         </tr>
                     </thead>
@@ -323,7 +325,7 @@
                             <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ $d->destinatario }}">{{ $d->destinatario }}</td>
                             <td style="text-align:center;font-weight:600">{{ $d->total_recibidas }}</td>
                             <td style="text-align:center;color:#15803d">{{ $d->completadas }}</td>
-                            <td style="text-align:center;color:#2563eb">{{ $d->recuperadas }}</td>
+                            <td style="text-align:center;color:#d97706">{{ $d->recuperadas }}</td>
                             <td style="text-align:center;color:#dc2626">{{ $d->sin_descargar }}</td>
                             <td style="text-align:center">
                                 <span style="font-size:.72rem;padding:2px 6px;border-radius:4px;font-weight:600;
@@ -341,14 +343,15 @@
     {{-- Gráficos fila 3: Cumplimiento por Usuario + Por Lugar --}}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
         <div class="glass-card" style="padding:1rem 1.25rem">
-            <h3 class="chart-title"><i class="bi bi-people-fill"></i> Cumplimiento por usuario</h3>
+            <h3 class="chart-title"><i class="bi bi-people-fill"></i> Asignadores / registradores · Top 15 por pendientes</h3>
             <div style="position:relative;height:{{ max(250, count($porUsuario) * 32) }}px">
                 <canvas id="userChart"></canvas>
             </div>
         </div>
 
         <div class="glass-card" style="padding:1rem 1.25rem">
-            <h3 class="chart-title"><i class="bi bi-geo-alt-fill" style="color:#0ea5e9"></i> Por Centro / Lugar</h3>
+            <h3 class="chart-title"><i class="bi bi-geo-alt-fill" style="color:#0ea5e9"></i> Lugar de la capacitación · Top 10</h3>
+            <p style="font-size:.75rem;color:var(--text-muted)">Solo registros con lugar informado.</p>
             @if($porLugar->isEmpty())
                 <div style="text-align:center;color:var(--text-muted);padding:2rem">
                     <i class="bi bi-geo-alt" style="font-size:1.5rem;display:block;margin-bottom:.3rem"></i>
@@ -364,7 +367,7 @@
 
     {{-- Top pendientes --}}
     <div class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1.5rem">
-        <h3 class="chart-title"><i class="bi bi-exclamation-triangle-fill" style="color:#f97316"></i> Responsables con Mayor Retraso</h3>
+        <h3 class="chart-title"><i class="bi bi-exclamation-triangle-fill" style="color:#f97316"></i> Pendientes con mayor antigüedad · Top 10 responsables</h3>
         <div class="glass-table-container">
             <table class="glass-table" style="font-size:.8rem">
                 <thead>
@@ -416,8 +419,9 @@
             <table class="glass-table">
                 <thead>
                     <tr>
+                        <th>ID Kizeo</th>
                         <th>Título</th>
-                        <th>Asignado Por</th>
+                        <th>Asignador / registrador</th>
                         <th>Destinatario</th>
                         <th>Lugar / CD</th>
                         <th style="text-align:center">Estatus</th>
@@ -432,10 +436,11 @@
                 @forelse($registrosList as $item)
                     @php
                         $refDate = $item->fecha_asignacion ?? $item->fecha_creacion;
-                        $dias = ($item->estado !== 'completado' && $refDate) ? (int) $refDate->diffInDays(now()) : null;
+                        $dias = ($item->estado !== 'completado' && $refDate) ? (int) $refDate->copy()->startOfDay()->diffInDays(now()->startOfDay()) : null;
                         $diasStyle = $dias !== null ? ($dias > 14 ? 'color:#dc2626;font-weight:700' : ($dias > 7 ? 'color:#d97706;font-weight:600' : 'color:var(--text-muted)')) : '';
                     @endphp
                     <tr>
+                        <td style="font-size:.78rem">{{ $item->kizeo_data_id }}</td>
                         <td style="font-size:.82rem;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ $item->titulo_actividad }}">
                             {{ $item->titulo_actividad ?: '—' }}
                         </td>
@@ -452,11 +457,11 @@
                             @if($item->estatus_kizeo === 'registrado')
                                 <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(34,197,94,.12);color:#15803d">✓ Registrado</span>
                             @elseif($item->estatus_kizeo === 'terminado')
-                                <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(34,197,94,.12);color:#15803d">✓ Terminado</span>
+                                <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(15,118,110,.12);color:#0f766e">✓ Terminado</span>
                             @elseif($item->estatus_kizeo === 'transferido')
-                                <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(249,115,22,.12);color:#ea580c">⟳ Transferido</span>
+                                <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(249,115,22,.12);color:#ea580c">⟳ Transferido · pendiente</span>
                             @elseif($item->estatus_kizeo === 'recuperado')
-                                <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(59,130,246,.12);color:#2563eb">↓ Recuperado</span>
+                                <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(245,158,11,.12);color:#b45309">↓ Recuperado · pendiente</span>
                             @else
                                 <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(107,114,128,.12);color:#6b7280">{{ ucfirst($item->estado) }}</span>
                             @endif
@@ -479,7 +484,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="10" style="text-align:center;color:var(--text-muted);padding:2rem">
+                        <td colspan="11" style="text-align:center;color:var(--text-muted);padding:2rem">
                             No hay registros en el período seleccionado.
                         </td>
                     </tr>
@@ -578,20 +583,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const dist = @json($distribucion);
     const statusLabels = {
         registrado: 'Registrado', transferido: 'Transferido',
-        recuperado: 'Recuperado', terminado: 'Terminado', pendiente: 'Pendiente'
+        recuperado: 'Recuperado · pendiente', terminado: 'Terminado', pendiente: 'Pendiente'
     };
     const statusColors = {
-        registrado: '#22c55e', transferido: '#f97316',
-        recuperado: '#3b82f6', terminado: '#06b6d4', pendiente: '#ef4444'
+        terminado: '#0f766e', registrado: '#22c55e',
+        recuperado: '#f59e0b', transferido: '#f97316', pendiente: '#ef4444'
     };
-    const distKeys = Object.keys(dist).filter(k => dist[k] > 0);
+    const distKeys = ['terminado', 'registrado', 'recuperado', 'transferido', 'pendiente'].filter(k => Number(dist[k]) > 0);
 
     new Chart(document.getElementById('donutChart'), {
         type: 'doughnut',
         data: {
             labels: distKeys.map(k => statusLabels[k] || k),
             datasets: [{
-                data: distKeys.map(k => dist[k]),
+                data: distKeys.map(k => Number(dist[k])),
                 backgroundColor: distKeys.map(k => statusColors[k] || '#6b7280'),
                 borderWidth: 0, hoverOffset: 8
             }]
@@ -616,8 +621,8 @@ document.addEventListener('DOMContentLoaded', function() {
             afterDraw(chart) {
                 const { ctx, width, height } = chart;
                 const total = chart.data.datasets[0].data.reduce((a,b) => a+b, 0);
-                const comp = (dist.registrado || 0) + (dist.terminado || 0);
-                const pct = total > 0 ? Math.round((comp / total) * 100) : 0;
+                const comp = Number(dist.registrado || 0) + Number(dist.terminado || 0);
+                const pct = total > 0 ? Math.round((comp / total) * 1000) / 10 : 0;
                 ctx.save();
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = 'bold 26px Segoe UI';

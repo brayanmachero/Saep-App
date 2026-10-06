@@ -90,9 +90,10 @@ class KizeoCharlaTracking extends Model
     public function getEstatusColorAttribute(): string
     {
         return match ($this->estatus_kizeo) {
-            'registrado', 'terminado' => '#22c55e',
+            'registrado' => '#22c55e',
+            'terminado' => '#0f766e',
             'transferido'             => '#f97316',
-            'recuperado'              => '#3b82f6',
+            'recuperado'              => '#d97706',
             default                   => '#6b7280',
         };
     }

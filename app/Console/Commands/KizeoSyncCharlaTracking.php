@@ -131,13 +131,13 @@ class KizeoSyncCharlaTracking extends Command
                 $actividad = $record['actividad_de_'] ?? '';
                 $summaryTitle = $record['_summary_title'] ?? '';
                 // Usar summary_title (corto) si existe, sino recortar descripcion
-                $titulo = $summaryTitle ?: ($descripcion ? mb_substr($descripcion, 0, 120) : '');
+                $titulo = ($record['titulo_actividad'] ?? '') ?: ($summaryTitle ?: ($descripcion ? mb_substr($descripcion, 0, 120) : ''));
                 if ($actividad && $titulo) {
                     $titulo = "{$actividad}: {$titulo}";
                 } elseif ($actividad) {
                     $titulo = $actividad;
                 }
-                $lugar  = $record['antecedentes'] ?? '';
+                $lugar  = $record['lugar_de_la_capacitacion'] ?? '';
 
                 $existing = KizeoCharlaTracking::where('kizeo_data_id', $dataId)->first();
 
