@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Seguimiento Charlas SST')
 @section('content')
-<div class="page-container">
+<div class="page-container charla-dashboard">
     @php
         $filterDisplayLabels = [
             'desde' => 'Desde',
@@ -22,8 +22,9 @@
     @endphp
 
     {{-- Header --}}
-    <div class="page-header">
+    <div class="page-header charla-hero">
         <div>
+            <span class="charla-eyebrow">PREVENCIÓN · SEGURIDAD Y SALUD</span>
             <h2 class="page-heading"><i class="bi bi-clipboard-data" style="color:var(--accent-color)"></i> Seguimiento Charlas de Seguridad</h2>
             <p class="page-subheading">
                 Seguimiento de registros y respuestas del formulario PDR Charla de Seguridad en Kizeo.
@@ -56,88 +57,8 @@
         </div>
     </div>
 
-    <div class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1rem;border-left:4px solid {{ $sincronizacionAtrasada ? '#dc2626' : '#16a34a' }}">
-        <strong>{{ $sincronizacionAtrasada ? 'Datos desactualizados' : 'Datos sincronizados' }}</strong>
-        <span style="color:var(--text-muted);font-size:.83rem;margin-left:.5rem">
-            {{ $ultimaSync ? 'Última sincronización completa: '.\Carbon\Carbon::parse($ultimaSync)->format('d/m/Y H:i') : 'Aún no hay una sincronización completa registrada.' }}
-            @if($sincronizacionAtrasada) Los indicadores pueden ser menores que los de Kizeo hasta completar la sincronización. @endif
-        </span>
-    </div>
-
-    <div class="glass-card" style="padding:1.2rem 1.35rem;margin-bottom:1rem">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
-            <div>
-                <strong style="display:block;font-size:.93rem">Dos fechas, dos cifras distintas</strong>
-                <span style="color:var(--text-muted);font-size:.8rem">El histórico de Kizeo usa la fecha de registro, incluso para transferencias pendientes. Las asignaciones usan la fecha de creación.</span>
-            </div>
-            <div style="display:flex;gap:1.5rem;flex-wrap:wrap">
-                <div><strong style="display:block;font-size:1.5rem;color:#15803d">{{ number_format($registradasPeriodo) }}</strong><small>Registradas en Kizeo</small></div>
-                <div><strong style="display:block;font-size:1.5rem;color:#2563eb">{{ number_format($creadasPeriodo) }}</strong><small>Creadas en el período</small></div>
-            </div>
-        </div>
-    </div>
-
-    @if(!empty($activeFilterBadges))
-    <div class="charla-active-filters">
-        <span class="charla-active-filters-label">Filtros activos</span>
-        @foreach($activeFilterBadges as $badge)
-            <span class="charla-filter-chip">{{ $badge }}</span>
-        @endforeach
-    </div>
-    @endif
-
-    @if(isset($charlaActionLogs) && $charlaActionLogs->isNotEmpty())
-    @php
-        $actionLabels = [
-            'sync' => 'Sincronizacion',
-            'report_send_now' => 'Envio manual',
-            'report_scheduled_send' => 'Envio programado',
-        ];
-        $statusLabels = [
-            'success' => 'Correcto',
-            'failed' => 'Error',
-            'skipped' => 'Omitido',
-            'partial' => 'Parcial',
-        ];
-        $statusStyles = [
-            'success' => 'background:#dcfce7;color:#166534',
-            'failed' => 'background:#fee2e2;color:#991b1b',
-            'skipped' => 'background:#fef3c7;color:#92400e',
-            'partial' => 'background:#dbeafe;color:#1e40af',
-        ];
-    @endphp
-    <div class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1rem">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:.75rem">
-            <div style="display:flex;align-items:center;gap:.5rem">
-                <i class="bi bi-activity" style="color:var(--accent-color)"></i>
-                <h3 style="font-size:.85rem;font-weight:700;margin:0;color:var(--text-primary)">Actividad reciente Charlas SST</h3>
-            </div>
-            <span style="font-size:.68rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em">Auditoria de acciones</span>
-        </div>
-        <div class="charla-activity-list">
-            @foreach($charlaActionLogs as $log)
-                <div class="charla-activity-row">
-                    <div>
-                        <strong style="display:block;font-size:.78rem;color:var(--text-primary)">{{ $actionLabels[$log->action] ?? $log->action }}</strong>
-                        <span style="font-size:.68rem;color:var(--text-muted)">{{ $log->user?->name ?? 'Sistema' }}</span>
-                    </div>
-                    <span style="{{ $statusStyles[$log->status] ?? 'background:#f1f5f9;color:#334155' }};justify-self:start;border-radius:999px;padding:.16rem .5rem;font-size:.68rem;font-weight:800">
-                        {{ $statusLabels[$log->status] ?? ucfirst($log->status) }}
-                    </span>
-                    <span class="charla-activity-summary">
-                        {{ $log->summary ?: 'Accion registrada' }}
-                    </span>
-                    <time title="{{ optional($log->created_at)->format('d/m/Y H:i') }}" style="font-size:.68rem;color:var(--text-muted);white-space:nowrap">
-                        {{ optional($log->created_at)->diffForHumans() }}
-                    </time>
-                </div>
-            @endforeach
-        </div>
-    </div>
-    @endif
-
     {{-- Filtros --}}
-    <form method="GET" action="{{ route('charla-tracking.index') }}" class="filter-form">
+    <form method="GET" action="{{ route('charla-tracking.index') }}" class="filter-form charla-filters">
         <div class="filter-group">
             <label for="tipo-fecha-charla">Analizar por</label>
             <select id="tipo-fecha-charla" name="tipo_fecha" class="form-input">
@@ -179,6 +100,88 @@
             Mostrando formularios creados entre {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }} y {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }} con su estado actual. Un formulario respondido después del período sigue perteneciendo a este grupo.
         @endif
     </p>
+
+    <div class="glass-card charla-sync-status" style="padding:1rem 1.25rem;margin-bottom:1rem;border-left:4px solid {{ $sincronizacionAtrasada ? '#dc2626' : '#16a34a' }}">
+        <strong>{{ $sincronizacionAtrasada ? 'Datos desactualizados' : 'Datos sincronizados' }}</strong>
+        <span style="color:var(--text-muted);font-size:.83rem;margin-left:.5rem">
+            {{ $ultimaSync ? 'Última sincronización completa: '.\Carbon\Carbon::parse($ultimaSync)->format('d/m/Y H:i') : 'Aún no hay una sincronización completa registrada.' }}
+            @if($sincronizacionAtrasada) Los indicadores pueden ser menores que los de Kizeo hasta completar la sincronización. @endif
+        </span>
+    </div>
+
+    <div class="glass-card charla-period-comparison" style="padding:1.2rem 1.35rem;margin-bottom:1rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+            <div>
+                <strong style="display:block;font-size:.93rem">Resumen del período</strong>
+                <span style="color:var(--text-muted);font-size:.8rem">El histórico de Kizeo usa la fecha de registro, incluso para transferencias pendientes. Las asignaciones usan la fecha de creación.</span>
+            </div>
+            <div style="display:flex;gap:1.5rem;flex-wrap:wrap">
+                <div><strong style="display:block;font-size:1.5rem;color:#15803d">{{ number_format($registradasPeriodo) }}</strong><small>Registradas en Kizeo</small></div>
+                <div><strong style="display:block;font-size:1.5rem;color:#2563eb">{{ number_format($creadasPeriodo) }}</strong><small>Creadas en el período</small></div>
+            </div>
+        </div>
+    </div>
+
+    @if(!empty($activeFilterBadges))
+    <div class="charla-active-filters">
+        <span class="charla-active-filters-label">Filtros activos</span>
+        @foreach($activeFilterBadges as $badge)
+            <span class="charla-filter-chip">{{ $badge }}</span>
+        @endforeach
+    </div>
+    @endif
+
+    @if(isset($charlaActionLogs) && $charlaActionLogs->isNotEmpty())
+    @php
+        $actionLabels = [
+            'sync' => 'Sincronizacion',
+            'report_send_now' => 'Envio manual',
+            'report_scheduled_send' => 'Envio programado',
+        ];
+        $statusLabels = [
+            'success' => 'Correcto',
+            'failed' => 'Error',
+            'skipped' => 'Omitido',
+            'partial' => 'Parcial',
+            'queued' => 'En cola',
+        ];
+        $statusStyles = [
+            'success' => 'background:#dcfce7;color:#166534',
+            'failed' => 'background:#fee2e2;color:#991b1b',
+            'skipped' => 'background:#fef3c7;color:#92400e',
+            'partial' => 'background:#dbeafe;color:#1e40af',
+        ];
+    @endphp
+    <details class="glass-card charla-audit">
+        <summary>
+            <div style="display:flex;align-items:center;gap:.5rem">
+                <i class="bi bi-shield-check"></i>
+                <span>Actividad y auditoría</span>
+                <span class="charla-audit-count">{{ $charlaActionLogs->count() }}</span>
+            </div>
+            <span class="charla-audit-toggle"><span class="audit-show">Ver acciones</span><span class="audit-hide">Ocultar acciones</span><i class="bi bi-chevron-down"></i></span>
+        </summary>
+        <div class="charla-activity-list">
+            @foreach($charlaActionLogs as $log)
+                <div class="charla-activity-row">
+                    <div>
+                        <strong style="display:block;font-size:.78rem;color:var(--text-primary)">{{ $actionLabels[$log->action] ?? $log->action }}</strong>
+                        <span style="font-size:.68rem;color:var(--text-muted)">{{ $log->user?->name ?? 'Sistema' }}</span>
+                    </div>
+                    <span style="{{ $statusStyles[$log->status] ?? 'background:#f1f5f9;color:#334155' }};justify-self:start;border-radius:999px;padding:.16rem .5rem;font-size:.68rem;font-weight:800">
+                        {{ $statusLabels[$log->status] ?? ucfirst($log->status) }}
+                    </span>
+                    <span class="charla-activity-summary">
+                        {{ $log->summary ?: 'Accion registrada' }}
+                    </span>
+                    <time title="{{ optional($log->created_at)->format('d/m/Y H:i') }}" style="font-size:.68rem;color:var(--text-muted);white-space:nowrap">
+                        {{ optional($log->created_at)->diffForHumans() }}
+                    </time>
+                </div>
+            @endforeach
+        </div>
+    </details>
+    @endif
 
     {{-- KPIs --}}
     <div class="stats-grid" style="margin-bottom:1.5rem">
@@ -697,7 +700,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 @push('styles')
 <style>
-.chart-title {
+.charla-dashboard .chart-title {
     font-size:.82rem;color:var(--text-muted);text-transform:uppercase;
     letter-spacing:.06em;font-weight:700;margin-bottom:.75rem;
 }
@@ -813,6 +816,88 @@ document.addEventListener('DOMContentLoaded', function() {
         grid-column: 1 / -1;
         white-space: normal;
     }
+}
+.charla-dashboard { --charla-navy:#172f50; --charla-teal:#0f766e; }
+.charla-dashboard .charla-hero {
+    padding:1.65rem; margin-bottom:1.2rem; border-radius:18px;
+    background:linear-gradient(115deg,#142c4b,#204c69); color:#fff;
+    box-shadow:0 8px 24px rgba(20,44,75,.12); gap:1.25rem; flex-wrap:wrap;
+}
+.charla-eyebrow { display:block; font-size:.65rem; font-weight:800; letter-spacing:.14em; color:#9ddbd5; margin-bottom:.6rem; }
+.charla-dashboard .charla-hero .page-heading { color:#fff; font-size:1.5rem; letter-spacing:-.035em; }
+.charla-dashboard .charla-hero .page-heading i { color:#fb923c !important; }
+.charla-dashboard .charla-hero .page-subheading,
+.charla-dashboard .charla-hero .page-subheading span { color:#c7d8e7 !important; line-height:1.6; }
+.charla-dashboard .charla-hero .btn-secondary { background:rgba(255,255,255,.1) !important; border:1px solid rgba(255,255,255,.25) !important; color:#fff !important; box-shadow:none; }
+.charla-dashboard .charla-hero .btn-premium { background:#fff; color:#173653; box-shadow:none; border:1px solid #fff; }
+.charla-dashboard .charla-hero button:hover,.charla-dashboard .charla-hero a:hover { filter:brightness(1.12); }
+.charla-dashboard .glass-card {
+    background:var(--card-bg,#fff); border:1px solid var(--border-color,#e2e8f0);
+    border-radius:14px; box-shadow:0 3px 12px rgba(15,23,42,.035); backdrop-filter:none;
+}
+.charla-dashboard .charla-filters {
+    display:grid; grid-template-columns:minmax(240px,1.4fr) repeat(3,minmax(135px,1fr)) minmax(170px,1.2fr) auto;
+    gap:.85rem; padding:1.15rem; background:var(--card-bg,#fff);
+    border:1px solid var(--border-color,#e2e8f0); border-radius:14px; margin-bottom:.65rem;
+}
+.charla-dashboard .charla-filters .filter-group { min-width:0; width:auto; }
+.charla-dashboard .charla-filters label { font-size:.72rem; font-weight:700; color:var(--text-muted); margin-bottom:.4rem; }
+.charla-dashboard .charla-filters .form-input { width:100%; min-height:42px; font-size:.8rem; border-radius:8px; box-shadow:none; }
+.charla-dashboard .charla-filters .btn-secondary { min-height:42px; background:var(--charla-navy); color:#fff; border-radius:8px; }
+.charla-dashboard .charla-sync-status { padding:.75rem 1rem !important; font-size:.8rem; box-shadow:none; }
+.charla-dashboard .charla-period-comparison { background:linear-gradient(105deg,var(--card-bg),var(--bg-color)); box-shadow:none; }
+.charla-dashboard .charla-audit { padding:0; margin:0 0 1.15rem; overflow:hidden; }
+.charla-audit summary { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:.9rem 1.1rem; cursor:pointer; list-style:none; font-size:.8rem; font-weight:700; color:var(--text-primary); }
+.charla-audit summary::-webkit-details-marker { display:none; }
+.charla-audit summary:hover { background:var(--bg-color); }
+.charla-audit summary:focus-visible { outline:3px solid #38bdf8; outline-offset:-3px; }
+.charla-audit summary .bi-shield-check { color:var(--charla-teal); font-size:1rem; }
+.charla-audit-count { background:var(--bg-color); color:var(--text-muted); padding:.1rem .45rem; border-radius:6px; font-size:.68rem; }
+.charla-audit-toggle { display:flex; align-items:center; gap:.65rem; color:var(--text-muted); font-size:.72rem; white-space:nowrap; }
+.charla-audit .audit-hide { display:none; }
+.charla-audit[open] .audit-hide { display:inline; }
+.charla-audit[open] .audit-show { display:none; }
+.charla-audit[open] .bi-chevron-down { transform:rotate(180deg); }
+.charla-audit .charla-activity-list { padding:0 1.1rem .75rem; max-height:340px; overflow:auto; }
+.charla-dashboard .stats-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1rem; }
+.charla-dashboard .stat-item {
+    display:flex; align-items:center; gap:.9rem; padding:1.3rem 1rem;
+    background:var(--card-bg); border:1px solid var(--border-color); border-top:3px solid #64748b;
+    border-radius:12px; box-shadow:0 3px 12px rgba(15,23,42,.035); min-width:0;
+}
+.charla-dashboard .stat-item:nth-child(1) { border-top-color:#2563eb; }
+.charla-dashboard .stat-item:nth-child(2) { border-top-color:#0f766e; }
+.charla-dashboard .stat-item:nth-child(3) { border-top-color:#ea580c; }
+.charla-dashboard .stat-item:nth-child(4) { border-top-color:#6366f1; }
+.charla-dashboard .stat-icon { width:42px; height:42px; border-radius:11px; flex-shrink:0; font-size:1.15rem; }
+.charla-dashboard .stat-value { font-size:1.85rem; font-weight:800; letter-spacing:-.045em; line-height:1.15; font-variant-numeric:tabular-nums; }
+.charla-dashboard .stat-label { color:var(--text-muted); font-size:.72rem; line-height:1.4; margin-top:.35rem; }
+.charla-dashboard .chart-title { color:var(--text-primary); font-size:.8rem; letter-spacing:.025em; padding-bottom:.8rem; border-bottom:1px solid var(--border-color); }
+.charla-dashboard .chart-title i { color:var(--charla-teal); margin-right:.3rem; }
+.charla-dashboard .glass-table thead th { background:var(--bg-color); font-size:.66rem; letter-spacing:.04em; color:var(--text-muted); padding:.8rem .65rem; }
+.charla-dashboard .glass-table tbody td { padding:.8rem .65rem; border-bottom:1px solid var(--border-color); }
+.charla-dashboard .glass-table tbody tr:hover { background:var(--bg-color); }
+.charla-dashboard .glass-table-container { border-radius:8px; }
+body.dark-mode .charla-dashboard .stat-value { color:#e2e8f0 !important; }
+body.dark-mode .charla-dashboard .charla-filter-chip { color:#93c5fd; }
+@media(max-width:1400px) {
+    .charla-dashboard .charla-filters { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .charla-dashboard .stats-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+@media(max-width:900px) {
+    .charla-dashboard .charla-hero { padding:1.25rem; }
+    .charla-dashboard .charla-header-actions { display:flex; flex-wrap:wrap; justify-content:flex-start; }
+    .charla-dashboard .charla-header-actions > a,.charla-dashboard .charla-header-actions > form { width:auto; flex:1 1 160px; }
+    .charla-dashboard .charla-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .charla-dashboard .stats-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:540px) {
+    .charla-dashboard .charla-filters { grid-template-columns:1fr; }
+    .charla-dashboard .stat-item { padding:1rem .7rem; gap:.6rem; }
+    .charla-dashboard .stat-icon { width:32px; height:32px; font-size:1rem; }
+    .charla-dashboard .stat-value { font-size:1.5rem; }
+    .charla-dashboard .charla-hero .page-heading { font-size:1.25rem; }
+    .charla-audit-toggle .audit-show,.charla-audit-toggle .audit-hide { display:none; }
 }
 </style>
 @endpush
