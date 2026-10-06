@@ -226,39 +226,53 @@ class KizeoSyncCharlaTracking extends Command
         }
     }
 
-    /**
-     * Obtiene TODOS los registros usando data/advanced con paginación.
-     * Incluye campos _answer_time, _direction, _recipient_id que data/all no tiene.
-     */
+    /** Obtiene los detalles por mes; Kizeo agota el tiempo con el rango completo. */
     private function fetchAllAdvanced(KizeoService $kizeo, string $formId, string $desde): array
     {
         $allRecords = [];
-        $limit = 500;
-        $offset = 0;
+        $start = Carbon::parse($desde);
+        $end = now()->endOfDay();
+        $cursor = $start->copy();
 
-        do {
+        while ($cursor->lte($end)) {
+            $monthEnd = $cursor->copy()->endOfMonth()->min($end);
             $response = $kizeo->rawPost("forms/{$formId}/data/advanced", [
                 'filters' => [
                     [
                         'type'     => 'simple',
                         'field'    => '_create_time',
                         'operator' => '>=',
-                        'val'      => $desde,
+                        'val'      => $cursor->format('Y-m-d H:i:s'),
+                    ],
+                    [
+                        'type'     => 'simple',
+                        'field'    => '_create_time',
+                        'operator' => '<=',
+                        'val'      => $monthEnd->format('Y-m-d H:i:s'),
                     ],
                 ],
                 'order' => [['col' => '_create_time', 'type' => 'desc']],
-                'limit' => $limit,
-                'offset' => $offset,
-            ]);
+                'limit' => 500,
+                'offset' => 0,
+            ], 60);
 
-            $data = $response['data'] ?? [];
-            $count = count($data);
-            $allRecords = array_merge($allRecords, $data);
-            $offset += $limit;
+            $data = $response['data'] ?? null;
+            if (!is_array($data)) {
+                throw new \RuntimeException('Kizeo devolvió un bloque de charlas inválido.');
+            }
+            $expected = (int) ($response['recordsFiltered'] ?? count($data));
+            if ($expected !== count($data)) {
+                throw new \RuntimeException("Kizeo devolvió un bloque incompleto: {$expected} esperados, " . count($data) . ' recibidos.');
+            }
+            foreach ($data as $record) {
+                if (isset($record['_id'])) {
+                    $allRecords[(string) $record['_id']] = $record;
+                }
+            }
+            $this->line("  {$cursor->format('Y-m')}: " . count($data) . ' registros');
+            $cursor = $monthEnd->copy()->addSecond();
+        }
 
-            $this->line("  Batch: +{$count} registros (offset {$offset})...");
-        } while ($count >= $limit);
-
-        return $allRecords;
+        return array_values($allRecords);
     }
 }

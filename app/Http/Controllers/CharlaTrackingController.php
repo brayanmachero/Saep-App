@@ -10,6 +10,7 @@ use App\Models\KizeoCharlaTracking;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 
 class CharlaTrackingController extends Controller
 {
@@ -18,6 +19,7 @@ class CharlaTrackingController extends Controller
         $filters = KizeoCharlaWeeklyReport::normalizeReportFilters([
             'desde' => $request->input('desde', now()->subDays(30)->format('Y-m-d')),
             'hasta' => $request->input('hasta', now()->format('Y-m-d')),
+            'tipo_fecha' => $request->input('tipo_fecha', 'respuesta'),
             'estado' => $request->input('estado', 'todos'),
             'buscar' => $request->input('buscar'),
         ]);
@@ -26,6 +28,8 @@ class CharlaTrackingController extends Controller
         $hasta = $filters['hasta'];
         $estado = $filters['estado'] ?? 'todos';
         $buscar = $filters['buscar'] ?? null;
+        $tipoFecha = $filters['tipo_fecha'];
+        $esHistorico = $tipoFecha === 'respuesta';
 
         $charlaActionLogs = $this->recentActionLogs();
 
@@ -44,10 +48,31 @@ class CharlaTrackingController extends Controller
             ->value('prom');
         $promDias = $promDias ? round($promDias, 1) : 0;
 
+        // Los dos totales tienen bases distintas y se muestran explícitamente.
+        $filterCommon = $filters;
+        $filterCommon['estado'] = 'todos';
+        $respondidasPeriodo = $this->trackingQuery(array_merge($filterCommon, ['tipo_fecha' => 'respuesta']))->count();
+        $creadasPeriodo = $this->trackingQuery(array_merge($filterCommon, ['tipo_fecha' => 'creacion']))->count();
+
         // === DATOS PARA GRÁFICOS ===
 
         // 1. Tendencia semanal
-        $tendencia = (clone $baseQuery)
+        $tendencia = $esHistorico ? (clone $baseQuery)
+            ->whereNotNull('fecha_respuesta')
+            ->get(['fecha_respuesta'])
+            ->groupBy(fn ($row) => $row->fecha_respuesta->format('o-W'))
+            ->sortKeys()
+            ->map(function ($rows) {
+                $date = $rows->first()->fecha_respuesta->copy()->startOfWeek();
+                return [
+                    'label' => 'S' . $date->isoWeek() . ' (' . $date->format('d/m') . ')',
+                    'total' => $rows->count(),
+                    'completadas' => $rows->count(),
+                    'pendientes' => 0,
+                    'tasa' => 100,
+                ];
+            })->values()
+            : (clone $baseQuery)
             ->selectRaw("anio, semana,
                          COUNT(*) as total,
                          SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
@@ -137,15 +162,17 @@ class CharlaTrackingController extends Controller
         $queryDetalle = $this->trackingQuery($filters);
 
         $registrosList = $queryDetalle
-            ->orderByDesc('fecha_creacion')
+            ->orderByDesc($esHistorico ? 'fecha_respuesta' : 'fecha_creacion')
             ->paginate(20)
             ->withQueryString();
 
-        $ultimaSync = KizeoCharlaTracking::max('updated_at');
+        $ultimaSync = Cache::get('charla_tracking_last_sync');
+        $sincronizacionAtrasada = !$ultimaSync || Carbon::parse($ultimaSync)->lt(now()->subHours(12));
 
         return view('charla-tracking.index', compact(
-            'desde', 'hasta', 'estado', 'buscar', 'filters',
+            'desde', 'hasta', 'estado', 'buscar', 'tipoFecha', 'esHistorico', 'filters',
             'total', 'completadas', 'pendientes', 'transferidos', 'tasa', 'promDias',
+            'respondidasPeriodo', 'creadasPeriodo', 'sincronizacionAtrasada',
             'porUsuario', 'tendencia', 'distribucion',
             'topAsignadores', 'porDestinatario', 'porLugar',
             'registrosList', 'topPendientes', 'ultimaSync', 'charlaActionLogs'
@@ -242,7 +269,10 @@ class CharlaTrackingController extends Controller
         $desde = Carbon::parse($filters['desde'])->startOfDay()->toDateTimeString();
         $hasta = Carbon::parse($filters['hasta'])->endOfDay()->toDateTimeString();
 
-        $query = KizeoCharlaTracking::query()->enPeriodo($desde, $hasta);
+        $dateColumn = ($filters['tipo_fecha'] ?? 'creacion') === 'respuesta'
+            ? 'fecha_respuesta'
+            : 'fecha_creacion';
+        $query = KizeoCharlaTracking::query()->whereBetween($dateColumn, [$desde, $hasta]);
 
         if (($filters['estado'] ?? 'todos') === 'pendiente') {
             $query->pendientes();

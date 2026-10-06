@@ -19,6 +19,7 @@ class KizeoCharlaWeeklyReport extends Command
     public const REPORT_FILTER_KEYS = [
         'desde',
         'hasta',
+        'tipo_fecha',
         'estado',
         'buscar',
     ];
@@ -28,6 +29,7 @@ class KizeoCharlaWeeklyReport extends Command
                             {--sync : Ejecutar sincronización antes del reporte}
                             {--desde= : Fecha de inicio del reporte (YYYY-MM-DD)}
                             {--hasta= : Fecha de término del reporte (YYYY-MM-DD)}
+                            {--tipo_fecha=creacion : Fecha de creación o respuesta}
                             {--estado=todos : Estado a incluir: todos, completado, pendiente o transferido}
                             {--buscar= : Texto de búsqueda aplicado al reporte}';
 
@@ -38,8 +40,12 @@ class KizeoCharlaWeeklyReport extends Command
         // Opcionalmente sincronizar primero
         if ($this->option('sync')) {
             $this->info('Ejecutando sincronización previa...');
-            Artisan::call('kizeo:sync-charla-tracking', ['--months' => 3]);
+            $syncExit = Artisan::call('kizeo:sync-charla-tracking', ['--months' => 6]);
             $this->info(Artisan::output());
+            if ($syncExit !== self::SUCCESS) {
+                $this->error('No se enviará un reporte con datos desactualizados.');
+                return self::FAILURE;
+            }
         }
 
         $this->info('Generando reporte semanal de charlas...');
@@ -47,6 +53,7 @@ class KizeoCharlaWeeklyReport extends Command
         $data = self::buildReportDataFromFilters([
             'desde' => $this->option('desde'),
             'hasta' => $this->option('hasta'),
+            'tipo_fecha' => $this->option('tipo_fecha'),
             'estado' => $this->option('estado'),
             'buscar' => $this->option('buscar'),
         ]);
@@ -166,6 +173,9 @@ class KizeoCharlaWeeklyReport extends Command
         $desde = Carbon::parse($filters['desde'])->startOfDay();
         $hasta = Carbon::parse($filters['hasta'])->endOfDay();
         $periodo = $desde->format('d/m/Y') . ' al ' . $hasta->format('d/m/Y');
+        if (($filters['tipo_fecha'] ?? 'creacion') === 'respuesta') {
+            $periodo .= ' · fecha de respuesta en Kizeo';
+        }
 
         $baseQuery = self::filteredQuery($filters);
 
@@ -208,7 +218,19 @@ class KizeoCharlaWeeklyReport extends Command
             })
             ->toArray();
 
-        $resumenSemanal = (clone $baseQuery)
+        $resumenSemanal = ($filters['tipo_fecha'] === 'respuesta'
+            ? (clone $baseQuery)->get(['fecha_respuesta'])->groupBy(function ($row) {
+                $date = $row->fecha_respuesta;
+                return $date->format('o-W');
+            })->sortKeys()->map(function ($rows) {
+                $date = $rows->first()->fecha_respuesta->copy()->startOfWeek();
+                return [
+                    'semana' => $date->isoWeek(), 'anio' => $date->isoWeekYear(),
+                    'fecha' => $date->format('d/m'), 'total' => $rows->count(),
+                    'completadas' => $rows->count(), 'transferidos' => 0, 'tasa' => 100,
+                ];
+            })->values()->toArray()
+            : (clone $baseQuery)
             ->selectRaw("anio, semana,
                          COUNT(*) as total,
                          SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
@@ -230,7 +252,7 @@ class KizeoCharlaWeeklyReport extends Command
                     'tasa'         => $row->total > 0 ? round(($row->completadas / $row->total) * 100, 1) : 0,
                 ];
             })
-            ->toArray();
+            ->toArray());
 
         $topDestinatarios = (clone $baseQuery)
             ->whereNotNull('asignado_a')
@@ -296,10 +318,18 @@ class KizeoCharlaWeeklyReport extends Command
         if (!in_array($estado, ['todos', 'completado', 'pendiente', 'transferido'], true)) {
             $estado = 'todos';
         }
+        $tipoFecha = $normalized['tipo_fecha'] ?? 'creacion';
+        if (!in_array($tipoFecha, ['creacion', 'respuesta'], true)) {
+            $tipoFecha = 'creacion';
+        }
+        if ($tipoFecha === 'respuesta') {
+            $estado = 'todos';
+        }
 
         return array_filter([
             'desde' => $desde->format('Y-m-d'),
             'hasta' => $hasta->format('Y-m-d'),
+            'tipo_fecha' => $tipoFecha,
             'estado' => $estado,
             'buscar' => $normalized['buscar'] ?? null,
         ], fn ($value) => $value !== null && $value !== '');
@@ -310,7 +340,10 @@ class KizeoCharlaWeeklyReport extends Command
         $desde = Carbon::parse($filters['desde'])->startOfDay()->toDateTimeString();
         $hasta = Carbon::parse($filters['hasta'])->endOfDay()->toDateTimeString();
 
-        $query = KizeoCharlaTracking::query()->enPeriodo($desde, $hasta);
+        $dateColumn = ($filters['tipo_fecha'] ?? 'creacion') === 'respuesta'
+            ? 'fecha_respuesta'
+            : 'fecha_creacion';
+        $query = KizeoCharlaTracking::query()->whereBetween($dateColumn, [$desde, $hasta]);
 
         $estado = $filters['estado'] ?? 'todos';
         if ($estado === 'pendiente') {

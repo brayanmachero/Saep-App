@@ -6,6 +6,7 @@
         $filterDisplayLabels = [
             'desde' => 'Desde',
             'hasta' => 'Hasta',
+            'tipo_fecha' => 'Fecha usada',
             'estado' => 'Estado',
             'buscar' => 'Buscar',
         ];
@@ -25,7 +26,7 @@
         <div>
             <h2 class="page-heading"><i class="bi bi-clipboard-data" style="color:var(--accent-color)"></i> Seguimiento Charlas de Seguridad</h2>
             <p class="page-subheading">
-                Control de cumplimiento de charlas asignadas desde Kizeo Forms
+                Seguimiento de registros y respuestas del formulario PDR Charla de Seguridad en Kizeo.
                 @if($ultimaSync)
                     <span style="font-size:.72rem;color:var(--text-muted);margin-left:.5rem">
                         <i class="bi bi-arrow-repeat"></i> Última sincronización: {{ \Carbon\Carbon::parse($ultimaSync)->diffForHumans() }}
@@ -52,6 +53,27 @@
                     <i class="bi bi-arrow-clockwise" id="sync-icon"></i> Sincronizar desde Kizeo
                 </button>
             </form>
+        </div>
+    </div>
+
+    <div class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1rem;border-left:4px solid {{ $sincronizacionAtrasada ? '#dc2626' : '#16a34a' }}">
+        <strong>{{ $sincronizacionAtrasada ? 'Datos desactualizados' : 'Datos sincronizados' }}</strong>
+        <span style="color:var(--text-muted);font-size:.83rem;margin-left:.5rem">
+            {{ $ultimaSync ? 'Última sincronización completa: '.\Carbon\Carbon::parse($ultimaSync)->format('d/m/Y H:i') : 'Aún no hay una sincronización completa registrada.' }}
+            @if($sincronizacionAtrasada) Los indicadores pueden ser menores que los de Kizeo hasta completar la sincronización. @endif
+        </span>
+    </div>
+
+    <div class="glass-card" style="padding:1.2rem 1.35rem;margin-bottom:1rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+            <div>
+                <strong style="display:block;font-size:.93rem">Dos fechas, dos cifras distintas</strong>
+                <span style="color:var(--text-muted);font-size:.8rem">El histórico de Kizeo usa la fecha de respuesta. El seguimiento de asignaciones usa la fecha de creación.</span>
+            </div>
+            <div style="display:flex;gap:1.5rem;flex-wrap:wrap">
+                <div><strong style="display:block;font-size:1.5rem;color:#15803d">{{ number_format($respondidasPeriodo) }}</strong><small>Respondidas en el período</small></div>
+                <div><strong style="display:block;font-size:1.5rem;color:#2563eb">{{ number_format($creadasPeriodo) }}</strong><small>Creadas en el período</small></div>
+            </div>
         </div>
     </div>
 
@@ -117,6 +139,13 @@
     {{-- Filtros --}}
     <form method="GET" action="{{ route('charla-tracking.index') }}" class="filter-form">
         <div class="filter-group">
+            <label for="tipo-fecha-charla">Analizar por</label>
+            <select id="tipo-fecha-charla" name="tipo_fecha" class="form-input" onchange="document.getElementById('estado-charla').disabled = this.value === 'respuesta'">
+                <option value="respuesta" {{ $tipoFecha === 'respuesta' ? 'selected' : '' }}>Fecha de respuesta · histórico Kizeo</option>
+                <option value="creacion" {{ $tipoFecha === 'creacion' ? 'selected' : '' }}>Fecha de creación · asignaciones</option>
+            </select>
+        </div>
+        <div class="filter-group">
             <label>Desde</label>
             <input type="date" name="desde" value="{{ $desde }}" class="form-input">
         </div>
@@ -125,8 +154,8 @@
             <input type="date" name="hasta" value="{{ $hasta }}" class="form-input">
         </div>
         <div class="filter-group">
-            <label>Estado</label>
-            <select name="estado" class="form-input">
+            <label for="estado-charla">Estado actual</label>
+            <select id="estado-charla" name="estado" class="form-input" {{ $esHistorico ? 'disabled' : '' }}>
                 <option value="todos" {{ $estado === 'todos' ? 'selected' : '' }}>Todos</option>
                 <option value="completado" {{ $estado === 'completado' ? 'selected' : '' }}>Completado</option>
                 <option value="pendiente" {{ $estado === 'pendiente' ? 'selected' : '' }}>Pendiente</option>
@@ -143,6 +172,14 @@
         </div>
     </form>
 
+    <p style="font-size:.82rem;color:var(--text-muted);margin:.25rem 0 1rem">
+        @if($esHistorico)
+            Mostrando formularios respondidos entre {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }} y {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }}, aunque se hayan creado antes. Este total es comparable con el histórico de Kizeo filtrado por fecha de registro.
+        @else
+            Mostrando formularios creados entre {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }} y {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }} con su estado actual. Un formulario respondido después del período sigue perteneciendo a este grupo.
+        @endif
+    </p>
+
     {{-- KPIs --}}
     <div class="stats-grid" style="margin-bottom:1.5rem">
         <div class="stat-item">
@@ -151,9 +188,20 @@
             </div>
             <div>
                 <div class="stat-value">{{ number_format($total) }}</div>
-                <div class="stat-label">Total Registros</div>
+                <div class="stat-label">{{ $esHistorico ? 'Respuestas en el período' : 'Creadas en el período' }}</div>
             </div>
         </div>
+        @if($esHistorico)
+        <div class="stat-item">
+            <div class="stat-icon" style="background:rgba(34,197,94,.12);color:#15803d"><i class="bi bi-check-circle-fill"></i></div>
+            <div><div class="stat-value">{{ number_format($distribucion['registrado'] ?? 0) }}</div><div class="stat-label">Registradas directamente</div></div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-icon" style="background:rgba(6,182,212,.12);color:#0891b2"><i class="bi bi-person-check-fill"></i></div>
+            <div><div class="stat-value">{{ number_format($distribucion['terminado'] ?? 0) }}</div><div class="stat-label">Terminadas tras transferencia</div></div>
+        </div>
+        @endif
+        @unless($esHistorico)
         <div class="stat-item">
             <div class="stat-icon" style="background:rgba(34,197,94,.12);color:#22c55e">
                 <i class="bi bi-check-circle-fill"></i>
@@ -172,6 +220,8 @@
                 <div class="stat-label">Transferidas Pend.</div>
             </div>
         </div>
+        @endunless
+        @unless($esHistorico)
         <div class="stat-item">
             @php
                 $tasaColor = $tasa >= 80 ? '#15803d' : ($tasa >= 50 ? '#d97706' : '#dc2626');
@@ -181,9 +231,11 @@
             </div>
             <div>
                 <div class="stat-value" style="color:{{ $tasaColor }}">{{ $tasa }}%</div>
-                <div class="stat-label">Tasa Cumplimiento</div>
+                <div class="stat-label">{{ $esHistorico ? 'Respuestas registradas' : 'Tasa de finalización' }}</div>
             </div>
         </div>
+        @endunless
+        @unless($esHistorico)
         <div class="stat-item">
             <div class="stat-icon" style="background:rgba(239,68,68,.12);color:#ef4444">
                 <i class="bi bi-clock-history"></i>
@@ -193,12 +245,13 @@
                 <div class="stat-label">Prom. Días Pendiente</div>
             </div>
         </div>
+        @endunless
     </div>
 
     {{-- Gráficos fila 1: Tendencia + Distribución estatus --}}
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1.5rem">
         <div class="glass-card" style="padding:1rem 1.25rem">
-            <h3 class="chart-title"><i class="bi bi-graph-up"></i> Tendencia Semanal</h3>
+            <h3 class="chart-title"><i class="bi bi-graph-up"></i> {{ $esHistorico ? 'Respuestas por semana' : 'Asignaciones por semana de creación' }}</h3>
             <div style="position:relative;height:280px">
                 <canvas id="trendChart"></canvas>
             </div>
@@ -216,7 +269,7 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
         {{-- Quién crea/asigna --}}
         <div class="glass-card" style="padding:1rem 1.25rem">
-            <h3 class="chart-title"><i class="bi bi-send-fill" style="color:#8b5cf6"></i> Cumplimiento por Creador</h3>
+            <h3 class="chart-title"><i class="bi bi-send-fill" style="color:#8b5cf6"></i> {{ $esHistorico ? 'Respuestas por creador' : 'Cumplimiento por creador' }}</h3>
             @if($topAsignadores->isEmpty())
                 <div style="text-align:center;color:var(--text-muted);padding:2rem">
                     <i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:.3rem"></i>
@@ -228,10 +281,12 @@
                     <thead>
                         <tr>
                             <th style="text-align:left">Creador</th>
-                            <th style="text-align:center;width:70px">Total</th>
+                            <th style="text-align:center;width:70px">{{ $esHistorico ? 'Respuestas' : 'Total' }}</th>
+                            @unless($esHistorico)
                             <th style="text-align:center;width:70px">Completadas</th>
                             <th style="text-align:center;width:70px">Pendientes</th>
                             <th style="text-align:center;width:60px">Tasa</th>
+                            @endunless
                         </tr>
                     </thead>
                     <tbody>
@@ -240,12 +295,14 @@
                         <tr>
                             <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ $a->usuario }}">{{ $a->usuario }}</td>
                             <td style="text-align:center;font-weight:600">{{ $a->total_asignadas }}</td>
+                            @unless($esHistorico)
                             <td style="text-align:center;color:#15803d">{{ $a->completadas }}</td>
                             <td style="text-align:center;color:#dc2626">{{ $a->pendientes }}</td>
                             <td style="text-align:center">
                                 <span style="font-size:.72rem;padding:2px 6px;border-radius:4px;font-weight:600;
                                     {{ $aTasa >= 80 ? 'background:rgba(34,197,94,.12);color:#15803d' : ($aTasa >= 50 ? 'background:rgba(217,119,6,.12);color:#d97706' : 'background:rgba(239,68,68,.12);color:#dc2626') }}">{{ $aTasa }}%</span>
                             </td>
+                            @endunless
                         </tr>
                     @endforeach
                     </tbody>
@@ -268,11 +325,13 @@
                     <thead>
                         <tr>
                             <th style="text-align:left">Destinatario</th>
-                            <th style="text-align:center;width:65px">Recibidas</th>
+                            <th style="text-align:center;width:65px">{{ $esHistorico ? 'Respuestas' : 'Recibidas' }}</th>
+                            @unless($esHistorico)
                             <th style="text-align:center;width:65px">Completadas</th>
                             <th style="text-align:center;width:65px" title="Descargadas al dispositivo, en progreso">Recuperadas</th>
                             <th style="text-align:center;width:65px" title="Aún no descargadas">Sin descargar</th>
                             <th style="text-align:center;width:55px">Tasa</th>
+                            @endunless
                         </tr>
                     </thead>
                     <tbody>
@@ -281,6 +340,7 @@
                         <tr>
                             <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ $d->destinatario }}">{{ $d->destinatario }}</td>
                             <td style="text-align:center;font-weight:600">{{ $d->total_recibidas }}</td>
+                            @unless($esHistorico)
                             <td style="text-align:center;color:#15803d">{{ $d->completadas }}</td>
                             <td style="text-align:center;color:#2563eb">{{ $d->recuperadas }}</td>
                             <td style="text-align:center;color:#dc2626">{{ $d->sin_descargar }}</td>
@@ -288,6 +348,7 @@
                                 <span style="font-size:.72rem;padding:2px 6px;border-radius:4px;font-weight:600;
                                     {{ $dTasa >= 80 ? 'background:rgba(34,197,94,.12);color:#15803d' : ($dTasa >= 50 ? 'background:rgba(217,119,6,.12);color:#d97706' : 'background:rgba(239,68,68,.12);color:#dc2626') }}">{{ $dTasa }}%</span>
                             </td>
+                            @endunless
                         </tr>
                     @endforeach
                     </tbody>
@@ -300,7 +361,7 @@
     {{-- Gráficos fila 3: Cumplimiento por Usuario + Por Lugar --}}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
         <div class="glass-card" style="padding:1rem 1.25rem">
-            <h3 class="chart-title"><i class="bi bi-people-fill"></i> Cumplimiento por Usuario</h3>
+            <h3 class="chart-title"><i class="bi bi-people-fill"></i> {{ $esHistorico ? 'Respuestas por usuario' : 'Cumplimiento por usuario' }}</h3>
             <div style="position:relative;height:{{ max(250, count($porUsuario) * 32) }}px">
                 <canvas id="userChart"></canvas>
             </div>
@@ -322,6 +383,7 @@
     </div>
 
     {{-- Top pendientes --}}
+    @unless($esHistorico)
     <div class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1.5rem">
         <h3 class="chart-title"><i class="bi bi-exclamation-triangle-fill" style="color:#f97316"></i> Responsables con Mayor Retraso</h3>
         <div class="glass-table-container">
@@ -362,12 +424,13 @@
             </table>
         </div>
     </div>
+    @endunless
 
     {{-- Tabla de registros detalle --}}
     <div class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1.5rem">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
             <h3 class="chart-title" style="margin:0">
-                <i class="bi bi-list-check"></i> Detalle de Registros
+                <i class="bi bi-list-check"></i> {{ $esHistorico ? 'Histórico de respuestas' : 'Detalle de asignaciones' }}
                 <span class="badge" style="font-size:.65rem;margin-left:.3rem;vertical-align:middle;background:rgba(59,130,246,.12);color:#3b82f6">{{ $registrosList->total() }}</span>
             </h3>
         </div>
@@ -484,7 +547,7 @@ document.addEventListener('DOMContentLoaded', function() {
             labels: trendData.map(d => d.label),
             datasets: [
                 {
-                    label: 'Completadas',
+                    label: @json($esHistorico ? 'Respuestas' : 'Completadas'),
                     data: trendData.map(d => d.completadas),
                     borderColor: '#22c55e',
                     backgroundColor: 'rgba(34,197,94,.1)',
@@ -492,7 +555,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     pointRadius: 4, pointBackgroundColor: '#22c55e'
                 },
                 {
-                    label: 'Pendientes',
+                    label: 'Pendientes', hidden: @json($esHistorico),
                     data: trendData.map(d => d.pendientes),
                     borderColor: '#f97316',
                     backgroundColor: 'rgba(249,115,22,.1)',
@@ -500,7 +563,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     pointRadius: 4, pointBackgroundColor: '#f97316'
                 },
                 {
-                    label: 'Tasa %',
+                    label: 'Tasa %', hidden: @json($esHistorico),
                     data: trendData.map(d => d.tasa),
                     borderColor: '#8b5cf6',
                     borderDash: [5, 3], borderWidth: 2,
@@ -577,10 +640,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = 'bold 26px Segoe UI';
                 ctx.fillStyle = pct >= 80 ? '#15803d' : (pct >= 50 ? '#d97706' : '#dc2626');
-                ctx.fillText(pct + '%', width / 2, height / 2 - 6);
+                ctx.fillText(@json($esHistorico) ? total.toLocaleString('es-CL') : pct + '%', width / 2, height / 2 - 6);
                 ctx.font = '10px Segoe UI';
                 ctx.fillStyle = textColor;
-                ctx.fillText('Cumplimiento', width / 2, height / 2 + 14);
+                ctx.fillText(@json($esHistorico) ? 'Respuestas' : 'Finalización', width / 2, height / 2 + 14);
                 ctx.restore();
             }
         }]
@@ -595,7 +658,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const n = d.usuario || 'Desconocido';
                 return n.length > 25 ? n.substring(0, 22) + '...' : n;
             }),
-            datasets: [
+            datasets: @json($esHistorico) ? [
+                { label: 'Respuestas', data: userData.map(d => d.total), backgroundColor: '#22c55e', borderRadius: 4, barPercentage: .7 }
+            ] : [
                 { label: 'Completadas', data: userData.map(d => d.completadas), backgroundColor: '#22c55e', borderRadius: 4, barPercentage: .7 },
                 { label: 'Pendientes', data: userData.map(d => d.pendientes), backgroundColor: '#f97316', borderRadius: 4, barPercentage: .7 }
             ]
@@ -621,7 +686,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     const n = d.lugar || 'Sin lugar';
                     return n.length > 25 ? n.substring(0, 22) + '...' : n;
                 }),
-                datasets: [
+                datasets: @json($esHistorico) ? [
+                    { label: 'Respuestas', data: lugarData.map(d => d.total), backgroundColor: '#22c55e', borderRadius: 4, barPercentage: .7 }
+                ] : [
                     { label: 'Completadas', data: lugarData.map(d => d.completadas), backgroundColor: '#22c55e', borderRadius: 4, barPercentage: .7 },
                     { label: 'Pendientes', data: lugarData.map(d => d.pendientes), backgroundColor: '#f97316', borderRadius: 4, barPercentage: .7 }
                 ]
