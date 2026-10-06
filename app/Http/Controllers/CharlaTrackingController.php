@@ -136,7 +136,7 @@ class CharlaTrackingController extends Controller
             ->get();
 
         // 6. Distribución por lugar/CD
-        $porLugar = (clone $baseQuery)
+        $todosLosLugares = (clone $baseQuery)
             ->whereNotNull('lugar')
             ->where('lugar', '!=', '')
             ->selectRaw("lugar, COUNT(*) as total,
@@ -144,8 +144,14 @@ class CharlaTrackingController extends Controller
                          SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) as pendientes")
             ->groupBy('lugar')
             ->orderByDesc('total')
-            ->limit(10)
+            ->orderBy('lugar')
             ->get();
+        $porLugar = $todosLosLugares->take(10)->values();
+        $maxCompletadasCD = (int) ($todosLosLugares->max('completadas') ?? 0);
+        $maxPendientesCD = (int) ($todosLosLugares->max('pendientes') ?? 0);
+        $cdMasCompletadas = $todosLosLugares->filter(fn ($cd) => $maxCompletadasCD > 0 && (int) $cd->completadas === $maxCompletadasCD)->values();
+        $cdMasPendientes = $todosLosLugares->filter(fn ($cd) => $maxPendientesCD > 0 && (int) $cd->pendientes === $maxPendientesCD)->values();
+        $sinLugar = $total - (int) $todosLosLugares->sum('total');
 
         // 7. Top pendientes por responsable
         $topPendientes = (clone $baseQuery)
@@ -176,6 +182,7 @@ class CharlaTrackingController extends Controller
             'registradasPeriodo', 'creadasPeriodo', 'sincronizacionAtrasada',
             'porUsuario', 'tendencia', 'distribucion',
             'topAsignadores', 'porDestinatario', 'porLugar',
+            'cdMasCompletadas', 'cdMasPendientes', 'maxCompletadasCD', 'maxPendientesCD', 'sinLugar',
             'registrosList', 'topPendientes', 'ultimaSync', 'charlaActionLogs'
         ));
     }

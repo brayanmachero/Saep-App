@@ -235,6 +235,27 @@
         </div>
     </div>
 
+    <div class="charla-cd-leaders">
+        @foreach([
+            ['titulo' => 'CD con más charlas ejecutadas', 'cantidad' => $maxCompletadasCD, 'centros' => $cdMasCompletadas, 'clase' => 'completed', 'estado' => 'completadas'],
+            ['titulo' => 'CD con más charlas pendientes', 'cantidad' => $maxPendientesCD, 'centros' => $cdMasPendientes, 'clase' => 'pending', 'estado' => 'pendientes'],
+        ] as $lider)
+        <div class="glass-card charla-cd-card {{ $lider['clase'] }}">
+            <h3>{{ $lider['titulo'] }}</h3>
+            @if($lider['centros']->isNotEmpty())
+                <strong class="charla-cd-count">{{ number_format($lider['cantidad']) }} <small>{{ $lider['estado'] }}{{ $lider['centros']->count() > 1 ? ' por CD' : '' }}</small></strong>
+                <p class="charla-cd-names">{{ $lider['centros']->pluck('lugar')->implode(' · ') }}</p>
+                @if($lider['centros']->count() > 1)
+                    <small>Empate entre {{ $lider['centros']->count() }} centros.</small>
+                @endif
+            @else
+                <p class="charla-cd-names">Sin charlas {{ $lider['estado'] }} con CD informado para estos filtros.</p>
+            @endif
+        </div>
+        @endforeach
+    </div>
+    <p class="charla-cd-note">Según el lugar de capacitación informado en Kizeo y los filtros activos. Ejecutadas = terminadas + registradas. Se consideran todos los centros, no solo el Top 10. {{ number_format($sinLugar) }} registros sin CD informado quedan fuera de estos indicadores.</p>
+
     <p style="font-size:.78rem;color:var(--text-muted);margin:0 0 1rem">Terminadas y registradas cuentan como completadas. Recuperadas y transferidas siguen pendientes. Los rankings muestran grupos limitados y pueden no sumar el total del período.</p>
 
     {{-- Gráficos fila 1: Tendencia + Distribución estatus --}}
@@ -908,3 +929,21 @@ body.dark-mode .charla-dashboard .charla-filter-chip { color:#93c5fd; }
 </style>
 @endpush
 @endsection
+
+@push('styles')
+<style>
+.charla-cd-leaders { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-bottom:.5rem; }
+.charla-cd-card { padding:1rem 1.25rem;border-top:3px solid #22c55e;min-width:0; }
+.charla-cd-card.pending { border-top-color:#f97316; }
+.charla-cd-card h3 { font-size:.85rem;font-weight:700;margin:0 0 .65rem;color:var(--text-muted); }
+.charla-cd-count { font-size:1.8rem;color:#15803d; }
+.charla-cd-card.pending .charla-cd-count { color:#ea580c; }
+.charla-cd-count small { font-size:.8rem;font-weight:500; }
+.charla-cd-names { font-weight:600;overflow-wrap:anywhere;margin:.4rem 0;color:var(--text-primary); }
+.charla-cd-card > small,.charla-cd-note { font-size:.75rem;color:var(--text-muted); }
+.charla-cd-note { margin-bottom:1.5rem; }
+body.dark-mode .charla-cd-count { color:#4ade80; }
+body.dark-mode .charla-cd-card.pending .charla-cd-count { color:#fb923c; }
+@media(max-width:700px) { .charla-cd-leaders { grid-template-columns:1fr; } }
+</style>
+@endpush
