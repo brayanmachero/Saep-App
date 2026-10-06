@@ -137,6 +137,36 @@ class CharlaTrackingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_sync_uses_answer_time_from_kizeo_history_when_advanced_omits_it(): void
+    {
+        Carbon::setTestNow('2026-10-06 12:00:00');
+        config()->set('services.kizeo.charla_form_id', '973784');
+        KizeoCharlaTracking::query()->delete();
+
+        $kizeo = \Mockery::mock(KizeoService::class);
+        $kizeo->shouldReceive('rawPost')->once()->andReturn([
+            'recordsFiltered' => 1,
+            'data' => [[
+                '_id' => 123, '_create_time' => '2026-10-01 10:00:00',
+                '_answer_time' => '', '_user_name' => 'Persona de prueba',
+            ]],
+        ]);
+        $kizeo->shouldReceive('rawGet')->once()->andReturn([
+            'data' => [[
+                'id' => 123, 'create_time' => '2026-10-01 10:00:00',
+                'answer_time' => '2026-10-02 11:00:00', 'direction' => 'in',
+            ]],
+        ]);
+        $this->app->instance(KizeoService::class, $kizeo);
+
+        $this->artisan('kizeo:sync-charla-tracking', ['--months' => 0])->assertExitCode(0);
+        $this->assertDatabaseHas('kizeo_charla_tracking', [
+            'kizeo_data_id' => '123', 'estado' => 'completado',
+            'fecha_respuesta' => '2026-10-02 11:00:00',
+        ]);
+        Carbon::setTestNow();
+    }
+
     public function test_sync_is_queued_and_audited(): void
     {
         $user = $this->createSuperAdminUser();

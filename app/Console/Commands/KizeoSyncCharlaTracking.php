@@ -34,6 +34,7 @@ class KizeoSyncCharlaTracking extends Command
             //    que incluye _answer_time, _direction, _recipient_id, _recipient_name
             $desde = now()->subMonths($months)->startOfDay()->format('Y-m-d H:i:s');
             $records = $this->fetchAllAdvanced($kizeo, $formId, $desde);
+            $records = $this->mergeCanonicalDates($kizeo, $formId, $desde, $records);
 
             if (empty($records)) {
                 $this->warn('No se encontraron registros en Kizeo.');
@@ -274,5 +275,41 @@ class KizeoSyncCharlaTracking extends Command
         }
 
         return array_values($allRecords);
+    }
+
+    /** data/all contiene la fecha de respuesta que muestra el histórico de Kizeo. */
+    private function mergeCanonicalDates(KizeoService $kizeo, string $formId, string $desde, array $records): array
+    {
+        $response = $kizeo->rawGet("forms/{$formId}/data/all", 90);
+        $summaries = $response['data'] ?? null;
+        if (!is_array($summaries)) {
+            throw new \RuntimeException('Kizeo devolvió un histórico de charlas inválido.');
+        }
+
+        $recent = [];
+        foreach ($summaries as $summary) {
+            $id = (string) ($summary['id'] ?? '');
+            if ($id !== '' && ($summary['create_time'] ?? '') >= $desde) {
+                $recent[$id] = $summary;
+            }
+        }
+
+        $advancedIds = [];
+        foreach ($records as $record) {
+            $advancedIds[(string) ($record['_id'] ?? '')] = true;
+        }
+        if (array_diff_key($recent, $advancedIds) || array_diff_key($advancedIds, $recent)) {
+            throw new \RuntimeException('Kizeo devolvió conjuntos distintos en el histórico y los detalles de charlas.');
+        }
+
+        foreach ($records as &$record) {
+            $summary = $recent[(string) $record['_id']];
+            $record['_create_time'] = $summary['create_time'];
+            $record['_answer_time'] = $summary['answer_time'] ?? '';
+            $record['_direction'] = $summary['direction'] ?? ($record['_direction'] ?? null);
+        }
+        unset($record);
+
+        return $records;
     }
 }
