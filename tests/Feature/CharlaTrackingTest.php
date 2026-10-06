@@ -171,6 +171,40 @@ class CharlaTrackingTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_completed_transfer_does_not_reconstruct_current_kizeo_recipient(): void
+    {
+        Carbon::setTestNow('2026-10-06 12:00:00');
+        config()->set('services.kizeo.charla_form_id', '973784');
+        $kizeo = \Mockery::mock(KizeoService::class);
+        $kizeo->shouldReceive('rawPost')->once()->andReturn([
+            'recordsFiltered' => 1,
+            'data' => [[
+                '_id' => 123, '_create_time' => '2026-10-06 10:00:00',
+                '_answer_time' => '2026-10-06 11:00:00',
+                '_user_name' => 'SMU Sop', '_user_id' => 'user-smu',
+                '_recipient_name' => '', '_recipient_id' => null,
+                '_history' => 'Transferido por Prevencion a SMU Sop el 2026-10-06 10:00:00',
+            ]],
+        ]);
+        $kizeo->shouldReceive('rawGet')->once()->andReturn([
+            'data' => [[
+                'id' => 123, 'create_time' => '2026-10-06 10:00:00',
+                'answer_time' => '2026-10-06 11:00:00',
+            ]],
+        ]);
+        $this->app->instance(KizeoService::class, $kizeo);
+        try {
+            $this->artisan('kizeo:sync-charla-tracking', ['--months' => 0])->assertExitCode(0);
+            $record = KizeoCharlaTracking::where('kizeo_data_id', '123')->firstOrFail();
+            $this->assertNull($record->asignado_a);
+            $this->assertNull($record->asignado_a_id);
+            $this->assertSame('completado', $record->estado);
+            $this->assertSame('SMU Sop', $record->metadata['destinatario_historico']);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_sync_is_queued_and_audited(): void
     {
         $user = $this->createSuperAdminUser();

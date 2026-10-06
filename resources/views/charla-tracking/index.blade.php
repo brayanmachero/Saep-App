@@ -293,7 +293,8 @@
 
         {{-- A quién se le asigna --}}
         <div class="glass-card" style="padding:1rem 1.25rem">
-            <h3 class="chart-title"><i class="bi bi-person-check-fill" style="color:#f97316"></i> Destinatarios (Quién Recibe)</h3>
+            <h3 class="chart-title"><i class="bi bi-person-check-fill" style="color:#f97316"></i> Destinatario actual en Kizeo</h3>
+            <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:.75rem">Coincide con la columna Destinatario de Kizeo. Los registros completados cuyo destinatario quedó vacío siguen incluidos en el total general.</p>
             @if($porDestinatario->isEmpty())
                 <div style="text-align:center;color:var(--text-muted);padding:2rem">
                     <i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:.3rem"></i>

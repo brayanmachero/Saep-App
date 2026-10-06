@@ -108,13 +108,11 @@ class KizeoSyncCharlaTracking extends Command
                 $asignadoA   = $recipientNm ?: null;
                 $asignadoAId = $recipientId ? (string) $recipientId : null;
 
-                // Fix: Kizeo limpia _recipient_name cuando el destinatario completa
-                // el formulario transferido. En ese caso _user_name ES el destinatario.
-                // Restauramos asignado_a desde el user actual y extraemos el remitente
-                // original del historial de transferencia.
+                // El destinatario actual debe coincidir con la columna de Kizeo.
+                // La atribución histórica de una respuesta no reemplaza un destinatario vacío.
+                $destinatarioHistorico = null;
                 if ($estado === 'completado' && $isTransfer && !$asignadoA) {
-                    $asignadoA   = $userName;
-                    $asignadoAId = $userId;
+                    $destinatarioHistorico = $userName;
                     // Extraer remitente original: "Transferido por [Nombre] a [Destino]..."
                     if (preg_match('/Transferido por (.+?) a /u', $history, $hm)) {
                         $userName = trim($hm[1]);
@@ -163,6 +161,7 @@ class KizeoSyncCharlaTracking extends Command
                     'metadata'         => [
                         'history'   => $history,
                         'pull_time' => $pullTime,
+                        'destinatario_historico' => $destinatarioHistorico,
                     ],
                 ];
 
