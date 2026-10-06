@@ -884,7 +884,8 @@ body.dark-mode .charla-dashboard .charla-filter-chip { color:#93c5fd; }
     .charla-dashboard .charla-filters { grid-template-columns:repeat(3,minmax(0,1fr)); }
     .charla-dashboard .stats-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
 }
-@media(max-width:900px) {
+@media(max-width:1100px) {
+    .charla-dashboard > div[style*="grid-template-columns"] { grid-template-columns:minmax(0,1fr) !important; }
     .charla-dashboard .charla-hero { padding:1.25rem; }
     .charla-dashboard .charla-header-actions { display:flex; flex-wrap:wrap; justify-content:flex-start; }
     .charla-dashboard .charla-header-actions > a,.charla-dashboard .charla-header-actions > form { width:auto; flex:1 1 160px; }
