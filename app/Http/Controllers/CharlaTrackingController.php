@@ -7,6 +7,7 @@ use App\Jobs\DashboardSyncJob;
 use App\Mail\CharlaTrackingReporteMail;
 use App\Models\CharlaTrackingActionLog;
 use App\Models\KizeoCharlaTracking;
+use App\Models\Configuracion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -166,7 +167,7 @@ class CharlaTrackingController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        $ultimaSync = Cache::get('charla_tracking_last_sync');
+        $ultimaSync = Configuracion::get('charla_tracking_last_sync') ?: Cache::get('charla_tracking_last_sync');
         $sincronizacionAtrasada = !$ultimaSync || Carbon::parse($ultimaSync)->lt(now()->subHours(12));
 
         return view('charla-tracking.index', compact(

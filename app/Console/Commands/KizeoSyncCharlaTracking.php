@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\KizeoCharlaTracking;
+use App\Models\Configuracion;
 use App\Services\KizeoService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -205,6 +206,11 @@ class KizeoSyncCharlaTracking extends Command
 
             // Guardar marca de tiempo real de la sincronización
             Cache::put('charla_tracking_last_sync', now()->toDateTimeString(), now()->addDays(30));
+            Configuracion::updateOrCreate(['clave' => 'charla_tracking_last_sync'], [
+                'valor' => now()->toDateTimeString(), 'tipo' => 'TEXT',
+                'categoria' => 'sistema', 'editable' => false,
+                'descripcion' => 'Última sincronización completa de charlas Kizeo',
+            ]);
 
             Log::info('kizeo:sync-charla-tracking completado', [
                 'form_id'     => $formId,
