@@ -14,3 +14,4 @@ Enlace: https://teams.microsoft.com/l/entity/com.microsoft.teamspace.tab.planner
 - Esta instrucción autoriza crear y actualizar registros de trabajo en este plan; no autoriza enviar correos ni mensajes por otros canales.
 - Verificar que el registro quedó guardado. Si el acceso falla, informar la limitación y conservar el resumen pendiente de registrar; no afirmar que se actualizó Planner.
 - Aplicar al finalizar trabajo en sesiones activas y cuando se solicite cierre de día; no implica una automatización programada fuera de sesión.
+- Fechas de Planner: en cada registro de trabajo realizado, completar los campos Inicio y Vencimiento con el período real de trabajo (para una bitácora diaria, ambos con la fecha del día en Chile), además de la fecha del título/notas. Verificar su aparición en el calendario y el estado correcto. Las tareas futuras sin programación acordada permanecen pendientes y no se fechan como trabajo ya realizado.
