@@ -59,6 +59,8 @@
 
     {{-- Filtros --}}
     <form method="GET" action="{{ route('charla-tracking.index') }}" class="filter-form charla-filters">
+        @if($sinCDSeleccionado)<input type="hidden" name="sin_cd" value="1">
+        @elseif($centroSeleccionado)<input type="hidden" name="centro" value="{{ $centroSeleccionado }}">@endif
         <div class="filter-group">
             <label for="tipo-fecha-charla">Analizar por</label>
             <select id="tipo-fecha-charla" name="tipo_fecha" class="form-input">
@@ -428,8 +430,40 @@
         </div>
     </div>
 
+    <section class="glass-card" id="visor-centros" style="padding:1rem 1.25rem;margin-bottom:1.5rem">
+        <h3 class="chart-title"><i class="bi bi-buildings"></i> Visor por centro de costos / CD</h3>
+        <p style="font-size:.8rem;color:var(--text-muted)">Centros según el lugar de capacitación informado en Kizeo. Selecciona un centro para ver sus charlas abajo. El resumen respeta el período, estado y búsqueda activos; seleccionar un centro filtra solo el detalle.</p>
+        <div class="glass-table-container" style="max-height:420px;overflow:auto">
+            <table class="glass-table">
+                <thead><tr><th>Centro / CD</th><th>Completadas</th><th>Pendientes</th><th>Total</th><th>Detalle</th></tr></thead>
+                <tbody>
+                @foreach($todosLosLugares as $cd)
+                    <tr>
+                        <td>{{ $cd->lugar }}</td>
+                        <td style="color:#15803d;font-weight:600">{{ number_format($cd->completadas) }}</td>
+                        <td style="color:#ea580c;font-weight:600">{{ number_format($cd->pendientes) }}</td>
+                        <td>{{ number_format($cd->total) }}</td>
+                        <td><a class="btn-secondary" aria-label="Ver charlas de {{ $cd->lugar }}" href="{{ route('charla-tracking.index', array_merge($filters, ['centro' => $cd->lugar])) }}#detalle-charlas">{{ !$sinCDSeleccionado && $centroSeleccionado === $cd->lugar ? 'Seleccionado' : 'Ver charlas' }}</a></td>
+                    </tr>
+                @endforeach
+                @if($resumenSinCD->total > 0)
+                    <tr><td>Sin CD informado</td><td style="color:#15803d">{{ number_format($resumenSinCD->completadas) }}</td><td style="color:#ea580c">{{ number_format($resumenSinCD->pendientes) }}</td><td>{{ number_format($resumenSinCD->total) }}</td><td><a class="btn-secondary" href="{{ route('charla-tracking.index', array_merge($filters, ['sin_cd' => 1])) }}#detalle-charlas">Ver charlas</a></td></tr>
+                @endif
+                @if($todosLosLugares->isEmpty() && !$resumenSinCD->total)
+                    <tr><td colspan="5">Sin registros para los filtros seleccionados.</td></tr>
+                @endif
+                </tbody>
+                <tfoot><tr><th>Total del filtro</th><th>{{ number_format($completadas) }}</th><th>{{ number_format($pendientes) }}</th><th>{{ number_format($total) }}</th><td></td></tr></tfoot>
+            </table>
+        </div>
+    </section>
+
     {{-- Tabla de registros detalle --}}
-    <div class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1.5rem">
+    <div id="detalle-charlas" class="glass-card" style="padding:1rem 1.25rem;margin-bottom:1.5rem">
+        @if($sinCDSeleccionado || $centroSeleccionado)
+            <p><strong>Detalle: {{ $sinCDSeleccionado ? 'Sin CD informado' : $centroSeleccionado }}</strong>
+            <a href="{{ route('charla-tracking.index', $filters) }}#visor-centros" style="margin-left:.75rem">Ver todos los centros</a></p>
+        @endif
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
             <h3 class="chart-title" style="margin:0">
                 <i class="bi bi-list-check"></i> {{ $esHistorico ? 'Histórico de registros Kizeo' : 'Detalle de asignaciones' }}

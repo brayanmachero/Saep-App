@@ -165,8 +165,21 @@ class CharlaTrackingController extends Controller
             ->limit(10)
             ->get();
 
+        $request->validate(['centro' => 'nullable|string|max:195', 'sin_cd' => 'nullable|boolean']);
+        $centroSeleccionado = $request->input('centro');
+        $sinCDSeleccionado = $request->boolean('sin_cd');
+        $resumenSinCD = (clone $baseQuery)
+            ->where(fn ($q) => $q->whereNull('lugar')->orWhere('lugar', ''))
+            ->selectRaw("COUNT(*) as total, SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas, SUM(CASE WHEN estado IN ('pendiente','transferido') THEN 1 ELSE 0 END) as pendientes")
+            ->first();
+
         // 8. Tabla detalle filtrable
         $queryDetalle = $this->trackingQuery($filters);
+        if ($sinCDSeleccionado) {
+            $queryDetalle->where(fn ($q) => $q->whereNull('lugar')->orWhere('lugar', ''));
+        } elseif ($centroSeleccionado !== null && $centroSeleccionado !== '') {
+            $queryDetalle->where('lugar', $centroSeleccionado);
+        }
 
         $registrosList = $queryDetalle
             ->orderByDesc($esHistorico ? 'fecha_registro_kizeo' : 'fecha_creacion')
@@ -182,6 +195,7 @@ class CharlaTrackingController extends Controller
             'registradasPeriodo', 'creadasPeriodo', 'sincronizacionAtrasada',
             'porUsuario', 'tendencia', 'distribucion',
             'topAsignadores', 'porDestinatario', 'porLugar',
+            'todosLosLugares', 'centroSeleccionado', 'sinCDSeleccionado', 'resumenSinCD',
             'cdMasCompletadas', 'cdMasPendientes', 'maxCompletadasCD', 'maxPendientesCD', 'sinLugar',
             'registrosList', 'topPendientes', 'ultimaSync', 'charlaActionLogs'
         ));
