@@ -92,8 +92,8 @@ class KizeoCharlaTracking extends Model
         return match ($this->estatus_kizeo) {
             'registrado' => '#22c55e',
             'terminado' => '#0f766e',
-            'transferido'             => '#f97316',
-            'recuperado'              => '#d97706',
+            'transferido', 'pendiente' => '#f97316',
+            'recuperado'              => '#f59e0b',
             default                   => '#6b7280',
         };
     }

@@ -214,7 +214,7 @@
         </div>
         <div class="stat-item">
             @php
-                $tasaColor = $tasa >= 80 ? '#15803d' : ($tasa >= 50 ? '#d97706' : '#dc2626');
+                $tasaColor = '#7c3aed';
             @endphp
             <div class="stat-icon" style="background:rgba(139,92,246,.12);color:#8b5cf6">
                 <i class="bi bi-percent"></i>
@@ -283,10 +283,10 @@
                             <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ $a->usuario }}">{{ $a->usuario }}</td>
                             <td style="text-align:center;font-weight:600">{{ $a->total_asignadas }}</td>
                             <td style="text-align:center;color:#15803d">{{ $a->completadas }}</td>
-                            <td style="text-align:center;color:#dc2626">{{ $a->pendientes }}</td>
+                            <td style="text-align:center;color:#ea580c">{{ $a->pendientes }}</td>
                             <td style="text-align:center">
                                 <span style="font-size:.72rem;padding:2px 6px;border-radius:4px;font-weight:600;
-                                    {{ $aTasa >= 80 ? 'background:rgba(34,197,94,.12);color:#15803d' : ($aTasa >= 50 ? 'background:rgba(217,119,6,.12);color:#d97706' : 'background:rgba(239,68,68,.12);color:#dc2626') }}">{{ $aTasa }}%</span>
+                                    background:rgba(139,92,246,.12);color:#7c3aed">{{ $aTasa }}%</span>
                             </td>
                         </tr>
                     @endforeach
@@ -326,10 +326,10 @@
                             <td style="text-align:center;font-weight:600">{{ $d->total_recibidas }}</td>
                             <td style="text-align:center;color:#15803d">{{ $d->completadas }}</td>
                             <td style="text-align:center;color:#d97706">{{ $d->recuperadas }}</td>
-                            <td style="text-align:center;color:#dc2626">{{ $d->sin_descargar }}</td>
+                            <td style="text-align:center;color:#ea580c">{{ $d->sin_descargar }}</td>
                             <td style="text-align:center">
                                 <span style="font-size:.72rem;padding:2px 6px;border-radius:4px;font-weight:600;
-                                    {{ $dTasa >= 80 ? 'background:rgba(34,197,94,.12);color:#15803d' : ($dTasa >= 50 ? 'background:rgba(217,119,6,.12);color:#d97706' : 'background:rgba(239,68,68,.12);color:#dc2626') }}">{{ $dTasa }}%</span>
+                                    background:rgba(139,92,246,.12);color:#7c3aed">{{ $dTasa }}%</span>
                             </td>
                         </tr>
                     @endforeach
@@ -387,7 +387,7 @@
                     <tr>
                         <td>{{ $tp->responsable ?? 'Desconocido' }}</td>
                         <td style="text-align:center">
-                            <span class="badge danger" style="font-size:.72rem">{{ $tp->cantidad }}</span>
+                            <span class="badge" style="font-size:.72rem;background:rgba(249,115,22,.12);color:#ea580c">{{ $tp->cantidad }}</span>
                         </td>
                         <td style="text-align:center;font-size:.75rem;color:var(--text-muted)">
                             {{ $tp->mas_antigua ? \Carbon\Carbon::parse($tp->mas_antigua)->format('d/m/Y') : '-' }}
@@ -463,7 +463,7 @@
                             @elseif($item->estatus_kizeo === 'recuperado')
                                 <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(245,158,11,.12);color:#b45309">↓ Recuperado · pendiente</span>
                             @else
-                                <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(107,114,128,.12);color:#6b7280">{{ ucfirst($item->estado) }}</span>
+                                <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;font-weight:600;background:rgba(249,115,22,.12);color:#ea580c">{{ ucfirst($item->estado) }}</span>
                             @endif
                         </td>
                         <td style="text-align:center;font-size:.78rem;color:var(--text-muted)">
@@ -582,12 +582,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // === 2. Doughnut Estatus Kizeo ===
     const dist = @json($distribucion);
     const statusLabels = {
-        registrado: 'Registrado', transferido: 'Transferido',
+        registrado: 'Registrado', transferido: 'Transferido · pendiente',
         recuperado: 'Recuperado · pendiente', terminado: 'Terminado', pendiente: 'Pendiente'
     };
     const statusColors = {
         terminado: '#0f766e', registrado: '#22c55e',
-        recuperado: '#f59e0b', transferido: '#f97316', pendiente: '#ef4444'
+        recuperado: '#f59e0b', transferido: '#f97316', pendiente: '#f97316'
     };
     const distKeys = ['terminado', 'registrado', 'recuperado', 'transferido', 'pendiente'].filter(k => Number(dist[k]) > 0);
 
@@ -626,7 +626,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 ctx.save();
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = 'bold 26px Segoe UI';
-                ctx.fillStyle = pct >= 80 ? '#15803d' : (pct >= 50 ? '#d97706' : '#dc2626');
+                ctx.fillStyle = isDark ? '#c4b5fd' : '#7c3aed';
                 ctx.fillText(pct + '%', width / 2, height / 2 - 6);
                 ctx.font = '10px Segoe UI';
                 ctx.fillStyle = textColor;
@@ -871,9 +871,9 @@ document.addEventListener('DOMContentLoaded', function() {
     border-radius:12px; box-shadow:0 3px 12px rgba(15,23,42,.035); min-width:0;
 }
 .charla-dashboard .stat-item:nth-child(1) { border-top-color:#2563eb; }
-.charla-dashboard .stat-item:nth-child(2) { border-top-color:#0f766e; }
+.charla-dashboard .stat-item:nth-child(2) { border-top-color:#22c55e; }
 .charla-dashboard .stat-item:nth-child(3) { border-top-color:#ea580c; }
-.charla-dashboard .stat-item:nth-child(4) { border-top-color:#6366f1; }
+.charla-dashboard .stat-item:nth-child(4) { border-top-color:#8b5cf6; }
 .charla-dashboard .stat-icon { width:42px; height:42px; border-radius:11px; flex-shrink:0; font-size:1.15rem; }
 .charla-dashboard .stat-value { font-size:1.85rem; font-weight:800; letter-spacing:-.045em; line-height:1.15; font-variant-numeric:tabular-nums; }
 .charla-dashboard .stat-label { color:var(--text-muted); font-size:.72rem; line-height:1.4; margin-top:.35rem; }
