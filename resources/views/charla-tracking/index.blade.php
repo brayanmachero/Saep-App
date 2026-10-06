@@ -938,6 +938,9 @@ document.addEventListener('DOMContentLoaded', function() {
 .charla-dashboard .glass-table tbody td { padding:.8rem .65rem; border-bottom:1px solid var(--border-color); }
 .charla-dashboard .glass-table tbody tr:hover { background:var(--bg-color); }
 .charla-dashboard .glass-table-container { border-radius:8px; }
+.charla-dashboard #visor-centros .glass-table tbody td { font-size:.8rem; padding:.5rem .65rem; line-height:1.4; }
+.charla-dashboard #visor-centros .glass-table tfoot th { font-size:.75rem; padding:.65rem; }
+.charla-dashboard #visor-centros .btn-secondary { font-size:.75rem; padding:.25rem .6rem; line-height:1.4; border-radius:6px; }
 body.dark-mode .charla-dashboard .stat-value { color:#e2e8f0 !important; }
 body.dark-mode .charla-dashboard .charla-filter-chip { color:#93c5fd; }
 @media(max-width:1400px) {
