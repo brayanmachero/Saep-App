@@ -296,7 +296,7 @@ function rebuildTableRows(table, columns) {
 }
 
 function monthlyProgressTotal(seg, target) {
-    return seg?.realizado ? Math.max(target, Number(seg.cantidad_realizada || 0)) : Number(seg?.cantidad_realizada || 0);
+    return Math.max(0, Number(seg?.cantidad_realizada || 0));
 }
 
 function updateMonthlyRowSummary(row, actData, mes) {
@@ -321,7 +321,7 @@ function updateMonthlyRowSummary(row, actData, mes) {
         .filter(item => Number(item.mes) === Number(mes))
         .reduce((sum, item) => sum + Number(item.cantidad_realizada || 0), 0);
     const unassigned = Math.max(0, total - attributed);
-    summary.textContent = MESES_CORTO[mes] + ': ' + total + '/' + target + (unassigned ? ' · ' + unassigned + ' sin semana' : '');
+    summary.textContent = MESES_CORTO[mes] + ': ' + total + '/' + target + ' · ' + Math.round(total / target * 100) + '%' + (unassigned ? ' · ' + unassigned + ' sin semana' : '');
 }
 
 function buildMonthlyWeekControl(actData, seg, col, week) {
@@ -329,19 +329,19 @@ function buildMonthlyWeekControl(actData, seg, col, week) {
     const total = monthlyProgressTotal(seg, target);
     const weekRecord = (actData.semanas || []).find(item => Number(item.mes) === Number(col.mes) && item.semana_inicio === week.startKey);
     const weekDone = Number(weekRecord?.cantidad_realizada || 0);
-    const single = target === 1;
+    const single = target === 1 && !actData.permitir_exceder_meta && total <= 1;
     const complete = total >= target;
     const wrapper = document.createElement('span');
     wrapper.className = 'sst-weekly-control';
 
     const main = document.createElement(PUEDE_EDITAR ? 'button' : 'span');
     main.className = 'gantt-cell ' + (single && complete ? 'gantt-done' : (weekDone > 0 ? 'gantt-partial' : 'gantt-plan'));
-    main.textContent = single ? (complete ? '✓' : '○') : (weekDone > 0 ? String(weekDone) : (complete ? '·' : '+'));
+    main.textContent = single ? (complete ? '✓' : '○') : (weekDone > 0 ? String(weekDone) : (complete && !actData.permitir_exceder_meta ? '·' : '+'));
     main.title = actData.nombre + ' · semana ' + week.dayStart + '–' + week.dayEnd + ': ' + weekDone + ' registro(s). Total del mes ' + total + '/' + target + '.' + (PUEDE_EDITAR ? (single ? ' Clic para marcar o desmarcar el mes.' : ' Clic para sumar uno en esta semana.') : ' Solo lectura.');
     main.setAttribute('aria-label', main.title);
     if (PUEDE_EDITAR) {
         main.type = 'button';
-        main.disabled = monthlyProgressBusy || (!single && complete);
+        main.disabled = monthlyProgressBusy || (!single && complete && !actData.permitir_exceder_meta);
         main.onclick = () => updateMonthlyWeekProgress(actData.id, col.mes, week.startKey, 1, main);
     }
     wrapper.appendChild(main);
@@ -463,7 +463,7 @@ async function resetOccurrencePeriod() {
 function buildLegacyControl(actData, col, done, cantReal, cantProg) {
     const el = document.createElement(PUEDE_EDITAR ? 'button' : 'span');
     el.className = 'gantt-cell ' + (done ? 'gantt-done' : (cantReal > 0 ? 'gantt-partial' : 'gantt-plan'));
-    el.textContent = cantProg > 1 ? (done ? '✓' : cantReal + '/' + cantProg) : (done ? '✓' : '○');
+    el.textContent = cantReal > cantProg ? Math.round(cantReal / cantProg * 100) + '%' : (cantProg > 1 ? (done ? '✓' : cantReal + '/' + cantProg) : (done ? '✓' : '○'));
     el.title = actData.nombre + ': ' + (done ? 'realizado' : 'programado') + '.' + (actData.periodicidad === 'MENSUAL' ? ' Clic para ver las semanas del mes.' : '');
     if (PUEDE_EDITAR) el.onclick = () => actData.periodicidad === 'MENSUAL'
         ? goToMonthlyProgress(col.mes)
@@ -794,6 +794,7 @@ function openEditModal(row) {
     document.getElementById('edit-estado').value = data.estado || 'PENDIENTE';
     document.getElementById('edit-periodicidad').value = data.periodicidad || '';
     document.getElementById('edit-cantidad').value = data.cantidad_programada || 1;
+    document.getElementById('edit-permitir-exceder-meta').checked = !!data.permitir_exceder_meta;
     document.getElementById('edit-fecha-inicio').value = data.fecha_inicio || '';
     document.getElementById('edit-fecha-fin').value = data.fecha_fin || '';
 
@@ -842,8 +843,8 @@ function openDetail(row) {
         let txt = MESES_CORTO[m];
         if (s && s.programado) {
             const cantidadMes = s.cantidad_programada || cantProg;
-            const cantReal = s.realizado ? cantidadMes : (s.cantidad_realizada > 0 ? s.cantidad_realizada : 0);
-            if (s.realizado) { cls = 'sst-seg-done'; txt += cantidadMes > 1 ? ' ' + cantidadMes+'/'+cantidadMes : ' ✓'; }
+            const cantReal = monthlyProgressTotal(s, cantidadMes);
+            if (s.realizado) { cls = 'sst-seg-done'; txt += ' ' + cantReal+'/'+cantidadMes + ' · ' + Math.round(cantReal / cantidadMes * 100) + '%'; }
             else if (isPastProgramMonth(m)) { cls = 'sst-seg-late'; txt += cantidadMes > 1 ? ' ' + cantReal+'/'+cantidadMes : ' !'; }
             else { cls = 'sst-seg-prog'; txt += cantidadMes > 1 ? ' ' + cantReal+'/'+cantidadMes : ' ○'; }
         }
@@ -887,9 +888,8 @@ function updateStats() {
     const mesFiltro = selectedStatMonth;
 
     // Helper: get realized quantity
-    // If realizado=true, always count as fully done (cantProg)
+    // Recorded quantities are authoritative, including overachievement.
     function getCantReal(s, cantProg) {
-        if (s.realizado) return cantProg;
         return s.cantidad_realizada > 0 ? s.cantidad_realizada : 0;
     }
 
@@ -926,14 +926,14 @@ function updateStats() {
     // Global progress
     const bar = document.getElementById('progressBar');
     const num = document.getElementById('progressNum');
-    if (bar) bar.style.width = pct + '%';
+    if (bar) bar.style.width = Math.min(100, pct) + '%';
     if (num) num.textContent = pct + '%';
 
     // Month progress
     const mBar = document.getElementById('monthProgressBar');
     const mNum = document.getElementById('monthProgressNum');
     const lblAvMes = document.getElementById('labelAvanceMes');
-    if (mBar) mBar.style.width = mesPct + '%';
+    if (mBar) mBar.style.width = Math.min(100, mesPct) + '%';
     if (mNum) mNum.textContent = mesPct + '%';
     if (lblAvMes) lblAvMes.textContent = 'Avance ' + MESES[mesFiltro];
 
@@ -969,14 +969,14 @@ function updateStats() {
             for (let m = 1; m <= 12; m++) {
                 const s = actData.seguimiento[m];
                 if (s && s.programado) {
-                    catProg += cantProg;
+                    catProg += s.cantidad_programada || cantProg;
                     catReal += getCantReal(s, cantProg);
                 }
             }
         });
         const catPct = catProg > 0 ? Math.round(catReal / catProg * 100) : 0;
         const catFill = card.querySelector('.sst-cat-progress-fill');
-        if (catFill) catFill.style.width = catPct + '%';
+        if (catFill) catFill.style.width = Math.min(100, catPct) + '%';
         const catInfo = card.querySelector('[data-filter-count]');
         if (catInfo) {
             const count = card.querySelectorAll('.sst-act-row').length;

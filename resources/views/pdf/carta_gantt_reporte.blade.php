@@ -430,7 +430,7 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #1e293b; ba
                     <div style="display:table;width:100%;">
                         <div style="display:table-cell;vertical-align:middle;width:75%;">
                             <div class="cat-bar">
-                                <div class="cat-bar-fill" style="width:{{ $cs['pct'] }}%;background:{{ $cs['pct'] >= 75 ? '#059669' : ($cs['pct'] >= 50 ? '#2563eb' : ($cs['pct'] >= 25 ? '#f59e0b' : '#dc2626')) }};"></div>
+                                <div class="cat-bar-fill" style="width:{{ min(100, $cs['pct']) }}%;background:{{ $cs['pct'] >= 75 ? '#059669' : ($cs['pct'] >= 50 ? '#2563eb' : ($cs['pct'] >= 25 ? '#f59e0b' : '#dc2626')) }};"></div>
                             </div>
                         </div>
                         <div style="display:table-cell;vertical-align:middle;padding-left:6px;font-weight:800;font-size:9px;color:#0f1b4c;">{{ $cs['pct'] }}%</div>

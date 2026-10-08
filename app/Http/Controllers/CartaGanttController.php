@@ -458,6 +458,7 @@ class CartaGanttController extends Controller
                         'estado' => 'PENDIENTE',
                         'periodicidad' => $actividad->periodicidad,
                         'cantidad_programada' => $actividad->cantidad_programada,
+                        'permitir_exceder_meta' => $actividad->permitir_exceder_meta,
                     ]);
                     $summary['actividades']++;
 
@@ -708,6 +709,7 @@ class CartaGanttController extends Controller
             'meses_prog'          => 'nullable|array',
             'meses_prog.*'        => 'integer|min:1|max:12',
             'cantidad_programada' => 'nullable|integer|min:1|max:999',
+            'permitir_exceder_meta' => 'nullable|boolean',
         ]);
 
         $actividad = $categoria->actividades()->create([
@@ -722,6 +724,7 @@ class CartaGanttController extends Controller
             'prioridad'           => $request->prioridad ?? 'MEDIA',
             'periodicidad'        => $request->periodicidad,
             'cantidad_programada' => $request->cantidad_programada ?? 1,
+            'permitir_exceder_meta' => $request->boolean('permitir_exceder_meta'),
             'orden'               => $categoria->actividades()->max('orden') + 1,
         ]);
 
@@ -793,6 +796,7 @@ class CartaGanttController extends Controller
             'meses_prog'          => 'nullable|array',
             'meses_prog.*'        => 'integer|min:1|max:12',
             'cantidad_programada' => 'nullable|integer|min:1|max:999',
+            'permitir_exceder_meta' => 'nullable|boolean',
         ]);
 
         $actividad->update([
@@ -808,6 +812,7 @@ class CartaGanttController extends Controller
             'estado'              => $request->estado ?? $actividad->estado,
             'periodicidad'        => $request->periodicidad,
             'cantidad_programada' => $request->cantidad_programada ?? $actividad->cantidad_programada,
+            'permitir_exceder_meta' => $request->has('permitir_exceder_meta') ? $request->boolean('permitir_exceder_meta') : $actividad->permitir_exceder_meta,
         ]);
 
         // Actualizar meses programados si se enviaron checkboxes
@@ -966,7 +971,7 @@ class CartaGanttController extends Controller
             }
 
             $meta = max(1, (int) $actividad->cantidad_programada);
-            $totalAnterior = max((int) $seguimiento->cantidad_realizada, $seguimiento->realizado ? $meta : 0);
+            $totalAnterior = max(0, (int) $seguimiento->cantidad_realizada);
             $semana = $actividad->seguimientoSemanas()
                 ->where('mes', $mes)
                 ->whereDate('semana_inicio', $inicio->toDateString())
@@ -974,7 +979,7 @@ class CartaGanttController extends Controller
                 ->first();
             $avanceSemanaAnterior = (int) ($semana?->cantidad_realizada ?? 0);
 
-            if ($meta === 1) {
+            if ($meta === 1 && !$actividad->permitir_exceder_meta && $totalAnterior <= 1) {
                 if ($totalAnterior > 0) {
                     $actividad->seguimientoSemanas()->where('mes', $mes)->update([
                         'cantidad_realizada' => 0,
@@ -1000,7 +1005,7 @@ class CartaGanttController extends Controller
                     $totalNuevo = 1;
                 }
             } elseif ((int) $datos['direccion'] === 1) {
-                if ($totalAnterior >= $meta) {
+                if ($totalAnterior >= $meta && !$actividad->permitir_exceder_meta) {
                     return response()->json(['error' => 'La meta mensual ya está completa.'], 422);
                 }
                 $semana ??= $actividad->seguimientoSemanas()->firstOrNew([
@@ -1482,9 +1487,7 @@ class CartaGanttController extends Controller
 
                         $mes = (int) $seguimiento->mes;
                         $factorEsperado = $this->factorEsperadoDashboard($anio, $mes, $fechaCorte);
-                        $cantidadReal = $seguimiento->realizado
-                            ? $cantidadProgramada
-                            : min($cantidadProgramada, max(0, (int) $seguimiento->cantidad_realizada));
+                        $cantidadReal = max(0, (int) $seguimiento->cantidad_realizada);
 
                         $this->acumularMetricasDashboard($resumen, $mes, $cantidadProgramada, $cantidadReal, $factorEsperado);
                         $this->acumularMetricasDashboard($metricasPrograma, $mes, $cantidadProgramada, $cantidadReal, $factorEsperado);
@@ -1585,12 +1588,12 @@ class CartaGanttController extends Controller
     {
         $planificado = (float) $metricas['planificado'];
         $esperado = (float) $metricas['esperado'];
-        $real = min($planificado, (float) $metricas['real']);
+        $real = (float) $metricas['real'];
         $esperadoPorcentaje = $planificado > 0 ? round(($esperado / $planificado) * 100, 1) : 0.0;
         $realPorcentaje = $planificado > 0 ? round(($real / $planificado) * 100, 1) : 0.0;
         $brechaPuntos = round($realPorcentaje - $esperadoPorcentaje, 1);
         $brechaUnidades = max(0, $esperado - $real);
-        $cumplimiento = $esperado > 0 ? round(min(100, ($real / $esperado) * 100), 1) : null;
+        $cumplimiento = $esperado > 0 ? round(($real / $esperado) * 100, 1) : null;
 
         $mesCritico = collect($metricas['mensual'])
             ->map(function (array $mes, int $numero) {
@@ -1950,6 +1953,7 @@ class CartaGanttController extends Controller
             'estado' => $actividad->estado,
             'periodicidad' => $actividad->periodicidad,
             'cantidad_programada' => (int) ($actividad->cantidad_programada ?? 1),
+            'permitir_exceder_meta' => (bool) $actividad->permitir_exceder_meta,
         ];
     }
 
@@ -2085,8 +2089,17 @@ class CartaGanttController extends Controller
         }
 
         $actividad->load('seguimiento');
+        if (!$actividad->usaSeguimientoPorOcurrencia()) {
+            $meta = max(1, (int) $actividad->cantidad_programada);
+            foreach ($actividad->seguimiento as $seguimiento) {
+                $realizado = (int) $seguimiento->cantidad_realizada >= $meta;
+                if ($seguimiento->realizado !== $realizado) {
+                    $seguimiento->update(['realizado' => $realizado]);
+                }
+            }
+        }
         $programados = $actividad->seguimiento->where('programado', true)->count();
-        $realizados  = $actividad->seguimiento->where('realizado', true)->count();
+        $realizados  = $actividad->seguimiento->where('programado', true)->where('realizado', true)->count();
 
         // También considerar progreso parcial (cantidad_realizada > 0 aunque no esté 100% realizado)
         $conProgresoParcial = $actividad->seguimiento

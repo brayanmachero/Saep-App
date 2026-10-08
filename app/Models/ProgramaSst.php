@@ -87,9 +87,7 @@ class ProgramaSst extends Model
 
                 $cantidad = max(1, (int) ($seguimiento['cantidad_programada'] ?? $actividad->cantidad_programada ?? 1));
                 $totalProg += $cantidad;
-                $totalReal += $seguimiento['realizado']
-                    ? $cantidad
-                    : min($cantidad, (int) ($seguimiento['cantidad_realizada'] ?? 0));
+                $totalReal += max(0, (int) ($seguimiento['cantidad_realizada'] ?? 0));
             }
         }
         return $totalProg > 0 ? (int) round($totalReal / $totalProg * 100) : 0;

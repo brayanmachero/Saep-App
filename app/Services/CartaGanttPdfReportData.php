@@ -37,7 +37,7 @@ class CartaGanttPdfReportData
                     continue;
                 }
                 $meta = max(1, (int) ($seg['cantidad_programada'] ?? $actividad->cantidad_programada ?? 1));
-                $avance = $seg['realizado'] ? $meta : min($meta, (int) ($seg['cantidad_realizada'] ?? 0));
+                $avance = max(0, (int) ($seg['cantidad_realizada'] ?? 0));
                 $programado += $meta;
                 $realizado += $avance;
                 $mesesData[$m]['prog'] += $meta;

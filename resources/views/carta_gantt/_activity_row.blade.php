@@ -20,6 +20,7 @@
         'estado' => $act->estado,
         'periodicidad' => $act->periodicidad,
         'cantidad_programada' => (int) ($act->cantidad_programada ?? 1),
+        'permitir_exceder_meta' => (bool) $act->permitir_exceder_meta,
         'fecha_inicio' => $act->fecha_inicio ? $act->fecha_inicio->format('Y-m-d') : '',
         'fecha_fin' => $act->fecha_fin ? $act->fecha_fin->format('Y-m-d') : '',
         'meses_prog' => collect($seg)->filter(fn($s) => $s['programado'])->keys()->values()->all(),
@@ -80,12 +81,12 @@
     <td class="sst-td-mes {{ $m === $mesActual ? 'sst-mes-actual' : '' }}">
         @if($prog)
         @if($rolPuedeEditar && !$seguimientoGranular)
-        @if($cantProgMes > 1)
+        @if($cantProgMes > 1 || $cantReal > 1)
         <button class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : ($parcial ? 'gantt-partial' : 'gantt-plan')) }}"
                 onclick="@if($act->periodicidad === 'MENSUAL')goToMonthlyProgress({{ $m }})@else toggleSeguimiento({{ $act->id }}, {{ $m }}, this)@endif"
                 title="{{ $tituloMes }} Avance {{ $cantReal }}/{{ $cantProgMes }}."
                 aria-label="{{ $tituloMes }} Avance {{ $cantReal }} de {{ $cantProgMes }}.">
-            {{ $real ? '✓' : ($cantReal > 0 ? $cantReal.'/'.$cantProgMes : '0/'.$cantProgMes) }}
+            {{ $cantReal > $cantProgMes ? round($cantReal / $cantProgMes * 100).'%' : ($real ? '✓' : $cantReal.'/'.$cantProgMes) }}
         </button>
         @else
         <button class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : 'gantt-plan') }}"
@@ -97,11 +98,11 @@
         @endif
         @else
         {{-- Solo vista: sin onclick --}}
-        @if($cantProgMes > 1)
+        @if($cantProgMes > 1 || $cantReal > 1)
         <span class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : ($parcial ? 'gantt-partial' : 'gantt-plan')) }}" style="cursor:default;"
               title="{{ $tituloMes }} Avance {{ $cantReal }}/{{ $cantProgMes }}."
               aria-label="{{ $tituloMes }} Avance {{ $cantReal }} de {{ $cantProgMes }}.">
-            {{ $real ? '✓' : ($cantReal > 0 ? $cantReal.'/'.$cantProgMes : '0/'.$cantProgMes) }}
+            {{ $cantReal > $cantProgMes ? round($cantReal / $cantProgMes * 100).'%' : ($real ? '✓' : $cantReal.'/'.$cantProgMes) }}
         </span>
         @else
         <span class="gantt-cell {{ $real ? 'gantt-done' : ($vencido ? 'gantt-overdue' : 'gantt-plan') }}" style="cursor:default;"

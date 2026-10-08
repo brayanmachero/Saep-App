@@ -44,6 +44,7 @@
             'estado' => $a->estado,
             'periodicidad' => $a->periodicidad,
             'cantidad_programada' => (int) ($a->cantidad_programada ?? 1),
+            'permitir_exceder_meta' => (bool) $a->permitir_exceder_meta,
             'fecha_inicio' => $a->fecha_inicio ? $a->fecha_inicio->format('Y-m-d') : null,
             'fecha_fin' => $a->fecha_fin ? $a->fecha_fin->format('Y-m-d') : null,
             'seguimiento' => $a->seguimiento_por_mes,
@@ -311,7 +312,7 @@
             <div style="flex:1">
                 <div class="sst-stat-label">Avance Global <span class="sst-help-tooltip" title="Porcentaje total realizado considerando todas las actividades programadas del año." aria-label="Porcentaje total realizado considerando todas las actividades programadas del año.">?</span></div>
                 <div class="sst-stat-value" id="progressNum">{{ $pct }}%</div>
-                <div class="sst-progress-track"><div class="sst-progress-fill" id="progressBar" style="width:{{ $pct }}%"></div></div>
+                <div class="sst-progress-track"><div class="sst-progress-fill" id="progressBar" style="width:{{ min(100, $pct) }}%"></div></div>
             </div>
         </div>
         @php
@@ -321,7 +322,7 @@
                 if ($sMes && $sMes['programado']) {
                     $esperadas = max(1, (int) ($sMes['cantidad_programada'] ?? $a->cantidad_programada ?? 1));
                     $mesProgTotal += $esperadas;
-                    $mesRealTotal += $sMes['realizado'] ? $esperadas : min($esperadas, (int) ($sMes['cantidad_realizada'] ?? 0));
+                    $mesRealTotal += max(0, (int) ($sMes['cantidad_realizada'] ?? 0));
                 }
             }
             $mesPct = $mesProgTotal > 0 ? (int) round($mesRealTotal / $mesProgTotal * 100) : 0;
@@ -344,7 +345,7 @@
             <div style="flex:1">
                 <div class="sst-stat-label" id="labelAvanceMes">Avance {{ $mesesNombres[$mesActual] }} <span class="sst-help-tooltip" title="Porcentaje de actividades completadas para el mes seleccionado." aria-label="Porcentaje de actividades completadas para el mes seleccionado.">?</span></div>
                 <div class="sst-stat-value" id="monthProgressNum">{{ $mesPct }}%</div>
-                <div class="sst-progress-track"><div class="sst-progress-fill" id="monthProgressBar" style="width:{{ $mesPct }}%;background:linear-gradient(90deg,#8b5cf6,#a78bfa)"></div></div>
+                <div class="sst-progress-track"><div class="sst-progress-fill" id="monthProgressBar" style="width:{{ min(100, $mesPct) }}%;background:linear-gradient(90deg,#8b5cf6,#a78bfa)"></div></div>
             </div>
         </div>
         <div class="sst-stat-card">
@@ -441,7 +442,7 @@
                 if (!($s['programado'] ?? false)) continue;
                 $cp = max(1, (int) ($s['cantidad_programada'] ?? $a->cantidad_programada ?? 1));
                 $catProg += $cp;
-                $catReal += ($s['realizado'] ?? false) ? $cp : min($cp, (int) ($s['cantidad_realizada'] ?? 0));
+                $catReal += max(0, (int) ($s['cantidad_realizada'] ?? 0));
             }
         }
         $catPct = $catProg > 0 ? (int) round($catReal / $catProg * 100) : 0;
@@ -454,7 +455,7 @@
                     <h3 class="sst-cat-title">{{ $categoria->nombre }}</h3>
                     <span style="font-size:.72rem;color:var(--text-muted)" data-filter-count>{{ $catActs->count() }} actividades · {{ $catPct }}% avance</span>
                 </div>
-                <div class="sst-cat-progress"><div class="sst-cat-progress-fill" style="width:{{ $catPct }}%"></div></div>
+                <div class="sst-cat-progress"><div class="sst-cat-progress-fill" style="width:{{ min(100, $catPct) }}%"></div></div>
             </div>
             <div style="display:flex;gap:.35rem">
                 @if($puedeCrear)
@@ -488,6 +489,7 @@
                     <div class="form-group" style="margin:0"><label class="sst-label">Periodicidad</label>
                         <select name="periodicidad" class="form-input"><option value="">— Ninguna —</option>@foreach(\App\Models\SstActividad::periodicidadesMap() as $k => $v)<option value="{{ $k }}">{{ $v }}</option>@endforeach</select></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Cantidad <small style="text-transform:none;font-weight:400">(repeticiones/mes)</small></label><input type="number" name="cantidad_programada" class="form-input" value="1" min="1" max="999" placeholder="1"></div>
+                    <div class="form-group" style="grid-column:1/-1;margin:0"><input type="hidden" name="permitir_exceder_meta" value="0"><label style="display:flex;align-items:center;gap:.5rem;font-size:.82rem"><input type="checkbox" name="permitir_exceder_meta" value="1"> Permitir superar la meta mensual</label><small style="display:block;color:var(--text-muted);font-size:.72rem">En actividades mensuales permite sumar ejecuciones adicionales y mostrar un cumplimiento superior al 100%. Desactivarlo bloquea nuevas sumas al llegar a la meta; conserva lo ya registrado.</small></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha inicio</label><input type="date" name="fecha_inicio" class="form-input"></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha fin</label><input type="date" name="fecha_fin" class="form-input"></div>
                     <div class="form-group" style="margin:0;grid-column:1/-1"><label class="sst-label">Descripción</label><textarea name="descripcion" class="form-input" rows="2" placeholder="Descripción o instrucciones..."></textarea></div>
@@ -641,6 +643,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     <div class="form-group" style="margin:0"><label class="sst-label">Periodicidad</label>
                         <select name="periodicidad" id="edit-periodicidad" class="form-input"><option value="">— Ninguna —</option>@foreach(\App\Models\SstActividad::periodicidadesMap() as $k => $v)<option value="{{ $k }}">{{ $v }}</option>@endforeach</select></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Cantidad <small style="text-transform:none;font-weight:400">(repeticiones/mes)</small></label><input type="number" name="cantidad_programada" id="edit-cantidad" class="form-input" value="1" min="1" max="999"></div>
+                    <div class="form-group" style="grid-column:1/-1;margin:0"><input type="hidden" name="permitir_exceder_meta" value="0"><label style="display:flex;align-items:center;gap:.5rem;font-size:.82rem"><input type="checkbox" name="permitir_exceder_meta" value="1" id="edit-permitir-exceder-meta"> Permitir superar la meta mensual</label><small style="display:block;color:var(--text-muted);font-size:.72rem">En actividades mensuales permite sumar ejecuciones adicionales y mostrar un cumplimiento superior al 100%. Desactivarlo bloquea nuevas sumas al llegar a la meta; conserva lo ya registrado.</small></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha inicio</label><input type="date" name="fecha_inicio" id="edit-fecha-inicio" class="form-input"></div>
                     <div class="form-group" style="margin:0"><label class="sst-label">Fecha fin</label><input type="date" name="fecha_fin" id="edit-fecha-fin" class="form-input"></div>
                     <div class="form-group" style="margin:0;grid-column:1/-1"><label class="sst-label">Descripción</label><textarea name="descripcion" id="edit-descripcion" class="form-input" rows="2" placeholder="Descripción o instrucciones..."></textarea></div>

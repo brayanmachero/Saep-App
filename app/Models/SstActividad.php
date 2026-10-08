@@ -12,10 +12,11 @@ class SstActividad extends Model
     protected $fillable = [
         'categoria_id', 'nombre', 'descripcion', 'responsable', 'responsable_id',
         'orden', 'fecha_inicio', 'fecha_fin', 'prioridad', 'estado', 'periodicidad',
-        'cantidad_programada',
+        'cantidad_programada', 'permitir_exceder_meta',
     ];
 
     protected $casts = [
+        'permitir_exceder_meta' => 'boolean',
         'fecha_inicio' => 'date',
         'fecha_fin'    => 'date',
     ];
@@ -244,7 +245,7 @@ class SstActividad extends Model
         foreach ($this->seguimiento as $s) {
             $meses[$s->mes] = [
                 'programado'          => (bool) $s->programado,
-                'realizado'           => (bool) $s->realizado,
+                'realizado'           => (int) $s->cantidad_realizada >= $cantidadEstandar,
                 'observacion'         => $s->observacion,
                 'cantidad_realizada'  => (int) $s->cantidad_realizada,
                 'cantidad_programada' => $cantidadEstandar,
