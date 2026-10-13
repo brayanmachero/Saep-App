@@ -277,7 +277,7 @@ class DescargaContenedorTest extends TestCase
         $capturador = $this->createContainerModuleUser(false);
         $centro = $this->createCentroCosto('Centro Externo Selector QA');
         $tarifa = $this->createTarifa('CNTEXTERNO', 75000, 36000, 'EXTERNO SELECTOR QA', false, $centro);
-        $worker = $this->createTalanaWorker('Trabajador Externo Selector QA', $centro, [
+        $worker = $this->createTalanaWorker('Trabajador Externo Selector', $centro, [
             'cargo_nombre' => 'Cargo Fuera Filtro QA',
             'centro_costo_nombre' => 'Centro Externo Selector QA',
         ]);
@@ -1429,7 +1429,7 @@ class DescargaContenedorTest extends TestCase
     {
         $capturador = $this->createContainerModuleUser(false);
         $centro = $this->createCentroCosto('CD Captura Precio QA');
-        $this->createTarifa('CNTPRECIOCAP', 75000, 36000, 'PRECIO OCULTO QA', false, $centro);
+        $this->createTarifa('CNTPRECIOCAP', 876543.21, 36000, 'PRECIO OCULTO QA', false, $centro);
 
         foreach ([
             route('descarga-contenedores.create'),
@@ -1440,8 +1440,8 @@ class DescargaContenedorTest extends TestCase
                 ->assertOk()
                 ->assertSee('CNTPRECIOCAP')
                 ->assertDontSee('Costo unitario')
-                ->assertDontSee('75000')
-                ->assertDontSee('$75.000')
+                ->assertDontSee('876543.21')
+                ->assertDontSee('$876.543')
                 ->assertDontSee('"costo_unitario"', false);
         }
     }

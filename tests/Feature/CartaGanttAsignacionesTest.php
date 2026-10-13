@@ -591,11 +591,13 @@ class CartaGanttAsignacionesTest extends TestCase
         $this->actingAs($creator)
             ->put(route('carta-gantt.update', $programa), [
                 'nombre' => 'Programa trazabilidad editado',
+                'vista_inicial' => 'ANUAL',
                 'anio' => $programa->anio,
                 'estado' => 'ACTIVO',
                 'responsable_id' => $assigned->id,
                 'asignados' => [$assigned->id],
             ])
+            ->assertSessionHasNoErrors()
             ->assertRedirect();
 
         $this->assertDatabaseHas('sst_actividad_logs', [
