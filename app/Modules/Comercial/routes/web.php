@@ -27,6 +27,12 @@ Route::middleware(['auth', 'consentimiento', 'force.password', 'modulo:comercial
     ->prefix('comercial')
     ->name('comercial.')
     ->group(function () {
+    Route::get('tarifas', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'index'])->name('tarifas.index');
+    Route::get('tarifas/exportar', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'export'])->name('tarifas.export');
+    Route::get('tarifas/create', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'create'])->middleware('modulo:comercial,puede_crear')->name('tarifas.create');
+    Route::post('tarifas', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'store'])->middleware('modulo:comercial,puede_crear')->name('tarifas.store');
+    Route::get('tarifas/{tarifa}', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'show'])->name('tarifas.show');
+    Route::patch('tarifas/{tarifa}/revision', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'revisar'])->middleware(['modulo:comercial,puede_editar', 'permission:puede_aprobar'])->name('tarifas.revisar');
     // Cotizaciones
     Route::get('cotizaciones', [CotizacionController::class, 'index'])->name('cotizaciones.index');
     Route::get('cotizaciones/create', [CotizacionController::class, 'create'])->middleware('modulo:comercial,puede_crear')->name('cotizaciones.create');

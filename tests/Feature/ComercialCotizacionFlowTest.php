@@ -31,6 +31,7 @@ class ComercialCotizacionFlowTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->withoutVite();
 
         Config::set('database.default', 'sqlite');
         Config::set('database.connections.sqlite.database', ':memory:');
@@ -327,6 +328,86 @@ class ComercialCotizacionFlowTest extends TestCase
             @unlink($path);
             @rmdir($directory);
         }
+    }
+
+    public function test_sabana_importa_sin_aprobar_ni_duplicar_y_conserva_revision(): void
+    {
+        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
+        $service = app(\App\Modules\Comercial\Services\SabanaTarifasService::class);
+        $lote = [
+            'fuentes' => [['clave' => 'idl', 'archivo' => 'IDL.xlsx', 'hash_sha256' => str_repeat('a', 64), 'estado' => 'parcial']],
+            'tarifas' => [[
+                'fuente_clave' => 'idl', 'cliente' => 'Cliente prueba', 'centro' => 'Centro Sur',
+                'cargo' => 'Operario', 'modalidad' => 'EST', 'unidad' => 'mes', 'precio' => 123456.789012,
+                'fecha_referencia' => '2026-06-01', 'hoja' => 'P626', 'celda' => 'AB3',
+                'conceptos' => [['concepto' => 'Sueldo base', 'valor' => 529000, 'celda' => 'E3']],
+            ]],
+        ];
+        $this->assertSame(1, $service->importar($lote)['nuevas']);
+        $tarifa = \App\Modules\Comercial\Models\TarifaReferencia::firstOrFail();
+        $this->assertSame('pendiente', $tarifa->estado);
+        $this->assertSame('123456.789012', $tarifa->precio);
+        $this->assertSame(0, $service->consulta(['vista' => 'vigentes'])->count());
+        $this->actingAs($this->createAdminUser());
+        $this->patch(route('comercial.tarifas.revisar', $tarifa), [
+            'categoria' => 'Operaciones', 'modalidad' => 'EST', 'unidad' => 'mes',
+            'estado' => 'confirmada', 'vigente_desde' => '2026-06-01', 'motivo' => 'Contrato revisado',
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertSame(0, $service->importar($lote)['nuevas']);
+        $this->assertSame('confirmada', $tarifa->fresh()->estado);
+        $this->assertSame(1, $tarifa->revisiones()->count());
+        $this->assertSame(1, $service->consulta(['vista' => 'vigentes', 'fecha' => '2026-06-01', 'categoria' => 'Operaciones'])->count());
+        $this->assertSame(0, $service->consulta(['vista' => 'vigentes', 'fecha' => '2026-05-31'])->count());
+        $this->get(route('comercial.tarifas.index', ['cliente' => 'Cliente prueba']))->assertOk()->assertSee('Sábana de tarifas')->assertSee('Operario');
+        $this->get(route('comercial.tarifas.show', $tarifa))->assertOk()->assertSee('Sueldo base')->assertSee('Contrato revisado');
+        $export = $this->get(route('comercial.tarifas.export', ['cliente' => 'Cliente prueba']))->assertOk();
+        $this->assertStringContainsString('123456.789012', $export->streamedContent());
+    }
+
+    public function test_sabana_resuelve_versiones_sin_reactivar_tarifas_vencidas_y_respeta_unidades(): void
+    {
+        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
+        $service = app(\App\Modules\Comercial\Services\SabanaTarifasService::class);
+        $modelo = \App\Modules\Comercial\Models\TarifaReferencia::class;
+        $datos = ['cliente' => 'A', 'centro' => 'Sur', 'cargo' => 'Operario', 'unidad' => 'mes', 'moneda' => 'CLP', 'precio' => 100, 'estado' => 'confirmada'];
+        $base = $modelo::create($datos + ['identidad' => str_repeat('a',64), 'grupo' => $modelo::grupoPara($datos), 'vigente_desde' => '2026-01-01']);
+        $modelo::create(array_merge($datos, ['precio' => 200, 'identidad' => str_repeat('b',64), 'grupo' => $base->grupo, 'vigente_desde' => '2026-06-01', 'vigente_hasta' => '2026-06-30']));
+        $modelo::create(array_merge($datos, ['precio' => 300, 'estado' => 'pendiente', 'identidad' => str_repeat('c',64), 'grupo' => $base->grupo, 'vigente_desde' => '2026-07-01']));
+        $this->assertSame('100.000000', $service->consulta(['vista' => 'vigentes', 'fecha' => '2026-05-31'])->first()->precio);
+        $this->assertSame('200.000000', $service->consulta(['vista' => 'vigentes', 'fecha' => '2026-06-30'])->first()->precio);
+        $this->assertSame(0, $service->consulta(['vista' => 'vigentes', 'fecha' => '2026-07-01'])->count());
+        $diaria = array_merge($datos, ['unidad' => 'día', 'precio' => 50]);
+        $modelo::create($diaria + ['identidad' => str_repeat('d',64), 'grupo' => $modelo::grupoPara($diaria), 'vigente_desde' => '2026-01-01']);
+        $this->assertSame(2, $service->consulta(['vista' => 'vigentes', 'fecha' => '2026-06-01'])->count());
+        $this->assertSame(1, $service->consulta(['vista' => 'vigentes', 'fecha' => '2026-06-01', 'unidad' => 'día'])->count());
+        $this->assertSame(0, $service->consulta(['cliente' => 'Otro'])->count());
+        $base->update(['fecha_referencia' => '2025-01-01']);
+        $posterior = $modelo::where('identidad', str_repeat('b',64))->firstOrFail();
+        $posterior->update(['fecha_referencia' => '2026-06-01']);
+        $this->assertFalse($service->consulta(['vista' => 'ultimas'])->get()->contains('id', $base->id));
+        $this->assertTrue($service->consulta(['vista' => 'ultimas', 'anio' => 2025])->get()->contains('id', $base->id));
+    }
+
+    public function test_sabana_impide_aprobar_sin_datos_y_crea_nuevas_versiones_sin_sobrescribir(): void
+    {
+        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
+        $this->get(route('comercial.tarifas.index'))->assertRedirect(route('login'));
+        $this->actingAs($this->createAdminUser());
+        $payload = ['cliente' => 'A', 'cargo' => 'Operario', 'unidad' => 'mes', 'moneda' => 'CLP', 'precio' => 100, 'fecha_referencia' => '2026-01-01', 'observaciones' => 'Acuerdo comercial'];
+        $this->post(route('comercial.tarifas.store'), $payload)->assertSessionHasNoErrors()->assertRedirect();
+        $tarifa = \App\Modules\Comercial\Models\TarifaReferencia::firstOrFail();
+        $this->patch(route('comercial.tarifas.revisar', $tarifa), ['estado' => 'confirmada'])->assertSessionHasErrors(['modalidad', 'unidad', 'vigente_desde', 'motivo']);
+        $this->post(route('comercial.tarifas.store'), array_merge($payload, ['precio' => 200]))->assertSessionHasNoErrors();
+        $this->assertSame(2, \App\Modules\Comercial\Models\TarifaReferencia::count());
+        $this->assertSame('100.000000', $tarifa->fresh()->precio);
+        $this->assertSame('pendiente', $tarifa->fresh()->estado);
+        $usuario = auth()->user();
+        $usuario->rol->update(['codigo' => 'CONSULTOR_COMERCIAL', 'puede_aprobar' => false]);
+        $usuario->unsetRelation('rol');
+        $this->patch(route('comercial.tarifas.revisar', $tarifa), [
+            'estado' => 'confirmada', 'modalidad' => 'EST', 'unidad' => 'mes',
+            'vigente_desde' => '2026-01-01', 'motivo' => 'Intento sin permiso',
+        ])->assertForbidden();
     }
 
     private function createAdminUser(): User

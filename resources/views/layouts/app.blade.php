@@ -250,6 +250,9 @@
                         <i class="bi bi-calculator-fill"></i>
                         <span>Cotizador</span>
                     </a>
+                    <a href="{{ route('comercial.tarifas.index') }}" class="nav-item {{ request()->routeIs('comercial.tarifas.*') ? 'active' : '' }}">
+                        <i class="bi bi-table"></i><span>Sábana de tarifas</span>
+                    </a>
                     <a href="{{ route('comercial.clientes.index') }}" class="nav-item {{ request()->routeIs('comercial.clientes.*') || request()->routeIs('comercial.centros-costo.*') ? 'active' : '' }}">
                         <i class="bi bi-building-fill"></i>
                         <span>Clientes y CC</span>
