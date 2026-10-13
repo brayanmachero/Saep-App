@@ -98,3 +98,16 @@ denominación LTS se vincula solo si todos los centros LTS de los maestros tiene
 el mismo cliente. Cada cambio mantiene la auditoría y el estado pendiente.
 Los archivos aún sin extracción conservan el motivo específico de revisión en
 las observaciones de la fuente; no deben marcarse completos por tener inventario.
+
+## Formatos de cliente y tablas paralelas
+
+`ops/comercial/extraer_formatos_cliente.py AUDIT_DIRECTORY` lee los formatos
+auditados de La Polar (EST/SUB) y LTS Peñón/Quilicura. La Polar usa la columna
+VALOR y el TOTAL A FACTURAR FINAL mensual, conservando los componentes anteriores
+y las tarifas horarias explícitas. Las tablas paralelas se separan por encabezado
+CARGO; cada versión conserva la celda del bloque, sin inventar una fecha común.
+Si hay PRECIO DE VENTA MES, COSTO FINAL MES se conserva solo como componente.
+
+Genera un lote delta y otro acumulado. La referencia histórica de Quilicura W7,
+extraída previamente como costo, debe descartarse con auditoría al incorporar Z7,
+el precio final. Nunca se borra ni se confirma automáticamente una tarifa.

@@ -14,7 +14,7 @@ PRICES = {'COSTO FINAL MES': 'mes', 'OFERTA VALOR HORA': 'hora',
           'OFERTA VALOR HORA EXTRA (50%)': 'hora extra 50%',
           'OFERTA VALOR HORA EXTRA FESTIVO (100%)': 'hora extra 100%',
           'PRECIO UNITARIO': None}
-TABLE_PRICES = PRICES | {'TARIFA': None, 'HORA NORMAL': 'hora', 'TARIFA DIA': 'día', 'TARIFA HORA': 'hora', 'HHEE 50%': 'hora extra 50%', 'HHEE 100%': 'hora extra 100%'}
+TABLE_PRICES = PRICES | {'PRECIO DE VENTA MES': 'mes', 'TARIFA': None, 'HORA NORMAL': 'hora', 'TARIFA DIA': 'día', 'TARIFA HORA': 'hora', 'HHEE 50%': 'hora extra 50%', 'HHEE 100%': 'hora extra 100%'}
 
 
 def money(value):
@@ -73,6 +73,8 @@ def extract_table(rows, raw_rows, title):
             key = normal(h.value)
             if key not in TABLE_PRICES:
                 continue
+            if key == 'COSTO FINAL MES' and 'PRECIO DE VENTA MES' in headers:
+                continue  # This format exposes a later sale price including its fee.
             price = money(get(h.column))
             if price is None or price < 0:
                 continue

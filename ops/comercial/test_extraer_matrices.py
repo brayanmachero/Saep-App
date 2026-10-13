@@ -5,10 +5,10 @@ from extraer_matrices import extract_sheet, reference_date, source_context
 from extraer_tablas import PRICES, extract_table, money
 
 
-def matrix(cells, columns=4):
+def matrix(cells, columns=4, rows=40):
     return [[SimpleNamespace(value=cells.get(f'{get_column_letter(c)}{r}'), row=r, column=c,
                              coordinate=f'{get_column_letter(c)}{r}')
-             for c in range(1, columns + 1)] for r in range(1, 36)]
+             for c in range(1, columns + 1)] for r in range(1, rows + 1)]
 
 
 class MatrixTests(unittest.TestCase):
