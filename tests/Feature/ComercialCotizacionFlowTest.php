@@ -417,6 +417,10 @@ class ComercialCotizacionFlowTest extends TestCase
         $this->assertSame('Cliente Uno', $command::resolver('Bodega Sur SUB.', $masters));
         $this->assertSame('DHL', $command::resolver('DHL Aramark', $masters));
         $this->assertNull($command::resolver('DHLotro', $masters));
+        $this->assertSame('DHL', $command::resolver('16-FINAL DHL Aramark', $masters));
+        $lts = [['centro' => 'LTS LO AGUIRRE SUB', 'cliente' => 'Walmart Chile'], ['centro' => 'LTS PEÑON EST', 'cliente' => 'Walmart Chile']];
+        $this->assertSame('Walmart Chile', $command::resolver('14.1-FINAL LTS QUILICURA SUB', $lts));
+        $this->assertNull($command::resolver('LTS QUILICURA', array_merge($lts, [['centro' => 'LTS OTRO', 'cliente' => 'Otro']])));
         $this->assertNull($command::resolver('Bodega Sur', array_merge($masters, [['centro' => 'Bodega Sur SUB', 'cliente' => 'Otro']])));
         (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
         $this->createCommercialFixture();

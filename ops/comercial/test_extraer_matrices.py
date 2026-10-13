@@ -2,6 +2,7 @@ import unittest
 from types import SimpleNamespace
 from openpyxl.utils import get_column_letter
 from extraer_matrices import extract_sheet, reference_date, source_context
+from extraer_tablas import PRICES, extract_table, money
 
 
 def matrix(cells, columns=4):
@@ -11,6 +12,36 @@ def matrix(cells, columns=4):
 
 
 class MatrixTests(unittest.TestCase):
+    def test_percentage_column_is_not_the_unit_price(self):
+        cells = {'A3': 'TARIFA IPC', 'A4': 'SUPERVISOR', 'B4': '%', 'C4': 'VALOR $',
+                 'A6': 'Sueldo Base', 'C6': 800000, 'A34': 'Precio Unitario', 'B34': 0.1, 'C34': 1500000}
+        rows = matrix(cells)
+        result, _ = extract_sheet(rows, rows, '2026', PRICES)
+        self.assertEqual(1500000, result[0]['precio'])
+        self.assertEqual('C34', result[0]['celda'])
+        self.assertIn('TARIFA IPC', result[0]['variante'])
+        self.assertIsNone(result[0]['fecha_referencia'])
+        rows = matrix(cells | {'A3': 'TARIFA CON ERROR'})
+        self.assertEqual([], extract_sheet(rows, rows, '2026', PRICES)[0])
+
+    def test_table_preserves_daily_and_hourly_units_and_ignores_totals(self):
+        cells = {'A1': 'Cargo', 'B1': 'Sueldo Base Mensual', 'C1': 'TARIFA DÍA', 'D1': 'TARIFA HORA',
+                 'A2': 'OPERARIO', 'B2': 30000, 'C2': 45000, 'D2': 6000,
+                 'A3': 'TOTAL', 'B3': 30000, 'C3': 45000, 'D3': 6000}
+        rows = matrix(cells)
+        result, _ = extract_table(rows, rows, '2026')
+        self.assertEqual(['día', 'hora'], [r['unidad'] for r in result])
+        self.assertEqual([45000, 6000], [r['precio'] for r in result])
+        self.assertIsNone(result[0]['fecha_referencia'])
+        rows = matrix(cells | {'B2': '#REF!'})
+        self.assertEqual([], extract_table(rows, rows, '2026')[0])
+
+    def test_money_does_not_guess_ambiguous_decimal_strings(self):
+        self.assertEqual(1234567.89, money('$ 1.234.567,89'))
+        self.assertIsNone(money('1,234.56'))
+        self.assertIsNone(money('1.25'))
+        self.assertEqual(0, money(0))
+
     def test_periods_and_invalid_dates(self):
         for text, expected in [('P626', '2026-06-01'), ('P10-2026', '2026-10-01'), ('TARIFA ENERO 2026', '2026-01-01'),
                                ('Cotización 09-10-2026', '2026-10-09'), ('31-02-2026', None), ('P1326', None), ('2026', None)]:

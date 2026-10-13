@@ -16,7 +16,10 @@ class HomologarTarifas extends Command
 
     public static function normalizar(string $text): string
     {
-        return trim(preg_replace('/\s+/', ' ', preg_replace('/\b(EST|SUB)\b|[.]/', ' ', Str::upper(Str::ascii($text)))));
+        $text = Str::upper(Str::ascii(trim($text)));
+        $text = preg_replace('/^(?:COPIA DE\s+)?(?:\d+(?:[.-]\d+)*[.\s-]+)?(?:FINAL[\s-]+)?/', '', $text);
+
+        return trim(preg_replace('/\s+/', ' ', preg_replace('/\b(EST|SUB)\b|[.]/', ' ', $text)));
     }
 
     public static function resolver(string $centro, array $maestros): ?string
@@ -28,6 +31,15 @@ class HomologarTarifas extends Command
         $exact = collect($maestros)->filter(fn ($m) => self::normalizar($m['centro']) === $key)->pluck('cliente')->filter()->unique()->values();
         if ($exact->isNotEmpty()) {
             return $exact->count() === 1 ? $exact->first() : null;
+        }
+        // LTS is an existing commercial-center designation. Resolve its owner
+        // only when every LTS master agrees, never by a hard-coded client ID.
+        if (str_starts_with($key, 'LTS ')) {
+            $lts = collect($maestros)->filter(fn ($m) => str_starts_with(self::normalizar($m['centro']), 'LTS '))->pluck('cliente')->filter()->unique()->values();
+            if ($lts->count() === 1) {
+                return $lts->first();
+            }
+            return null;
         }
         // A customer name must appear as a complete prefix; no fuzzy spelling,
         // first-word guesses, or automatic assignment of a cost-center ID.
@@ -63,7 +75,7 @@ class HomologarTarifas extends Command
                     $tarifa->grupo = TarifaReferencia::grupoPara($tarifa->toArray());
                     $tarifa->save();
                     $tarifa->revisiones()->create(['usuario_id' => null, 'antes' => $antes,
-                        'despues' => $tarifa->toArray() + ['motivo_revision' => 'Homologación por coincidencia única con maestros comerciales (centro normalizado o nombre completo del cliente). No aprueba precio ni vigencia.'],
+                        'despues' => $tarifa->toArray() + ['motivo_revision' => 'Homologación inequívoca con maestros comerciales: centro normalizado, nombre completo del cliente o denominación LTS con propietario único. Se omiten prefijos de archivo numéricos/FINAL/Copia de; no aprueba precio ni vigencia.'],
                     ]);
                 }
             }

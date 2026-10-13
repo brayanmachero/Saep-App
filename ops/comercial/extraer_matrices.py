@@ -40,23 +40,28 @@ def reference_date(value):
         return None
 
 
-def extract_sheet(rows, raw_rows, title):
+def extract_sheet(rows, raw_rows, title, price_labels=None):
     """Accept only adjacent label/value columns and a salary-anchored heading.
 
     All columns are scanned; an HHEE calculation to the right of the base-price
     column is never treated as the base tariff. Dates come from this block only.
     """
     accepted, issues = [], []
+    extended = price_labels is not None
+    price_labels = price_labels or {'PRECIO VENTA': None, 'PRECIO DE VENTA': None}
     def val(r, c):
         return rows[r - 1][c - 1].value if 0 < r <= len(rows) and 0 < c <= len(rows[r - 1]) else None
     for row in rows:
         for label in row:
-            if normal(label.value) not in ('PRECIO VENTA', 'PRECIO DE VENTA'):
+            if normal(label.value) not in price_labels:
                 continue
             pr, col = label.row, label.column
-            price = number(val(pr, col + 1))
             reason = None
             start = next((r for r in range(pr - 1, max(0, pr - 65), -1) if normal(val(r, col)) == 'SUELDO BASE'), None)
+            value_col = col + 1
+            if start and any(normal(val(r, col + 1)) == '%' and normal(val(r, col + 2)) in ('VALOR $', 'VALOR ($)') for r in range(max(1, start - 5), start)):
+                value_col = col + 2
+            price = number(val(pr, value_col))
             if price is None or price < 0:
                 reason = 'Precio sin valor numérico guardado.'
             elif start is None:
@@ -71,6 +76,9 @@ def extract_sheet(rows, raw_rows, title):
                 issues.append(dict(hoja=title, celda=label.coordinate, motivo='Cargo no identificado en el encabezado del bloque.'))
                 continue
             cr, cargo = cargo_candidates[-1]
+            if any(re.search(r'CON ERROR|NO USAR', normal(text)) for _, text in headings):
+                issues.append(dict(hoja=title, celda=label.coordinate, motivo='Bloque marcado con error o NO USAR.'))
+                continue
             periods = [(r, text) for r, text in headings if r < cr and reference_date(text)]
             date = reference_date(periods[-1][1]) if periods else None
             period = str(periods[-1][1]) if periods else 'Período por confirmar'
@@ -80,18 +88,21 @@ def extract_sheet(rows, raw_rows, title):
                 concept = val(r, col)
                 if not isinstance(concept, str) or concept.startswith('='):
                     continue
-                cell = rows[r - 1][col]
-                raw = raw_rows[r - 1][col].value
-                components.append(dict(concepto=concept.strip(), valor=cell.value, celda=cell.coordinate,
+                cell = rows[r - 1][value_col - 1]
+                raw = raw_rows[r - 1][value_col - 1].value
+                components.append(dict(concepto=concept.strip(), valor=cell.value, celda=f'{openpyxl.utils.get_column_letter(value_col)}{r}',
                                        formula=raw if isinstance(raw, str) and raw.startswith('=') else None))
             bad = [x['celda'] for x in components if isinstance(x['valor'], str) and x['valor'].startswith('#')]
             if bad:
                 issues.append(dict(hoja=title, celda=label.coordinate, motivo='Errores guardados en el bloque: ' + ', '.join(bad)))
                 continue
-            unit = 'día' if re.search(r'\b(POR DIA|DIARIO|DIARIA)\b', normal(cargo)) else None
+            unit = price_labels[normal(label.value)] or ('día' if re.search(r'\b(POR DIA|DIARIO|DIARIA)\b', normal(cargo)) else None)
             accepted.append(dict(cargo=cargo.strip(), precio=price, fecha_referencia=date, periodo=period,
-                                 hoja=title, celda=rows[pr - 1][col].coordinate, conceptos=components,
+                                 hoja=title, celda=rows[pr - 1][value_col - 1].coordinate, conceptos=components,
                                  unidad=unit, etiqueta_precio=label.coordinate))
+            if extended:
+                context = [str(text).strip() for r, text in headings if r < cr and not reference_date(text)]
+                accepted[-1]['variante'] = ' · '.join([str(label.value).strip()] + context)[:255]
     return accepted, issues
 
 

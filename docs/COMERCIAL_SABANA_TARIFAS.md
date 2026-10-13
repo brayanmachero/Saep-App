@@ -83,3 +83,18 @@ ambiguas. No usa similitud de nombres ni asigna categorías automáticamente.
 
 Verificación del extractor: `python -m unittest discover -s ops/comercial -p test_extraer_matrices.py`.
 
+## Tablas por cargo y unidades explícitas
+
+`ops/comercial/extraer_tablas.py AUDIT_DIRECTORY` parte del lote ampliado y añade
+matrices con costo final mensual/precio unitario y tablas de remuneraciones con
+un cargo por fila. Distingue mes, día, hora, HHEE 50% y HHEE 100% por encabezados
+explícitos. Una columna de porcentaje intermedia no se interpreta como precio;
+las variantes de IPC y otros encabezados se conservan. Bloques marcados CON ERROR
+o NO USAR y filas con errores guardados no se incorporan. No se heredan fechas
+del archivo; las referencias sin fecha verificable permanecen sin fecha.
+
+La homologación admite prefijos de archivo numéricos, FINAL y Copia de. La
+denominación LTS se vincula solo si todos los centros LTS de los maestros tienen
+el mismo cliente. Cada cambio mantiene la auditoría y el estado pendiente.
+Los archivos aún sin extracción conservan el motivo específico de revisión en
+las observaciones de la fuente; no deben marcarse completos por tener inventario.
