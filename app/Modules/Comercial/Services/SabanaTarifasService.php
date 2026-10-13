@@ -21,7 +21,7 @@ class SabanaTarifasService
 
     public function validar(array $lote): void
     {
-        Validator::make($lote, [
+        $reglas = [
             'fuentes' => 'required|array', 'tarifas' => 'present|array',
             'fuentes.*.clave' => 'required|string|max:1000',
             'fuentes.*.archivo' => 'required|string|max:1000',
@@ -42,7 +42,21 @@ class SabanaTarifasService
             'tarifas.*.variante' => 'nullable|string|max:255',
             'tarifas.*.moneda' => 'nullable|in:CLP,UF,USD',
             'tarifas.*.periodo' => 'nullable|string|max:255',
-        ])->validate();
+        ];
+        Validator::make($lote, array_intersect_key($reglas, array_flip(['fuentes', 'tarifas'])))->validate();
+        // Validate each record separately: expanding wildcard rules over all nested
+        // Excel concepts makes large batches needlessly quadratic.
+        foreach (['fuentes', 'tarifas'] as $seccion) {
+            $reglasFila = [];
+            foreach ($reglas as $campo => $regla) {
+                if (str_starts_with($campo, $seccion.'.*.')) {
+                    $reglasFila[substr($campo, strlen($seccion) + 3)] = $regla;
+                }
+            }
+            foreach ($lote[$seccion] as $fila) {
+                Validator::make($fila, $reglasFila)->validate();
+            }
+        }
     }
 
     private function registrarLote(array $lote): array
