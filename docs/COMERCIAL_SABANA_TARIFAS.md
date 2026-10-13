@@ -54,3 +54,32 @@ Los archivos privados de origen y lotes no deben incorporarse al repositorio.
 Pruebas en `ComercialCotizacionFlowTest`: importación idempotente, precisión,
 vigencia inclusiva, sustitución sin resucitar tarifas vencidas, unidades separadas,
 consulta por año, permisos, revisión auditada, nuevas versiones, render y CSV.
+# Ampliación de matrices comerciales (13-10-2026)
+
+`ops/comercial/extraer_matrices.py AUDIT_DIRECTORY` amplía el lote inicial leyendo
+las matrices de remuneraciones de los archivos inventariados. Conserva precio,
+conceptos, fórmulas guardadas, hoja y celda. Recorre todas las columnas de las
+hojas candidatas, incluidas las posteriores a AF. No recalcula Excel.
+
+Reconoce únicamente precio de venta adyacente a su etiqueta, sueldo base y cargo
+del mismo bloque. No convierte el sueldo ni los cálculos auxiliares de HHEE en
+tarifas. No hereda fechas del nombre de la hoja o del archivo: usa el encabezado
+del bloque (el primer día representa un período mensual) o deja fecha pendiente.
+Los errores guardados y encabezados ambiguos quedan en `cobertura-matrices.json`.
+Las tablas por filas, producción, tramos y otras estructuras siguen pendientes;
+una fuente con extracción se marca parcial, nunca completa por esta pasada.
+
+El lote ampliado se valida y carga con `comercial:importar-sabana`; volver a cargar
+el mismo lote no crea duplicados ni reemplaza revisiones comerciales. Las
+referencias son antecedentes por archivo/celda, no un conteo de tarifas vigentes
+ni de contratos distintos.
+
+`php artisan comercial:homologar-tarifas` muestra coincidencias propuestas sin
+escritura. Con `--aplicar`, identifica clientes únicamente por centro normalizado
+inequívoco o por nombre completo del cliente como prefijo, usando maestros
+comerciales. Conserva el centro original, precio, estado pendiente y vigencia;
+registra antes/después en auditoría. Omite referencias ya revisadas y coincidencias
+ambiguas. No usa similitud de nombres ni asigna categorías automáticamente.
+
+Verificación del extractor: `python -m unittest discover -s ops/comercial -p test_extraer_matrices.py`.
+

@@ -410,6 +410,33 @@ class ComercialCotizacionFlowTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_homologacion_solo_corrige_clientes_inequivocos_y_conserva_auditoria(): void
+    {
+        $command = \App\Console\Commands\HomologarTarifas::class;
+        $masters = [['centro' => 'Bodega Sur EST', 'cliente' => 'Cliente Uno'], ['centro' => 'DHL Norte EST', 'cliente' => 'DHL']];
+        $this->assertSame('Cliente Uno', $command::resolver('Bodega Sur SUB.', $masters));
+        $this->assertSame('DHL', $command::resolver('DHL Aramark', $masters));
+        $this->assertNull($command::resolver('DHLotro', $masters));
+        $this->assertNull($command::resolver('Bodega Sur', array_merge($masters, [['centro' => 'Bodega Sur SUB', 'cliente' => 'Otro']])));
+        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
+        $this->createCommercialFixture();
+        $modelo = \App\Modules\Comercial\Models\TarifaReferencia::class;
+        $base = ['cliente' => 'Por homologar', 'centro' => 'Cliente Prueba Norte', 'cargo' => 'Operario', 'precio' => 123456.123456, 'estado' => 'pendiente'];
+        $tarifa = $modelo::create($base + ['identidad' => str_repeat('a', 64), 'grupo' => $modelo::grupoPara($base)]);
+        $reviewed = $modelo::create($base + ['identidad' => str_repeat('b', 64), 'grupo' => $tarifa->grupo, 'revisado_at' => now()]);
+        $this->artisan('comercial:homologar-tarifas')->assertExitCode(0);
+        $this->assertSame('Por homologar', $tarifa->fresh()->cliente);
+        $this->artisan('comercial:homologar-tarifas', ['--aplicar' => true])->assertExitCode(0);
+        $this->assertSame('Cliente Prueba', $tarifa->fresh()->cliente);
+        $this->assertSame('Por homologar', $reviewed->fresh()->cliente);
+        $this->assertSame('123456.123456', $tarifa->fresh()->precio);
+        $this->assertSame('pendiente', $tarifa->fresh()->estado);
+        $this->assertNull($tarifa->fresh()->vigente_desde);
+        $this->assertSame('Por homologar', $tarifa->revisiones()->first()->antes['cliente']);
+        $this->artisan('comercial:homologar-tarifas', ['--aplicar' => true])->assertExitCode(0);
+        $this->assertSame(1, $tarifa->revisiones()->count());
+    }
+
     private function createAdminUser(): User
     {
         $rol = Rol::create([
