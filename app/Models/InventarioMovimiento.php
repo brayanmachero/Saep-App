@@ -101,4 +101,10 @@ class InventarioMovimiento extends Model
     {
         return $this->belongsTo(InventarioEntregaKizeoAplicacion::class, 'referencia_id');
     }
+
+    /** Solo aplica a movimientos cuya referencia_tipo es InventarioIngreso. */
+    public function ingreso(): BelongsTo
+    {
+        return $this->belongsTo(InventarioIngreso::class, 'referencia_id');
+    }
 }

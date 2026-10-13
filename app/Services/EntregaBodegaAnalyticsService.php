@@ -6,6 +6,7 @@ use App\Models\EntregaBodega;
 use App\Models\InventarioEntregaKizeoAplicacion;
 use App\Models\InventarioEntregaKizeoLinea;
 use App\Models\InventarioMovimiento;
+use App\Models\InventarioIngreso;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use stdClass;
@@ -24,7 +25,7 @@ class EntregaBodegaAnalyticsService
 
     public function hasSyncedData(): bool
     {
-        return $this->appliedKizeoMovements()->exists();
+        return $this->appliedConsumptionMovements()->exists();
     }
 
     public function getSyncInfo(): ?array
@@ -50,7 +51,7 @@ class EntregaBodegaAnalyticsService
         $valuedNetUnits = $this->absoluteSum($valuedEntries, 'netas');
 
         return [
-            'total' => $entries->pluck('aplicacion_id')->unique()->count(),
+            'total' => $entries->pluck('documento_clave')->unique()->count(),
             'entregadas' => $this->sum($entries, 'entregadas'),
             'devueltas' => $this->sum($entries, 'devueltas'),
             'netas' => $this->sum($entries, 'netas'),
@@ -63,7 +64,7 @@ class EntregaBodegaAnalyticsService
             'precio_referencia_promedio' => $valuedNetUnits > 0
                 ? round(abs($this->sum($valuedEntries, 'valor_neto')) / $valuedNetUnits, 2)
                 : null,
-            'personas' => $entries->pluck('persona')->filter()->unique()->count(),
+            'personas' => $entries->where('persona_identificada', true)->pluck('persona')->filter()->unique()->count(),
             'centros_activos' => $entries->pluck('centro')
                 ->reject(fn (string $center) => $center === 'Sin centro imputado')
                 ->unique()
@@ -99,7 +100,7 @@ class EntregaBodegaAnalyticsService
 
         return [
             'centros' => $entries->pluck('centro')->filter()->unique()->sort()->values()->all(),
-            'trabajadores' => $entries->pluck('persona')->filter()->unique()->sort()->values()->all(),
+            'trabajadores' => $entries->where('persona_identificada', true)->pluck('persona')->filter()->unique()->sort()->values()->all(),
             'articulos' => $entries->pluck('articulo')->filter()->unique()->sort()->values()->all(),
             'tallas' => $entries->pluck('talla')->filter()->unique()->sort()->values()->all(),
         ];
@@ -108,12 +109,13 @@ class EntregaBodegaAnalyticsService
     /** @return Collection<int, stdClass> */
     private function getFilteredEntries(array $filters): Collection
     {
-        $query = $this->appliedKizeoMovements()->with([
+        $query = $this->appliedConsumptionMovements()->with([
             'centroCosto',
             'producto',
             'variante',
             'entregaKizeoLinea.aplicacion.entrega',
             'entregaKizeoAplicacion.entrega',
+            'ingreso',
         ]);
         $this->applyFilters($query, $filters);
 
@@ -157,6 +159,21 @@ class EntregaBodegaAnalyticsService
             });
     }
 
+    private function appliedConsumptionMovements(): Builder
+    {
+        return InventarioMovimiento::query()->where(function (Builder $query): void {
+            $query->whereIn('id', $this->appliedKizeoMovements()->select('id'))
+                ->orWhere(function (Builder $returns): void {
+                    $returns->where('origen', 'DEVOLUCION_BODEGA')
+                        ->where('tipo', 'DEVOLUCION_EPP')
+                        ->where('referencia_tipo', InventarioIngreso::class)
+                        ->whereHas('ingreso', fn (Builder $receipt) => $receipt
+                            ->where('tipo_ingreso', 'DEVOLUCION_EPP')
+                            ->whereNull('reversado_en'));
+                });
+        });
+    }
+
     private function applyFilters(Builder $query, array $filters): void
     {
         if (! empty($filters['centro'])) {
@@ -187,11 +204,12 @@ class EntregaBodegaAnalyticsService
             default => null,
         };
         $delivery = $application?->entrega;
-        if (! $application || ! $delivery) {
+        $receipt = $movement->referencia_tipo === InventarioIngreso::class ? $movement->ingreso : null;
+        if ((! $application || ! $delivery) && ! $receipt) {
             return null;
         }
 
-        $isReturn = $delivery->flujo_inventario === 'ENTRADA';
+        $isReturn = $receipt !== null || $delivery->flujo_inventario === 'ENTRADA';
         $quantity = round((float) $movement->cantidad, 3);
         $delivered = $isReturn ? 0.0 : -$quantity;
         $returned = $isReturn ? $quantity : 0.0;
@@ -204,13 +222,16 @@ class EntregaBodegaAnalyticsService
 
         $entry = new stdClass;
         $entry->movimiento_id = $movement->id;
-        $entry->aplicacion_id = $application->id;
+        $entry->aplicacion_id = $application?->id;
+        $entry->documento_clave = $receipt ? 'ingreso:'.$receipt->id : 'kizeo:'.$application->id;
+        $entry->referencia = $receipt ? $receipt->codigo : 'Kizeo #'.($delivery->kizeo_record_number ?: $delivery->kizeo_data_id);
         $entry->entrega = $delivery;
-        $entry->fecha = $movement->ocurrido_en?->toDateString() ?: $delivery->fecha_pedido?->toDateString();
+        $entry->fecha = $movement->ocurrido_en?->toDateString() ?: ($delivery?->fecha_pedido?->toDateString() ?? $receipt?->fecha_recepcion?->toDateString());
         $entry->orden = $movement->id;
         $entry->tipo = $isReturn ? 'Devolución' : 'Entrega';
-        $entry->persona = $movement->destinatario_nombre ?: $delivery->nombre ?: 'Sin identificar';
-        $entry->rut = $movement->destinatario_rut ?: $delivery->rut;
+        $entry->persona = $movement->destinatario_nombre ?: $delivery?->nombre ?: ($receipt ? 'Devolución de centro de costo' : 'Sin identificar');
+        $entry->persona_identificada = filled($movement->destinatario_nombre) || filled($delivery?->nombre);
+        $entry->rut = $movement->destinatario_rut ?: $delivery?->rut;
         $entry->centro = $movement->centroCosto?->nombre ?: ($movement->centro_costo ?: 'Sin centro imputado');
         $entry->centro_id = $movement->centro_costo_id;
         $entry->articulo = $movement->producto?->nombre ?: 'Artículo sin catálogo';
@@ -227,7 +248,7 @@ class EntregaBodegaAnalyticsService
         $entry->valor_neto = $price === null ? 0.0 : round($net * $price, 2);
         $entry->tiene_precio = $price !== null;
         $entry->origen = $movement->origen;
-        $entry->registrado_por = $movement->registrado_por_nombre ?: 'Kizeo automático';
+        $entry->registrado_por = $movement->registrado_por_nombre ?: ($receipt ? 'Inventario' : 'Kizeo automático');
 
         return $entry;
     }
@@ -236,7 +257,7 @@ class EntregaBodegaAnalyticsService
     private function recordsFromEntries(Collection $entries): Collection
     {
         return $entries
-            ->groupBy(fn (stdClass $entry) => implode('|', [$entry->aplicacion_id, $entry->fecha, $entry->centro_id ?: $entry->centro]))
+            ->groupBy(fn (stdClass $entry) => implode('|', [$entry->documento_clave, $entry->fecha, $entry->centro_id ?: $entry->centro]))
             ->map(function (Collection $group): stdClass {
                 /** @var stdClass $first */
                 $first = $group->first();
@@ -260,6 +281,8 @@ class EntregaBodegaAnalyticsService
 
                 $record = new stdClass;
                 $record->aplicacion_id = $first->aplicacion_id;
+                $record->documento_clave = $first->documento_clave;
+                $record->referencia = $first->referencia;
                 $record->entrega = $first->entrega;
                 $record->fecha = $first->fecha;
                 $record->orden = $group->max('orden');
@@ -290,7 +313,7 @@ class EntregaBodegaAnalyticsService
             ->sortKeys()
             ->map(fn (Collection $group, string $date) => [
                 'label' => $date,
-                'documentos' => $group->pluck('aplicacion_id')->unique()->count(),
+                'documentos' => $group->pluck('documento_clave')->unique()->count(),
                 'entregadas' => $this->sum($group, 'entregadas'),
                 'devueltas' => $this->sum($group, 'devueltas'),
                 'netas' => $this->sum($group, 'netas'),
@@ -304,7 +327,7 @@ class EntregaBodegaAnalyticsService
         return $entries->groupBy('centro')->map(function (Collection $group, string $center): array {
             return [
                 'centro' => $center,
-                'comprobantes' => $group->pluck('aplicacion_id')->unique()->count(),
+                'comprobantes' => $group->pluck('documento_clave')->unique()->count(),
                 'entregadas' => $this->sum($group, 'entregadas'),
                 'devueltas' => $this->sum($group, 'devueltas'),
                 'netas' => $this->sum($group, 'netas'),
@@ -345,7 +368,7 @@ class EntregaBodegaAnalyticsService
     /** @param Collection<int, stdClass> $entries */
     private function peopleBreakdown(Collection $entries): array
     {
-        return $entries->groupBy('persona')->map(function (Collection $group, string $person): array {
+        return $entries->where('persona_identificada', true)->groupBy('persona')->map(function (Collection $group, string $person): array {
             return [
                 'nombre' => $person,
                 'centro' => (string) $group->pluck('centro')->countBy()->sortDesc()->keys()->first(),
@@ -360,7 +383,7 @@ class EntregaBodegaAnalyticsService
     /** @param Collection<int, stdClass> $entries */
     private function centerPeopleBreakdown(Collection $entries): array
     {
-        return $entries->groupBy(fn (stdClass $entry) => $entry->centro.'|'.$entry->persona)
+        return $entries->where('persona_identificada', true)->groupBy(fn (stdClass $entry) => $entry->centro.'|'.$entry->persona)
             ->map(function (Collection $group, string $key): array {
                 [$center, $person] = array_pad(explode('|', $key, 2), 2, '');
 

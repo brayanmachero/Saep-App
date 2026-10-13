@@ -20,7 +20,7 @@ class EntregaBodegaExcelExport
         $book->getProperties()
             ->setCreator('SAEP')
             ->setTitle('Consumo EPP por centro de costo')
-            ->setSubject('Entregas y devoluciones Kizeo aplicadas a Inventario');
+            ->setSubject('Entregas Kizeo y devoluciones aplicadas a Inventario');
 
         $this->summary($book, $analytics, $filters);
         $this->operations($book, $records);
@@ -128,8 +128,8 @@ class EntregaBodegaExcelExport
     private function operations(Spreadsheet $book, Collection $records): void
     {
         $sheet = $book->createSheet();
-        $sheet->setTitle('Operaciones Kizeo');
-        $headers = ['Kizeo', 'Fecha operativa', 'Tipo', 'Persona', 'RUT', 'Centro de costo imputado', 'Entregado', 'Devuelto', 'Neto', 'Valor neto (CLP)', 'Líneas'];
+        $sheet->setTitle('Operaciones EPP');
+        $headers = ['Comprobante', 'Fecha operativa', 'Tipo', 'Persona', 'RUT', 'Centro de costo imputado', 'Entregado', 'Devuelto', 'Neto', 'Valor neto (CLP)', 'Líneas'];
         $sheet->fromArray($headers, null, 'A1');
         $this->heading($sheet, 'A1:K1');
         $sheet->freezePane('A2');
@@ -138,7 +138,7 @@ class EntregaBodegaExcelExport
         $row = 2;
         foreach ($records as $record) {
             $sheet->fromArray([
-                $record->entrega->kizeo_record_number ?: $record->entrega->kizeo_data_id,
+                $record->referencia,
                 $record->fecha ? \Carbon\Carbon::parse($record->fecha)->format('d/m/Y') : null,
                 $record->tipo,
                 $record->persona,
@@ -166,7 +166,7 @@ class EntregaBodegaExcelExport
     {
         $sheet = $book->createSheet();
         $sheet->setTitle('Detalle EPP');
-        $headers = ['Kizeo', 'Fecha operativa', 'Tipo', 'Persona', 'Centro de costo imputado', 'Artículo EPP', 'Talla', 'Entregado', 'Devuelto', 'Neto', 'Precio referencia (CLP)', 'Valor neto (CLP)', 'Origen del precio'];
+        $headers = ['Comprobante', 'Fecha operativa', 'Tipo', 'Persona', 'Centro de costo imputado', 'Artículo EPP', 'Talla', 'Entregado', 'Devuelto', 'Neto', 'Precio referencia (CLP)', 'Valor neto (CLP)', 'Origen del precio'];
         $sheet->fromArray($headers, null, 'A1');
         $this->heading($sheet, 'A1:M1');
         $sheet->freezePane('A2');
@@ -176,7 +176,7 @@ class EntregaBodegaExcelExport
         foreach ($records as $record) {
             foreach ($record->items as $item) {
                 $sheet->fromArray([
-                    $record->entrega->kizeo_record_number ?: $record->entrega->kizeo_data_id,
+                    $record->referencia,
                     $record->fecha ? \Carbon\Carbon::parse($record->fecha)->format('d/m/Y') : null,
                     $record->tipo,
                     $record->persona,
