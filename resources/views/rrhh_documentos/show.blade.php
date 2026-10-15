@@ -1,0 +1,10 @@
+@extends('layouts.app')
+@section('title','Detalle del lote documental')
+@include('rrhh_documentos.style')
+@section('content')
+@php($battery=json_decode($batch->battery_snapshot,true))
+<div class="gdm"><a href="{{ route('rrhh-documentos.index') }}">← Gestión documental</a><section class="panel"><div class="hero"><div><h2>{{ $batch->nombre }}</h2><p class="muted">{{ $battery['nombre'] }} · v{{ $battery['version'] }} · creado {{ $batch->created_at }} · usuario #{{ $batch->created_by }}</p></div><span class="badge-draft">Borrador · sin envíos</span></div><p class="note">Esta revisión comprueba datos básicos y reglas de aplicación. No valida todavía el contenido de las plantillas. No se generaron PDFs ni se enviaron documentos a Talana.</p></section>
+<div class="stats"><div><strong>{{ $batch->trabajadores }}</strong>Contratos seleccionados</div><div><strong>{{ $batch->documentos }}</strong>Documentos previstos</div><div><strong>{{ $batch->observados }}</strong>Contratos con observaciones</div></div>
+<section class="panel"><h3>Documentos de esta versión</h3><ul>@foreach($battery['documentos'] as $doc)<li>{{ $doc }}</li>@endforeach</ul><p class="muted">La batería y los datos quedan conservados tal como estaban al preparar el lote. Para cambiar selección o versión, prepara otro borrador.</p></section>
+<section class="panel"><h3>Revisión por trabajador y contrato</h3><div class="scroll"><table><thead><tr><th>Trabajador</th><th>Contrato / empresa</th><th>Centro / cargo</th><th>Validación básica</th></tr></thead><tbody>@foreach($items as $item)@php($snapshot=json_decode($item->snapshot,true))@php($warnings=json_decode($item->observaciones,true))<tr><td>{{ $snapshot['persona_nombre'] }}<br>{{ $snapshot['persona_rut'] }}</td><td>#{{ $snapshot['talana_id'] }}<br>{{ $snapshot['empresa_nombre'] }}</td><td>{{ $snapshot['centro_costo_nombre'] }}<br>{{ $snapshot['cargo_nombre'] }}</td><td>@if($warnings)<ul class="err">@foreach($warnings as $warning)<li>{{ $warning }}</li>@endforeach</ul>@else<span>Sin observaciones básicas</span>@endif</td></tr>@endforeach</tbody></table></div>{{ $items->links() }}</section></div>
+@endsection

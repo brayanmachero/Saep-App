@@ -211,13 +211,16 @@
             @endif
 
             {{-- RRHH --}}
-            @if(auth()->user()->tieneAcceso('contratacion') || auth()->user()->tieneAcceso('reclutamiento_whatsapp'))
+            @if(auth()->user()->tieneAcceso('contratacion') || auth()->user()->tieneAcceso('reclutamiento_whatsapp') || auth()->user()->tieneAcceso('gestion_documental'))
             <div class="nav-section" data-nav-section="rrhh">
                 <button type="button" class="nav-section-toggle" aria-expanded="false">
                     <span>RRHH</span>
                     <i class="bi bi-chevron-down"></i>
                 </button>
                 <div class="nav-section-items">
+                    @if(auth()->user()->tieneAcceso('gestion_documental'))
+                    <a href="{{ route('rrhh-documentos.index') }}" class="nav-item {{ request()->routeIs('rrhh-documentos.*') ? 'active' : '' }}"><i class="bi bi-files"></i><span>Gestión documental</span></a>
+                    @endif
                     @if(auth()->user()->tieneAcceso('contratacion'))
                     <a href="{{ route('contratacion.index') }}" class="nav-item {{ request()->routeIs('contratacion.*') ? 'active' : '' }}">
                         <i class="bi bi-person-badge-fill"></i>
