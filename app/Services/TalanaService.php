@@ -19,6 +19,11 @@ class TalanaService
         $this->token   = (string) config('services.talana.token', '');
     }
 
+    public function centrosCosto(int $empresa): array
+    {
+        return $this->get('centroCosto/', ['empresa' => $empresa], 60);
+    }
+
     // ─── HTTP ─────────────────────────────────────────────────────────────────
 
     private function get(string $endpoint, array $query = [], int $timeout = 30): array

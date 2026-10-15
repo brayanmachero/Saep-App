@@ -975,6 +975,24 @@ class InventarioBodegaController extends Controller
             ->with('success', "Importacion finalizada: {$result['created']} productos creados, {$result['updated']} actualizados, {$result['variantsCreated']} variantes creadas y {$result['skipped']} filas omitidas.".$stockMessage.$costMessage.$statusMessage.$centralStockMessage);
     }
 
+    public function syncCentersToKizeo(\App\Services\InventarioKizeoCentroSyncService $service): RedirectResponse
+    {
+        $redirect = redirect()->route('inventario-bodega.index', ['vista' => 'maestros']);
+        try {
+            $result = $service->synchronize();
+            $message = "Centros verificados en Kizeo: {$result['created']} creados, {$result['updated']} actualizados y {$result['unchanged']} sin cambios. Los formularios conservan su vinculación actual.";
+            if ($result['unresolved']) {
+                $message .= ' Pendientes de código/modalidad: '.implode(', ', $result['unresolved']).'.';
+            }
+
+            return $redirect->with('success', $message);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return $redirect->with('error', 'No se completó la verificación de centros en Kizeo. Revisa el registro de sincronización antes de vincular formularios.');
+        }
+    }
+
     public function syncCatalogToKizeo(): RedirectResponse
     {
         try {

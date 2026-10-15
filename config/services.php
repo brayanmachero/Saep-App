@@ -46,6 +46,7 @@ return [
     ],
 
     'kizeo' => [
+        'inventory_centers_list_id' => env('KIZEO_INVENTORY_CENTERS_LIST_ID', '507253'),
         'token'                    => env('KIZEO_API_TOKEN'),
         'url'                      => env('KIZEO_API_URL', 'https://www.kizeoforms.com/rest/v3'),
         'notify_email'             => env('KIZEO_NOTIFY_EMAIL', 'bmachero@saep.cl'),
@@ -139,6 +140,7 @@ return [
     ],
 
     'talana' => [
+        'inventory_companies' => ['SUB' => (int) env('TALANA_EMPRESA_SAEP_ID', 1039), 'EST' => (int) env('TALANA_EMPRESA_SAEP_EST_ID', 1081)],
         'base_url'    => env('TALANA_API_BASE_URL', 'https://talana.com/es/api'),
         'auth_scheme' => env('TALANA_API_AUTH_SCHEME', 'token'),
         'token'       => env('TALANA_API_TOKEN'),

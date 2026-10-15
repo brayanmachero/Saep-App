@@ -899,6 +899,13 @@
 
             <aside class="inventory-side-note inventory-ribbon-note"><i class="bi bi-diagram-3"></i><strong>Relación controlada.</strong><span>Un centro puede tener un coordinador asociado. Al usarlo en Movimientos, el sistema propone esa relación sin alterar registros históricos.</span></aside>
 
+            @if($canEdit)
+                <form method="POST" action="{{ route('inventario-bodega.maestros.kizeo.sincronizar') }}" class="inventory-side-note">
+                    @csrf
+                    <div><strong>Centros de costo en Kizeo</strong><p>Publica nombres, coordinadores y rutas. Conserva los identificadores y marca los inactivos sin eliminar su historial. Los formularios se vinculan por separado.</p></div>
+                    <button type="submit" class="btn btn-primary inventory-btn">Sincronizar centros con Kizeo</button>
+                </form>
+            @endif
             <form method="GET" action="{{ route('inventario-bodega.index') }}" class="inventory-master-filter">
                 <input type="hidden" name="vista" value="maestros">
                 <label>Buscar
