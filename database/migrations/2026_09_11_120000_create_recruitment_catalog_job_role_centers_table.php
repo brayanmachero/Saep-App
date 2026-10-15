@@ -21,8 +21,8 @@ return new class extends Migration
             $table->string('cost_center_external_id', 120);
             $table->timestamps();
 
-            $table->unique(['cargo_id', 'cost_center_external_id']);
-            $table->index('cost_center_external_id');
+            $table->unique(['cargo_id', 'cost_center_external_id'], 'recruitment_role_center_unique');
+            $table->index('cost_center_external_id', 'recruitment_cost_center_index');
         });
     }
 

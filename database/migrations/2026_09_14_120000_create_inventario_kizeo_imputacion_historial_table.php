@@ -20,7 +20,7 @@ return new class extends Migration
                 $table->string('registrado_por_nombre', 200)->nullable();
                 $table->timestamps();
 
-                $table->index(['aplicacion_id', 'created_at']);
+                $table->index(['aplicacion_id', 'created_at'], 'inv_kiz_imp_app_created_index');
             });
         }
 
