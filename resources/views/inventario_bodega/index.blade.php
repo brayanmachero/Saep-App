@@ -902,7 +902,7 @@
             @if($canEdit)
                 <form method="POST" action="{{ route('inventario-bodega.maestros.kizeo.sincronizar') }}" class="inventory-side-note">
                     @csrf
-                    <div><strong>Centros de costo en Kizeo</strong><p>Publica nombres, coordinadores y rutas. Conserva los identificadores y marca los inactivos sin eliminar su historial. Los formularios se vinculan por separado.</p></div>
+                    <div><strong>Centros de costo en Kizeo</strong><p>Sincronización automática cada 2 horas. Puedes publicar los cambios de inmediato con el botón. Conserva los identificadores y marca los inactivos sin eliminar su historial. Los formularios se vinculan por separado.</p></div>
                     <button type="submit" class="btn btn-primary inventory-btn">Sincronizar centros con Kizeo</button>
                 </form>
             @endif

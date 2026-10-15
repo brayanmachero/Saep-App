@@ -28,6 +28,11 @@ Schedule::command('inventario:conciliar-cambios-kizeo')->everyThirtyMinutes()->w
 Schedule::command('kizeo:sync-catalogo-inventario')->everyThirtyMinutes()->withoutOverlapping()
     ->skip(fn () => ! config('services.kizeo.inventory_catalog_list_id'));
 
+// Centros de costo: cada dos horas, al minuto 10 para separar otras sincronizaciones.
+Schedule::command('inventario:sync-centros-kizeo')->cron('10 */2 * * *')
+    ->timezone('America/Santiago')->withoutOverlapping(30)->runInBackground()
+    ->appendOutputTo(storage_path('logs/kizeo-centros-sync.log'));
+
 // Actualizar el padrón de personas/contratos antes de cada publicación de
 // trabajadores hacia Kizeo. Los cortes de 12:35 y 19:35 omiten las marcas de
 // asistencia, por lo que mantienen el padrón fresco sin repetir la parte
