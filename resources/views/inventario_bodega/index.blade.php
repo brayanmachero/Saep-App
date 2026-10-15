@@ -1955,10 +1955,13 @@ document.addEventListener('DOMContentLoaded', function () {
         menu.append(search, results, help);
         wrapper.appendChild(trigger);
         menu.classList.add('is-portal');
-        document.body.appendChild(menu);
+        // Keep the popup in the modal top layer so it remains visible and interactive.
+        var dialogHost = nativeSelect.closest('dialog');
+        (dialogHost || document.body).appendChild(menu);
 
         component = { nativeSelect: nativeSelect, wrapper: wrapper, trigger: trigger, triggerLabel: triggerLabel, menu: menu, search: search, results: results, originalRequired: originalRequired };
         searchableSelects.push(component);
+        if (dialogHost) dialogHost.addEventListener('close', function () { closeSearchSelect(component); });
 
         function selectedOption() {
             return nativeSelect.options[nativeSelect.selectedIndex] || nativeSelect.options[0];
