@@ -38,9 +38,9 @@
             @endif
         </div>
     </div>
-    <dialog id="stock-export-dialog" style="border:0;border-radius:16px;width:min(560px,94vw);padding:24px;box-shadow:0 20px 70px #0004">
+    <dialog id="stock-export-dialog" aria-labelledby="stock-export-title" style="margin:auto;border:0;border-radius:16px;width:min(560px,94vw);max-height:90vh;overflow:auto;padding:24px;box-shadow:0 20px 70px #0004">
         <form method="GET" action="{{ route('inventario-bodega.export') }}">
-            <h2>Exportar stock por bodega</h2>
+            <h2 id="stock-export-title">Exportar stock por bodega</h2>
             <p>Selecciona una o varias bodegas. Sin selección se exportan todas, separadas por ubicación.</p>
             @foreach(['buscar' => $summaryFilters['search'], 'estado_stock' => $summaryFilters['stock_status'], 'categoria' => $summaryFilters['category'], 'subcategoria' => $summaryFilters['subcategory'], 'proveedor_id' => $summaryFilters['provider_id']] as $key => $value)
                 @if($value !== null && $value !== '')<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
@@ -1035,10 +1035,10 @@
                             @endif
                         </section>
                         <div class="inventory-split-forms">
-                            <div class="inventory-compact-form"><h3>Agregar producto</h3><p>Crea categorías, subcategorías y variantes con su precio neto de referencia.</p><button type="button" class="btn btn-primary inventory-btn" onclick="document.getElementById('product-create-dialog').showModal()">Agregar producto</button></div>
-                            <dialog id="product-create-dialog" style="border:0;border-radius:16px;width:min(760px,94vw);max-height:90vh;overflow:auto;padding:24px;box-shadow:0 20px 70px #0004">
+                            <div class="inventory-compact-form inventory-product-launcher"><h3>Agregar producto</h3><p>Crea categorías, subcategorías y variantes con su precio neto de referencia.</p><button type="button" class="btn btn-primary inventory-btn" onclick="document.getElementById('product-create-dialog').showModal()">Agregar producto</button></div>
+                            <dialog id="product-create-dialog" aria-labelledby="product-create-title" style="margin:auto;border:0;border-radius:16px;width:min(760px,94vw);max-height:90vh;overflow:auto;padding:24px;box-shadow:0 20px 70px #0004">
                             <form method="POST" action="{{ route('inventario-bodega.productos.store') }}" class="inventory-compact-form">@csrf
-                                <h3>Agregar producto</h3>
+                                <div class="inventory-dialog-heading"><div><h3 id="product-create-title">Agregar producto</h3><p>Completa los datos del producto y sus variantes.</p></div><button type="button" class="btn btn-light inventory-icon-btn" aria-label="Cerrar agregar producto" onclick="this.closest('dialog').close()"><i class="bi bi-x-lg"></i></button></div>
                                 <div class="inventory-form-grid two">
                                     <label>Codigo<input name="codigo" class="form-control" maxlength="80" placeholder="Automatico si se deja vacio" value="{{ old('codigo') }}"></label>
                                     <label>Producto<input name="nombre" class="form-control" maxlength="220" required value="{{ old('nombre') }}"></label>
@@ -1051,8 +1051,7 @@
                                     <label>Stock minimo<input name="stock_minimo" type="number" min="0" step="0.001" class="form-control" value="{{ old('stock_minimo', 0) }}"></label>
                                     <label>Tallas o variantes<input name="tallas" class="form-control" maxlength="500" placeholder="S, M, L o ESTANDAR" value="{{ old('tallas') }}"></label>
                                     <label>Precio neto de referencia (CLP)<input name="costo_referencia" type="number" min="0.01" step="0.01" class="form-control" value="{{ old('costo_referencia') }}" placeholder="Se aplica a las variantes nuevas"></label>
-                                </div><input type="hidden" name="activo" value="1"><button class="btn btn-primary inventory-btn" type="submit"><i class="bi bi-plus-lg"></i>Agregar producto</button>
-                                <button type="button" class="btn btn-light inventory-btn" onclick="this.closest('dialog').close()">Cancelar</button>
+                                </div><input type="hidden" name="activo" value="1"><div class="inventory-dialog-actions"><button type="button" class="btn btn-light inventory-btn" onclick="this.closest('dialog').close()">Cancelar</button><button class="btn btn-primary inventory-btn" type="submit"><i class="bi bi-plus-lg"></i>Agregar producto</button></div>
                             </form></dialog>
                             <form method="POST" action="{{ route('inventario-bodega.productos.importar') }}" enctype="multipart/form-data" class="inventory-compact-form">@csrf
                                 <h3>Importar catalogo</h3><p>Admite la plantilla SAEP y la lista EPP con columnas Tipo, Categoria, Sub Categoria, Item y Formato. Los sufijos T-39, T-M y T-NA se convierten en tallas o variantes.</p><div class="inventory-import-flow"><i class="bi bi-box-seam"></i><div><strong>El catálogo puede incluir stock, costo y estado por talla.</strong><span>Completa Costo_Referencia por talla para conservar el valor vigente y su evolución. Estado acepta Activo/Habilitado o Inactivo/Inhabilitado; si dejas Codigo vacío, SAEP lo genera. Cero o vacío en costo no reemplaza un valor ya registrado.</span></div></div><div class="inventory-import-actions"><a href="{{ route('inventario-bodega.index', ['vista' => 'ingresos']) }}" class="inventory-link"><i class="bi bi-box-arrow-in-down"></i>Cargar desde compra</a><a href="{{ route('inventario-bodega.index', ['vista' => 'conteos']) }}" class="inventory-link"><i class="bi bi-clipboard-check"></i>Cargar desde conteo</a></div><a href="{{ route('inventario-bodega.productos.plantilla') }}" class="inventory-template-download"><i class="bi bi-download"></i>Descargar plantilla</a><label>Archivo Excel o CSV<input name="archivo" type="file" accept=".xlsx,.xls,.csv" class="form-control" required></label><button class="btn btn-light inventory-btn" type="submit"><i class="bi bi-upload"></i>Importar productos</button>
@@ -1351,6 +1350,16 @@
     @container (max-width: 700px) { .inventory-history-filter { grid-template-columns:1fr 1fr; }.inventory-history-filter .inventory-history-search { grid-column:1 / -1; }.inventory-history-filter-actions { grid-column:1 / -1; }.inventory-history-filter-actions .inventory-btn { flex:1; } }
     @container (max-width: 430px) { .inventory-history-filter { grid-template-columns:1fr; }.inventory-history-filter .inventory-history-search,.inventory-history-filter-actions { grid-column:auto; } }
     .inventory-reverse-form .form-select { min-height:2.42rem; font-size:.88rem; letter-spacing:0; text-transform:none; }.inventory-kizeo-cost-center-editor { border-color:#c9d8f8; background:#f5f8ff; }.inventory-kizeo-cost-center-help { color:#657593; font-size:.76rem; line-height:1.35; }.inventory-kizeo-imputation-history { margin:.8rem 1rem 0; }
+    .inventory-product-launcher { align-self:start; align-content:start; }
+    .inventory-product-launcher > .inventory-btn { justify-self:start; min-height:40px; height:auto; }
+    .inventory-dialog-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; padding-bottom:1rem; border-bottom:1px solid #e3e8f1; }
+    .inventory-dialog-heading p { margin-top:.35rem; }
+    .inventory-dialog-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:.6rem; border-top:1px solid #e3e8f1; padding-top:1rem; }
+    .dark-mode #product-create-dialog,.dark-mode #stock-export-dialog { background:#1f2937; color:#f8fafc; }
+    #product-create-dialog .inventory-form-grid.two { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    #product-create-dialog .inventory-compact-form { padding:0; border:0; background:transparent; }
+    #product-create-dialog::backdrop, #stock-export-dialog::backdrop { background:rgba(15,23,42,.42); }
+    @media(max-width:600px) { #product-create-dialog .inventory-form-grid.two { grid-template-columns:1fr; } }
 </style>
 
 @if($vista === 'resumen')
