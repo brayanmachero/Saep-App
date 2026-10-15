@@ -22,7 +22,7 @@ class RrhhDocumentController extends Controller
         foreach (['empresa_nombre', 'centro_costo_nombre', 'cargo_nombre', 'tipo_contrato_nombre'] as $field) {
             $options[$field] = TalanaContrato::whereNotNull($field)->where($field, '!=', '')->distinct()->orderBy($field)->pluck($field);
         }
-        $companies = TalanaContrato::select('empresa_id', 'empresa_nombre')->distinct()->get();
+        $companies = TalanaContrato::select('empresa_id', 'empresa_nombre')->whereNotNull('empresa_id')->whereNotNull('empresa_nombre')->where('empresa_nombre', '!=', '')->distinct()->orderBy('empresa_nombre')->get();
 
         return view('rrhh_documentos.index', compact('contracts', 'filters', 'options', 'companies') + ['batteries' => DB::table('rrhh_document_batteries')->orderByDesc('id')->get(), 'batches' => DB::table('rrhh_document_batches')->orderByDesc('created_at')->paginate(10, ['*'], 'lotes_pagina')]);
     }
@@ -57,6 +57,6 @@ class RrhhDocumentController extends Controller
         abort_unless($batch, 404);
         $items = DB::table('rrhh_document_batch_items')->where('batch_id', $id)->orderBy('id')->paginate(50);
 
-        return view('rrhh_documentos.show',compact('batch','items'));
+        return view('rrhh_documentos.show', compact('batch', 'items'));
     }
 }
