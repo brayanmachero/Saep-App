@@ -44,26 +44,31 @@ class InventarioStockService
 
     public function createProduct(array $data, User $user): InventarioProducto
     {
-        $requestedCode = trim((string) ($data['codigo'] ?? ''));
-        if ($requestedCode !== '' && InventarioProducto::query()->where('codigo', $requestedCode)->exists()) {
-            throw ValidationException::withMessages(['codigo' => 'Ya existe un producto con ese codigo.']);
-        }
+        return DB::transaction(function () use ($data, $user) {
+            $requestedCode = trim((string) ($data['codigo'] ?? ''));
+            if ($requestedCode !== '' && InventarioProducto::query()->where('codigo', $requestedCode)->exists()) {
+                throw ValidationException::withMessages(['codigo' => 'Ya existe un producto con ese codigo.']);
+            }
 
-        $product = InventarioProducto::create([
-            'codigo' => $requestedCode !== '' ? $requestedCode : $this->availableProductCode(Str::upper(Str::slug($data['nombre'], '-'))),
-            'nombre' => trim($data['nombre']),
-            'tipo' => $this->nullable($data['tipo'] ?? null),
-            'categoria' => $this->nullable($data['categoria'] ?? null),
-            'subcategoria' => $this->nullable($data['subcategoria'] ?? null),
-            'unidad_medida' => $this->nullable($data['unidad_medida'] ?? null) ?: 'Unidad',
-            'stock_minimo' => $this->decimal($data['stock_minimo'] ?? 0),
-            'activo' => (bool) ($data['activo'] ?? true),
-            'creado_por' => $user->id,
-        ]);
+            $product = InventarioProducto::create([
+                'codigo' => $requestedCode !== '' ? $requestedCode : $this->availableProductCode(Str::upper(Str::slug($data['nombre'], '-'))),
+                'nombre' => trim($data['nombre']),
+                'tipo' => $this->nullable($data['tipo'] ?? null),
+                'categoria' => $this->nullable($data['categoria'] ?? null),
+                'subcategoria' => $this->nullable($data['subcategoria'] ?? null),
+                'unidad_medida' => $this->nullable($data['unidad_medida'] ?? null) ?: 'Unidad',
+                'stock_minimo' => $this->decimal($data['stock_minimo'] ?? 0),
+                'activo' => (bool) ($data['activo'] ?? true),
+                'creado_por' => $user->id,
+            ]);
 
-        $this->syncProductVariants($product, $data['tallas'] ?? null);
+            $this->syncProductVariants($product, $data['tallas'] ?? null);
+            foreach ($product->variantes as $variant) {
+                $this->syncReferenceCost($variant, $data['costo_referencia'] ?? null, $user, 'ALTA_PRODUCTO_CATALOGO', InventarioProducto::class, $product->id);
+            }
 
-        return $product;
+            return $product;
+        });
     }
 
     public function updateProduct(InventarioProducto $product, array $data): void
@@ -2343,8 +2348,9 @@ class InventarioStockService
             ->with('coordinador')
             ->where('activo', true)
             ->where(function ($query) use ($value, $normalized) {
-                $query->where('numero_maestro', $value)
-                    ->orWhere('nombre_normalizado', $normalized);
+                $query->where('codigo_origen', Str::upper(preg_replace('/\s+/', '', $value)))
+                    ->orWhere('nombre_normalizado', $normalized)
+                    ->when(ctype_digit($value), fn ($numbers) => $numbers->orWhere('numero_maestro', (int) $value));
             })
             ->first();
     }

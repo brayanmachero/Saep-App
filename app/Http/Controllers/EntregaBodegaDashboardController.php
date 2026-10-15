@@ -56,10 +56,6 @@ class EntregaBodegaDashboardController extends Controller
         $filters = $this->filtersFromRequest($request);
         $records = $this->analytics->getFilteredRecords($filters);
 
-        if ($records->isEmpty()) {
-            return back()->with('error', 'No hay entregas con los filtros seleccionados para exportar.');
-        }
-
         $path = (new EntregaBodegaExcelExport)->generate(
             $this->analytics->getFilteredAnalytics($filters),
             $records,

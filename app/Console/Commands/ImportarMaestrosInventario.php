@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 class ImportarMaestrosInventario extends Command
 {
-    protected $signature = 'inventario:importar-maestros {archivo : Ruta absoluta o relativa del libro Excel} {--dry-run : Valida e informa el resultado sin guardar}';
+    protected $signature = 'inventario:importar-maestros {archivo : Ruta absoluta o relativa del libro Excel} {--dry-run : Valida e informa el resultado sin guardar} {--equivalencias= : JSON revisado de nombre de origen a ID existente}';
 
     protected $description = 'Importa los maestros Maestro_CC y Maestro_Coordinador del libro de Inventario.';
 
@@ -26,7 +26,9 @@ class ImportarMaestrosInventario extends Command
         }
 
         try {
-            $result = $masters->import($path);
+            $mappingPath = $this->option('equivalencias');
+            $mappings = $mappingPath ? json_decode(file_get_contents($mappingPath), true, 512, JSON_THROW_ON_ERROR) : [];
+            $result = $masters->import($path, $mappings);
             if ($this->option('dry-run')) {
                 DB::rollBack();
             }

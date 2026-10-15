@@ -69,7 +69,7 @@ class EntregaBodegaExcelExport
         $sheet->getStyle('E5:G5')->getNumberFormat()->setFormatCode('$#,##0');
 
         $sheet->mergeCells('A7:H7');
-        $sheet->setCellValue('A7', 'Fuente de verdad: movimientos de Inventario vigentes. Las devoluciones reducen el consumo del mismo centro de costo y los valores son referenciales.');
+        $sheet->setCellValue('A7', 'Movimientos vigentes de Inventario. Devoluciones descontadas del centro imputado. Valores referenciales: IVA = neto × 19%; bruto = neto + IVA. Incluye centros sin movimientos.');
         $sheet->getStyle('A7:H7')->getFont()->setItalic(true)->setSize(9);
         $sheet->getStyle('A7:H7')->getAlignment()->setWrapText(true);
         $sheet->getRowDimension(7)->setRowHeight(28);
@@ -78,25 +78,17 @@ class EntregaBodegaExcelExport
             $sheet,
             9,
             'Consumo por centro de costo',
-            ['Centro de costo', 'Comprobantes', 'Entregado', 'Devuelto', 'Neto', 'Valor neto (CLP)'],
-            collect($analytics['centros'] ?? [])->map(fn (array $row) => [
+            ['Centro de costo', 'Comprobantes', 'Entregado', 'Devuelto', 'Neto unidades', 'Valor neto (CLP)', 'IVA 19% (CLP)', 'Valor bruto (CLP)'],
+            collect($analytics['centros_exportacion'] ?? $analytics['centros'] ?? [])->map(fn (array $row) => [
                 $row['centro'], $row['comprobantes'], $row['entregadas'], $row['devueltas'], $row['netas'], $row['valor_neto'],
+                round($row['valor_neto'] * 0.19, 2), round($row['valor_neto'] + round($row['valor_neto'] * 0.19, 2), 2),
             ])->all(),
             [2, 3, 4, 5],
-            [6],
+            [6, 7, 8],
         );
-        $articleStart = 12 + count($analytics['centros'] ?? []);
-        $this->breakdown(
-            $sheet,
-            $articleStart,
-            'Artículos por consumo neto',
-            ['Artículo EPP', 'Entregado', 'Devuelto', 'Neto', 'Valor neto (CLP)'],
-            collect($analytics['articulos'] ?? [])->map(fn (array $row) => [
-                $row['label'], $row['entregadas'], $row['devueltas'], $row['netas'], $row['valor_neto'],
-            ])->all(),
-            [2, 3, 4],
-            [5],
-        );
+        $sheet->getColumnDimension('A')->setWidth(44);
+        $sheet->freezePane('B11');
+        $sheet->setAutoFilter('A10:H'.max(10, 10 + count($analytics['centros_exportacion'] ?? $analytics['centros'] ?? [])));
     }
 
     private function breakdown($sheet, int $row, string $title, array $headers, array $rows, array $quantityColumns, array $currencyColumns): void
@@ -110,7 +102,7 @@ class EntregaBodegaExcelExport
         $this->heading($sheet, "A{$row}:{$lastColumn}{$row}");
         $row++;
         foreach ($rows as $values) {
-            $sheet->fromArray($values, null, "A{$row}");
+            $sheet->fromArray($values, null, "A{$row}", true);
             $this->zebra($sheet, $row, $lastColumn);
             $row++;
         }
@@ -120,7 +112,7 @@ class EntregaBodegaExcelExport
                 $sheet->getStyle(chr(64 + $column)."{$start}:".chr(64 + $column).($row - 1))->getNumberFormat()->setFormatCode('#,##0.###');
             }
             foreach ($currencyColumns as $column) {
-                $sheet->getStyle(chr(64 + $column)."{$start}:".chr(64 + $column).($row - 1))->getNumberFormat()->setFormatCode('$#,##0');
+                $sheet->getStyle(chr(64 + $column)."{$start}:".chr(64 + $column).($row - 1))->getNumberFormat()->setFormatCode('$#,##0.00');
             }
         }
     }
@@ -129,11 +121,11 @@ class EntregaBodegaExcelExport
     {
         $sheet = $book->createSheet();
         $sheet->setTitle('Operaciones EPP');
-        $headers = ['Comprobante', 'Fecha operativa', 'Tipo', 'Persona', 'RUT', 'Centro de costo imputado', 'Entregado', 'Devuelto', 'Neto', 'Valor neto (CLP)', 'Líneas'];
+        $headers = ['Comprobante', 'Fecha operativa', 'Tipo', 'Persona', 'RUT', 'Centro de costo imputado', 'Entregado', 'Devuelto', 'Neto', 'Valor neto (CLP)', 'Líneas', 'IVA 19% (CLP)', 'Valor bruto (CLP)'];
         $sheet->fromArray($headers, null, 'A1');
-        $this->heading($sheet, 'A1:K1');
+        $this->heading($sheet, 'A1:M1');
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:K1');
+        $sheet->setAutoFilter('A1:M1');
 
         $row = 2;
         foreach ($records as $record) {
@@ -149,15 +141,18 @@ class EntregaBodegaExcelExport
                 $record->netas,
                 $record->valor_neto,
                 $record->items->count(),
-            ], null, "A{$row}");
-            $this->zebra($sheet, $row, 'K');
+                round($record->valor_neto * 0.19, 2),
+                round($record->valor_neto + round($record->valor_neto * 0.19, 2), 2),
+            ], null, "A{$row}", true);
+            $this->zebra($sheet, $row, 'M');
             $row++;
         }
         if ($row > 2) {
             $sheet->getStyle('G2:I'.($row - 1))->getNumberFormat()->setFormatCode('#,##0.###');
             $sheet->getStyle('J2:J'.($row - 1))->getNumberFormat()->setFormatCode('$#,##0');
+            $sheet->getStyle('L2:M'.($row - 1))->getNumberFormat()->setFormatCode('$#,##0.00');
         }
-        foreach (range('A', 'K') as $column) {
+        foreach (range('A', 'M') as $column) {
             $sheet->getColumnDimension($column)->setWidth(in_array($column, ['D', 'F'], true) ? 31 : 18);
         }
     }
@@ -166,11 +161,11 @@ class EntregaBodegaExcelExport
     {
         $sheet = $book->createSheet();
         $sheet->setTitle('Detalle EPP');
-        $headers = ['Comprobante', 'Fecha operativa', 'Tipo', 'Persona', 'Centro de costo imputado', 'Artículo EPP', 'Talla', 'Entregado', 'Devuelto', 'Neto', 'Precio referencia (CLP)', 'Valor neto (CLP)', 'Origen del precio'];
+        $headers = ['Comprobante', 'Fecha operativa', 'Tipo', 'Persona', 'Centro de costo imputado', 'Artículo EPP', 'Talla', 'Entregado', 'Devuelto', 'Neto', 'Precio referencia neto (CLP)', 'Valor neto (CLP)', 'Origen del precio', 'IVA 19% (CLP)', 'Valor bruto (CLP)'];
         $sheet->fromArray($headers, null, 'A1');
-        $this->heading($sheet, 'A1:M1');
+        $this->heading($sheet, 'A1:O1');
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:M1');
+        $sheet->setAutoFilter('A1:O1');
 
         $row = 2;
         foreach ($records as $record) {
@@ -189,16 +184,19 @@ class EntregaBodegaExcelExport
                     $item->precio_referencia,
                     $item->valor_neto,
                     $item->origen_precio ?: 'Sin precio de referencia',
-                ], null, "A{$row}");
-                $this->zebra($sheet, $row, 'M');
+                    $item->precio_referencia === null ? null : round($item->valor_neto * 0.19, 2),
+                    $item->precio_referencia === null ? null : round($item->valor_neto + round($item->valor_neto * 0.19, 2), 2),
+                ], null, "A{$row}", true);
+                $this->zebra($sheet, $row, 'O');
                 $row++;
             }
         }
         if ($row > 2) {
             $sheet->getStyle('H2:J'.($row - 1))->getNumberFormat()->setFormatCode('#,##0.###');
             $sheet->getStyle('K2:L'.($row - 1))->getNumberFormat()->setFormatCode('$#,##0');
+            $sheet->getStyle('N2:O'.($row - 1))->getNumberFormat()->setFormatCode('$#,##0.00');
         }
-        foreach (range('A', 'M') as $column) {
+        foreach (range('A', 'O') as $column) {
             $sheet->getColumnDimension($column)->setWidth(in_array($column, ['D', 'E', 'F', 'M'], true) ? 31 : 18);
         }
     }

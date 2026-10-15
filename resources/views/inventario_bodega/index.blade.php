@@ -25,9 +25,9 @@
             <p>Stock por ubicacion, movimientos trazables y conteos fisicos.</p>
         </div>
         <div class="inventory-header-actions">
-            <a class="btn btn-light inventory-btn" href="{{ route('inventario-bodega.export', array_filter(['ubicacion_id' => $selectedLocation, 'buscar' => $summaryFilters['search'], 'estado_stock' => $summaryFilters['stock_status'], 'categoria' => $summaryFilters['category'], 'subcategoria' => $summaryFilters['subcategory'], 'proveedor_id' => $summaryFilters['provider_id']], fn ($value) => $value !== null && $value !== '')) }}" title="Descargar el stock visible en Excel">
+            <button class="btn btn-light inventory-btn" type="button" onclick="document.getElementById('stock-export-dialog').showModal()" title="Elegir bodegas para exportar">
                 <i class="bi bi-file-earmark-excel"></i><span>Exportar stock</span>
-            </a>
+            </button>
             @if($canCreate)
                 <a class="btn btn-primary inventory-btn" href="{{ route('inventario-bodega.index', ['vista' => 'ingresos']) }}#registrar-ingreso">
                     <i class="bi bi-plus-lg"></i><span>Registrar ingreso</span>
@@ -38,6 +38,21 @@
             @endif
         </div>
     </div>
+    <dialog id="stock-export-dialog" style="border:0;border-radius:16px;width:min(560px,94vw);padding:24px;box-shadow:0 20px 70px #0004">
+        <form method="GET" action="{{ route('inventario-bodega.export') }}">
+            <h2>Exportar stock por bodega</h2>
+            <p>Selecciona una o varias bodegas. Sin selección se exportan todas, separadas por ubicación.</p>
+            @foreach(['buscar' => $summaryFilters['search'], 'estado_stock' => $summaryFilters['stock_status'], 'categoria' => $summaryFilters['category'], 'subcategoria' => $summaryFilters['subcategory'], 'proveedor_id' => $summaryFilters['provider_id']] as $key => $value)
+                @if($value !== null && $value !== '')<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
+            @endforeach
+            <div style="max-height:320px;overflow:auto;margin:16px 0">
+                @foreach($locations as $location)<label class="inventory-checkbox"><input type="checkbox" name="ubicaciones[]" value="{{ $location->id }}" @checked($selectedLocation == $location->id)><span>{{ $location->nombre }}</span></label>@endforeach
+            </div>
+            <p>Precios unitarios netos, IVA 19% y brutos en CLP. Los precios no informados quedan vacíos.</p>
+            <button type="button" class="btn btn-light inventory-btn" onclick="this.closest('dialog').close()">Cancelar</button>
+            <button class="btn btn-primary inventory-btn" type="submit">Descargar Excel</button>
+        </form>
+    </dialog>
 
     @if(session('success'))
         <div class="alert alert-success inventory-alert"><i class="bi bi-check-circle-fill"></i>{{ session('success') }}</div>
@@ -370,7 +385,7 @@
 
     @elseif($vista === 'movimientos')
         <section class="inventory-section inventory-movement-section">
-                <div class="inventory-section-title"><div><h2>Registrar movimiento</h2><p>Usa entregas, despachos, traslados o ajustes. El sistema valida que nunca salga mas stock del disponible.</p></div></div>
+                <div class="inventory-section-title"><div><h2>Movimientos y traslados entre bodegas</h2><p>Selecciona origen, destino, artículo y cantidad para trasladar stock. La salida y la entrada quedan vinculadas.</p></div><button type="button" class="btn btn-primary inventory-btn" onclick="var select=document.getElementById('movement-type');if(select){select.value='TRASLADO';select.dispatchEvent(new Event('change'));select.focus();}">Nuevo traslado</button></div>
                 @if($canCreate)
                     <div class="inventory-inline-editor inventory-receipt-import" id="importar-movimientos">
                         <div><h3>Importar movimientos manuales</h3><p>Carga en una sola planilla entregas EPP, despachos, traslados y ajustes. Cada fila queda registrada en Kardex; los traslados descuentan el origen y suman automáticamente el destino.</p></div>
@@ -908,9 +923,9 @@
                         <div class="inventory-table-wrap"><table class="inventory-table inventory-master-table"><thead><tr><th>N°</th><th>Centro</th><th>Ubicación</th><th>Coordinador</th><th>Contacto</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
                             @forelse($masterCenters as $center)
                                 <tr>
-                                    <td>{{ $center->numero_maestro ?: '—' }}</td>
+                                    <td>{{ $center->codigo_origen ?: ($center->numero_maestro ?: '—') }}</td>
                                     <td><strong>{{ $center->nombre }}</strong><small>{{ $center->tipo ?: 'Sin tipo' }}{{ $center->jefe_operaciones ? ' · ' . $center->jefe_operaciones : '' }}</small></td>
-                                    <td>{{ $center->comuna ?: '—' }}<small>{{ $center->direccion ?: '' }}</small></td>
+                                    <td>{{ $center->comuna ?: '—' }}<small>{{ $center->direccion ?: '' }}</small>@if($center->ruta)<small>Ruta {{ $center->ruta }} · {{ $center->dias_despacho ?: 'Días por definir' }}</small>@endif</td>
                                     <td>{{ $center->coordinador?->nombre ?: ($center->coordinador_nombre_origen ?: 'Sin asignar') }}<small>{{ $center->coordinador?->cargo ?: $center->cargo_contacto ?: '' }}</small></td>
                                     <td>{{ $center->correo_contacto ?: '—' }}<small>{{ $center->telefono_contacto ?: '' }}</small></td>
                                     <td><span class="inventory-status {{ $center->activo ? 'is-ok' : 'is-empty' }}">{{ $center->activo ? 'Activo' : 'Inactivo' }}</span></td>
@@ -952,7 +967,7 @@
                 <summary><span><i class="bi bi-file-earmark-arrow-up"></i>Actualizar desde libro</span><i class="bi bi-chevron-down"></i></summary>
                 <div class="inventory-details-body">
                     <section class="inventory-master-import">
-                        <div><h3>Sincronización de maestros</h3><p>Usa esta opción para sincronizar las hojas <strong>Maestro_CC</strong> y <strong>Maestro_Coordinador</strong>. Se actualiza por nombre y no se duplican registros existentes.</p></div>
+                        <div><h3>Importación de maestros</h3><p>Acepta <strong>Centros y Personal</strong> o <strong>Maestro_CC y Maestro_Coordinador</strong>. Actualiza la app por nombre o código de origen EST/SUB. Los cambios de nombre sin código asociado requieren conciliación previa.</p></div>
                         @if($canCreate)
                             <form method="POST" action="{{ route('inventario-bodega.maestros.importar') }}" enctype="multipart/form-data" class="inventory-import-master-form">@csrf
                                 <label>Libro de maestros<input name="archivo" type="file" accept=".xlsx,.xls" class="form-control" required></label>
@@ -1020,6 +1035,8 @@
                             @endif
                         </section>
                         <div class="inventory-split-forms">
+                            <div class="inventory-compact-form"><h3>Agregar producto</h3><p>Crea categorías, subcategorías y variantes con su precio neto de referencia.</p><button type="button" class="btn btn-primary inventory-btn" onclick="document.getElementById('product-create-dialog').showModal()">Agregar producto</button></div>
+                            <dialog id="product-create-dialog" style="border:0;border-radius:16px;width:min(760px,94vw);max-height:90vh;overflow:auto;padding:24px;box-shadow:0 20px 70px #0004">
                             <form method="POST" action="{{ route('inventario-bodega.productos.store') }}" class="inventory-compact-form">@csrf
                                 <h3>Agregar producto</h3>
                                 <div class="inventory-form-grid two">
@@ -1028,11 +1045,15 @@
                                     <label>Tipo<select name="tipo" class="form-select"><option value="">Selecciona un tipo</option>@foreach($productTypes as $type)<option value="{{ $type }}" @selected(old('tipo') === $type)>{{ $type }}</option>@endforeach</select></label>
                                     <label>Categoria<select name="categoria" class="form-select" data-product-category-select><option value="">Selecciona una categoria</option>@foreach($productCategories as $category)<option value="{{ $category }}" @selected(old('categoria') === $category)>{{ $category }}</option>@endforeach</select></label>
                                     <label>Subcategoria<select name="subcategoria" class="form-select" data-product-subcategory-select><option value="">Selecciona una subcategoria</option>@foreach($productSubcategories as $subcategory)<option value="{{ $subcategory['nombre'] }}" data-category="{{ $subcategory['categoria'] }}" @selected(old('subcategoria') === $subcategory['nombre'])>{{ $subcategory['nombre'] }}</option>@endforeach</select></label>
+                                    <label>Nueva categoría (opcional)<input name="categoria_nueva" maxlength="120" class="form-control" value="{{ old('categoria_nueva') }}" placeholder="O escribe una categoría nueva"></label>
+                                    <label>Nueva subcategoría (opcional)<input name="subcategoria_nueva" maxlength="120" class="form-control" value="{{ old('subcategoria_nueva') }}" placeholder="Depende de la categoría elegida o nueva"></label>
                                     <label>Unidad<select name="unidad_medida" class="form-select">@foreach($productUnits as $unit)<option value="{{ $unit }}" @selected(old('unidad_medida', 'Unidad') === $unit)>{{ $unit }}</option>@endforeach</select></label>
                                     <label>Stock minimo<input name="stock_minimo" type="number" min="0" step="0.001" class="form-control" value="{{ old('stock_minimo', 0) }}"></label>
                                     <label>Tallas o variantes<input name="tallas" class="form-control" maxlength="500" placeholder="S, M, L o ESTANDAR" value="{{ old('tallas') }}"></label>
+                                    <label>Precio neto de referencia (CLP)<input name="costo_referencia" type="number" min="0.01" step="0.01" class="form-control" value="{{ old('costo_referencia') }}" placeholder="Se aplica a las variantes nuevas"></label>
                                 </div><input type="hidden" name="activo" value="1"><button class="btn btn-primary inventory-btn" type="submit"><i class="bi bi-plus-lg"></i>Agregar producto</button>
-                            </form>
+                                <button type="button" class="btn btn-light inventory-btn" onclick="this.closest('dialog').close()">Cancelar</button>
+                            </form></dialog>
                             <form method="POST" action="{{ route('inventario-bodega.productos.importar') }}" enctype="multipart/form-data" class="inventory-compact-form">@csrf
                                 <h3>Importar catalogo</h3><p>Admite la plantilla SAEP y la lista EPP con columnas Tipo, Categoria, Sub Categoria, Item y Formato. Los sufijos T-39, T-M y T-NA se convierten en tallas o variantes.</p><div class="inventory-import-flow"><i class="bi bi-box-seam"></i><div><strong>El catálogo puede incluir stock, costo y estado por talla.</strong><span>Completa Costo_Referencia por talla para conservar el valor vigente y su evolución. Estado acepta Activo/Habilitado o Inactivo/Inhabilitado; si dejas Codigo vacío, SAEP lo genera. Cero o vacío en costo no reemplaza un valor ya registrado.</span></div></div><div class="inventory-import-actions"><a href="{{ route('inventario-bodega.index', ['vista' => 'ingresos']) }}" class="inventory-link"><i class="bi bi-box-arrow-in-down"></i>Cargar desde compra</a><a href="{{ route('inventario-bodega.index', ['vista' => 'conteos']) }}" class="inventory-link"><i class="bi bi-clipboard-check"></i>Cargar desde conteo</a></div><a href="{{ route('inventario-bodega.productos.plantilla') }}" class="inventory-template-download"><i class="bi bi-download"></i>Descargar plantilla</a><label>Archivo Excel o CSV<input name="archivo" type="file" accept=".xlsx,.xls,.csv" class="form-control" required></label><button class="btn btn-light inventory-btn" type="submit"><i class="bi bi-upload"></i>Importar productos</button>
                             </form>
@@ -1482,7 +1503,21 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('click', function (event) { if (event.target.closest('.inventory-remove-line')) { event.target.closest('.inventory-line').remove(); } });
     var type = document.getElementById('movement-type');
     var destination = document.querySelector('[data-movement-destination]');
-    function toggleDestination() { if (destination && type) { destination.hidden = type.value !== 'TRASLADO'; } }
+    function toggleDestination() {
+        if (!destination || !type) return;
+        var transfer = type.value === 'TRASLADO';
+        destination.hidden = !transfer;
+        var target = destination.querySelector('select');
+        var origin = document.querySelector('#movement-form [name="ubicacion_id"]');
+        target.required = transfer;
+        target.disabled = !transfer;
+        Array.from(target.options).forEach(function (option) { option.disabled = !!option.value && origin && option.value === origin.value; });
+        if (origin && target.value === origin.value) target.value = '';
+    }
+    var movementOrigin = document.querySelector('#movement-form [name="ubicacion_id"]');
+    if (movementOrigin) movementOrigin.addEventListener('change', toggleDestination);
+    var createDialog = document.getElementById('product-create-dialog');
+    @if($errors->any() && old('nombre'))if (createDialog) createDialog.showModal();@endif
     if (type) { type.addEventListener('change', toggleDestination); toggleDestination(); }
     function setupEditor(formId, selectId, fields) {
         var form = document.getElementById(formId);

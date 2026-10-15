@@ -176,6 +176,7 @@ class InventarioBodegaController extends Controller
                     $query->where(function ($centers) use ($masterSearch) {
                         $centers->where('nombre', 'like', '%'.$masterSearch.'%')
                             ->orWhere('numero_maestro', 'like', '%'.$masterSearch.'%')
+                            ->orWhere('codigo_origen', 'like', '%'.$masterSearch.'%')
                             ->orWhere('comuna', 'like', '%'.$masterSearch.'%')
                             ->orWhereHas('coordinador', fn ($coordinators) => $coordinators->where('nombre', 'like', '%'.$masterSearch.'%'));
                     });
@@ -1202,41 +1203,55 @@ class InventarioBodegaController extends Controller
 
     public function exportBalances(Request $request)
     {
-        $locationId = $request->integer('ubicacion_id') ?: null;
-        $balances = $this->filterSummaryBalances($this->stock->balances($locationId), $this->summaryFilters($request));
-        $locationName = $locationId
-            ? InventarioUbicacion::query()->find($locationId)?->nombre
-            : 'Todas las ubicaciones';
+        $selection = $request->validate([
+            'ubicacion_id' => ['nullable', 'integer', 'exists:inventario_ubicaciones,id'],
+            'ubicaciones' => ['nullable', 'array'],
+            'ubicaciones.*' => ['integer', 'distinct', 'exists:inventario_ubicaciones,id'],
+        ]);
+        $ids = $selection['ubicaciones'] ?? (empty($selection['ubicacion_id']) ? [] : [$selection['ubicacion_id']]);
+        $locations = InventarioUbicacion::query()->when($ids !== [], fn ($q) => $q->whereIn('id', $ids))->orderBy('nombre')->get();
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Stock actual');
-        $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia', 'Stock_Critico', 'Stock_Actual', 'Ubicacion', 'Estado'];
+        $headers = ['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Precio neto (CLP)', 'Stock_Critico', 'Stock_Actual', 'Ubicacion', 'Estado', 'IVA 19% (CLP)', 'Precio bruto (CLP)'];
         $sheet->fromArray($headers, null, 'A1');
-        $sheet->getStyle('A1:L1')->applyFromArray([
+        $sheet->getStyle('A1:N1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF2D0B64']],
         ]);
         $row = 2;
-        foreach ($balances as $variant) {
-            $sheet->fromArray([
-                $variant->producto->codigo,
-                $variant->producto->nombre,
-                $variant->producto->tipo,
-                $variant->producto->categoria,
-                $variant->producto->subcategoria,
-                $variant->producto->unidad_medida,
-                $variant->talla,
-                $variant->costo_referencia ?? 0,
-                $variant->stock_minimo ?? $variant->producto->stock_minimo,
-                $variant->stock_actual,
-                $locationName,
-                $variant->producto->activo && $variant->activo ? 'Activo' : 'Inactivo',
-            ], null, "A{$row}");
-            $row++;
+        foreach ($locations as $location) {
+            $balances = $this->filterSummaryBalances($this->stock->balances($location->id), $this->summaryFilters($request));
+            foreach ($balances as $variant) {
+                $net = $variant->costo_referencia === null ? null : (float) $variant->costo_referencia;
+                $iva = $net === null ? null : round($net * 0.19, 2);
+                $sheet->fromArray([
+                    $variant->producto->codigo,
+                    $variant->producto->nombre,
+                    $variant->producto->tipo,
+                    $variant->producto->categoria,
+                    $variant->producto->subcategoria,
+                    $variant->producto->unidad_medida,
+                    $variant->talla,
+                    $net,
+                    $variant->stock_minimo ?? $variant->producto->stock_minimo,
+                    $variant->stock_actual,
+                    $location->nombre,
+                    $variant->producto->activo && $variant->activo ? 'Activo' : 'Inactivo',
+                    $iva,
+                    $net === null ? null : round($net + $iva, 2),
+                ], null, "A{$row}", true);
+                $row++;
+            }
         }
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:L1');
-        foreach (range('A', 'L') as $column) {
+        $sheet->setAutoFilter('A1:N'.max(1, $row - 1));
+        if ($row > 2) {
+            foreach (['H', 'M', 'N'] as $column) {
+                $sheet->getStyle($column.'2:'.$column.($row - 1))->getNumberFormat()->setFormatCode('$#,##0.00');
+            }
+        }
+        foreach (range('A', 'N') as $column) {
             $sheet->getColumnDimension($column)->setWidth(in_array($column, ['B', 'D', 'E', 'K'], true) ? 30 : 18);
         }
 
@@ -1859,12 +1874,24 @@ class InventarioBodegaController extends Controller
             'unidad_medida' => ['nullable', 'string', 'max:30'],
             'stock_minimo' => ['nullable', 'numeric', 'gte:0'],
             'tallas' => ['nullable', 'string', 'max:500'],
+            'costo_referencia' => ['nullable', 'numeric', 'gt:0'],
+            'categoria_nueva' => ['nullable', 'string', 'max:120'],
+            'subcategoria_nueva' => ['nullable', 'string', 'max:120'],
             'activo' => ['nullable', 'boolean'],
         ];
         if ($withCode) {
             $rules['codigo'] = ['nullable', 'string', 'max:80'];
         }
         $data = $request->validate($rules);
+        $newCategory = trim((string) ($data['categoria_nueva'] ?? ''));
+        $newSubcategory = trim((string) ($data['subcategoria_nueva'] ?? ''));
+        if ($newCategory !== '') {
+            $data['categoria'] = $newCategory;
+            $data['subcategoria'] = null;
+        }
+        if ($newSubcategory !== '') {
+            $data['subcategoria'] = $newSubcategory;
+        }
         $data['categoria'] = trim((string) ($data['categoria'] ?? '')) ?: null;
         $data['subcategoria'] = trim((string) ($data['subcategoria'] ?? '')) ?: null;
 
@@ -1874,7 +1901,7 @@ class InventarioBodegaController extends Controller
             ]);
         }
 
-        if ($data['subcategoria'] && ! InventarioProducto::query()
+        if ($data['subcategoria'] && $newSubcategory === '' && ! InventarioProducto::query()
             ->where('categoria', $data['categoria'])
             ->where('subcategoria', $data['subcategoria'])
             ->exists()) {

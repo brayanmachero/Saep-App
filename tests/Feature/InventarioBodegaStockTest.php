@@ -107,6 +107,7 @@ class InventarioBodegaStockTest extends TestCase
         $receiptReversalMigration->up();
         $operationalMastersMigration = require dirname(__DIR__, 2).'/database/migrations/2026_08_13_190000_add_operational_masters_to_inventario.php';
         $operationalMastersMigration->up();
+        (require dirname(__DIR__, 2).'/database/migrations/2026_10_15_120000_add_source_metadata_to_inventory_centers.php')->up();
         $referenceCostMigration = require dirname(__DIR__, 2).'/database/migrations/2026_08_14_150000_add_reference_cost_history_to_inventario.php';
         $referenceCostMigration->up();
         $kizeoCatalogMigration = require dirname(__DIR__, 2).'/database/migrations/2026_08_18_170000_create_inventario_kizeo_catalog_items_table.php';
@@ -1244,7 +1245,8 @@ class InventarioBodegaStockTest extends TestCase
             @unlink($path);
         }
         $this->assertSame('LENTE-SEG', $rows[1][0]);
-        $this->assertNull($rows[2][0]);
+        $this->assertSame('LENTE-SEG', $rows[2][0]);
+        $this->assertNotSame($rows[1][10], $rows[2][10]);
     }
 
     public function test_summary_operational_traceability_excludes_movements_before_its_start_date(): void
@@ -2236,15 +2238,88 @@ class InventarioBodegaStockTest extends TestCase
         $path = $response->getFile()->getPathname();
 
         try {
-            $rows = IOFactory::load($path)->getActiveSheet()->rangeToArray('A1:L2', null, true, true, false);
+            $sheet = IOFactory::load($path)->getActiveSheet();
+            $rows = $sheet->rangeToArray('A1:N2', null, true, false, false);
+            $this->assertSame('$#,##0.00', $sheet->getStyle('H2')->getNumberFormat()->getFormatCode());
         } finally {
             @unlink($path);
         }
 
-        $this->assertSame(['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Costo_Referencia', 'Stock_Critico', 'Stock_Actual', 'Ubicacion', 'Estado'], $rows[0]);
+        $this->assertSame(['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Formato', 'Talla', 'Precio neto (CLP)', 'Stock_Critico', 'Stock_Actual', 'Ubicacion', 'Estado', 'IVA 19% (CLP)', 'Precio bruto (CLP)'], $rows[0]);
         $this->assertSame(1750.0, (float) $rows[1][7]);
+        $this->assertSame(332.5, (float) $rows[1][12]);
+        $this->assertSame(2082.5, (float) $rows[1][13]);
         $this->assertSame(3.0, (float) $rows[1][9]);
         $this->assertSame($origin->nombre, $rows[1][10]);
+    }
+
+    public function test_stock_export_limits_multiple_locations_and_keeps_unknown_prices_blank(): void
+    {
+        [$user, $origin, $destination, $variant] = $this->inventoryContextWithCentralStock(9);
+        InventarioUbicacion::create(['codigo' => 'EXCLUIDA', 'nombre' => 'Bodega excluida', 'tipo' => 'BODEGA', 'activo' => true]);
+        $response = (new InventarioBodegaController(app(InventarioStockService::class)))->exportBalances(Request::create('/', 'GET', ['ubicaciones' => [$origin->id, $destination->id]]));
+        $path = $response->getFile()->getPathname();
+        try {
+            $rows = IOFactory::load($path)->getActiveSheet()->toArray(null, true, false);
+            $this->assertCount(3, $rows);
+            $this->assertEqualsCanonicalizing([$origin->nombre, $destination->nombre], [$rows[1][10], $rows[2][10]]);
+            $this->assertEquals(9, $rows[1][9] + $rows[2][9]);
+            foreach (array_slice($rows, 1) as $row) {
+                $this->assertNull($row[7]);
+                $this->assertNull($row[12]);
+                $this->assertNull($row[13]);
+            }
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function test_product_modal_accepts_new_dependent_categories_and_initial_variant_prices(): void
+    {
+        [$user] = $this->inventoryContext();
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)->actingAs($user)
+            ->post(route('inventario-bodega.productos.store'), [
+                'nombre' => 'Nuevo uniforme prueba', 'categoria_nueva' => 'Uniformes nuevos',
+                'subcategoria_nueva' => 'Poleras nuevas', 'tallas' => 'S, M, L', 'costo_referencia' => 5870,
+            ])->assertSessionHasNoErrors()->assertRedirect();
+        $product = InventarioProducto::where('nombre', 'Nuevo uniforme prueba')->firstOrFail();
+        $this->assertSame('Uniformes nuevos', $product->categoria);
+        $this->assertSame('Poleras nuevas', $product->subcategoria);
+        $this->assertCount(3, $product->variantes);
+        foreach ($product->variantes as $variant) {
+            $this->assertSame(5870.0, (float) $variant->costo_referencia);
+            $this->assertDatabaseHas('inventario_historial_costos', ['variante_id' => $variant->id, 'costo_unitario' => 5870, 'origen' => 'ALTA_PRODUCTO_CATALOGO']);
+        }
+    }
+
+    public function test_route_master_keeps_est_sub_codes_separate_and_does_not_erase_rut(): void
+    {
+        $coordinator = InventarioCoordinador::create(['nombre' => 'Persona Prueba', 'nombre_normalizado' => 'persona prueba', 'rut' => '12345678-5', 'activo' => true]);
+        $path = tempnam(sys_get_temp_dir(), 'route-master-').'.xlsx';
+        $book = new Spreadsheet;
+        $book->getActiveSheet()->setTitle('Personal')->fromArray([
+            ['Nombre', 'Cargo', 'Correo', 'Teléfono', 'Reporta a', 'RUT'],
+            ['Coordinadores'],
+            ['Persona Prueba', 'Coordinador', 'prueba@example.com', null, null, null],
+        ], null, 'A4');
+        $book->createSheet()->setTitle('Centros')->fromArray([
+            ['ID', 'Centro', 'Jefe de Operaciones', 'Ruta', 'Días de despacho', 'Comuna', 'Dirección', 'Coordinador(a)', 'Teléfono', 'Correo', 'Estado', '¿Se despacha?'],
+            ['20 - Est', 'Centro Est', null, 'Norte', 'Lunes', null, null, 'Persona Prueba', null, null, 'Activo', 'No'],
+            ['20 - Sub', 'Centro Sub', null, 'Sur', 'Martes', null, null, 'Persona Prueba', null, null, 'No activo', 'No'],
+        ], null, 'A4');
+        (new Xlsx($book))->save($path);
+        try {
+            $service = app(InventarioOperationalMasterService::class);
+            $first = $service->import($path);
+            $second = $service->import($path);
+            $this->assertSame(2, $first['centrosCreados']);
+            $this->assertSame(0, $second['centrosCreados']);
+            $this->assertSame('12345678-5', $coordinator->fresh()->rut);
+            $this->assertDatabaseHas('inventario_centros_costo', ['codigo_origen' => '20-EST', 'tipo' => 'EST', 'activo' => true, 'se_despacha' => false, 'coordinador_id' => $coordinator->id]);
+            $this->assertDatabaseHas('inventario_centros_costo', ['codigo_origen' => '20-SUB', 'tipo' => 'SUB', 'activo' => false]);
+        } finally {
+            @unlink($path);
+        }
     }
 
     public function test_catalog_explains_how_to_load_stock_after_import(): void

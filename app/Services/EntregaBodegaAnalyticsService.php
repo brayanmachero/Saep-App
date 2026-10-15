@@ -7,6 +7,7 @@ use App\Models\InventarioEntregaKizeoAplicacion;
 use App\Models\InventarioEntregaKizeoLinea;
 use App\Models\InventarioMovimiento;
 use App\Models\InventarioIngreso;
+use App\Models\InventarioCentroCosto;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use stdClass;
@@ -71,6 +72,7 @@ class EntregaBodegaAnalyticsService
                 ->count(),
             'by_day' => $this->dailyBreakdown($entries),
             'centros' => $this->centerBreakdown($entries),
+            'centros_exportacion' => $this->allCenterBreakdown($entries, $filters),
             'articulos' => $this->articleBreakdown($entries, 'articulo'),
             'tallas' => $this->articleBreakdown($entries, 'talla'),
             'articulos_distribucion' => $this->positiveNetDistribution($entries, 'articulo'),
@@ -322,7 +324,18 @@ class EntregaBodegaAnalyticsService
     }
 
     /** @param Collection<int, stdClass> $entries */
-    private function centerBreakdown(Collection $entries): array
+    private function allCenterBreakdown(Collection $entries, array $filters): array
+    {
+        $rows = collect($this->centerBreakdown($entries, false))->keyBy('centro');
+        foreach (InventarioCentroCosto::query()->when(! empty($filters['centro']), fn ($q) => $q->where('nombre', $filters['centro']))->pluck('nombre') as $name) {
+            if (! $rows->has($name)) {
+                $rows->put($name, ['centro' => $name, 'comprobantes' => 0, 'entregadas' => 0, 'devueltas' => 0, 'netas' => 0, 'valor_neto' => 0]);
+            }
+        }
+        return $rows->sortBy('centro')->values()->all();
+    }
+
+    private function centerBreakdown(Collection $entries, bool $limit = true): array
     {
         return $entries->groupBy('centro')->map(function (Collection $group, string $center): array {
             return [
@@ -333,7 +346,7 @@ class EntregaBodegaAnalyticsService
                 'netas' => $this->sum($group, 'netas'),
                 'valor_neto' => $this->sum($group, 'valor_neto'),
             ];
-        })->sortByDesc('netas')->take(10)->values()->all();
+        })->sortByDesc('netas')->when($limit, fn ($rows) => $rows->take(10))->values()->all();
     }
 
     /** @param Collection<int, stdClass> $entries */

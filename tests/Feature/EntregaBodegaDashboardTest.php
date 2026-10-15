@@ -263,6 +263,33 @@ class EntregaBodegaDashboardTest extends TestCase
         $this->assertSame(0, $analytics['personas']);
     }
 
+    public function test_summary_exports_all_centers_including_zero_and_inactive_without_article_breakdown(): void
+    {
+        for ($i = 1; $i <= 13; $i++) {
+            $center = InventarioCentroCosto::create(['nombre' => sprintf('Centro %02d', $i), 'activo' => $i !== 13]);
+            if ($i <= 11) {
+                $this->createInventoryReturn($center, 1, '2026-10-15');
+            }
+        }
+        $service = new EntregaBodegaAnalyticsService;
+        $analytics = $service->getFilteredAnalytics();
+        $this->assertCount(10, $analytics['centros']);
+        $this->assertCount(13, $analytics['centros_exportacion']);
+        $path = (new EntregaBodegaExcelExport)->generate($analytics, $service->getFilteredRecords(), []);
+        try {
+            $sheet = IOFactory::load($path)->getSheetByName('Resumen neto');
+            $rows = $sheet->rangeToArray('A11:H23', null, true, false);
+            $this->assertSame('Centro 13', $rows[12][0]);
+            $this->assertEquals(0, $rows[12][5]);
+            $this->assertEquals(-1100, array_sum(array_column($rows, 5)));
+            $this->assertEquals(-209, array_sum(array_column($rows, 6)));
+            $this->assertEquals(-1309, array_sum(array_column($rows, 7)));
+            $this->assertSame(23, $sheet->getHighestDataRow());
+        } finally {
+            @unlink($path);
+        }
+    }
+
     private function createInventoryReturn(InventarioCentroCosto $center, float $quantity, string $date): InventarioMovimiento
     {
         $location = InventarioUbicacion::firstOrCreate(['nombre' => 'Sede Central SAEP'], ['codigo' => 'CENTRAL']);

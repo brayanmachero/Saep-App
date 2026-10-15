@@ -13,10 +13,12 @@ class InventarioCentroCosto extends Model
     protected $fillable = [
         'numero_maestro', 'nombre', 'nombre_normalizado', 'tipo', 'comuna', 'direccion', 'jefe_operaciones',
         'coordinador_id', 'coordinador_nombre_origen', 'cargo_contacto', 'correo_contacto', 'telefono_contacto', 'activo',
+        'codigo_origen', 'ruta', 'dias_despacho', 'se_despacha',
     ];
 
     protected $casts = [
         'activo' => 'boolean',
+        'se_despacha' => 'boolean',
     ];
 
     public function coordinador(): BelongsTo

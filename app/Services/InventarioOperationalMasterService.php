@@ -16,15 +16,16 @@ class InventarioOperationalMasterService
     /**
      * @return array{coordinadoresCreados:int,coordinadoresActualizados:int,centrosCreados:int,centrosActualizados:int,coordinadoresSinRelacion:array<int,string>}
      */
-    public function import(UploadedFile|string $source): array
+    public function import(UploadedFile|string $source, array $centerMappings = []): array
     {
         $spreadsheet = IOFactory::load($source instanceof UploadedFile ? $source->getRealPath() : $source);
-        $coordinatorSheet = $this->sheetNamed($spreadsheet, 'Maestro_Coordinador');
-        $costCenterSheet = $this->sheetNamed($spreadsheet, 'Maestro_CC');
+        $coordinatorSheet = $this->sheetNamed($spreadsheet, 'Maestro_Coordinador') ?? $this->sheetNamed($spreadsheet, 'Personal');
+        $costCenterSheet = $this->sheetNamed($spreadsheet, 'Maestro_CC') ?? $this->sheetNamed($spreadsheet, 'Centros');
+        $routeFormat = $costCenterSheet && Str::lower($costCenterSheet->getTitle()) === 'centros';
 
         if (! $coordinatorSheet || ! $costCenterSheet) {
             throw ValidationException::withMessages([
-                'archivo' => 'El libro debe incluir las hojas Maestro_CC y Maestro_Coordinador.',
+                'archivo' => 'El libro debe incluir Maestro_CC y Maestro_Coordinador, o Centros y Personal.',
             ]);
         }
 
@@ -37,14 +38,28 @@ class InventarioOperationalMasterService
             ]);
         }
 
-        return DB::transaction(function () use ($coordinatorRows, $costCenterRows) {
+        if ($routeFormat) {
+            $codes = [];
+            foreach ($costCenterRows as $row) {
+                $code = Str::upper(preg_replace('/\s+/', '', $this->value($row, 'id') ?? ''));
+                if ($code !== '' && isset($codes[$code])) {
+                    throw ValidationException::withMessages(['archivo' => "El código {$code} está repetido en Centros."]);
+                }
+                $codes[$code] = true;
+                if (! in_array($this->normalize($this->value($row, 'estado')), ['activo', 'no activo'], true)) {
+                    throw ValidationException::withMessages(['archivo' => 'Cada centro debe indicar Activo o No activo.']);
+                }
+            }
+        }
+
+        return DB::transaction(function () use ($coordinatorRows, $costCenterRows, $routeFormat, $centerMappings) {
             $createdCoordinators = 0;
             $updatedCoordinators = 0;
 
             foreach ($coordinatorRows as $row) {
                 $name = $this->value($row, 'nombre_completo');
                 $normalizedName = $this->normalize($name);
-                if (! $normalizedName) {
+                if (! $normalizedName || ($routeFormat && ! $this->value($row, 'cargo'))) {
                     continue;
                 }
 
@@ -58,7 +73,7 @@ class InventarioOperationalMasterService
                 $coordinator->fill([
                     'nombre' => $name,
                     'nombre_normalizado' => $normalizedName,
-                    'rut' => $rut,
+                    'rut' => $rut ?? $coordinator->rut,
                     'cargo' => $this->value($row, 'cargo'),
                     'correo' => $this->value($row, 'correo'),
                     'telefono' => $this->value($row, 'tlf'),
@@ -83,19 +98,39 @@ class InventarioOperationalMasterService
 
                 $sourceCoordinator = $this->value($row, 'coordinador');
                 $matchedCoordinator = $coordinators->get($this->normalize($sourceCoordinator));
+                if (! $matchedCoordinator && $sourceCoordinator) {
+                    $contactName = trim(preg_replace('/\s*\([^)]*\)/', '', $sourceCoordinator));
+                    $matchedCoordinator = $coordinators->get($this->normalize($contactName));
+                }
                 if ($sourceCoordinator && ! $matchedCoordinator) {
                     $unmatched[$sourceCoordinator] = $sourceCoordinator;
                 }
 
+                $code = $routeFormat ? $this->value($row, 'id') : null;
+                $code = $code ? Str::upper(preg_replace('/\s+/', '', $code)) : null;
                 $costCenter = InventarioCentroCosto::query()->where('nombre_normalizado', $normalizedName)->first();
+                if (isset($centerMappings[$name])) {
+                    $mapped = InventarioCentroCosto::query()->findOrFail($centerMappings[$name]);
+                    if ($costCenter && $costCenter->id !== $mapped->id) {
+                        throw ValidationException::withMessages(['archivo' => "La equivalencia de {$name} entra en conflicto con un centro existente."]);
+                    }
+                    $costCenter = $mapped;
+                }
+                if ($routeFormat && $code) {
+                    $byCode = InventarioCentroCosto::query()->where('codigo_origen', $code)->first();
+                    if ($costCenter && $byCode && $costCenter->id !== $byCode->id) {
+                        throw ValidationException::withMessages(['archivo' => "El código {$code} corresponde a otro centro. Revisa {$name}."]);
+                    }
+                    $costCenter ??= $byCode;
+                }
                 $isNew = ! $costCenter;
                 $costCenter ??= new InventarioCentroCosto();
                 $number = $this->numericValue($row, 'n');
                 $costCenter->fill([
-                    'numero_maestro' => $number,
+                    'numero_maestro' => $routeFormat ? $costCenter->numero_maestro : $number,
                     'nombre' => $name,
                     'nombre_normalizado' => $normalizedName,
-                    'tipo' => $this->value($row, 'tipo'),
+                    'tipo' => $this->value($row, 'tipo') ?? (preg_match('/\b(EST|SUB)\b/i', $code ?? $name, $match) ? Str::upper($match[1]) : $costCenter->tipo),
                     'comuna' => $this->value($row, 'comuna'),
                     'direccion' => $this->value($row, 'direccion'),
                     'jefe_operaciones' => $this->value($row, 'jefe_de_operaciones'),
@@ -104,8 +139,16 @@ class InventarioOperationalMasterService
                     'cargo_contacto' => $this->value($row, 'cargo'),
                     'correo_contacto' => $this->value($row, 'correo'),
                     'telefono_contacto' => $this->value($row, 'tlf'),
-                    'activo' => true,
+                    'activo' => $routeFormat ? $this->normalize($this->value($row, 'estado')) === 'activo' : true,
                 ]);
+                if ($routeFormat) {
+                    $costCenter->fill([
+                        'codigo_origen' => $code,
+                        'ruta' => $this->value($row, 'ruta'),
+                        'dias_despacho' => $this->value($row, 'dias_de_despacho'),
+                        'se_despacha' => $this->normalize($this->value($row, 'se_despacha')) === 'si',
+                    ]);
+                }
                 $costCenter->save();
                 $isNew ? $createdCostCenters++ : $updatedCostCenters++;
             }
@@ -124,6 +167,9 @@ class InventarioOperationalMasterService
     private function rows(Worksheet $sheet): array
     {
         $rawRows = $sheet->toArray(null, true, true, false);
+        if (in_array(Str::lower($sheet->getTitle()), ['centros', 'personal'], true)) {
+            $rawRows = array_slice($rawRows, 3);
+        }
         $headers = array_map(fn ($header) => $this->header((string) $header), array_shift($rawRows) ?: []);
 
         return collect($rawRows)
@@ -142,9 +188,10 @@ class InventarioOperationalMasterService
 
         return match ($value) {
             'n', 'nro', 'numero' => 'n',
-            'centro_de_costo', 'centro_de_costos' => 'centro_de_costos',
-            'nombre_completo' => 'nombre_completo',
-            'jefe_de_operaciones' => 'jefe_de_operaciones',
+            'centro', 'centro_de_costo', 'centro_de_costos' => 'centro_de_costos',
+            'nombre', 'nombre_completo' => 'nombre_completo',
+            'reporta_a', 'jefe_de_operaciones' => 'jefe_de_operaciones',
+            'coordinador_a' => 'coordinador',
             'telefono', 'tel', 'tlf' => 'tlf',
             default => $value,
         };
