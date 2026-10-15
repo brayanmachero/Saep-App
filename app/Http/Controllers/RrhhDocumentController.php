@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\TalanaContrato;
 use App\Services\RrhhDocumentDraftService;
+use App\Services\RrhhDocumentReviewService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -51,12 +52,29 @@ class RrhhDocumentController extends Controller
         return redirect()->route('rrhh-documentos.show', $id);
     }
 
-    public function show(string $id)
+    public function show(Request $request, string $id)
     {
         $batch = DB::table('rrhh_document_batches')->where('id', $id)->first();
         abort_unless($batch, 404);
-        $items = DB::table('rrhh_document_batch_items')->where('batch_id', $id)->orderBy('id')->paginate(50);
+        $filter = $request->validate(['revision' => 'nullable|in:activos,observados,listos,retirados'])['revision'] ?? 'activos';
+        $query = DB::table('rrhh_document_batch_items')->where('batch_id', $id)->where('excluido', $filter === 'retirados');
+        if ($filter === 'observados') {
+            $query->whereJsonLength('observaciones', '>', 0);
+        }
+        if ($filter === 'listos') {
+            $query->whereJsonLength('observaciones', 0);
+        }
+        $items = $query->orderBy('id')->paginate(50)->withQueryString();
+        $events = DB::table('rrhh_document_batch_events')->where('batch_id', $id)->orderByDesc('id')->paginate(20, ['*'], 'historial_pagina')->withQueryString();
 
-        return view('rrhh_documentos.show', compact('batch', 'items'));
+        return view('rrhh_documentos.show', compact('batch', 'items', 'filter', 'events'));
+    }
+
+    public function review(Request $request, string $id, RrhhDocumentReviewService $service)
+    {
+        $data = $request->validate(['accion' => 'required|in:retirar,restaurar,cancelar', 'item_id' => 'required_unless:accion,cancelar|integer', 'motivo' => 'required|string|min:3|max:500']);
+        $service->update($id, $data, $request->user()->id);
+
+        return back()->with('success', 'Revisión guardada en el historial del lote.');
     }
 }

@@ -57,7 +57,7 @@ class RrhhDocumentDraftService
                 throw ValidationException::withMessages(['contratos' => 'La selección cambió o incluye contratos fuera de los filtros/vigencia. Actualiza la lista.']);
             }
             $people = $contracts->groupBy(fn ($c) => $c->empresa_id.':'.$c->persona_talana_id);
-            $previous = DB::table('rrhh_document_batch_items as i')->join('rrhh_document_batches as b', 'b.id', '=', 'i.batch_id')->where('b.battery_id', $battery->id)->whereIn('i.contrato_id', $contracts->pluck('id'))->pluck('i.contrato_id')->flip();
+            $previous = DB::table('rrhh_document_batch_items as i')->join('rrhh_document_batches as b', 'b.id', '=', 'i.batch_id')->where('b.estado', 'BORRADOR')->where('i.excluido', false)->where('b.battery_id', $battery->id)->whereIn('i.contrato_id', $contracts->pluck('id'))->pluck('i.contrato_id')->flip();
             $id = $data['request_id'];
             $rows = [];
             $observed = 0;

@@ -4,12 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\TalanaContrato;
 use App\Services\RrhhDocumentDraftService;
+use App\Services\RrhhDocumentReviewService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class RrhhDocumentDraftTest extends TestCase
@@ -18,7 +20,7 @@ class RrhhDocumentDraftTest extends TestCase
     {
         parent::setUp();
         Http::preventStrayRequests();
-        foreach (['rrhh_document_batch_items', 'rrhh_document_batches', 'rrhh_document_batteries', 'talana_contratos', 'modulos'] as $t) {
+        foreach (['rrhh_document_batch_events', 'rrhh_document_batch_items', 'rrhh_document_batches', 'rrhh_document_batteries', 'talana_contratos', 'modulos'] as $t) {
             Schema::dropIfExists($t);
         }
         Schema::create('modulos', function (Blueprint $t) {
@@ -42,6 +44,7 @@ class RrhhDocumentDraftTest extends TestCase
             $t->timestamps();
         });
         (require base_path('database/migrations/2026_10_15_200000_create_rrhh_document_drafts.php'))->up();
+        (require base_path('database/migrations/2026_10_15_210000_add_document_batch_review.php'))->up();
         DB::table('rrhh_document_batteries')->insert(['id' => 1, 'nombre' => 'Prueba', 'version' => 1, 'documentos' => '["Contrato","Anexo"]', 'reglas' => '{}', 'created_by' => 1, 'created_at' => now(), 'updated_at' => now()]);
     }
 
@@ -98,7 +101,45 @@ class RrhhDocumentDraftTest extends TestCase
         $this->assertSame('Persona 1', json_decode($item->snapshot, true)['persona_nombre']);
         $this->assertCount(2, json_decode($batch->battery_snapshot, true)['documentos']);
         $second = $s->create($this->data(), 1);
-        $this->assertStringContainsString('otro borrador', DB::table('rrhh_document_batch_items')->where('batch_id',$second)->value('observaciones'));
+        $this->assertStringContainsString('otro borrador', DB::table('rrhh_document_batch_items')->where('batch_id', $second)->value('observaciones'));
         Http::assertNothingSent();
+    }
+
+    public function test_review_preserves_snapshot_recalculates_and_locks_cancelled_batch(): void
+    {
+        $this->contract(1);
+        $this->contract(2, ['synced_at' => now()->subDays(3)]);
+        $id = (new RrhhDocumentDraftService)->create($this->data(), 1);
+        $item = DB::table('rrhh_document_batch_items')->where('batch_id', $id)->orderByDesc('id')->first();
+        $review = new RrhhDocumentReviewService;
+        $review->update($id, ['accion' => 'retirar', 'item_id' => $item->id, 'motivo' => 'Fuera de alcance'], 1);
+        $b = DB::table('rrhh_document_batches')->find($id);
+        $this->assertSame(1, $b->trabajadores);
+        $this->assertSame(2, $b->documentos);
+        $this->assertSame(0, $b->observados);
+        $this->assertSame($item->snapshot, DB::table('rrhh_document_batch_items')->find($item->id)->snapshot);
+        $review->update($id, ['accion' => 'restaurar', 'item_id' => $item->id, 'motivo' => 'Corresponde al lote'], 1);
+        $this->assertSame(2, DB::table('rrhh_document_batches')->find($id)->trabajadores);
+        $review->update($id, ['accion' => 'cancelar', 'motivo' => 'Solicitud cancelada'], 1);
+        $this->assertSame('CANCELADO', DB::table('rrhh_document_batches')->find($id)->estado);
+        $this->assertSame(3, DB::table('rrhh_document_batch_events')->count());
+        $this->expectException(ValidationException::class);
+        $review->update($id, ['accion' => 'retirar', 'item_id' => $item->id, 'motivo' => 'No permitido'], 1);
+    }
+
+    public function test_cannot_change_item_from_another_batch(): void
+    {
+        $this->contract(1);
+        $service = new RrhhDocumentDraftService;
+        $id = $service->create($this->data(), 1);
+        $other = $service->create($this->data(), 1);
+        $item = DB::table('rrhh_document_batch_items')->where('batch_id', $other)->first();
+        try {
+            (new RrhhDocumentReviewService)->update($id, ['accion' => 'retirar', 'item_id' => $item->id, 'motivo' => 'Otro lote'], 1);
+            $this->fail('Expected 404');
+        } catch (HttpException $e) {
+            $this->assertSame(404, $e->getStatusCode());
+        }
+        $this->assertSame(0,DB::table('rrhh_document_batch_events')->count());
     }
 }
