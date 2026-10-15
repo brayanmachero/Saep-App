@@ -1038,15 +1038,13 @@
                             <div class="inventory-compact-form inventory-product-launcher"><h3>Agregar producto</h3><p>Crea categorías, subcategorías y variantes con su precio neto de referencia.</p><button type="button" class="btn btn-primary inventory-btn" onclick="document.getElementById('product-create-dialog').showModal()">Agregar producto</button></div>
                             <dialog id="product-create-dialog" aria-labelledby="product-create-title" style="margin:auto;border:0;border-radius:16px;width:min(760px,94vw);max-height:90vh;overflow:auto;padding:24px;box-shadow:0 20px 70px #0004">
                             <form method="POST" action="{{ route('inventario-bodega.productos.store') }}" class="inventory-compact-form">@csrf
-                                <div class="inventory-dialog-heading"><div><h3 id="product-create-title">Agregar producto</h3><p>Completa los datos del producto y sus variantes.</p></div><button type="button" class="btn btn-light inventory-icon-btn" aria-label="Cerrar agregar producto" onclick="this.closest('dialog').close()"><i class="bi bi-x-lg"></i></button></div>
+                                <input type="hidden" name="subcategoria_nueva" value="{{ old('subcategoria_nueva') }}"><div class="inventory-dialog-heading"><div><h3 id="product-create-title">Agregar producto</h3><p>Completa los datos del producto y sus variantes.</p></div><button type="button" class="btn btn-light inventory-icon-btn" aria-label="Cerrar agregar producto" onclick="this.closest('dialog').close()"><i class="bi bi-x-lg"></i></button></div>
                                 <div class="inventory-form-grid two">
                                     <label>Codigo<input name="codigo" class="form-control" maxlength="80" placeholder="Automatico si se deja vacio" value="{{ old('codigo') }}"></label>
                                     <label>Producto<input name="nombre" class="form-control" maxlength="220" required value="{{ old('nombre') }}"></label>
                                     <label>Tipo<select name="tipo" class="form-select"><option value="">Selecciona un tipo</option>@foreach($productTypes as $type)<option value="{{ $type }}" @selected(old('tipo') === $type)>{{ $type }}</option>@endforeach</select></label>
-                                    <label>Categoria<select name="categoria" class="form-select" data-product-category-select><option value="">Selecciona una categoria</option>@foreach($productCategories as $category)<option value="{{ $category }}" @selected(old('categoria') === $category)>{{ $category }}</option>@endforeach</select></label>
-                                    <label>Subcategoria<select name="subcategoria" class="form-select" data-product-subcategory-select><option value="">Selecciona una subcategoria</option>@foreach($productSubcategories as $subcategory)<option value="{{ $subcategory['nombre'] }}" data-category="{{ $subcategory['categoria'] }}" @selected(old('subcategoria') === $subcategory['nombre'])>{{ $subcategory['nombre'] }}</option>@endforeach</select></label>
-                                    <label>Nueva categoría (opcional)<input name="categoria_nueva" maxlength="120" class="form-control" value="{{ old('categoria_nueva') }}" placeholder="O escribe una categoría nueva"></label>
-                                    <label>Nueva subcategoría (opcional)<input name="subcategoria_nueva" maxlength="120" class="form-control" value="{{ old('subcategoria_nueva') }}" placeholder="Depende de la categoría elegida o nueva"></label>
+                                    <label>Categoria<select name="categoria" class="form-select" data-product-category-select data-create-label="categoría" data-search-help="Busca o escribe un nombre nuevo. Se guardará al agregar el producto."><option value="">Selecciona una categoria</option>@if(old('categoria') && !$productCategories->contains(old('categoria')))<option value="{{ old('categoria') }}" selected>{{ old('categoria') }}</option>@endif @foreach($productCategories as $category)<option value="{{ $category }}" @selected(old('categoria') === $category)>{{ $category }}</option>@endforeach</select></label>
+                                    <label>Subcategoria<select name="subcategoria" class="form-select" data-product-subcategory-select data-create-label="subcategoría" data-search-help="Busca o crea una subcategoría para la categoría seleccionada."><option value="">Selecciona una subcategoria</option>@if(old('subcategoria') && !$productSubcategories->contains(fn ($item) => $item['nombre'] === old('subcategoria') && $item['categoria'] === old('categoria')))<option value="{{ old('subcategoria') }}" data-category="{{ old('categoria') }}" data-created="true" selected>{{ old('subcategoria') }}</option>@endif @foreach($productSubcategories as $subcategory)<option value="{{ $subcategory['nombre'] }}" data-category="{{ $subcategory['categoria'] }}" @selected(old('subcategoria') === $subcategory['nombre'])>{{ $subcategory['nombre'] }}</option>@endforeach</select></label>
                                     <label>Unidad<select name="unidad_medida" class="form-select">@foreach($productUnits as $unit)<option value="{{ $unit }}" @selected(old('unidad_medida', 'Unidad') === $unit)>{{ $unit }}</option>@endforeach</select></label>
                                     <label>Stock minimo<input name="stock_minimo" type="number" min="0" step="0.001" class="form-control" value="{{ old('stock_minimo', 0) }}"></label>
                                     <label>Tallas o variantes<input name="tallas" class="form-control" maxlength="500" placeholder="S, M, L o ESTANDAR" value="{{ old('tallas') }}"></label>
@@ -1854,7 +1852,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function shouldUseSearchSelect(nativeSelect) {
         if (nativeSelect.dataset.inventorySearchIgnore === 'true') return false;
-        return selectableOptions(nativeSelect).length > 5;
+        return Boolean(nativeSelect.dataset.createLabel) || selectableOptions(nativeSelect).length > 5;
     }
 
     function setupSearchSelects(container) {
@@ -1996,7 +1994,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 empty.className = 'inventory-search-select-empty';
                 empty.textContent = 'No hay opciones que coincidan.';
                 results.appendChild(empty);
-                return;
             }
 
             matches.forEach(function (option) {
@@ -2011,6 +2008,27 @@ document.addEventListener('DOMContentLoaded', function () {
                 result.addEventListener('click', function () { selectOption(option); });
                 results.appendChild(result);
             });
+            var newName = search.value.trim().replace(/\s+/g, ' ');
+            var exactMatch = selectableOptions(nativeSelect).some(function (option) {
+                return normalizedSearch(option.textContent).replace(/\s+/g, ' ') === normalizedSearch(newName);
+            });
+            if (nativeSelect.dataset.createLabel && newName && newName.length <= 120 && !exactMatch) {
+                var create = document.createElement('button');
+                create.type = 'button';
+                create.className = 'inventory-search-select-option';
+                create.setAttribute('role', 'option');
+                create.textContent = '+ Crear ' + nativeSelect.dataset.createLabel + ' «' + newName + '»';
+                create.addEventListener('click', function () {
+                    var option = new Option(newName, newName);
+                    option.dataset.created = 'true';
+                    if (nativeSelect.hasAttribute('data-product-subcategory-select')) {
+                        option.dataset.category = nativeSelect.closest('form').querySelector('[data-product-category-select]').value;
+                    }
+                    nativeSelect.appendChild(option);
+                    selectOption(option);
+                });
+                results.appendChild(create);
+            }
         }
 
         function openSearchSelect() {
@@ -2052,6 +2070,10 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
         nativeSelect.addEventListener('change', function () {
+            if (nativeSelect.dataset.createLabel && nativeSelect.hasAttribute('data-product-subcategory-select')) {
+                var newSubcategoryInput = nativeSelect.closest('form').querySelector('[name="subcategoria_nueva"]');
+                if (newSubcategoryInput) newSubcategoryInput.value = selectedOption().dataset.created === 'true' ? nativeSelect.value : '';
+            }
             syncSelectedOption();
             trigger.setAttribute('aria-expanded', 'false');
         });
