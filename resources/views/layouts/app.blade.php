@@ -211,7 +211,7 @@
             @endif
 
             {{-- RRHH --}}
-            @if(auth()->user()->tieneAcceso('contratacion') || auth()->user()->tieneAcceso('reclutamiento_whatsapp') || auth()->user()->tieneAcceso('gestion_documental'))
+            @if(auth()->user()->tieneAcceso('contratacion') || auth()->user()->tieneAcceso('gestion_documental'))
             <div class="nav-section" data-nav-section="rrhh">
                 <button type="button" class="nav-section-toggle" aria-expanded="false">
                     <span>RRHH</span>
@@ -225,16 +225,6 @@
                     <a href="{{ route('contratacion.index') }}" class="nav-item {{ request()->routeIs('contratacion.*') ? 'active' : '' }}">
                         <i class="bi bi-person-badge-fill"></i>
                         <span>Contratación</span>
-                    </a>
-                    @endif
-                    @if(auth()->user()->tieneAcceso('reclutamiento_whatsapp'))
-                    <a href="{{ route('reclutamiento-whatsapp.index') }}" class="nav-item {{ request()->routeIs('reclutamiento-whatsapp.index') ? 'active' : '' }}">
-                        <i class="bi bi-whatsapp"></i>
-                        <span>Campañas WhatsApp</span>
-                    </a>
-                    <a href="{{ route('reclutamiento-whatsapp.bandeja') }}" class="nav-item {{ request()->routeIs('reclutamiento-whatsapp.bandeja') ? 'active' : '' }}">
-                        <i class="bi bi-chat-square-dots"></i>
-                        <span>Bandeja Reclutamiento</span>
                     </a>
                     @endif
                 </div>
