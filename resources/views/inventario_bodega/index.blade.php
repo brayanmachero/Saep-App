@@ -413,10 +413,10 @@
                             <label>Articulo<select name="variante_id" class="form-select" required data-inventory-search-select data-search-placeholder="Buscar por codigo, articulo o talla"><option value="">Selecciona articulo y talla</option>@foreach($variantOptions as $variant)<option value="{{ $variant->id }}">{{ $variant->producto->codigo }} - {{ $variant->producto->nombre }} · {{ $variant->talla }}</option>@endforeach</select></label>
                             <label>Cantidad<input name="cantidad" type="number" min="0.001" step="0.001" class="form-control" required></label>
                             <label>Fecha y hora<input name="ocurrido_en" type="datetime-local" value="{{ now()->format('Y-m-d\\TH:i') }}" class="form-control" required></label>
-                            @if($inventoryCostCenters->isNotEmpty())<label>Centro de costo<select name="centro_costo_id" class="form-select" data-inventory-search-select data-inventory-cost-center-select data-search-placeholder="Buscar centro de costo"><option value="">Sin centro de costo</option>@foreach($inventoryCostCenters as $costCenter)<option value="{{ $costCenter->id }}" data-coordinator-id="{{ $costCenter->coordinador_id }}">{{ $costCenter->nombre }}{{ $costCenter->comuna ? ' · ' . $costCenter->comuna : '' }}</option>@endforeach</select></label>@elseif($legacyCostCenters->isNotEmpty())<label>Centro de costo<select name="centro_costo" class="form-select" data-inventory-search-select data-search-placeholder="Buscar centro de costo"><option value="">Sin centro de costo</option>@foreach($legacyCostCenters as $costCenter)<option value="{{ $costCenter->codigo }}">{{ $costCenter->codigo }} · {{ $costCenter->nombre }}</option>@endforeach</select></label>@endif
-                            <label>Coordinador o destinatario<select name="coordinador_id" class="form-select" data-inventory-search-select data-inventory-coordinator-select data-search-placeholder="Buscar coordinador o destinatario"><option value="">Sin coordinador de la maestra</option>@foreach($coordinators as $coordinator)<option value="{{ $coordinator->id }}" data-coordinator-rut="{{ $coordinator->rut }}">{{ $coordinator->nombre }}{{ $coordinator->cargo ? ' · ' . $coordinator->cargo : '' }}</option>@endforeach</select></label>
-                            <label>Persona o destinatario<input name="destinatario_nombre" class="form-control" maxlength="200" placeholder="Para entrega EPP o persona no incluida"></label>
-                            <label>RUT destinatario<input name="destinatario_rut" class="form-control" maxlength="30" placeholder="Sin puntos, con guion"></label>
+                            @if($inventoryCostCenters->isNotEmpty())<label data-movement-recipient>Centro de costo<select name="centro_costo_id" class="form-select" data-inventory-search-select data-inventory-cost-center-select data-search-placeholder="Buscar centro de costo"><option value="">Sin centro de costo</option>@foreach($inventoryCostCenters as $costCenter)<option value="{{ $costCenter->id }}" data-coordinator-id="{{ $costCenter->coordinador_id }}">{{ $costCenter->nombre }}{{ $costCenter->comuna ? ' · ' . $costCenter->comuna : '' }}</option>@endforeach</select></label>@elseif($legacyCostCenters->isNotEmpty())<label data-movement-recipient>Centro de costo<select name="centro_costo" class="form-select" data-inventory-search-select data-search-placeholder="Buscar centro de costo"><option value="">Sin centro de costo</option>@foreach($legacyCostCenters as $costCenter)<option value="{{ $costCenter->codigo }}">{{ $costCenter->codigo }} · {{ $costCenter->nombre }}</option>@endforeach</select></label>@endif
+                            <label data-movement-recipient>Coordinador o destinatario<select name="coordinador_id" class="form-select" data-inventory-search-select data-inventory-coordinator-select data-search-placeholder="Buscar coordinador o destinatario"><option value="">Sin coordinador de la maestra</option>@foreach($coordinators as $coordinator)<option value="{{ $coordinator->id }}" data-coordinator-rut="{{ $coordinator->rut }}">{{ $coordinator->nombre }}{{ $coordinator->cargo ? ' · ' . $coordinator->cargo : '' }}</option>@endforeach</select></label>
+                            <label data-movement-recipient>Persona o destinatario<input name="destinatario_nombre" class="form-control" maxlength="200" placeholder="Para entrega EPP o persona no incluida"></label>
+                            <label data-movement-recipient>RUT destinatario<input name="destinatario_rut" class="form-control" maxlength="30" placeholder="Sin puntos, con guion"></label>
                             <label>Tipo documento<select name="documento_tipo" class="form-select"><option value="">Sin documento</option>@foreach(\App\Models\InventarioMovimiento::TIPOS_DOCUMENTO as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select></label>
                             <label>Nro. documento<input name="documento_numero" class="form-control" maxlength="100" placeholder="Referencia externa"></label>
                             <label>Costo unitario<input name="costo_unitario" type="number" min="0" step="0.01" class="form-control" placeholder="Opcional"></label>
@@ -1155,6 +1155,7 @@
 </div>
 
 <style>
+    #movement-form [hidden] { display: none !important; }
     .inventory-page { container-type: inline-size; padding: .25rem 0 2rem; color: #17213a; }
     .inventory-heading, .inventory-section-title, .inventory-header-actions, .inventory-tabs, .inventory-line-header, .inventory-form-actions, .inventory-list-row { display:flex; align-items:center; }
     .inventory-heading { justify-content:space-between; gap:1rem; margin-bottom:1rem; }
@@ -1521,6 +1522,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!destination || !type) return;
         var transfer = type.value === 'TRASLADO';
         destination.hidden = !transfer;
+        document.querySelectorAll('#movement-form [data-movement-recipient]').forEach(function (field) {
+            field.hidden = transfer;
+            field.querySelectorAll('input, select, button').forEach(function (control) {
+                control.disabled = transfer;
+            });
+        });
+        var submit = document.querySelector('#movement-form button[type="submit"]');
+        if (submit) submit.lastChild.textContent = transfer ? 'Registrar traslado' : 'Registrar movimiento';
         var target = destination.querySelector('select');
         var origin = document.querySelector('#movement-form [name="ubicacion_id"]');
         target.required = transfer;
