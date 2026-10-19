@@ -109,7 +109,7 @@ class EntregaBodegaExcelExport
         if ($rows !== []) {
             $start = $row - count($rows);
             foreach ($quantityColumns as $column) {
-                $sheet->getStyle(chr(64 + $column)."{$start}:".chr(64 + $column).($row - 1))->getNumberFormat()->setFormatCode('#,##0.###');
+                $this->formatQuantities($sheet, chr(64 + $column), chr(64 + $column), $start, $row - 1);
             }
             foreach ($currencyColumns as $column) {
                 $sheet->getStyle(chr(64 + $column)."{$start}:".chr(64 + $column).($row - 1))->getNumberFormat()->setFormatCode('$#,##0.00');
@@ -148,7 +148,7 @@ class EntregaBodegaExcelExport
             $row++;
         }
         if ($row > 2) {
-            $sheet->getStyle('G2:I'.($row - 1))->getNumberFormat()->setFormatCode('#,##0.###');
+            $this->formatQuantities($sheet, 'G', 'I', 2, $row - 1);
             $sheet->getStyle('J2:J'.($row - 1))->getNumberFormat()->setFormatCode('$#,##0');
             $sheet->getStyle('L2:M'.($row - 1))->getNumberFormat()->setFormatCode('$#,##0.00');
         }
@@ -192,12 +192,25 @@ class EntregaBodegaExcelExport
             }
         }
         if ($row > 2) {
-            $sheet->getStyle('H2:J'.($row - 1))->getNumberFormat()->setFormatCode('#,##0.###');
+            $this->formatQuantities($sheet, 'H', 'J', 2, $row - 1);
             $sheet->getStyle('K2:L'.($row - 1))->getNumberFormat()->setFormatCode('$#,##0');
             $sheet->getStyle('N2:O'.($row - 1))->getNumberFormat()->setFormatCode('$#,##0.00');
         }
         foreach (range('A', 'O') as $column) {
             $sheet->getColumnDimension($column)->setWidth(in_array($column, ['D', 'E', 'F', 'M'], true) ? 31 : 18);
+        }
+    }
+
+    private function formatQuantities($sheet, string $firstColumn, string $lastColumn, int $firstRow, int $lastRow): void
+    {
+        foreach (range($firstColumn, $lastColumn) as $column) {
+            for ($row = $firstRow; $row <= $lastRow; $row++) {
+                $cell = $sheet->getCell($column.$row);
+                // Use a decimal separator only when the quantity has fractional digits.
+                $fraction = rtrim(explode('.', number_format((float) $cell->getValue(), 3, '.', ''))[1], '0');
+                $format = '#,##0'.($fraction === '' ? '' : '.'.str_repeat('0', strlen($fraction)));
+                $cell->getStyle()->getNumberFormat()->setFormatCode($format);
+            }
         }
     }
 
