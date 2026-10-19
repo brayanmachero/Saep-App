@@ -1555,10 +1555,76 @@ class InventarioStockService
         });
     }
 
+    public function previewProducts(UploadedFile $file): array
+    {
+        $book = IOFactory::load($file->getPathname());
+        $sheet = $book->getSheetByName('Productos') ?? $book->getActiveSheet();
+        $rows = $sheet->toArray(null, true, true, false);
+        $headers = array_map(fn ($v) => $this->normalizeHeader($v), array_shift($rows) ?? []);
+        $errors = []; $preview = []; $products = []; $variants = []; $variantData = []; $identities = [];
+        $nonempty = array_filter($headers);
+        if (count($nonempty) !== count(array_unique($nonempty))) $errors[] = 'Hay columnas repetidas en la cabecera.';
+        if (! array_intersect(['producto', 'nombre', 'item'], $headers)) $errors[] = 'Falta la columna Producto (o Nombre / Item).';
+        foreach ($rows as $index => $row) {
+            $line = $index + 2;
+            if (! array_filter($row, fn ($v) => $this->importText($v) !== '')) continue;
+            $v = array_combine($headers, array_pad($row, count($headers), null));
+            $name = $this->importText($v['producto'] ?? $v['nombre'] ?? $v['item'] ?? null);
+            if ($name === '') { $errors[] = "Fila $line: falta Producto."; continue; }
+            $size = $this->importText($v['talla'] ?? $v['variante'] ?? null);
+            if (isset($v['item']) && ! isset($v['producto']) && ! isset($v['nombre'])) {
+                [$name, $detected] = $this->eppItemAndVariant($name);
+                $size = $size ?: $detected;
+            }
+            $size = Str::upper($size ?: 'ESTANDAR');
+            if (preg_match('/[,;\r\n]/', $size)) $errors[] = "Fila $line: informa una sola talla por fila; separa '$size' en filas distintas.";
+            $code = $this->importText($v['codigo'] ?? null);
+            $existing = $code !== '' ? InventarioProducto::where('codigo', $code)->first() : InventarioProducto::whereRaw('LOWER(nombre) = ?', [Str::lower($name)])->first();
+            $key = $existing ? 'id:'.$existing->id : ($code !== '' ? 'code:'.$code : 'name:'.Str::lower($name));
+            $nameKey = Str::lower($name);
+            if (isset($identities[$nameKey]) && $identities[$nameKey] !== $key) $errors[] = "Fila $line: el mismo nombre usa códigos diferentes. Unifica el código del producto.";
+            $identities[$nameKey] = $key;
+            $shared = ['nombre' => $name, 'tipo' => $v['tipo'] ?? '', 'categoria' => $v['categoria'] ?? '', 'subcategoria' => $v['subcategoria'] ?? $v['sub_categoria'] ?? '', 'formato' => $v['formato'] ?? $v['unidad_medida'] ?? '', 'stock_minimo' => $v['stock_critico'] ?? $v['stock_minimo'] ?? ''];
+            foreach ($shared as $field => $value) {
+                $value = $this->importText($value);
+                if ($value === '') continue;
+                if (isset($products[$key][$field]) && $products[$key][$field]['value'] !== $value) {
+                    $previous = $products[$key][$field]['line'];
+                    $errors[] = "Fila $line: $field contradice la fila $previous del mismo producto.";
+                } else $products[$key][$field] = ['value' => $value, 'line' => $line];
+            }
+            $location = $this->importText($v['ubicacion_codigo'] ?? $v['ubicacion'] ?? null);
+            $stock = $this->importText($v['stock_inicial'] ?? $v['stock_actual'] ?? $v['stock'] ?? null);
+            if ($stock !== '' && ($location === '' || $this->isAllLocationsLabel($location))) $location = self::KIZEO_ORIGIN_LOCATION_CODE;
+            $variantKey = $key.'|'.$size.'|'.$location;
+            if (isset($variants[$variantKey])) $errors[] = "Fila $line: producto, talla y ubicación repetidos respecto de la fila {$variants[$variantKey]}.";
+            $variants[$variantKey] = $line;
+            $cost = $this->importText($v['costo_referencia'] ?? $v['precio_referencia'] ?? $v['precio'] ?? $v['costo'] ?? $v['costo_unitario'] ?? null);
+            foreach (['precio' => $cost === '' ? '' : $this->importDecimal($cost), 'estado' => $this->importText($v['estado'] ?? $v['activo'] ?? null)] as $field => $value) {
+                if ($value === '' || ($field === 'precio' && ! $value)) continue;
+                $identity = $key.'|'.$size.'|'.$field;
+                if (isset($variantData[$identity]) && $variantData[$identity]['value'] !== $value) $errors[] = "Fila $line: $field de la talla contradice la fila {$variantData[$identity]['line']}.";
+                else $variantData[$identity] = ['value' => $value, 'line' => $line];
+            }
+            foreach (['Costo_Referencia' => $cost, 'Stock_Inicial' => $stock, 'Stock_Critico' => $this->importText($shared['stock_minimo'])] as $field => $value) {
+                if ($value !== '' && ($this->importDecimal($value) === null || $this->importDecimal($value) < 0)) $errors[] = "Fila $line: $field debe ser un número igual o mayor que cero.";
+            }
+            if ($stock !== '' && ! InventarioUbicacion::where('codigo', $location)->where('activo', true)->exists()) $errors[] = "Fila $line: ubicación '$location' inexistente o inactiva.";
+            if ($stock === '' && $location !== '' && ! $this->isAllLocationsLabel($location)) $errors[] = "Fila $line: ubicación informada sin Stock_Inicial.";
+            try { $this->importVariantStatus($v['estado'] ?? $v['activo'] ?? null, $name, $size); }
+            catch (ValidationException $e) { $errors[] = "Fila $line: ".implode(' ', $e->validator->errors()->all()); }
+            $preview[] = ['fila' => $line, 'codigo' => $code, 'producto' => $name, 'talla' => $size, 'precio' => $cost, 'ubicacion' => $location, 'saldo' => $stock, 'categoria' => $this->importText($shared['categoria']) ?: ($existing?->categoria ?: 'Sin categoría'), 'subcategoria' => $this->importText($shared['subcategoria']) ?: ($existing?->subcategoria ?: 'Sin subcategoría'), 'accion' => $existing ? 'Actualizar / agregar talla' : 'Crear producto / talla'];
+        }
+        if ($preview === []) $errors[] = 'El archivo no contiene productos para importar.';
+        return ['rows' => $preview, 'errors' => array_values(array_unique($errors))];
+    }
+
     public function importProducts(UploadedFile $file, User $user): array
     {
+        $preview = $this->previewProducts($file);
+        if ($preview['errors']) throw ValidationException::withMessages(['archivo' => $preview['errors']]);
         $spreadsheet = IOFactory::load($file->getPathname());
-        $sheet = $spreadsheet->getActiveSheet();
+        $sheet = $spreadsheet->getSheetByName('Productos') ?? $spreadsheet->getActiveSheet();
         $rows = $sheet->toArray(null, true, true, false);
         $headers = array_map(fn ($value) => $this->normalizeHeader($value), array_shift($rows) ?? []);
 
@@ -1661,6 +1727,12 @@ class InventarioStockService
                 ];
 
                 if ($product) {
+                    foreach (['tipo', 'categoria', 'subcategoria'] as $field) {
+                        if ($attributes[$field] === null) unset($attributes[$field]);
+                    }
+                    if ($this->importText($values['formato'] ?? $values['unidad_medida'] ?? null) === '') unset($attributes['unidad_medida']);
+                    if ($this->importText($values['stock_critico'] ?? $values['stock_minimo'] ?? null) === '') unset($attributes['stock_minimo']);
+                    unset($attributes['creado_por']);
                     $product->update($attributes);
                     if (! isset($createdProducts[$product->id]) && ! isset($updatedProducts[$product->id])) {
                         $updatedProducts[$product->id] = true;
@@ -1676,8 +1748,8 @@ class InventarioStockService
                 $isNewVariant = ! $variant->exists;
                 $variant->fill([
                     'codigo' => $variant->exists ? $variant->codigo : $this->availableVariantCode($product->codigo, $talla),
-                    'descripcion' => $this->nullable($values['descripcion_variante'] ?? null),
-                    'activo' => $variantActive,
+                    'descripcion' => $this->nullable($values['descripcion_variante'] ?? null) ?? $variant->descripcion,
+                    'activo' => $variant->exists && $this->importText($values['estado'] ?? $values['activo'] ?? null) === '' ? $variant->activo : $variantActive,
                 ]);
                 $variant->save();
                 $variantsCreated += $isNewVariant ? 1 : 0;

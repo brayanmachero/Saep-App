@@ -1689,6 +1689,84 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertSame(3.0, app(InventarioStockService::class)->stockActual($origin->id, $botin36->id));
     }
 
+    private function catalogReviewFile(array $rows): UploadedFile
+    {
+        $path = tempnam(sys_get_temp_dir(), 'catalog-review-').'.xlsx';
+        $book = new Spreadsheet;
+        $book->getActiveSheet()->setTitle('Productos');
+        $book->getActiveSheet()->fromArray([['Codigo', 'Producto', 'Tipo', 'Categoria', 'Subcategoria', 'Talla', 'Costo_Referencia', 'Estado'], ...$rows]);
+        (new Xlsx($book))->save($path);
+        return new UploadedFile($path, 'catalogo.xlsx', null, null, true);
+    }
+
+    public function test_catalog_preview_reports_conflicts_without_writes(): void
+    {
+        [$user] = $this->inventoryContext();
+        $file = $this->catalogReviewFile([
+            ['REV-1', 'Polera revisión', 'Uniforme', 'Poleras', 'Piqué', 'S', 5870],
+            ['REV-1', 'Polera revisión', 'Uniforme', 'Otra categoría', 'Piqué', 'S, M, L', 5870],
+        ]);
+        try {
+            $before = InventarioProducto::count();
+            $preview = app(InventarioStockService::class)->previewProducts($file);
+            $this->assertCount(2, $preview['rows']);
+            $this->assertStringContainsString('Fila 3', implode(' ', $preview['errors']));
+            $this->assertStringContainsString('contradice', implode(' ', $preview['errors']));
+            $this->assertStringContainsString('una sola talla', implode(' ', $preview['errors']));
+            $this->assertSame($before, InventarioProducto::count());
+            try { app(InventarioStockService::class)->importProducts($file, $user); $this->fail('Debe bloquear conflictos'); }
+            catch (ValidationException $e) { $this->assertSame($before, InventarioProducto::count()); }
+        } finally { @unlink($file->getPathname()); }
+    }
+
+    public function test_catalog_blank_update_preserves_classification_and_variant_status(): void
+    {
+        [$user] = $this->inventoryContext();
+        $service = app(InventarioStockService::class);
+        $initial = $this->catalogReviewFile([['REV-2','Polera revisión','Uniforme','Poleras','Piqué','S',5870,'Inactivo']]);
+        $update = $this->catalogReviewFile([['REV-2','Polera revisión',null,null,null,'S',null,null], ['REV-2','Polera revisión',null,null,null,'M',6200,null]]);
+        try {
+            $service->importProducts($initial, $user);
+            $service->importProducts($update, $user);
+            $product = InventarioProducto::where('codigo','REV-2')->firstOrFail();
+            $this->assertSame('Poleras',$product->categoria);
+            $this->assertSame('Piqué',$product->subcategoria);
+            $this->assertSame('Uniforme',$product->tipo);
+            $this->assertFalse((bool) $product->variantes()->where('talla','S')->firstOrFail()->activo);
+            $this->assertSame(5870.0,(float) $product->variantes()->where('talla','S')->firstOrFail()->costo_referencia);
+            $this->assertSame(2,$product->variantes()->count());
+        } finally { @unlink($initial->getPathname()); @unlink($update->getPathname()); }
+    }
+
+    public function test_catalog_controller_requires_preview_before_confirmation(): void
+    {
+        [$user] = $this->inventoryContext();
+        Storage::fake('local');
+        $file = $this->catalogReviewFile([['REV-3','Producto revisión','Epp','Categoría','Sub','M',1000,'Activo']]);
+        try {
+            $session = app('session')->driver();
+            $request = Request::create('/inventario-bodega/productos/importar','POST',[],[],['archivo'=>$file]);
+            $request->setLaravelSession($session);
+            $request->setUserResolver(fn () => $user);
+            $controller = new InventarioBodegaController(app(InventarioStockService::class));
+            $view = $controller->importProducts($request);
+            $this->assertSame('inventario_bodega.import_preview',$view->name());
+            $this->actingAs($user);
+            $this->assertStringContainsString('Confirmar importación', $view->render());
+            $this->assertFalse(InventarioProducto::where('codigo','REV-3')->exists());
+            $pending = $session->get('catalog_preview');
+            $confirm = Request::create('/inventario-bodega/productos/importar','POST',['confirmacion'=>$pending['token']]);
+            $confirm->setLaravelSession($session);
+            $confirm->setUserResolver(fn () => $user);
+            $controller->importProducts($confirm);
+            $this->assertTrue(InventarioProducto::where('codigo','REV-3')->exists());
+            $this->assertNull($session->get('catalog_preview'));
+            Storage::disk('local')->assertMissing($pending['path']);
+            try { $controller->importProducts($confirm); $this->fail('No debe repetir la importación'); }
+            catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) { $this->assertSame(419,$e->getStatusCode()); }
+        } finally { @unlink($file->getPathname()); }
+    }
+
     public function test_catalog_template_includes_status_and_documents_automatic_codes(): void
     {
         $response = (new InventarioBodegaController(app(InventarioStockService::class)))->productTemplate();

@@ -951,12 +951,34 @@ class InventarioBodegaController extends Controller
             ->with('success', 'Centro de costo actualizado. El stock de Sede Central no se modificó y el cambio quedó registrado en la trazabilidad.');
     }
 
-    public function importProducts(Request $request): RedirectResponse
+    public function importProducts(Request $request)
     {
-        $request->validate([
-            'archivo' => ['required', 'file', 'extensions:xlsx,xls,csv', 'max:10240'],
-        ]);
-        $result = $this->stock->importProducts($request->file('archivo'), $request->user());
+        if (! $request->filled('confirmacion')) {
+            $request->validate(['archivo' => ['required', 'file', 'extensions:xlsx,xls,csv', 'max:10240']]);
+            $preview = $this->stock->previewProducts($request->file('archivo'));
+            $token = null;
+            if (! $preview['errors']) {
+                $token = (string) Str::uuid();
+                $path = $request->file('archivo')->storeAs('private/catalog-previews', $token.'.'.$request->file('archivo')->getClientOriginalExtension(), 'local');
+                $old = $request->session()->pull('catalog_preview');
+                if ($old) \Illuminate\Support\Facades\Storage::disk('local')->delete($old['path']);
+                $request->session()->put('catalog_preview', ['token' => $token, 'path' => $path, 'expires' => time() + 1800]);
+            }
+            return view('inventario_bodega.import_preview', compact('preview', 'token'));
+        }
+        $request->validate(['confirmacion' => ['required', 'uuid']]);
+        $pending = $request->session()->get('catalog_preview');
+        abort_unless($pending && hash_equals($pending['token'], $request->input('confirmacion')) && $pending['expires'] >= time(), 419, 'La vista previa venció. Vuelve a cargar el archivo.');
+        $lock = \Illuminate\Support\Facades\Cache::lock('catalog-import:'.$pending['token'], 300);
+        if (! $lock->get()) throw ValidationException::withMessages(['archivo' => 'Esta importación ya está en curso.']);
+        try {
+            $disk = \Illuminate\Support\Facades\Storage::disk('local');
+            abort_unless($disk->exists($pending['path']), 419, 'Esta importación ya fue procesada.');
+            $file = new \Illuminate\Http\UploadedFile($disk->path($pending['path']), basename($pending['path']), null, null, true);
+            $result = $this->stock->importProducts($file, $request->user());
+            $request->session()->forget('catalog_preview');
+            $disk->delete($pending['path']);
+        } finally { $lock->release(); }
 
         $stockMessage = $result['stocksSet'] > 0
             ? " {$result['stocksSet']} saldo(s) por ubicacion fueron cargados o ajustados con movimientos trazables."
@@ -1113,16 +1135,32 @@ class InventarioBodegaController extends Controller
             ['Plantilla de catalogo e inventario inicial'],
             ['Stock_Critico es el minimo que activa una alerta; no representa existencias.'],
             ['Costo_Referencia es el último costo conocido de esa talla. Ingresa solo el número (por ejemplo, 41590); Excel puede mostrarlo con separador de miles. Puedes usar Precio, Precio_Referencia, Costo o Costo_Unitario como alias. Cero o vacío significa sin información y no borra un costo ya registrado.'],
-            ['Estado se aplica a cada talla: deja vacío o usa Activo/Habilitado para dejarla disponible; usa Inactivo/Inhabilitado para conservarla en catálogo, pero impedir que se seleccione en nuevos movimientos.'],
+            ['Estado: vacío conserva la vigencia de una talla existente; una talla nueva queda activa. Usa Activo/Habilitado o Inactivo/Inhabilitado para cambiarla explícitamente.'],
             ['Codigo es opcional para un producto nuevo: SAEP lo genera automáticamente desde el nombre. Para cada talla también genera su código propio.'],
             ['Para cargar existencias, informa Ubicacion_Codigo (codigo de una ubicacion activa) y Stock_Inicial. Si recibes “Todas las ubicaciones” o dejas la ubicación vacía con Stock_Inicial, SAEP carga ese saldo en SAEP-CENTRAL (Sede Central SAEP).'],
             ['Cada fila corresponde a un producto, talla y ubicacion. El Stock_Inicial fija el saldo de esa talla en esa ubicacion y deja un movimiento trazable.'],
             ['Si vuelves a importar la misma fila con el mismo saldo, no se duplica stock. Si cambias el saldo, se crea un ajuste trazable.'],
             ['Deja Stock_Inicial vacío si solo quieres cargar o actualizar el catálogo.'],
+            ['UNA TALLA POR FILA: repite Codigo y Producto para S, M y L en tres filas distintas. No escribas S, M, L en una celda. Cada talla puede tener un costo diferente.'],
+            ['Las categorías, subcategorías, tipo, unidad y mínimo vacíos conservan los datos de un producto existente. Para productos nuevos escribe los datos compartidos en todas sus filas de forma consistente.'],
+            ['La carga muestra primero una vista previa. Corrige conflictos y duplicados antes de confirmar. No se aplica ningún cambio mientras existan errores.'],
+            ['Para registrar proveedor, factura y cantidades compradas usa Importar ingresos después de crear el catálogo. Stock_Inicial fija un saldo: NO suma una compra.'],
         ], null, 'A1');
         $instructions->getColumnDimension('A')->setWidth(120);
         $instructions->getStyle('A1')->getFont()->setBold(true);
-        $instructions->getStyle('A1:A9')->getAlignment()->setWrapText(true);
+        $instructions->getStyle('A1:A13')->getAlignment()->setWrapText(true);
+
+        $examples = $spreadsheet->createSheet();
+        $examples->setTitle('Ejemplos - no importar');
+        $examples->fromArray([$headers,
+            ['POLERA-EJEMPLO', 'Polera ejemplo', 'Uniforme', 'Poleras', 'Piqué', 'Unidad', 'S', 5870, 5, null, null, 'Activo'],
+            ['POLERA-EJEMPLO', 'Polera ejemplo', 'Uniforme', 'Poleras', 'Piqué', 'Unidad', 'M', 5870, 5, null, null, 'Activo'],
+            ['POLERA-EJEMPLO', 'Polera ejemplo', 'Uniforme', 'Poleras', 'Piqué', 'Unidad', 'L', 6200, 5, null, null, 'Activo'],
+            ['CASCO-EJEMPLO', 'Casco ejemplo', 'Epp', 'Cascos', 'Seguridad', 'Unidad', 'ESTANDAR', 2000, 5, null, null, 'Activo'],
+        ]);
+        foreach (range('A', 'L') as $column) $examples->getColumnDimension($column)->setAutoSize(true);
+        $examples->getStyle('A1:L1')->getFont()->setBold(true);
+        $spreadsheet->setActiveSheetIndex(0);
 
         $path = storage_path('app/plantilla_catalogo_inventario_'.now()->format('YmdHis').'.xlsx');
         (new Xlsx($spreadsheet))->save($path);
