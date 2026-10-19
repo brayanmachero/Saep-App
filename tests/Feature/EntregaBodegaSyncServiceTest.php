@@ -19,6 +19,7 @@ class EntregaBodegaSyncServiceTest extends TestCase
     {
         parent::setUp();
 
+        Schema::dropIfExists('inventario_entrega_kizeo_lineas');
         Schema::dropIfExists('inventario_entrega_kizeo_aplicaciones');
         Schema::dropIfExists('inventario_kizeo_catalog_items');
         Schema::dropIfExists('entrega_bodega_items');
@@ -65,6 +66,7 @@ class EntregaBodegaSyncServiceTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('entrega_bodega_id');
             $table->string('estado', 30)->default('APLICADA');
+            $table->text('correccion_pendiente_motivo')->nullable();
             $table->timestamps();
         });
 
@@ -77,6 +79,11 @@ class EntregaBodegaSyncServiceTest extends TestCase
             $table->timestamp('sincronizado_en')->nullable();
             $table->text('ultimo_error')->nullable();
             $table->timestamps();
+        });
+        Schema::create('inventario_entrega_kizeo_lineas', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('aplicacion_id');
+            $table->unsignedInteger('linea_fuente');
         });
     }
 
@@ -405,6 +412,59 @@ class EntregaBodegaSyncServiceTest extends TestCase
         $this->expectExceptionMessage('corresponde a una devolución');
 
         (new InventarioStockService)->applyKizeoDelivery($delivery, 1, [], new User);
+    }
+
+    public function test_center_ids_resolve_for_both_forms_and_unknown_ids_block_without_changing_stock(): void
+    {
+        $uuid = 'a278a28d-8661-449e-9335-fbced6f5cfb3';
+        foreach ([['1196386', 'centro_de_costo', 'epp', 'uniforme_y_epp'], ['1195951', 'centro_de_costo1', 'epi', 'concepto']] as [$form, $field, $section, $article]) {
+            foreach (['known', 'unknown', 'applied'] as $case) {
+                $id = $form.'-'.$case;
+                $record = ['update_time' => '2026-10-19 10:00:00', 'fields' => [
+                    $field => ['value' => $uuid],
+                    $section => ['value' => [[$article => ['value' => 'Casco T-NA'], 'cantidad' => ['value' => '2']]]],
+                ]];
+                if ($case === 'applied') {
+                    $stored = EntregaBodega::create(['kizeo_form_id' => $form, 'kizeo_data_id' => $id, 'centro' => $uuid]);
+                    \Illuminate\Support\Facades\DB::table('inventario_entrega_kizeo_aplicaciones')->insert(['entrega_bodega_id' => $stored->id, 'estado' => 'APLICADA']);
+                }
+                $api = Mockery::mock(KizeoService::class);
+                $api->shouldReceive('getRecord')->once()->with($form, $id)->andReturn($record);
+                $centers = Mockery::mock(\App\Services\InventarioKizeoCentroSyncService::class);
+                $centers->shouldReceive('listId')->once()->andReturn('507253');
+                $centers->shouldReceive('resolve')->once()->with('507253', $uuid)->andReturn($case === 'known' ? new \App\Models\InventarioCentroCosto(['nombre' => 'Centro Norte EST']) : null);
+                $delivery = (new EntregaBodegaSyncService($api, null, $centers))->syncSourceRecord($form, $id);
+                $this->assertSame($case === 'known' ? 'Centro Norte EST' : $uuid, $delivery->centro);
+                $this->assertSame(['known' => 'ACTIVA', 'unknown' => 'INCOMPLETA', 'applied' => 'REQUIERE_REVISION'][$case], $delivery->estado_fuente);
+                $this->assertSame($uuid, $delivery->raw_payload['fields'][$field]['value']);
+                if ($case !== 'known') {
+                    $this->assertStringContainsString('sin vínculo verificado', $delivery->alerta_fuente);
+                }
+                if ($case === 'applied') {
+                    $this->assertSame('APLICADA', $delivery->inventarioAplicacion->estado);
+                }
+            }
+        }
+    }
+
+    public function test_sync_retries_an_unresolved_center_without_a_remote_date_change(): void
+    {
+        $uuid = 'a278a28d-8661-449e-9335-fbced6f5cfb3';
+        $delivery = EntregaBodega::create(['kizeo_form_id' => '1196386', 'kizeo_data_id' => 'retry-center', 'centro' => $uuid, 'estado_fuente' => 'ACTIVA', 'kizeo_updated_at' => '2026-10-19 10:00:00']);
+        $api = Mockery::mock(KizeoService::class);
+        $api->shouldReceive('getFormData')->with('1196386', false)->andReturn([['id' => 'retry-center', 'update_time' => '2026-10-19 10:00:00']]);
+        $api->shouldReceive('getFormData')->with('1195951', false)->andReturn([]);
+        $api->shouldReceive('getRecord')->once()->with('1196386', 'retry-center')->andReturn(['update_time' => '2026-10-19 10:00:00', 'fields' => [
+            'centro_de_costo' => ['value' => $uuid],
+            'epp' => ['value' => [['uniforme_y_epp' => ['value' => 'Casco T-NA'], 'cantidad' => ['value' => '2']]]],
+        ]]);
+        $centers = Mockery::mock(\App\Services\InventarioKizeoCentroSyncService::class);
+        $centers->shouldReceive('listId')->andReturn('507253');
+        $centers->shouldReceive('resolve')->once()->with('507253', $uuid)->andReturn(new \App\Models\InventarioCentroCosto(['nombre' => 'Centro Norte EST']));
+        $result = (new EntregaBodegaSyncService($api, null, $centers))->sync(10);
+        $this->assertSame(0, $result['failed']);
+        $this->assertSame(1, $result['updated']);
+        $this->assertSame('Centro Norte EST', $delivery->fresh()->centro);
     }
 
     public function test_a_removed_kizeo_source_cannot_be_applied_as_a_stock_deduction(): void

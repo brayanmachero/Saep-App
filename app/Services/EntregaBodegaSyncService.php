@@ -52,6 +52,7 @@ class EntregaBodegaSyncService
     public function __construct(
         private readonly KizeoService $kizeo,
         private readonly ?InventarioStockService $inventoryStock = null,
+        private readonly ?InventarioKizeoCentroSyncService $centerSync = null,
     ) {}
 
     public function supportsForm(string|int $formId): bool
@@ -215,6 +216,7 @@ class EntregaBodegaSyncService
                     'kizeo_form_id',
                     'kizeo_data_id',
                     'kizeo_updated_at',
+                    'centro',
                     'estado_fuente',
                     'alerta_fuente',
                     'fuente_ausente_desde',
@@ -344,6 +346,10 @@ class EntregaBodegaSyncService
             return true;
         }
 
+        if (Str::isUuid(trim((string) $stored->centro))) {
+            return true;
+        }
+
         // Desde agosto de 2026 los formularios pueden entregar el UUID del
         // ítem de la lista avanzada en vez de su etiqueta. Mientras exista un
         // UUID sin resolver, la respuesta debe reintentarse aunque Kizeo no
@@ -374,13 +380,14 @@ class EntregaBodegaSyncService
     private function normalizeRecord(array $record, array $metadata, string $formId, array $mapping, ?EntregaBodega $stored): array
     {
         $fields = $record['fields'] ?? [];
+        $center = $this->resolveCenter($this->fieldValue($fields, $mapping['centro']));
         $tipoOperacion = $this->limit($this->fieldValue($fields, $mapping['tipo']), 120);
         $items = $this->items(
             $this->subformRows($fields, $mapping['subform']),
             $mapping['articulo'],
             $mapping['talla'],
         );
-        $source = $this->sourceState($fields, $items, $mapping, $metadata, $stored);
+        $source = $this->sourceState($fields, $items, $mapping, $metadata, $stored, $center);
 
         return [
             'attributes' => [
@@ -395,7 +402,7 @@ class EntregaBodegaSyncService
                 'kizeo_created_at' => $this->dateTimeValue($record['create_time'] ?? $metadata['create_time'] ?? null),
                 'kizeo_updated_at' => $this->dateTimeValue($record['update_time'] ?? $metadata['update_time'] ?? null),
                 'registrado_por' => $this->limit($this->recordUserName($record, $metadata), 200),
-                'centro' => $this->limit($this->fieldValue($fields, $mapping['centro']), 180),
+                'centro' => $this->limit($center, 180),
                 'rut' => $this->limit($this->fieldValue($fields, $mapping['rut'] ?? ''), 30),
                 'nombre' => $this->limit($this->fieldValue($fields, $mapping['nombre']), 200),
                 'fecha_pedido' => $this->dateValue($this->fieldValue($fields, $mapping['fecha']))
@@ -413,9 +420,12 @@ class EntregaBodegaSyncService
      * @param array<int, array{linea: int, articulo: string, talla: ?string, cantidad: int}> $items
      * @return array{state: string, alert: ?string}
      */
-    private function sourceState(array $fields, array $items, array $mapping, array $metadata, ?EntregaBodega $stored): array
+    private function sourceState(array $fields, array $items, array $mapping, array $metadata, ?EntregaBodega $stored, ?string $center): array
     {
         $issue = $this->sourceIssue($fields, $items, $mapping);
+        if (Str::isUuid(trim((string) $center))) {
+            $issue = 'El centro de costo llegó como identificador interno de Kizeo sin vínculo verificado en SAEP. Sincroniza los centros y vuelve a revisar la entrega antes de afectar inventario.';
+        }
         $hasAppliedStock = in_array($stored?->inventarioAplicacion?->estado, ['APLICADA', 'CORREGIDA'], true);
         $changed = $stored && $this->sourceHasChanged($metadata, $stored);
 
@@ -536,12 +546,21 @@ class EntregaBodegaSyncService
         return $items;
     }
 
-    /**
-     * Los formularios históricos guardaban el texto del artículo. Los nuevos
-     * selectores de la lista avanzada guardan el UUID del ítem. Primero se
-     * usa la relación que SAEP conserva al publicar su catálogo; si la lista
-     * aún no fue publicada, se consulta su etiqueta actual en Kizeo.
-     */
+    /** Conserva nombres históricos y resuelve los UUID de centros sincronizados. */
+    private function resolveCenter(?string $value): ?string
+    {
+        if (! Str::isUuid(trim((string) $value))) {
+            return $value;
+        }
+
+        $resolver = $this->centerSync ?? app(InventarioKizeoCentroSyncService::class);
+
+        // Solo una relación verificada permite sustituir el identificador.
+        // El payload original se conserva para auditoría; no se adivinan nombres.
+        return $resolver->resolve($resolver->listId(), trim($value))?->nombre ?: $value;
+    }
+
+    /** Resuelve artículos por vínculo local o etiqueta actual de la lista Kizeo. */
     private function resolveAdvancedCatalogItem(?string $value): ?string
     {
         if (! $this->isAdvancedCatalogItemId($value)) {
