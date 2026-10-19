@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('content')
-<div class="catalog-review" style="max-width:1200px;margin:24px auto;padding:20px;background:var(--bs-body-bg,#fff);border:1px solid #ddd;border-radius:12px">
+<div class="catalog-review">
     <h1 style="font-size:24px">Revisar importación de catálogo</h1>
     <p>{{ count($preview['rows']) }} filas revisadas. Todavía no se ha guardado ningún producto ni movimiento.</p>
     <p>Una fila por talla. Los datos vacíos de clasificación conservan la información existente. El precio vacío o cero no reemplaza un precio registrado.</p>
@@ -31,12 +31,12 @@
     </div>
 </div>
 <style>
-.catalog-review{color:#19233b;box-shadow:0 4px 18px #17223b0a}
+.catalog-review{box-sizing:border-box;width:100%;min-width:0;max-width:100%;margin:24px 0;padding:20px;background:var(--bs-body-bg,#fff);border:1px solid #ddd;border-radius:12px;color:#19233b;box-shadow:0 4px 18px #17223b0a}
 .catalog-review h1{font-weight:700;margin:0 0 12px}
 .catalog-review p{font-size:14px;line-height:1.6;margin:8px 0;color:#56627a}
 .catalog-review table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}
 .catalog-review th{padding:12px;background:#f2f4f8;color:#526079;font-size:11px;text-transform:uppercase;position:sticky;top:0}
-.catalog-review td{padding:12px;border-bottom:1px solid #e4e8ef;vertical-align:top}
+.catalog-review td{padding:12px;border-bottom:1px solid #e4e8ef;vertical-align:top;overflow-wrap:anywhere}
 .catalog-review tbody tr:nth-child(even){background:#f8fafc}
 .catalog-review .btn{display:inline-flex;align-items:center;min-height:40px;padding:9px 16px;border:1px solid #dce1ea;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer}
 .catalog-review .btn-light{background:#fff;color:#293552}
