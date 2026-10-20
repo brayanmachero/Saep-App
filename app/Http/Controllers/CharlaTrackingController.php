@@ -114,14 +114,16 @@ class CharlaTrackingController extends Controller
         // 4. Cumplimiento por destinatario
         $porDestinatario = (clone $baseQuery)
             ->whereNotNull('asignado_a')
+            ->where('asignado_a', '!=', '')
             ->selectRaw("asignado_a as destinatario,
                          COUNT(*) as total_recibidas,
                          SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completadas,
                          SUM(CASE WHEN estatus_kizeo='recuperado' THEN 1 ELSE 0 END) as recuperadas,
-                         SUM(CASE WHEN estatus_kizeo='transferido' THEN 1 ELSE 0 END) as sin_descargar")
+                         SUM(CASE WHEN estatus_kizeo='transferido' THEN 1 ELSE 0 END) as sin_descargar,
+                         SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) as pendientes")
             ->groupBy('asignado_a')
             ->orderByRaw("SUM(CASE WHEN estado IN('pendiente','transferido') THEN 1 ELSE 0 END) DESC")
-            ->limit(10)
+            ->orderBy('asignado_a')
             ->get();
 
         // 5. Cumplimiento por usuario (creador)

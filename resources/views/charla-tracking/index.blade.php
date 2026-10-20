@@ -321,7 +321,18 @@
 
         {{-- A quién se le asigna --}}
         <div class="glass-card" style="padding:1rem 1.25rem">
-            <h3 class="chart-title"><i class="bi bi-person-check-fill" style="color:#f97316"></i> Destinatario actual en Kizeo · Top 10 por pendientes</h3>
+            <h3 class="chart-title"><i class="bi bi-person-check-fill" style="color:#f97316"></i> Destinatario actual en Kizeo · <span id="destinatarios-titulo">Todos</span></h3>
+            <div style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-bottom:.75rem">
+                <label for="destinatarios-orden">Mostrar</label>
+                <select id="destinatarios-orden" class="form-input" style="width:auto;max-width:100%">
+                    <option value="pendientes">Top 10 · Más pendientes</option>
+                    <option value="mayor">Top 10 · Mayor cumplimiento</option>
+                    <option value="menor">Top 10 · Menor cumplimiento</option>
+                    <option value="todos" selected>Todos · A–Z</option>
+                </select>
+                <button type="button" id="destinatarios-copiar" class="btn-secondary" disabled><i class="bi bi-clipboard"></i> Copiar imagen</button>
+            </div>
+            <p id="destinatarios-estado" role="status" aria-live="polite" style="font-size:.75rem;color:var(--text-muted)"></p>
             <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:.75rem">Coincide con la columna Destinatario de Kizeo. Los registros completados cuyo destinatario quedó vacío siguen incluidos en el total general. La tasa corresponde a este grupo filtrado, no al historial completo de la persona.</p>
             @if($porDestinatario->isEmpty())
                 <div style="text-align:center;color:var(--text-muted);padding:2rem">
@@ -330,7 +341,7 @@
                 </div>
             @else
             <div class="glass-table-container" style="max-height:320px;overflow-y:auto">
-                <table class="glass-table" style="font-size:.8rem">
+                <table id="destinatarios-tabla" class="glass-table" style="font-size:.8rem" data-periodo="{{ $activeFilterSummary }}">
                     <thead>
                         <tr>
                             <th style="text-align:left">Destinatario</th>
@@ -344,7 +355,7 @@
                     <tbody>
                     @foreach($porDestinatario as $d)
                         @php $dTasa = $d->total_recibidas > 0 ? round(($d->completadas / $d->total_recibidas) * 100) : 0; @endphp
-                        <tr>
+                        <tr data-pendientes="{{ $d->pendientes }}">
                             <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ $d->destinatario }}">{{ $d->destinatario }}</td>
                             <td style="text-align:center;font-weight:600">{{ $d->total_recibidas }}</td>
                             <td style="text-align:center;color:#15803d">{{ $d->completadas }}</td>
@@ -558,6 +569,7 @@
 </div>
 
 @push('scripts')
+<script src="{{ asset('js/charla-destinatarios.js') }}?v=20261020"></script>
 <script src="{{ asset('vendor/chartjs/chart.umd.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
