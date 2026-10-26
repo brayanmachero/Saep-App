@@ -39,7 +39,8 @@ class SabanaTarifasController
         ];
         $fuentes = TarifaFuente::withCount('tarifas')->orderBy('carpeta')->orderBy('archivo')->get();
 
-        return view('comercial::tarifas.index', compact('tarifas', 'opciones', 'filtros', 'resumen', 'fuentes'));
+        $vigentesHoy = $service->consulta(['vista' => 'vigentes'])->whereIn('id', $tarifas->modelKeys())->pluck('id')->all();
+        return view('comercial::tarifas.index', compact('tarifas', 'opciones', 'filtros', 'resumen', 'fuentes', 'vigentesHoy'));
     }
 
     public function show(TarifaReferencia $tarifa)
@@ -47,7 +48,36 @@ class SabanaTarifasController
         $tarifa->load('fuente', 'revisiones');
         $versiones = TarifaReferencia::where('grupo', $tarifa->grupo)->orderByDesc('fecha_referencia')->get();
 
-        return view('comercial::tarifas.show', compact('tarifa', 'versiones'));
+        $grupos = app(\App\Modules\Comercial\Services\TarifaPresentacionService::class)->grupos($tarifa->conceptos ?? []);
+        $vigenteHoy = app(SabanaTarifasService::class)->consulta(['vista' => 'vigentes'])->whereKey($tarifa->id)->exists();
+        return view('comercial::tarifas.show', compact('tarifa', 'versiones', 'grupos', 'vigenteHoy'));
+    }
+
+    public function archivo(TarifaReferencia $tarifa)
+    {
+        $fuente = $tarifa->fuente;
+        abort_unless($fuente && preg_match('/^[a-f0-9]{64}$/', $fuente->hash_sha256), 404, 'Archivo de respaldo no disponible.');
+        foreach (['2026.zip', 'IDL.zip', 'complementarios.zip'] as $archivo) {
+            $zip = new \ZipArchive;
+            $path = storage_path('app/private/cotizador-evaluacion-20261013/'.$archivo);
+            if (! is_file($path) || $zip->open($path) !== true) continue;
+            try {
+                for ($i = 0; $i < $zip->numFiles; $i++) {
+                    $info = $zip->statIndex($i);
+                    if (! $info || $info['size'] > 25 * 1024 * 1024 || basename(str_replace('\\', '/', $info['name'])) !== $fuente->archivo) continue;
+                    $contenido = $zip->getFromIndex($i);
+                    if ($contenido === false || ! hash_equals($fuente->hash_sha256, hash('sha256', $contenido))) continue;
+                    return response()->streamDownload(fn () => print($contenido), basename($fuente->archivo), [
+                        'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        'Cache-Control' => 'private, no-store',
+                        'X-Content-Type-Options' => 'nosniff',
+                    ]);
+                }
+            } finally {
+                $zip->close();
+            }
+        }
+        abort(404, 'Archivo de respaldo no disponible. Solicítalo al equipo Comercial.');
     }
 
     public function create(Request $request)

@@ -541,6 +541,57 @@ class ComercialCotizacionFlowTest extends TestCase
         ];
     }
 
+    public function test_consulta_operativa_agrupa_sin_exponer_formulas_y_descarga_solo_respaldo_verificado(): void
+    {
+        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
+        $service = app(\App\Modules\Comercial\Services\SabanaTarifasService::class);
+        $lote = [
+            'fuentes' => [['clave' => 'idl', 'archivo' => 'IDL.xlsx', 'hash_sha256' => str_repeat('a', 64), 'estado' => 'parcial']],
+            'tarifas' => [[
+                'fuente_clave' => 'idl', 'cliente' => 'Cliente prueba', 'centro' => 'Centro Sur',
+                'cargo' => 'Operario', 'modalidad' => 'EST', 'unidad' => 'mes', 'precio' => 123456.789012,
+                'fecha_referencia' => '2026-06-01', 'hoja' => 'P626', 'celda' => 'AB3',
+                'conceptos' => [['concepto' => 'Sueldo base', 'valor' => 529000, 'celda' => 'E3']],
+            ]],
+        ];
+        $service->importar($lote);
+        $tarifa = \App\Modules\Comercial\Models\TarifaReferencia::firstOrFail();
+        $tarifa->update(['conceptos'=>[
+            ['concepto'=>'Sueldo base','valor'=>745000,'celda'=>'G6','formula'=>'=SECRET_FORMULA'],
+            ['concepto'=>'Bono Asistencia','valor'=>0],
+            ['concepto'=>'Total Imponible','valor'=>931250],
+            ['concepto'=>'SIS','valor'=>10000],
+        ]]);
+        $this->actingAs($this->createAdminUser());
+        $page = $this->get(route('comercial.tarifas.show', $tarifa));
+        $page->assertOk()->assertSee('Precio por confirmar')->assertSee('Remuneraciones')->assertSee('Costos del empleador')->assertDontSee('SECRET_FORMULA')->assertDontSee('Fórmula original');
+        $groups = app(\App\Modules\Comercial\Services\TarifaPresentacionService::class)->grupos($tarifa->conceptos);
+        $originalStorage = storage_path();
+        $temporaryStorage = sys_get_temp_dir().'/comercial-'.bin2hex(random_bytes(8));
+        $directory = $temporaryStorage.'/app/private/cotizador-evaluacion-20261013';
+        mkdir($directory, 0777, true);
+        $zip = new \ZipArchive;
+        $zip->open($directory.'/2026.zip', \ZipArchive::CREATE);
+        $zip->addFromString('carpeta/IDL.xlsx', 'respaldo de prueba');
+        $zip->close();
+        $this->app->useStoragePath($temporaryStorage);
+        try {
+            $this->get(route('comercial.tarifas.archivo', $tarifa))->assertNotFound();
+            $tarifa->fuente->update(['hash_sha256'=>hash('sha256', 'respaldo de prueba')]);
+            $download = $this->get(route('comercial.tarifas.archivo', $tarifa))->assertOk();
+            $this->assertSame('respaldo de prueba', $download->streamedContent());
+            auth()->logout();
+            $this->get(route('comercial.tarifas.archivo', $tarifa))->assertRedirect(route('login'));
+        } finally {
+            $this->app->useStoragePath($originalStorage);
+            unlink($directory.'/2026.zip');
+            rmdir($directory); rmdir(dirname($directory)); rmdir(dirname($directory, 2)); rmdir($temporaryStorage);
+        }
+        $this->assertCount(3, $groups['Remuneraciones']);
+        $this->assertSame('745.000', $groups['Remuneraciones'][0]['valor']);
+        $this->assertSame('123.456,789012', \App\Modules\Comercial\Services\TarifaPresentacionService::importe('123456.789012'));
+    }
+
     private function createTestSchema(): void
     {
         Schema::disableForeignKeyConstraints();

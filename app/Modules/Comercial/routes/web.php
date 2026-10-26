@@ -31,6 +31,7 @@ Route::middleware(['auth', 'consentimiento', 'force.password', 'modulo:comercial
     Route::get('tarifas/exportar', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'export'])->name('tarifas.export');
     Route::get('tarifas/create', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'create'])->middleware('modulo:comercial,puede_crear')->name('tarifas.create');
     Route::post('tarifas', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'store'])->middleware('modulo:comercial,puede_crear')->name('tarifas.store');
+    Route::get('tarifas/{tarifa}/archivo', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'archivo'])->name('tarifas.archivo');
     Route::get('tarifas/{tarifa}', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'show'])->name('tarifas.show');
     Route::patch('tarifas/{tarifa}/revision', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'revisar'])->middleware(['modulo:comercial,puede_editar', 'permission:puede_aprobar'])->name('tarifas.revisar');
     // Cotizaciones
@@ -74,7 +75,7 @@ Route::middleware(['auth', 'consentimiento', 'force.password', 'modulo:comercial
     Route::match(['put', 'patch'], 'centros-costo/{centroCosto}', [CentroCostoController::class, 'update'])->middleware('modulo:comercial,puede_editar')->name('centros-costo.update');
     Route::delete('centros-costo/{centroCosto}', [CentroCostoController::class, 'destroy'])->middleware('modulo:comercial,puede_eliminar')->name('centros-costo.destroy');
 
-    // Parámetros (Mantenedor)
+    // ParÃ¡metros (Mantenedor)
     Route::get('mantenedor/parametros', [ParametroController::class, 'index'])->name('parametros.index');
     Route::patch('mantenedor/parametros', [ParametroController::class, 'update'])->middleware('modulo:comercial,puede_editar')->name('parametros.update');
     Route::post('mantenedor/parametros/batch-update', [ParametroController::class, 'batchUpdate'])->middleware('modulo:comercial,puede_editar')->name('parametros.batch-update');

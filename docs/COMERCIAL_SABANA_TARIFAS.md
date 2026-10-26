@@ -111,3 +111,19 @@ Si hay PRECIO DE VENTA MES, COSTO FINAL MES se conserva solo como componente.
 Genera un lote delta y otro acumulado. La referencia histórica de Quilicura W7,
 extraída previamente como costo, debe descartarse con auditoría al incorporar Z7,
 el precio final. Nunca se borra ni se confirma automáticamente una tarifa.
+
+## Consulta operativa (26/10/2026)
+
+La consulta prioriza cliente, centro, servicio, precio, unidad y vigencia. Los
+filtros secundarios se encuentran en Más filtros. La ficha agrupa conceptos sin
+recalcular ni sumar subtotales; no infiere moneda, unidad ni conceptos ausentes.
+Los precios se presentan con hasta dos decimales; el importe exacto sigue en los
+datos y en la exportación CSV. El estado Vigente hoy usa las mismas reglas de
+sustitución y vencimiento que la consulta de vigentes.
+
+La revisión y los antecedentes quedan plegados para usuarios autorizados.
+Las fórmulas se conservan en la base de datos y en el archivo, fuera del detalle
+operativo. La descarga autenticada /comercial/tarifas/{tarifa}/archivo busca el
+archivo por nombre y SHA-256 en los tres ZIP privados de la evaluación del
+13/10/2026. No extrae archivos al directorio público. Si falta el respaldo o no
+coincide su hash, responde 404 sin entregar otro archivo del mismo nombre.
