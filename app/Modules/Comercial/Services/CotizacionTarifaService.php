@@ -60,6 +60,11 @@ class CotizacionTarifaService
                 'vinculo_tipo' => 'cotizador',
             ];
             $datos['grupo'] = TarifaReferencia::grupoPara($datos);
+            // MySQL normalizes JSON object key order. Do not audit a change for
+            // serialization-only differences when the stored concepts are equal.
+            if ($tarifa && $tarifa->conceptos == $datos['conceptos']) {
+                unset($datos['conceptos']);
+            }
             $tarifa ??= new TarifaReferencia(['cotizacion_id' => $cotizacion->id, 'identidad' => hash('sha256', 'cotizador:'.$cotizacion->id)]);
             $antes = $tarifa->exists ? $tarifa->toArray() : [];
             $tarifa->fill($datos);

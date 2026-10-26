@@ -692,6 +692,11 @@ class ComercialCotizacionFlowTest extends TestCase
         $this->delete(route('comercial.cotizaciones.destroy',$nueva),['motivo'=>'Prueba de eliminación'])->assertSessionHas('success');
         $this->assertSame(0,$sabana->consulta(['vista'=>'vigentes'])->count());
         $this->assertSame('Cotización eliminada',$nueva->tarifaReferencia->fresh()->etiquetaConsulta());
+        // Reproduce MySQL's JSON object key reordering in the SQLite fixture.
+        foreach (\App\Modules\Comercial\Models\TarifaReferencia::all() as $registro) {
+            $conceptos = array_map(fn ($c) => ['valor'=>$c['valor'],'concepto'=>$c['concepto']], $registro->conceptos);
+            DB::table('comercial_tarifas_referencia')->where('id',$registro->id)->update(['conceptos'=>json_encode($conceptos)]);
+        }
         $cantidad = \App\Modules\Comercial\Models\TarifaReferencia::count();
         $revisiones = \App\Modules\Comercial\Models\TarifaRevision::count();
         $this->artisan('comercial:conciliar-cotizaciones',['--aplicar'=>true])->assertSuccessful();
