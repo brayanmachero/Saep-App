@@ -27,6 +27,19 @@ class Cotizacion extends Model
 
     protected $table = 'comercial_cotizaciones';
 
+    protected static function booted(): void
+    {
+        $sincronizar = fn (self $cotizacion) => app(\App\Modules\Comercial\Services\CotizacionTarifaService::class)->sincronizar($cotizacion);
+        static::saved($sincronizar);
+        static::deleted($sincronizar);
+        static::restored($sincronizar);
+    }
+
+    public function tarifaReferencia()
+    {
+        return $this->hasOne(TarifaReferencia::class, 'cotizacion_id');
+    }
+
     protected $fillable = [
         'numero',
         'titulo',

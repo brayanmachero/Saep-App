@@ -4,7 +4,8 @@ Ruta: `/comercial/tarifas`. Requiere acceso al módulo Comercial.
 
 La sábana conserva referencias por cliente, centro, cargo, categoría, modalidad,
 unidad, variante y moneda. Cada importe mantiene fuente, hash del archivo,
-hoja/celda y desglose original. No recalcula ni sustituye las cotizaciones.
+hoja/celda y desglose original. Las cotizaciones nativas tienen vínculo único y
+actualizan su representación en la sábana; esta consulta no recalcula precios.
 
 ## Consulta y mantenimiento
 
@@ -155,3 +156,43 @@ permite registrar fecha de referencia y guardar avances incompletos como pendien
 confirmar sigue requiriendo modalidad, unidad, precio, cliente identificado e inicio
 de vigencia, además del permiso de aprobación y auditoría existente. No hay aprobación
 masiva ni cambios automáticos de precios.
+
+## Integración con cotizador (26/10/2026)
+
+Cada cotización nativa crea una referencia con `cotizacion_id` único. Al guardar,
+editar, duplicar, reajustar IPC, aprobar, reemplazar, rechazar o eliminar una
+cotización, sus eventos Eloquent actualizan esa referencia. Las operaciones HTTP
+de escritura conservan cotización, proyección y auditoría en la misma transacción.
+No usar actualizaciones masivas por SQL para cambios comerciales: omiten eventos;
+el comando de conciliación permite reparar las proyecciones si fuese necesario.
+
+El cotizador es el lugar de edición y aprobación. La sábana muestra número y
+enlace a la cotización, precio, desglose guardado y estado; bloquea cambios
+independientes sobre registros vinculados. La vista «Cotizaciones del sistema»
+incluye todas las versiones vinculadas y la búsqueda admite el número. La ficha
+del cotizador enlaza de vuelta a la sábana. La actualización se ve al consultar
+o recargar la página; no hay actualización en vivo de una pestaña abierta.
+
+Los borradores se muestran como «En cotización», sin aprobarse. Solo estados
+aprobados y fechas aplicables entran en «Vigentes»; no vigentes y eliminadas
+siguen en el historial. Un borrador posterior no oculta una referencia aprobada
+en la vista reciente. Las cotizaciones EST/SUB nativas calculan un precio mensual
+en CLP; sus horas se derivan de esa base. No se infiere unidad para históricos.
+
+`php artisan comercial:conciliar-cotizaciones` simula; `--aplicar` persiste y
+registra auditoría. Es idempotente: no duplica referencias ni revisiones sin
+cambios. Para históricos exige una única coincidencia de SHA-256, hoja y celda,
+además de cliente, centro, cargo, modalidad, fecha y precio redondeado a dos
+decimales. Conserva el importe original de seis decimales, desglose y respaldo;
+refleja el estado del cotizador. Las fechas sintéticas del importador no se
+convierten en vigencia aprobada. Origen distinto o coincidencia ambigua quedan
+sin enlace ni copia automática y se advierte en la ficha de cotización.
+
+Los históricos ya enlazados conservan sus datos originales; una aprobación
+posterior explícita desde el cotizador actualiza estado y fechas. Los históricos
+importados antes que su fuente de sábana requieren volver a ejecutar conciliación
+después de importar esa fuente.
+
+Validación: pruebas de creación, edición, IPC, aprobación/reemplazo, vencimiento,
+inicio futuro, eliminación, permisos de edición, navegación, exportación,
+idempotencia y rechazo de coincidencias históricas por origen/precio/ambigüedad.

@@ -57,6 +57,8 @@ class ComercialCotizacionFlowTest extends TestCase
         });
 
         $this->createTestSchema();
+        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
+        (require app_path('Modules/Comercial/database/migrations/2026_10_26_000001_link_tarifas_cotizaciones.php'))->up();
         $this->seed(ComercialSeeder::class);
     }
 
@@ -332,7 +334,6 @@ class ComercialCotizacionFlowTest extends TestCase
 
     public function test_sabana_importa_sin_aprobar_ni_duplicar_y_conserva_revision(): void
     {
-        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
         $service = app(\App\Modules\Comercial\Services\SabanaTarifasService::class);
         $lote = [
             'fuentes' => [['clave' => 'idl', 'archivo' => 'IDL.xlsx', 'hash_sha256' => str_repeat('a', 64), 'estado' => 'parcial']],
@@ -366,7 +367,6 @@ class ComercialCotizacionFlowTest extends TestCase
 
     public function test_sabana_resuelve_versiones_sin_reactivar_tarifas_vencidas_y_respeta_unidades(): void
     {
-        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
         $service = app(\App\Modules\Comercial\Services\SabanaTarifasService::class);
         $modelo = \App\Modules\Comercial\Models\TarifaReferencia::class;
         $datos = ['cliente' => 'A', 'centro' => 'Sur', 'cargo' => 'Operario', 'unidad' => 'mes', 'moneda' => 'CLP', 'precio' => 100, 'estado' => 'confirmada'];
@@ -390,7 +390,6 @@ class ComercialCotizacionFlowTest extends TestCase
 
     public function test_sabana_impide_aprobar_sin_datos_y_crea_nuevas_versiones_sin_sobrescribir(): void
     {
-        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
         $this->get(route('comercial.tarifas.index'))->assertRedirect(route('login'));
         $this->actingAs($this->createAdminUser());
         $payload = ['cliente' => 'A', 'cargo' => 'Operario', 'unidad' => 'mes', 'moneda' => 'CLP', 'precio' => 100, 'fecha_referencia' => '2026-01-01', 'observaciones' => 'Acuerdo comercial'];
@@ -422,7 +421,6 @@ class ComercialCotizacionFlowTest extends TestCase
         $this->assertSame('Walmart Chile', $command::resolver('14.1-FINAL LTS QUILICURA SUB', $lts));
         $this->assertNull($command::resolver('LTS QUILICURA', array_merge($lts, [['centro' => 'LTS OTRO', 'cliente' => 'Otro']])));
         $this->assertNull($command::resolver('Bodega Sur', array_merge($masters, [['centro' => 'Bodega Sur SUB', 'cliente' => 'Otro']])));
-        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
         $this->createCommercialFixture();
         $modelo = \App\Modules\Comercial\Models\TarifaReferencia::class;
         $base = ['cliente' => 'Por homologar', 'centro' => 'Cliente Prueba Norte', 'cargo' => 'Operario', 'precio' => 123456.123456, 'estado' => 'pendiente'];
@@ -543,7 +541,6 @@ class ComercialCotizacionFlowTest extends TestCase
 
     public function test_consulta_operativa_agrupa_sin_exponer_formulas_y_descarga_solo_respaldo_verificado(): void
     {
-        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
         $service = app(\App\Modules\Comercial\Services\SabanaTarifasService::class);
         $lote = [
             'fuentes' => [['clave' => 'idl', 'archivo' => 'IDL.xlsx', 'hash_sha256' => str_repeat('a', 64), 'estado' => 'parcial']],
@@ -594,7 +591,6 @@ class ComercialCotizacionFlowTest extends TestCase
 
     public function test_filtros_comerciales_limitan_centros_y_servicios_y_limpian_enlaces_incompatibles(): void
     {
-        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
         $modelo = \App\Modules\Comercial\Models\TarifaReferencia::class;
         foreach ([['Cliente A','Norte','Operario'], ['Cliente A','Sur','Supervisor'], ['Cliente B','Norte','Conductor']] as $i => [$cliente,$centro,$cargo]) {
             $modelo::create(['identidad'=>hash('sha256', (string)$i), 'grupo'=>hash('sha256', 'grupo'.$i), 'cliente'=>$cliente,'centro'=>$centro,'cargo'=>$cargo,'precio'=>100,'estado'=>'pendiente']);
@@ -616,7 +612,6 @@ class ComercialCotizacionFlowTest extends TestCase
 
     public function test_comparador_preserva_orden_y_no_compara_unidades_o_monedas_distintas(): void
     {
-        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
         $this->actingAs($this->createAdminUser());
         $modelo = \App\Modules\Comercial\Models\TarifaReferencia::class;
         $filas = collect();
@@ -640,7 +635,6 @@ class ComercialCotizacionFlowTest extends TestCase
 
     public function test_bandeja_filtra_pendientes_y_respeta_permiso_de_edicion(): void
     {
-        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
         $user=$this->createAdminUser();$this->actingAs($user);
         $modelo=\App\Modules\Comercial\Models\TarifaReferencia::class;
         foreach ([['Por homologar',null,'pendiente'],['Cliente B','mes','pendiente'],['Cliente B',null,'descartada']] as $i=>[$cliente,$unidad,$estado]) {
@@ -659,6 +653,83 @@ class ComercialCotizacionFlowTest extends TestCase
         $user->unsetRelation('rol');
         $this->get(route('comercial.tarifas.validacion'))->assertForbidden();
         $this->get(route('comercial.tarifas.comparar',['ids'=>$modelo::where('estado','pendiente')->pluck('id')->all()]))->assertOk();
+    }
+
+    public function test_cotizador_refleja_edicion_estados_versiones_y_eliminacion_en_sabana(): void
+    {
+        $this->actingAs($this->createAdminUser());
+        ['cliente'=>$cliente, 'centro'=>$centro, 'modalidad'=>$modalidad] = $this->createCommercialFixture();
+        $this->post(route('comercial.cotizaciones.store'), $this->quotePayload($cliente,$centro,$modalidad,700000))->assertSessionHasNoErrors();
+        $cotizacion = Cotizacion::firstOrFail();
+        $tarifa = $cotizacion->tarifaReferencia;
+        $sabana = app(\App\Modules\Comercial\Services\SabanaTarifasService::class);
+        $this->assertNotNull($tarifa);
+        $this->assertSame('en_cotizacion', $tarifa->estado);
+        $this->assertSame('mes', $tarifa->unidad);
+        $this->assertSame((float)$cotizacion->precio_venta, (float)$tarifa->precio);
+        $this->assertSame(0, $sabana->consulta(['vista'=>'vigentes'])->count());
+        $this->get(route('comercial.tarifas.index',['vista'=>'cotizaciones','q'=>$cotizacion->numero]))->assertOk()->assertSee($cotizacion->numero)->assertSee('En cotización');
+        $this->get(route('comercial.tarifas.show',$tarifa))->assertOk()->assertSee('Ver cotización')->assertDontSee('Administrar y aprobar esta tarifa');
+        $this->patch(route('comercial.tarifas.revisar',$tarifa),[])->assertStatus(409);
+        $this->patch(route('comercial.cotizaciones.update',$cotizacion),$this->quotePayload($cliente,$centro,$modalidad,800000))->assertSessionHasNoErrors();
+        $this->assertSame((float)$cotizacion->fresh()->precio_venta,(float)$tarifa->fresh()->precio);
+        $this->assertSame(1, \App\Modules\Comercial\Models\TarifaReferencia::count());
+        $this->patch(route('comercial.cotizaciones.aprobar',$cotizacion))->assertSessionHas('success');
+        $this->assertSame([$tarifa->id],$sabana->consulta(['vista'=>'vigentes'])->pluck('id')->all());
+        $this->post(route('comercial.cotizaciones.reajustar-ipc',$cotizacion),['ipc_porcentaje'=>2.8])->assertSessionHas('success');
+        $nueva = Cotizacion::latest('id')->firstOrFail();
+        $this->assertNotSame($tarifa->id,$nueva->tarifaReferencia->id);
+        $this->assertSame('en_cotizacion',$nueva->tarifaReferencia->estado);
+        $this->assertSame([$tarifa->id],$sabana->consulta(['vista'=>'vigentes'])->pluck('id')->all());
+        $this->patch(route('comercial.cotizaciones.aprobar',$nueva))->assertSessionHas('success');
+        $this->assertSame('no_vigente',$tarifa->fresh()->estado);
+        $this->assertSame([$nueva->tarifaReferencia->id],$sabana->consulta(['vista'=>'vigentes'])->pluck('id')->all());
+        $nueva->update(['fecha_vigencia_desde'=>now()->addDay()]);
+        $this->assertSame(0,$sabana->consulta(['vista'=>'vigentes'])->count());
+        $nueva->update(['fecha_vigencia_desde'=>now()->subDays(2),'fecha_vigencia_hasta'=>now()->subDay()]);
+        $this->assertSame(0,$sabana->consulta(['vista'=>'vigentes'])->count());
+        $nueva->update(['fecha_vigencia_hasta'=>now()->addDay()]);
+        $this->delete(route('comercial.cotizaciones.destroy',$nueva),['motivo'=>'Prueba de eliminación'])->assertSessionHas('success');
+        $this->assertSame(0,$sabana->consulta(['vista'=>'vigentes'])->count());
+        $this->assertSame('Cotización eliminada',$nueva->tarifaReferencia->fresh()->etiquetaConsulta());
+        $cantidad = \App\Modules\Comercial\Models\TarifaReferencia::count();
+        $revisiones = \App\Modules\Comercial\Models\TarifaRevision::count();
+        $this->artisan('comercial:conciliar-cotizaciones',['--aplicar'=>true])->assertSuccessful();
+        $this->assertSame($cantidad,\App\Modules\Comercial\Models\TarifaReferencia::count());
+        $this->assertSame($revisiones,\App\Modules\Comercial\Models\TarifaRevision::count());
+        $csv = $this->get(route('comercial.tarifas.export',['vista'=>'cotizaciones']))->assertOk()->streamedContent();
+        $this->assertStringContainsString($cotizacion->numero, $csv);
+    }
+
+    public function test_conciliacion_historica_exige_origen_datos_y_coincidencia_unica(): void
+    {
+        ['cliente'=>$cliente, 'centro'=>$centro, 'modalidad'=>$modalidad] = $this->createCommercialFixture();
+        $fuente = \App\Modules\Comercial\Models\TarifaFuente::create(['identidad'=>str_repeat('a',64),'hash_sha256'=>str_repeat('b',64),'archivo'=>'Historico.xlsx']);
+        $datos = ['identidad'=>str_repeat('c',64),'grupo'=>str_repeat('d',64),'fuente_id'=>$fuente->id,'cliente'=>$cliente->nombre,'centro'=>$centro->nombre,'cargo'=>'Operario','modalidad'=>'EST','precio'=>123456.789012,'fecha_referencia'=>'2025-01-01','hoja'=>'Hoja1','celda'=>'A1','estado'=>'pendiente'];
+        $tarifa = \App\Modules\Comercial\Models\TarifaReferencia::create($datos);
+        $origen = ['hash_sha256'=>str_repeat('e',64),'hoja'=>'Hoja1','celda_precio'=>'A1'];
+        $cotizacion = Cotizacion::create(['numero'=>'HIST-PRUEBA','cliente_id'=>$cliente->id,'centro_costo_id'=>$centro->id,'modalidad_id'=>$modalidad->id,'cargo'=>'Operario','precio_venta'=>123456.79,'estado'=>'no_vigente','fecha_cotizacion'=>'2025-01-01','datos_calculo'=>['origen'=>$origen]]);
+        $this->assertNull($tarifa->fresh()->cotizacion_id);
+        $this->assertSame(1,\App\Modules\Comercial\Models\TarifaReferencia::count());
+        $origen['hash_sha256'] = $fuente->hash_sha256;
+        $cotizacion->update(['precio_venta'=>99,'datos_calculo'=>['origen'=>$origen]]);
+        $this->assertNull($tarifa->fresh()->cotizacion_id);
+        $cotizacion->update(['precio_venta'=>123456.79]);
+        $tarifa->refresh();
+        $this->assertSame($cotizacion->id,$tarifa->cotizacion_id);
+        $this->assertSame('123456.789012',$tarifa->precio);
+        $this->assertSame('no_vigente',$tarifa->estado);
+        $this->assertNull($tarifa->vigente_desde);
+        $this->assertSame($fuente->id,$tarifa->fuente_id);
+        $service = app(\App\Modules\Comercial\Services\CotizacionTarifaService::class);
+        $count = $tarifa->revisiones()->count();
+        $service->sincronizar($cotizacion);
+        $this->assertSame($count,$tarifa->revisiones()->count());
+        $origen['celda_precio']='B2';
+        foreach (['f','g'] as $id) \App\Modules\Comercial\Models\TarifaReferencia::create(array_merge($datos,['identidad'=>str_repeat($id,64),'celda'=>'B2']));
+        $segunda = Cotizacion::create(['numero'=>'HIST-AMBIGUO','cliente_id'=>$cliente->id,'centro_costo_id'=>$centro->id,'modalidad_id'=>$modalidad->id,'cargo'=>'Operario','precio_venta'=>123456.79,'estado'=>'no_vigente','fecha_cotizacion'=>'2025-01-01','datos_calculo'=>['origen'=>$origen]]);
+        $this->assertNull($segunda->tarifaReferencia);
+        $this->assertSame('revisar_origen',$service->sincronizar($segunda,false));
     }
 
     private function createTestSchema(): void

@@ -479,10 +479,12 @@ class CotizacionController
             'motivo' => 'required|string|min:5|max:1000',
         ]);
 
-        $this->registrarAuditoria($cotizacion, 'eliminada', 'Cotización eliminada', [
-            'motivo' => $validated['motivo'],
-        ]);
-        $cotizacion->delete();
+        DB::transaction(function () use ($cotizacion, $validated) {
+            $this->registrarAuditoria($cotizacion, 'eliminada', 'Cotización eliminada', [
+                'motivo' => $validated['motivo'],
+            ]);
+            $cotizacion->delete();
+        });
 
         return redirect()->route('comercial.cotizaciones.index')
             ->with('success', 'Cotización eliminada.');
@@ -653,6 +655,7 @@ class CotizacionController
 
     private function marcarNoVigente(Cotizacion $cotizacion, string $motivo, string $descripcion): void
     {
+        DB::transaction(function () use ($cotizacion, $motivo, $descripcion) {
         $cotizacion->update([
             'estado' => Cotizacion::ESTADO_NO_VIGENTE,
             'fecha_cancelacion' => now(),
@@ -663,6 +666,7 @@ class CotizacionController
         $this->registrarAuditoria($cotizacion, 'no_vigente', $descripcion, [
             'motivo' => $motivo,
         ]);
+        });
     }
 
     private function validarCotizacion(Request $request, ?Cotizacion $cotizacion = null): array

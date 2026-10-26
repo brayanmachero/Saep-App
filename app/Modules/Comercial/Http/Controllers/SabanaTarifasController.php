@@ -19,7 +19,7 @@ class SabanaTarifasController
             'centro' => 'nullable|string|max:255', 'cargo' => 'nullable|string|max:255',
             'categoria' => 'nullable|string|max:255', 'modalidad' => 'nullable|string|max:255',
             'unidad' => 'nullable|string|max:255', 'fecha' => 'nullable|date_format:Y-m-d',
-            'vista' => 'nullable|in:ultimas,referencias,vigentes,pendientes,historico',
+            'vista' => 'nullable|in:ultimas,referencias,vigentes,pendientes,historico,cotizaciones',
             'anio' => 'nullable|integer|min:2000|max:2100',
         ]);
     }
@@ -47,19 +47,23 @@ class SabanaTarifasController
         $tarifas = $service->consulta($filtros)->paginate(40)->withQueryString();
         $resumen = [
             'fuentes' => TarifaFuente::count(), 'referencias' => TarifaReferencia::count(),
-            'pendientes' => TarifaReferencia::where('estado', 'pendiente')->count(),
+            'pendientes' => TarifaReferencia::where('estado', 'pendiente')->whereNull('cotizacion_id')->count(),
             'vigentes' => $service->consulta(['vista' => 'vigentes'])->count(),
         ];
         $fuentes = TarifaFuente::withCount('tarifas')->orderBy('carpeta')->orderBy('archivo')->get();
 
         $vigentesHoy = $service->consulta(['vista' => 'vigentes'])->whereIn('id', $tarifas->modelKeys())->pluck('id')->all();
-        return view('comercial::tarifas.index', compact('tarifas', 'opciones', 'filtros', 'resumen', 'fuentes', 'vigentesHoy'));
+        $cotizaciones = \App\Modules\Comercial\Models\Cotizacion::query();
+        $conciliacion = ['total' => (clone $cotizaciones)->count(),
+            'vinculadas' => (clone $cotizaciones)->whereHas('tarifaReferencia')->count(),
+            'pendientes' => (clone $cotizaciones)->whereDoesntHave('tarifaReferencia')->orderBy('id')->limit(10)->get(['id', 'numero'])];
+        return view('comercial::tarifas.index', compact('tarifas', 'opciones', 'filtros', 'resumen', 'fuentes', 'vigentesHoy', 'conciliacion'));
     }
 
     public function comparar(Request $request, \App\Modules\Comercial\Services\TarifaRevisionService $revision)
     {
         $datos = $request->validate(['ids'=>'required|array|min:2|max:4', 'ids.*'=>'required|integer|distinct|exists:comercial_tarifas_referencia,id']);
-        $porId = TarifaReferencia::with('fuente')->whereIn('id', $datos['ids'])->get()->keyBy('id');
+        $porId = TarifaReferencia::with(['fuente', 'cotizacion'])->whereIn('id', $datos['ids'])->get()->keyBy('id');
         $tarifas = collect($datos['ids'])->map(fn ($id) => $porId[$id]);
         $base = $tarifas->first();
         $diferencias = $tarifas->mapWithKeys(fn ($t) => [$t->id => $revision->diferencia($base, $t)]);
@@ -70,7 +74,7 @@ class SabanaTarifasController
     public function validacion(Request $request, \App\Modules\Comercial\Services\TarifaRevisionService $revision)
     {
         $filtros = $request->validate(['cliente'=>'nullable|string|max:255', 'centro'=>'nullable|string|max:255', 'motivo'=>'nullable|in:cliente,unidad,modalidad,categoria,fecha_referencia,vigente_desde,precio']);
-        $query = TarifaReferencia::where('estado', 'pendiente');
+        $query = TarifaReferencia::where('estado', 'pendiente')->whereNull('cotizacion_id');
         $clientes = (clone $query)->distinct()->orderBy('cliente')->pluck('cliente');
         if (!empty($filtros['cliente'])) $query->where('cliente', $filtros['cliente']);
         $centros = (clone $query)->whereNotNull('centro')->distinct()->orderBy('centro')->pluck('centro');
@@ -90,8 +94,8 @@ class SabanaTarifasController
 
     public function show(TarifaReferencia $tarifa)
     {
-        $tarifa->load('fuente', 'revisiones');
-        $versiones = TarifaReferencia::where('grupo', $tarifa->grupo)->orderByDesc('fecha_referencia')->get();
+        $tarifa->load('fuente', 'revisiones', 'cotizacion');
+        $versiones = TarifaReferencia::with('cotizacion')->where('grupo', $tarifa->grupo)->orderByDesc('fecha_referencia')->get();
 
         $grupos = app(\App\Modules\Comercial\Services\TarifaPresentacionService::class)->grupos($tarifa->conceptos ?? []);
         $vigenteHoy = app(SabanaTarifasService::class)->consulta(['vista' => 'vigentes'])->whereKey($tarifa->id)->exists();
@@ -129,6 +133,7 @@ class SabanaTarifasController
     {
         $request->validate(['base' => 'nullable|integer|exists:comercial_tarifas_referencia,id']);
         $base = $request->filled('base') ? TarifaReferencia::findOrFail($request->integer('base')) : new TarifaReferencia;
+        if ($base->cotizacion_id) return redirect()->route('comercial.cotizaciones.show', $base->cotizacion_id);
 
         return view('comercial::tarifas.create', compact('base'));
     }
@@ -165,6 +170,7 @@ class SabanaTarifasController
 
     public function revisar(Request $request, TarifaReferencia $tarifa)
     {
+        abort_if($tarifa->cotizacion_id, 409, 'Esta tarifa está vinculada al cotizador. Gestiona la cotización de origen.');
         $datos = $request->validate([
             'categoria' => 'nullable|string|max:255', 'modalidad' => 'nullable|required_if:estado,confirmada|string|max:100',
             'cliente' => 'sometimes|required|string|max:255', 'centro' => 'sometimes|nullable|string|max:255',
@@ -183,6 +189,7 @@ class SabanaTarifasController
         }
         DB::transaction(function () use ($datos, $request, $tarifa) {
             $registro = TarifaReferencia::lockForUpdate()->findOrFail($tarifa->id);
+            abort_if($registro->cotizacion_id, 409, 'Esta tarifa está vinculada al cotizador.');
             $antes = $registro->toArray();
             $registro->fill(collect($datos)->except('motivo')->all());
             $registro->grupo = TarifaReferencia::grupoPara($registro->toArray());
@@ -205,12 +212,13 @@ class SabanaTarifasController
         return response()->streamDownload(function () use ($query) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['Cliente', 'Centro', 'Cargo', 'Categoría', 'Modalidad', 'Unidad', 'Variante', 'Moneda', 'Tarifa', 'Período origen', 'Fecha referencia', 'Estado revisión', 'Vigente desde', 'Vigente hasta', 'Archivo', 'Hoja', 'Celda', 'Observaciones'], ';');
+            fputcsv($out, ['Cliente', 'Centro', 'Cargo', 'Categoría', 'Modalidad', 'Unidad', 'Variante', 'Moneda', 'Tarifa', 'Período origen', 'Fecha referencia', 'Estado revisión', 'Vigente desde', 'Vigente hasta', 'Archivo', 'Hoja', 'Celda', 'Observaciones', 'Cotización', 'Estado cotización'], ';');
             foreach ($query->lazy(200) as $tarifa) {
                 $fila = [$tarifa->cliente, $tarifa->centro, $tarifa->cargo, $tarifa->categoria, $tarifa->modalidad, $tarifa->unidad, $tarifa->variante, $tarifa->moneda,
                     $tarifa->precio, $tarifa->periodo, $tarifa->fecha_referencia?->format('Y-m-d'), $tarifa->estado,
                     $tarifa->vigente_desde?->format('Y-m-d'), $tarifa->vigente_hasta?->format('Y-m-d'),
-                    $tarifa->fuente?->archivo, $tarifa->hoja, $tarifa->celda, $tarifa->observaciones];
+                    $tarifa->fuente?->archivo, $tarifa->hoja, $tarifa->celda, $tarifa->observaciones,
+                    $tarifa->cotizacion?->numero, $tarifa->cotizacion ? ($tarifa->cotizacion->trashed() ? 'Eliminada' : \App\Modules\Comercial\Models\Cotizacion::etiquetaEstado($tarifa->cotizacion->estado)) : null];
                 fputcsv($out, array_map(fn ($valor) => is_string($valor) && preg_match('/^[\s]*[=+@-]/u', $valor) ? "'".$valor : $valor, $fila), ';');
             }
             fclose($out);

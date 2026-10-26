@@ -98,7 +98,7 @@ class SabanaTarifasService
 
     public function consulta(array $filtros)
     {
-        $query = TarifaReferencia::with('fuente');
+        $query = TarifaReferencia::with(['fuente', 'cotizacion']);
         foreach (['cliente', 'centro', 'cargo', 'categoria', 'modalidad', 'unidad'] as $campo) {
             if (! empty($filtros[$campo])) {
                 $query->where($campo, $filtros[$campo]);
@@ -108,7 +108,8 @@ class SabanaTarifasService
             $q = '%'.$filtros['q'].'%';
             $query->where(fn ($sub) => $sub->where('cliente', 'like', $q)->orWhere('centro', 'like', $q)
                 ->orWhere('cargo', 'like', $q)->orWhere('categoria', 'like', $q)
-                ->orWhereHas('fuente', fn ($fuente) => $fuente->where('archivo', 'like', $q)));
+                ->orWhereHas('fuente', fn ($fuente) => $fuente->where('archivo', 'like', $q))
+                ->orWhereHas('cotizacion', fn ($cotizacion) => $cotizacion->where('numero', 'like', $q)));
         }
         if (! empty($filtros['anio'])) {
             $query->whereYear('fecha_referencia', $filtros['anio']);
@@ -116,10 +117,19 @@ class SabanaTarifasService
         $vista = $filtros['vista'] ?? 'ultimas';
         if ($vista === 'vigentes') {
             $fecha = $filtros['fecha'] ?? now()->toDateString();
+            $query->where(fn ($q) => $q->whereNull('cotizacion_id')->orWhereHas('cotizacion', fn ($c) => $c
+                ->whereNull('deleted_at')->whereIn('estado', \App\Modules\Comercial\Models\Cotizacion::ESTADOS_VIGENTES_COMPATIBLES)));
             $query->where('estado', 'confirmada')->whereDate('vigente_desde', '<=', $fecha)
                 ->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhereDate('vigente_hasta', '>=', $fecha))
                 ->whereNotExists(function ($sub) use ($fecha) {
                     $sub->selectRaw('1')->from('comercial_tarifas_referencia as siguiente')
+                        ->where(function ($q) {
+                            $q->whereNull('siguiente.cotizacion_id')->orWhereExists(function ($c) {
+                                $c->selectRaw('1')->from('comercial_cotizaciones as cv')
+                                    ->whereColumn('cv.id', 'siguiente.cotizacion_id')->whereNull('cv.deleted_at')
+                                    ->whereIn('cv.estado', \App\Modules\Comercial\Models\Cotizacion::ESTADOS_VIGENTES_COMPATIBLES);
+                            });
+                        })
                         ->whereColumn('siguiente.grupo', 'comercial_tarifas_referencia.grupo')
                         ->where('siguiente.estado', 'confirmada')->whereDate('siguiente.vigente_desde', '<=', $fecha)
                         ->where(fn ($q) => $q->whereColumn('siguiente.vigente_desde', '>', 'comercial_tarifas_referencia.vigente_desde')
@@ -127,17 +137,20 @@ class SabanaTarifasService
                                 ->whereColumn('siguiente.id', '>', 'comercial_tarifas_referencia.id')));
                 });
         } elseif ($vista === 'ultimas') {
-            $query->where('estado', '!=', 'descartada')->whereNotExists(function ($sub) use ($filtros) {
+            $query->whereNotIn('estado', ['descartada', 'no_vigente'])->whereNotExists(function ($sub) use ($filtros) {
                 $sub->selectRaw('1')->from('comercial_tarifas_referencia as posterior')
                     ->whereColumn('posterior.grupo', 'comercial_tarifas_referencia.grupo')
                     ->where('posterior.estado', '!=', 'descartada')
+                    ->whereColumn('posterior.estado', 'comercial_tarifas_referencia.estado')
                     ->whereColumn('posterior.fecha_referencia', '>', 'comercial_tarifas_referencia.fecha_referencia');
                 if (! empty($filtros['anio'])) {
                     $sub->whereYear('posterior.fecha_referencia', $filtros['anio']);
                 }
             });
         } elseif ($vista === 'pendientes') {
-            $query->where('estado', 'pendiente');
+            $query->where('estado', 'pendiente')->whereNull('cotizacion_id');
+        } elseif ($vista === 'cotizaciones') {
+            $query->whereNotNull('cotizacion_id');
         } elseif ($vista === 'referencias') {
             $query->where('estado', '!=', 'descartada');
         }

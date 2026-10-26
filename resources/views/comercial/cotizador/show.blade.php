@@ -123,6 +123,7 @@
 </style>
 @endpush
 @section('content')
+@if($cotizacion->tarifaReferencia)<div class="alert alert-info">Esta cotización está vinculada a la sábana de precios. <a href="{{ route('comercial.tarifas.show', $cotizacion->tarifaReferencia) }}">Consultar en la sábana</a></div>@elseif(data_get($cotizacion->datos_calculo, 'origen'))<div class="alert alert-warning">Histórico pendiente de conciliación con la sábana. Comercial debe revisar su procedencia.</div>@endif
 @php
     $puedeCrearComercial = auth()->user()->tieneAcceso('comercial', 'puede_crear');
     $puedeEditarComercial = auth()->user()->tieneAcceso('comercial', 'puede_editar');
