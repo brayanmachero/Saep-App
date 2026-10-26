@@ -1,5 +1,56 @@
 # Sábana de tarifas de Comercial
 
+## API de consulta y Power Query (26/10/2026)
+
+`GET https://saep.bmachero.com/comercial/api/sabana-tarifas`
+
+Consulta de solo lectura, protegida por la configuración dedicada `COMERCIAL_SABANA_API_ENABLED`
+y `COMERCIAL_SABANA_API_TOKEN`. Enviar `Authorization: Bearer <credencial>` y `Accept: application/json`.
+La credencial actual es global: permite consultar todos los clientes. Los filtros no son permisos
+por cliente. Compartirla solo con personas autorizadas a esa cobertura; no incluirla en archivos
+Excel que se entreguen a clientes. La clave viaja solo por cabecera y no habilita los endpoints de remuneraciones de la API anterior.
+
+Por defecto devuelve únicamente tarifas confirmadas y vigentes según las mismas reglas de la
+pantalla. Filtros opcionales exactos: `cliente`, `centro`, `cargo`, `modalidad`, `unidad`.
+Sin cliente/centro devuelve todos. `vista=referencias` entrega la sábana no descartada, incluidos
+pendientes e históricos: no utilizar esas filas para prefacturar sin comprobar `vigente_en_fecha`.
+`fecha=AAAA-MM-DD` evalúa las fechas de vigencia con los estados actuales; no reconstruye los
+estados que existían antes de una aprobación, eliminación o reemplazo.
+
+Respuesta JSON v1: `generated_at`, `fecha_consulta`, `vista`, `pagination` y `data`.
+Páginas de 500 filas por defecto, máximo 1000; continuar hasta `pagination.last_page`.
+No hay truncamiento silencioso. `precio` conserva los seis decimales como texto con punto decimal;
+Excel lo convierte a número usando cultura `en-US`. `null` indica dato desconocido, no cero.
+Se entregan identificación de tarifa y cotización, cliente, centro, servicio, modalidad, moneda,
+unidad, condiciones, fechas, revisión, estado del cotizador y fecha de actualización.
+No se incluyen fórmulas, remuneraciones, márgenes, celdas ni archivos de respaldo.
+Respuesta vacía en vigentes significa que no hay precios aprobados aplicables; no se reemplaza
+automáticamente por una cotización pendiente. La API anterior `tarifas-cotizadas` se conserva.
+
+### Conectar Excel de escritorio
+
+1. Datos → Obtener datos → Consulta en blanco → Editor avanzado.
+2. Crear el parámetro de texto `TokenSAEP` con la credencial entregada por el administrador.
+3. Pegar [comercial-sabana-powerquery.pq](comercial-sabana-powerquery.pq). Ajustar `Cliente` y `Centro`
+   o dejarlos vacíos para cargar toda la sábana vigente y filtrar después.
+4. En las credenciales del origen Web elegir Anónima: la autenticación real se envía en la cabecera
+   Bearer. El parámetro no cifra ni oculta la clave a quien pueda editar el libro.
+5. Cerrar y cargar como tabla. Usar Datos → Actualizar todo antes de preparar la prefactura;
+   opcionalmente activar actualizar al abrir el archivo en las propiedades de la conexión.
+
+La actualización ocurre al refrescar, no como una notificación en vivo. Si falla, Excel puede
+conservar datos de la actualización anterior: comprobar éxito y `consultado_en` antes de usarlo.
+Cruzar por tarifa/cliente/centro/servicio/modalidad/unidad/moneda/condiciones, no solo por cargo.
+Guardar una copia de los precios utilizados al cerrar una prefactura para que una actualización
+posterior no modifique silenciosamente un documento ya emitido.
+La paginación consulta datos vivos, no una instantánea transaccional de varias peticiones;
+si Comercial cambia tarifas durante la carga, actualizar nuevamente antes de cerrar la prefactura.
+
+Fuentes: [Web.Contents](https://learn.microsoft.com/en-us/powerquery-m/web-contents) y
+[actualización de conexiones en Excel](https://support.microsoft.com/en-us/excel/refresh-an-external-data-connection-in-excel).
+El script es una plantilla de conexión; su ejecución en el libro real de prefacturas debe validarse
+al configurar ese archivo. No se ha modificado ningún libro de operaciones.
+
 Ruta: `/comercial/tarifas`. Requiere acceso al módulo Comercial.
 
 La sábana conserva referencias por cliente, centro, cargo, categoría, modalidad,

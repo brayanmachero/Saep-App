@@ -439,6 +439,67 @@ class ComercialCotizacionFlowTest extends TestCase
         $this->assertSame(1, $tarifa->revisiones()->count());
     }
 
+    public function test_revision_en_espanol_y_vigencia_coherente_en_versiones(): void
+    {
+        $this->actingAs($this->createAdminUser());
+        $modelo = \App\Modules\Comercial\Models\TarifaReferencia::class;
+        $datos = ['cliente'=>'QA', 'cargo'=>'Operario', 'precio'=>100, 'modalidad'=>'EST', 'unidad'=>'mes',
+            'estado'=>'confirmada', 'vigente_desde'=>now()->subDay()->toDateString()];
+        $vigente = $modelo::create($datos + ['identidad'=>hash('sha256','vigente'), 'grupo'=>$modelo::grupoPara($datos)]);
+        $pendiente = $modelo::create(array_merge($datos, ['estado'=>'pendiente', 'vigente_desde'=>null,
+            'identidad'=>hash('sha256','pendiente'), 'grupo'=>$vigente->grupo]));
+        $this->get(route('comercial.tarifas.show', $pendiente))->assertOk()
+            ->assertViewHas('vigentesHoy', [$vigente->id])->assertSee('Vigente hoy')->assertDontSee('No vigente hoy');
+        $respuesta = $this->patch(route('comercial.tarifas.revisar', $pendiente), ['estado'=>'confirmada']);
+        $respuesta->assertSessionHasErrors([
+            'vigente_desde'=>'Para confirmar la tarifa, completa el campo inicio de vigencia.',
+            'motivo'=>'Completa el campo motivo de revisión.',
+        ]);
+        $this->assertSame('pendiente', $pendiente->fresh()->estado);
+    }
+
+    public function test_api_sabana_autenticacion_paginacion_filtros_y_sincronizacion(): void
+    {
+        Config::set('comercial.api.sabana.enabled', true);
+        Config::set('comercial.api.sabana.token', 'test-only-key');
+        $url = '/comercial/api/sabana-tarifas';
+        $headers = ['Authorization'=>'Bearer test-only-key'];
+        $this->getJson($url)->assertUnauthorized();
+        $this->getJson($url, ['Authorization'=>'Bearer wrong'])->assertUnauthorized();
+        $this->getJson($url.'?api_key=test-only-key')->assertUnauthorized();
+        Config::set('comercial.api.enabled', true);
+        Config::set('comercial.api.token', 'legacy-only-key');
+        $this->getJson('/comercial/api/clientes', $headers)->assertUnauthorized();
+        $this->getJson($url, ['Authorization'=>'Bearer legacy-only-key'])->assertUnauthorized();
+        $modelo = \App\Modules\Comercial\Models\TarifaReferencia::class;
+        foreach (['A','B','C','Pendiente','Futura','Vencida'] as $i=>$cliente) {
+            $datos = ['cliente'=>$cliente, 'centro'=>'Centro QA', 'cargo'=>'Operario', 'precio'=>'123.123456',
+                'unidad'=>'mes', 'modalidad'=>'EST', 'estado'=>$cliente==='Pendiente'?'pendiente':'confirmada',
+                'vigente_desde'=>($cliente==='Futura'?now()->addDay():now()->subDays(3))->toDateString(),
+                'vigente_hasta'=>$cliente==='Vencida'?now()->subDay()->toDateString():null];
+            $modelo::create($datos+['identidad'=>hash('sha256',(string)$i),'grupo'=>$modelo::grupoPara($datos)]);
+        }
+        $this->getJson($url.'?per_page=2', $headers)->assertOk()->assertJsonPath('pagination.total',3)
+            ->assertJsonPath('pagination.last_page',2)->assertJsonPath('pagination.has_more',true)
+            ->assertJsonPath('data.0.precio','123.123456')->assertJsonPath('data.0.vigente_en_fecha',true);
+        $this->getJson($url.'?per_page=2&page=2', $headers)->assertOk()->assertJsonCount(1,'data')->assertJsonPath('data.0.cliente','C');
+        $this->getJson($url.'?vista=referencias', $headers)->assertOk()->assertJsonPath('pagination.total',6);
+        $this->getJson($url.'?cliente=B&centro=Centro%20QA', $headers)->assertOk()->assertJsonCount(1,'data')->assertJsonPath('data.0.cliente','B');
+        $this->getJson($url.'?cliente=B&centro=Otro', $headers)->assertOk()->assertJsonCount(0,'data');
+        $this->getJson($url.'?per_page=1001', $headers)->assertUnprocessable();
+        $this->getJson($url.'?vista=incorrecta', $headers)->assertUnprocessable();
+        $this->actingAs($this->createAdminUser());
+        ['cliente'=>$cliente,'centro'=>$centro,'modalidad'=>$modalidad] = $this->createCommercialFixture();
+        $this->post(route('comercial.cotizaciones.store'),$this->quotePayload($cliente,$centro,$modalidad,700000))->assertSessionHasNoErrors();
+        $cotizacion = Cotizacion::firstOrFail();
+        $this->getJson($url.'?cargo=Operario%20de%20Producci%C3%B3n', $headers)->assertJsonCount(0,'data');
+        $this->patch(route('comercial.cotizaciones.aprobar',$cotizacion))->assertSessionHas('success');
+        $this->getJson($url.'?cargo=Operario%20de%20Producci%C3%B3n', $headers)->assertOk()
+            ->assertJsonPath('data.0.cotizacion_id',$cotizacion->id)->assertJsonPath('data.0.vigente_en_fecha',true);
+        $cotizacion->delete();
+        $this->getJson($url.'?cargo=Operario%20de%20Producci%C3%B3n', $headers)->assertJsonCount(0,'data');
+    }
+
     private function createAdminUser(): User
     {
         $rol = Rol::create([

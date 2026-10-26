@@ -12,9 +12,40 @@ use Illuminate\Validation\Rule;
 
 class SabanaTarifasController
 {
+    private function validar(Request $request, array $reglas): array
+    {
+        return $request->validate($reglas, [
+            'required' => 'Completa el campo :attribute.',
+            'required_if' => 'Para confirmar la tarifa, completa el campo :attribute.',
+            'string' => 'El campo :attribute debe contener texto.',
+            'integer' => 'El campo :attribute debe ser un número entero.',
+            'numeric' => 'El campo :attribute debe ser un número válido.',
+            'array' => 'La selección de :attribute no es válida.',
+            'in' => 'Selecciona una opción válida para :attribute.',
+            'exists' => 'La referencia seleccionada ya no está disponible.',
+            'distinct' => 'Selecciona tarifas distintas para comparar.',
+            'date_format' => 'Indica una fecha válida para :attribute.',
+            'after_or_equal' => 'La fecha de término no puede ser anterior al inicio de vigencia.',
+            'min.array' => 'Selecciona al menos :min tarifas para comparar.',
+            'max.array' => 'Puedes comparar hasta :max tarifas.',
+            'min.numeric' => 'El campo :attribute debe ser mayor o igual a :min.',
+            'max.numeric' => 'El campo :attribute debe ser menor o igual a :max.',
+            'max.string' => 'El campo :attribute admite hasta :max caracteres.',
+        ], [
+            'q' => 'búsqueda', 'cliente' => 'cliente', 'centro' => 'centro de costo',
+            'cargo' => 'cargo o servicio', 'categoria' => 'categoría', 'modalidad' => 'modalidad',
+            'unidad' => 'unidad de cobro', 'fecha' => 'fecha de consulta', 'anio' => 'año',
+            'vista' => 'vista', 'ids' => 'tarifas', 'base' => 'tarifa de origen',
+            'variante' => 'condiciones', 'moneda' => 'moneda', 'precio' => 'precio',
+            'fecha_referencia' => 'fecha del documento', 'observaciones' => 'respaldo y condiciones',
+            'estado' => 'revisión', 'vigente_desde' => 'inicio de vigencia',
+            'vigente_hasta' => 'término de vigencia', 'motivo' => 'motivo de revisión',
+        ]);
+    }
+
     private function filtros(Request $request): array
     {
-        return $request->validate([
+        return $this->validar($request, [
             'q' => 'nullable|string|max:255', 'cliente' => 'nullable|string|max:255',
             'centro' => 'nullable|string|max:255', 'cargo' => 'nullable|string|max:255',
             'categoria' => 'nullable|string|max:255', 'modalidad' => 'nullable|string|max:255',
@@ -62,7 +93,7 @@ class SabanaTarifasController
 
     public function comparar(Request $request, \App\Modules\Comercial\Services\TarifaRevisionService $revision)
     {
-        $datos = $request->validate(['ids'=>'required|array|min:2|max:4', 'ids.*'=>'required|integer|distinct|exists:comercial_tarifas_referencia,id']);
+        $datos = $this->validar($request, ['ids'=>'required|array|min:2|max:4', 'ids.*'=>'required|integer|distinct|exists:comercial_tarifas_referencia,id']);
         $porId = TarifaReferencia::with(['fuente', 'cotizacion'])->whereIn('id', $datos['ids'])->get()->keyBy('id');
         $tarifas = collect($datos['ids'])->map(fn ($id) => $porId[$id]);
         $base = $tarifas->first();
@@ -73,7 +104,7 @@ class SabanaTarifasController
 
     public function validacion(Request $request, \App\Modules\Comercial\Services\TarifaRevisionService $revision)
     {
-        $filtros = $request->validate(['cliente'=>'nullable|string|max:255', 'centro'=>'nullable|string|max:255', 'motivo'=>'nullable|in:cliente,unidad,modalidad,categoria,fecha_referencia,vigente_desde,precio']);
+        $filtros = $this->validar($request, ['cliente'=>'nullable|string|max:255', 'centro'=>'nullable|string|max:255', 'motivo'=>'nullable|in:cliente,unidad,modalidad,categoria,fecha_referencia,vigente_desde,precio']);
         $query = TarifaReferencia::where('estado', 'pendiente')->whereNull('cotizacion_id');
         $clientes = (clone $query)->distinct()->orderBy('cliente')->pluck('cliente');
         if (!empty($filtros['cliente'])) $query->where('cliente', $filtros['cliente']);
@@ -98,8 +129,10 @@ class SabanaTarifasController
         $versiones = TarifaReferencia::with('cotizacion')->where('grupo', $tarifa->grupo)->orderByDesc('fecha_referencia')->get();
 
         $grupos = app(\App\Modules\Comercial\Services\TarifaPresentacionService::class)->grupos($tarifa->conceptos ?? []);
-        $vigenteHoy = app(SabanaTarifasService::class)->consulta(['vista' => 'vigentes'])->whereKey($tarifa->id)->exists();
-        return view('comercial::tarifas.show', compact('tarifa', 'versiones', 'grupos', 'vigenteHoy'));
+        $vigentesHoy = app(SabanaTarifasService::class)->consulta(['vista' => 'vigentes'])
+            ->whereIn('id', $versiones->modelKeys())->pluck('id')->all();
+        $vigenteHoy = in_array($tarifa->id, $vigentesHoy, true);
+        return view('comercial::tarifas.show', compact('tarifa', 'versiones', 'grupos', 'vigenteHoy', 'vigentesHoy'));
     }
 
     public function archivo(TarifaReferencia $tarifa)
@@ -131,7 +164,7 @@ class SabanaTarifasController
 
     public function create(Request $request)
     {
-        $request->validate(['base' => 'nullable|integer|exists:comercial_tarifas_referencia,id']);
+        $this->validar($request, ['base' => 'nullable|integer|exists:comercial_tarifas_referencia,id']);
         $base = $request->filled('base') ? TarifaReferencia::findOrFail($request->integer('base')) : new TarifaReferencia;
         if ($base->cotizacion_id) return redirect()->route('comercial.cotizaciones.show', $base->cotizacion_id);
 
@@ -140,7 +173,7 @@ class SabanaTarifasController
 
     public function store(Request $request)
     {
-        $datos = $request->validate([
+        $datos = $this->validar($request, [
             'cliente' => 'required|string|max:255', 'centro' => 'nullable|string|max:255',
             'cargo' => 'required|string|max:255', 'categoria' => 'nullable|string|max:255',
             'modalidad' => 'nullable|string|max:255', 'unidad' => 'required|string|max:100',
@@ -171,7 +204,7 @@ class SabanaTarifasController
     public function revisar(Request $request, TarifaReferencia $tarifa)
     {
         abort_if($tarifa->cotizacion_id, 409, 'Esta tarifa está vinculada al cotizador. Gestiona la cotización de origen.');
-        $datos = $request->validate([
+        $datos = $this->validar($request, [
             'categoria' => 'nullable|string|max:255', 'modalidad' => 'nullable|required_if:estado,confirmada|string|max:100',
             'cliente' => 'sometimes|required|string|max:255', 'centro' => 'sometimes|nullable|string|max:255',
             'cargo' => 'sometimes|required|string|max:255', 'variante' => 'sometimes|nullable|string|max:255',

@@ -12,6 +12,53 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TarifaApiController
 {
+    public function sabana(Request $request, \App\Modules\Comercial\Services\SabanaTarifasService $service)
+    {
+        $this->validarToken($request, 'comercial.api.sabana');
+        $validator = \Illuminate\Support\Facades\Validator::make($request->query(), [
+            'cliente' => 'nullable|string|max:255', 'centro' => 'nullable|string|max:255',
+            'cargo' => 'nullable|string|max:255', 'modalidad' => 'nullable|string|max:255',
+            'unidad' => 'nullable|string|max:255', 'fecha' => 'nullable|date_format:Y-m-d',
+            'vista' => 'nullable|in:vigentes,referencias',
+            'page' => 'nullable|integer|min:1|max:1000000',
+            'per_page' => 'nullable|integer|min:1|max:1000',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'message' => 'Revisa los filtros: usa una fecha AAAA-MM-DD, la vista vigentes o referencias y páginas de 1 a 1000 filas.',
+                'invalid_fields' => array_keys($validator->errors()->toArray())], 422)->header('Cache-Control', 'private, no-store');
+        }
+        $filtros = $validator->validated();
+        $filtros['vista'] = $filtros['vista'] ?? 'vigentes';
+        $filtros['fecha'] = $filtros['fecha'] ?? now()->toDateString();
+        $this->registrarAcceso($request, 'sabana-tarifas');
+        $pagina = $service->consulta($filtros)->paginate($filtros['per_page'] ?? 500, ['*'], 'page', $filtros['page'] ?? 1);
+        $vigentes = $service->consulta(['vista' => 'vigentes', 'fecha' => $filtros['fecha']])
+            ->whereIn('id', $pagina->getCollection()->modelKeys())->pluck('id')->all();
+        $filas = $pagina->getCollection()->map(function ($t) use ($vigentes) {
+            $cotizacion = $t->cotizacion;
+            return [
+                'tarifa_id' => $t->id, 'cliente' => $t->cliente, 'centro' => $t->centro,
+                'cargo' => $t->cargo, 'categoria' => $t->categoria, 'modalidad' => $t->modalidad,
+                'unidad' => $t->unidad, 'condiciones' => $t->variante, 'moneda' => $t->moneda,
+                // Decimal como texto: conserva los seis decimales guardados, sin redondeos de transporte.
+                'precio' => $t->precio, 'estado_revision' => $t->estado,
+                'vigente_en_fecha' => in_array($t->id, $vigentes, true),
+                'fecha_referencia' => $t->fecha_referencia?->toDateString(),
+                'vigente_desde' => $t->vigente_desde?->toDateString(), 'vigente_hasta' => $t->vigente_hasta?->toDateString(),
+                'cotizacion_id' => $t->cotizacion_id, 'cotizacion_numero' => $cotizacion?->numero,
+                'estado_cotizacion' => $cotizacion ? ($cotizacion->trashed() ? 'eliminada' : $cotizacion->estado) : null,
+                'actualizado_en' => $t->updated_at?->toIso8601String(),
+            ];
+        });
+        return response()->json([
+            'success' => true, 'schema_version' => 1, 'generated_at' => now()->toIso8601String(),
+            'fecha_consulta' => $filtros['fecha'], 'vista' => $filtros['vista'],
+            'pagination' => ['page' => $pagina->currentPage(), 'per_page' => $pagina->perPage(),
+                'total' => $pagina->total(), 'last_page' => $pagina->lastPage(), 'has_more' => $pagina->hasMorePages()],
+            'data' => $filas,
+        ])->header('Cache-Control', 'private, no-store');
+    }
+
     private const COLUMNAS_TARIFA = [
         'cotizacion_id',
         'cotizacion_numero',
@@ -148,14 +195,14 @@ class TarifaApiController
         ]);
     }
 
-    private function validarToken(Request $request): void
+    private function validarToken(Request $request, string $config = 'comercial.api'): void
     {
-        if (! config('comercial.api.enabled', false)) {
+        if (! config($config.'.enabled', false)) {
             Log::notice('API comercial deshabilitada invocada.', $this->contextoRequest($request));
             $this->errorJson(404, 'API comercial deshabilitada.');
         }
 
-        $esperado = (string) config('comercial.api.token', '');
+        $esperado = (string) config($config.'.token', '');
         if ($esperado === '') {
             Log::critical('API comercial habilitada sin token configurado.', $this->contextoRequest($request));
             $this->errorJson(503, 'API comercial no configurada.');
@@ -163,7 +210,7 @@ class TarifaApiController
 
         $recibido = $request->bearerToken()
             ?: $request->header('X-SAEP-API-KEY')
-            ?: (config('comercial.api.allow_query_token', false) ? $request->query('api_key') : null);
+            ?: (config($config.'.allow_query_token', false) ? $request->query('api_key') : null);
 
         if (! is_string($recibido) || ! hash_equals($esperado, $recibido)) {
             Log::warning('Token inválido en API comercial.', $this->contextoRequest($request));

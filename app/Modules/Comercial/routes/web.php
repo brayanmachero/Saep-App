@@ -20,6 +20,7 @@ Route::prefix('comercial/api')
     ])
     ->group(function () {
         Route::get('clientes', [TarifaApiController::class, 'clientes'])->name('clientes');
+        Route::get('sabana-tarifas', [TarifaApiController::class, 'sabana'])->name('sabana');
         Route::get('tarifas-cotizadas', [TarifaApiController::class, 'tarifasCotizadas'])->name('tarifas-cotizadas');
     });
 

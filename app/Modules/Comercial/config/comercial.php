@@ -50,6 +50,10 @@ return [
     ],
 
     'api' => [
+        'sabana' => [
+            'enabled' => env('COMERCIAL_SABANA_API_ENABLED', false),
+            'token' => env('COMERCIAL_SABANA_API_TOKEN'),
+        ],
         'enabled' => env('COMERCIAL_API_ENABLED', false),
         'token' => env('COMERCIAL_API_TOKEN'),
         'allow_query_token' => env('COMERCIAL_API_ALLOW_QUERY_TOKEN', false),
