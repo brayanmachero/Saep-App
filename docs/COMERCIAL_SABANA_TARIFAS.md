@@ -1,5 +1,27 @@
 # Sábana de tarifas de Comercial
 
+## Revisión del margen comercial (26/10/2026)
+
+El detalle de tarifa y la ficha de cotización muestran al equipo con edición o aprobación
+el costo total, precio, diferencia en dinero, porcentaje sobre costo y porcentaje sobre venta.
+El porcentaje del cotizador corresponde a la base costo. Se contrasta la diferencia con el
+margen guardado (tolerancia 0,02 unidades monetarias) y su porcentaje (0,01 puntos porcentuales).
+La etiqueta «Cálculo consistente» indica coherencia aritmética, no aprobación de rentabilidad.
+Se advierte un margen negativo; no hay un porcentaje mínimo comercial configurado.
+
+Cotizaciones nativas: costo/subtotal y margen guardados por el cotizador. Históricos y manuales:
+solo se acepta un concepto explícito de costo total, con moneda y unidad conocidas. No se suman
+conceptos ni se deduce costo desde precio/margen; datos ausentes, costo cero, ambiguo o inválido
+se muestran como «Margen no verificable». Los históricos desconocidos conservan sus antecedentes.
+Para documentar el costo faltante se registra una nueva versión, con el campo costo total respaldado
+y la explicación del documento en condiciones. No se copia automáticamente el costo a una versión nueva.
+
+Confirmar desde sábana o activar desde cotizador exige un cálculo verificable y consistente,
+revalidado dentro de la transacción antes de cambiar el estado. La auditoría conserva la fotografía
+de costo/precio/margen/bases verificada en esa acción. Guardar pendientes sigue permitido.
+La revisión no cambia precios ni aprueba registros existentes de forma retroactiva.
+El panel interno no se agrega a la API de prefacturas.
+
 ## API de consulta y Power Query (26/10/2026)
 
 `GET https://saep.bmachero.com/comercial/api/sabana-tarifas`

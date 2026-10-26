@@ -608,6 +608,9 @@ class CotizacionController
     private function activarCotizacion(Cotizacion $cotizacion): void
     {
         DB::transaction(function () use ($cotizacion) {
+            $cotizacion = Cotizacion::lockForUpdate()->findOrFail($cotizacion->id);
+            $revisionMargen = app(\App\Modules\Comercial\Services\TarifaMargenService::class)->cotizacion($cotizacion);
+            app(\App\Modules\Comercial\Services\TarifaMargenService::class)->exigir($revisionMargen);
             $vigentesReemplazadas = Cotizacion::where('id', '!=', $cotizacion->id)
                 ->where('cliente_id', $cotizacion->cliente_id)
                 ->where('centro_costo_id', $cotizacion->centro_costo_id)
@@ -639,6 +642,7 @@ class CotizacionController
             ]);
 
             $this->registrarAuditoria($cotizacion, 'vigente', 'Cotización aprobada y marcada como vigente', [
+                'revision_margen' => $revisionMargen,
                 'cotizaciones_reemplazadas' => $vigentesReemplazadas
                     ->map(fn (Cotizacion $reemplazada) => [
                         'id' => $reemplazada->id,

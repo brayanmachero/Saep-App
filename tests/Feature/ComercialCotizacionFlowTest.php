@@ -341,7 +341,7 @@ class ComercialCotizacionFlowTest extends TestCase
                 'fuente_clave' => 'idl', 'cliente' => 'Cliente prueba', 'centro' => 'Centro Sur',
                 'cargo' => 'Operario', 'modalidad' => 'EST', 'unidad' => 'mes', 'precio' => 123456.789012,
                 'fecha_referencia' => '2026-06-01', 'hoja' => 'P626', 'celda' => 'AB3',
-                'conceptos' => [['concepto' => 'Sueldo base', 'valor' => 529000, 'celda' => 'E3']],
+                'conceptos' => [['concepto' => 'Sueldo base', 'valor' => 529000, 'celda' => 'E3'], ['concepto'=>'Costo total del servicio', 'valor'=>100000]],
             ]],
         ];
         $this->assertSame(1, $service->importar($lote)['nuevas']);
@@ -498,6 +498,62 @@ class ComercialCotizacionFlowTest extends TestCase
             ->assertJsonPath('data.0.cotizacion_id',$cotizacion->id)->assertJsonPath('data.0.vigente_en_fecha',true);
         $cotizacion->delete();
         $this->getJson($url.'?cargo=Operario%20de%20Producci%C3%B3n', $headers)->assertJsonCount(0,'data');
+    }
+
+    public function test_margen_distingue_bases_y_rechaza_costos_ambiguos(): void
+    {
+        $service = app(\App\Modules\Comercial\Services\TarifaMargenService::class);
+        $tarifa = new \App\Modules\Comercial\Models\TarifaReferencia(['precio'=>110,'unidad'=>'mes','moneda'=>'CLP',
+            'conceptos'=>[['concepto'=>'Costo total del servicio','valor'=>100]]]);
+        $r = $service->tarifa($tarifa);
+        $this->assertTrue($r['consistente']);
+        $this->assertEqualsWithDelta(10,$r['sobre_costo'],0.0001);
+        $this->assertEqualsWithDelta(9.090909,$r['sobre_venta'],0.0001);
+        $tarifa->precio=90;
+        $this->assertEquals(-10,$service->tarifa($tarifa)['diferencia']);
+        $tarifa->precio=0;
+        $this->assertNull($service->tarifa($tarifa)['sobre_venta']);
+        $tarifa->conceptos=[['concepto'=>'Costo total del servicio','valor'=>0]];
+        $this->assertFalse($service->tarifa($tarifa)['verificable']);
+        $tarifa->conceptos=[['concepto'=>'Costo bruto','valor'=>100],['concepto'=>'Costo total','valor'=>100]];
+        $this->assertFalse($service->tarifa($tarifa)['verificable']);
+        $tarifa->conceptos=[['concepto'=>'Sueldo base','valor'=>100]];
+        $this->assertFalse($service->tarifa($tarifa)['verificable']);
+        $tarifa->conceptos=[['concepto'=>'Costo bruto','valor'=>100],['concepto'=>'Margen operacional','valor'=>999]];
+        $this->assertFalse($service->tarifa($tarifa)['consistente']);
+        $tarifa->unidad=null;
+        $this->assertFalse($service->tarifa($tarifa)['verificable']);
+    }
+
+    public function test_aprobacion_exige_margen_verificable_y_audita_resultado(): void
+    {
+        $this->actingAs($this->createAdminUser());
+        $modelo = \App\Modules\Comercial\Models\TarifaReferencia::class;
+        $payload=['cliente'=>'QA','cargo'=>'Operario','unidad'=>'mes','modalidad'=>'EST','moneda'=>'CLP','precio'=>110,
+            'fecha_referencia'=>'2026-10-26','observaciones'=>'Costo respaldado por documento QA'];
+        $this->post(route('comercial.tarifas.store'),$payload)->assertSessionHasNoErrors();
+        $sinCosto=$modelo::firstOrFail();
+        $revision=['estado'=>'confirmada','unidad'=>'mes','modalidad'=>'EST','vigente_desde'=>'2026-10-26','motivo'=>'Costo revisado'];
+        $this->patchJson(route('comercial.tarifas.revisar',$sinCosto),$revision)->assertUnprocessable()->assertJsonValidationErrors('margen');
+        $this->assertSame('pendiente',$sinCosto->fresh()->estado);
+        $this->post(route('comercial.tarifas.store'),$payload+['costo_total'=>100])->assertSessionHasNoErrors();
+        $conCosto=$modelo::latest('id')->firstOrFail();
+        $this->patch(route('comercial.tarifas.revisar',$conCosto),$revision)->assertSessionHasNoErrors();
+        $this->assertSame('confirmada',$conCosto->fresh()->estado);
+        $this->assertEquals(10,$conCosto->revisiones()->latest('id')->first()->despues['revision_margen']['diferencia']);
+        $this->get(route('comercial.tarifas.show',$conCosto))->assertOk()->assertSee('Porcentaje sobre costo')->assertSee('Porcentaje sobre venta');
+        ['cliente'=>$cliente,'centro'=>$centro,'modalidad'=>$modalidad]=$this->createCommercialFixture();
+        $this->post(route('comercial.cotizaciones.store'),$this->quotePayload($cliente,$centro,$modalidad,700000))->assertSessionHasNoErrors();
+        $cotizacion=Cotizacion::firstOrFail();
+        $cotizacion->update(['margen'=>1]);
+        $this->patchJson(route('comercial.cotizaciones.aprobar',$cotizacion))->assertUnprocessable()->assertJsonValidationErrors('margen');
+        $this->assertSame('en_cotizacion',$cotizacion->fresh()->estado);
+        $this->assertNull($cotizacion->fresh()->fecha_aprobacion);
+        $lectorRol=Rol::create(['codigo'=>'LECTOR_MARGEN','nombre'=>'Consulta','puede_aprobar'=>false]);
+        $lectorRol->modulos()->attach(Modulo::where('slug','comercial')->first()->id,['puede_ver'=>true,'puede_crear'=>false,'puede_editar'=>false,'puede_eliminar'=>false]);
+        $lector=User::create(['name'=>'Lector','email'=>'lector-margen@example.test','rol_id'=>$lectorRol->id,'activo'=>true]);
+        $this->actingAs($lector)->get(route('comercial.tarifas.show',$conCosto))->assertOk()->assertDontSee('Revisión de margen · Comercial');
+        $this->get(route('comercial.cotizaciones.show',$cotizacion))->assertOk()->assertDontSee('Revisión de margen · Comercial');
     }
 
     private function createAdminUser(): User

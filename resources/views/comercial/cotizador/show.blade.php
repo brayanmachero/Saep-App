@@ -123,6 +123,8 @@
 </style>
 @endpush
 @section('content')
+@if($errors->has('margen'))<div role="alert" class="alert alert-danger">{{ $errors->first('margen') }}</div>@endif
+@include('comercial::tarifas.margen', ['revisionMargen' => app(\App\Modules\Comercial\Services\TarifaMargenService::class)->cotizacion($cotizacion)])
 @if($cotizacion->tarifaReferencia)<div class="alert alert-info">Esta cotización está vinculada a la sábana de precios. <a href="{{ route('comercial.tarifas.show', $cotizacion->tarifaReferencia) }}">Consultar en la sábana</a></div>@elseif(data_get($cotizacion->datos_calculo, 'origen'))<div class="alert alert-warning">Histórico pendiente de conciliación con la sábana. Comercial debe revisar su procedencia.</div>@endif
 @php
     $puedeCrearComercial = auth()->user()->tieneAcceso('comercial', 'puede_crear');
@@ -240,7 +242,7 @@
                     . ($diferenciaPct !== null ? ' (' . ($diferenciaPct >= 0 ? '+' : '') . number_format($diferenciaPct, 2, ',', '.') . '%)' : ''),
             ];
         }
-        $confirmarHacerVigente = '¿Aprobar y dejar vigente esta cotización?';
+        $confirmarHacerVigente = '¿Confirmas que revisaste el costo y el margen para aprobar y dejar vigente esta cotización?';
         if ($vigenteComercialActual && $comparacionVigente) {
             $confirmarHacerVigente .= " Reemplazará {$vigenteComercialActual->numero}. Diferencia de precio: {$comparacionVigente['texto']}.";
         }

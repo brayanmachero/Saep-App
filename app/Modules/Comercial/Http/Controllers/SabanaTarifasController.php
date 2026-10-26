@@ -32,7 +32,7 @@ class SabanaTarifasController
             'max.numeric' => 'El campo :attribute debe ser menor o igual a :max.',
             'max.string' => 'El campo :attribute admite hasta :max caracteres.',
         ], [
-            'q' => 'búsqueda', 'cliente' => 'cliente', 'centro' => 'centro de costo',
+            'costo_total' => 'costo total del servicio', 'q' => 'búsqueda', 'cliente' => 'cliente', 'centro' => 'centro de costo',
             'cargo' => 'cargo o servicio', 'categoria' => 'categoría', 'modalidad' => 'modalidad',
             'unidad' => 'unidad de cobro', 'fecha' => 'fecha de consulta', 'anio' => 'año',
             'vista' => 'vista', 'ids' => 'tarifas', 'base' => 'tarifa de origen',
@@ -132,7 +132,8 @@ class SabanaTarifasController
         $vigentesHoy = app(SabanaTarifasService::class)->consulta(['vista' => 'vigentes'])
             ->whereIn('id', $versiones->modelKeys())->pluck('id')->all();
         $vigenteHoy = in_array($tarifa->id, $vigentesHoy, true);
-        return view('comercial::tarifas.show', compact('tarifa', 'versiones', 'grupos', 'vigenteHoy', 'vigentesHoy'));
+        $revisionMargen = app(\App\Modules\Comercial\Services\TarifaMargenService::class)->tarifa($tarifa);
+        return view('comercial::tarifas.show', compact('tarifa', 'versiones', 'grupos', 'vigenteHoy', 'vigentesHoy', 'revisionMargen'));
     }
 
     public function archivo(TarifaReferencia $tarifa)
@@ -181,7 +182,11 @@ class SabanaTarifasController
             'precio' => 'required|numeric|min:0|max:999999999999',
             'fecha_referencia' => 'required|date_format:Y-m-d',
             'observaciones' => 'required|string|max:4000',
+            'costo_total' => 'nullable|numeric|min:0.000001|max:999999999999',
         ]);
+        $costo = $datos['costo_total'] ?? null;
+        unset($datos['costo_total']);
+        if ($costo !== null) $datos['conceptos'] = [['concepto' => 'Costo total del servicio', 'valor' => $costo]];
         $tarifa = DB::transaction(function () use ($datos, $request) {
             $identidad = hash('sha256', (string) Str::uuid());
             $fuente = TarifaFuente::create([
@@ -225,13 +230,15 @@ class SabanaTarifasController
             abort_if($registro->cotizacion_id, 409, 'Esta tarifa está vinculada al cotizador.');
             $antes = $registro->toArray();
             $registro->fill(collect($datos)->except('motivo')->all());
+            $revisionMargen = app(\App\Modules\Comercial\Services\TarifaMargenService::class)->tarifa($registro);
+            if ($datos['estado'] === 'confirmada') app(\App\Modules\Comercial\Services\TarifaMargenService::class)->exigir($revisionMargen);
             $registro->grupo = TarifaReferencia::grupoPara($registro->toArray());
             $registro->revisado_por = $request->user()->id;
             $registro->revisado_at = now();
             $registro->save();
             $registro->revisiones()->create([
                 'usuario_id' => $request->user()->id, 'antes' => $antes,
-                'despues' => $registro->toArray() + ['motivo_revision' => $datos['motivo']],
+                'despues' => $registro->toArray() + ['motivo_revision' => $datos['motivo'], 'revision_margen' => $revisionMargen],
             ]);
         });
 
