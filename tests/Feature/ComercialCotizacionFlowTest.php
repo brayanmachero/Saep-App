@@ -614,6 +614,53 @@ class ComercialCotizacionFlowTest extends TestCase
             ->assertViewHas('opciones', fn ($o) => $o['cliente']->count() === 2 && $o['cargo']->count() === 3);
     }
 
+    public function test_comparador_preserva_orden_y_no_compara_unidades_o_monedas_distintas(): void
+    {
+        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
+        $this->actingAs($this->createAdminUser());
+        $modelo = \App\Modules\Comercial\Models\TarifaReferencia::class;
+        $filas = collect();
+        foreach ([[100,'mes','CLP'],[125,'mes','CLP'],[10,'hora','CLP'],[0,null,'CLP'],[100,'mes','UF']] as $i=>[$precio,$unidad,$moneda]) {
+            $filas->push($modelo::create(['identidad'=>hash('sha256','comp'.$i),'grupo'=>hash('sha256','comp'.$i),'cliente'=>'Cliente prueba','centro'=>'Centro Sur','cargo'=>'Operario','precio'=>$precio,'unidad'=>$unidad,'moneda'=>$moneda,'estado'=>'pendiente']));
+        }
+        $this->get(route('comercial.tarifas.comparar',['ids'=>[$filas[0]->id,$filas[1]->id,$filas[2]->id,$filas[3]->id]]))->assertOk()
+            ->assertViewHas('diferencias',fn($d)=>$d[$filas[1]->id]['importe']===25.0 && $d[$filas[1]->id]['porcentaje']===25.0 && $d[$filas[2]->id]===null && $d[$filas[3]->id]===null)
+            ->assertSee('No calculable');
+        $this->get(route('comercial.tarifas.comparar',['ids'=>[$filas[1]->id,$filas[0]->id,$filas[4]->id]]))->assertOk()
+            ->assertViewHas('base',fn($t)=>$t->id===$filas[1]->id)
+            ->assertViewHas('diferencias',fn($d)=>$d[$filas[0]->id]['importe']===-25.0 && $d[$filas[4]->id]===null);
+        $revision=app(\App\Modules\Comercial\Services\TarifaRevisionService::class);
+        $filas[0]->precio=0;
+        $this->assertNull($revision->diferencia($filas[0],$filas[1])['porcentaje']);
+        foreach ([[$filas[0]->id],[$filas[0]->id,$filas[0]->id],$filas->pluck('id')->all(),[$filas[0]->id,9999999]] as $ids) {
+            $this->getJson(route('comercial.tarifas.comparar',['ids'=>$ids]))->assertUnprocessable();
+        }
+        $this->assertSame(5,$modelo::where('estado','pendiente')->count());
+    }
+
+    public function test_bandeja_filtra_pendientes_y_respeta_permiso_de_edicion(): void
+    {
+        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
+        $user=$this->createAdminUser();$this->actingAs($user);
+        $modelo=\App\Modules\Comercial\Models\TarifaReferencia::class;
+        foreach ([['Por homologar',null,'pendiente'],['Cliente B','mes','pendiente'],['Cliente B',null,'descartada']] as $i=>[$cliente,$unidad,$estado]) {
+            $modelo::create(['identidad'=>hash('sha256','rev'.$i),'grupo'=>hash('sha256','rev'.$i),'cliente'=>$cliente,'centro'=>'Norte','cargo'=>'Operario','precio'=>100,'unidad'=>$unidad,'estado'=>$estado]);
+        }
+        $this->get(route('comercial.tarifas.validacion',['motivo'=>'unidad']))->assertOk()->assertViewHas('tarifas',fn($t)=>$t->total()===1)->assertSee('Por homologar');
+        $this->get(route('comercial.tarifas.validacion',['cliente'=>'Cliente B']))->assertOk()->assertViewHas('tarifas',fn($t)=>$t->total()===1);
+        $tarifa=$modelo::where('cliente','Por homologar')->firstOrFail();
+        $this->patch(route('comercial.tarifas.revisar',$tarifa),['estado'=>'pendiente','modalidad'=>null,'unidad'=>null,'fecha_referencia'=>'2026-10-01','motivo'=>'Fecha contrastada; faltan condiciones'])->assertSessionHasNoErrors();
+        $this->assertSame('2026-10-01',$tarifa->fresh()->fecha_referencia->format('Y-m-d'));
+        $this->assertSame('pendiente',$tarifa->fresh()->estado);
+        $this->assertSame(1,$tarifa->revisiones()->count());
+        $this->patchJson(route('comercial.tarifas.revisar',$tarifa),['estado'=>'confirmada','modalidad'=>null,'unidad'=>null,'motivo'=>'No debe aprobar'])->assertUnprocessable();
+        $user->rol->update(['codigo'=>'LECTOR','puede_aprobar'=>false]);
+        $user->rol->modulos()->updateExistingPivot(Modulo::where('slug','comercial')->first()->id,['puede_editar'=>false]);
+        $user->unsetRelation('rol');
+        $this->get(route('comercial.tarifas.validacion'))->assertForbidden();
+        $this->get(route('comercial.tarifas.comparar',['ids'=>$modelo::where('estado','pendiente')->pluck('id')->all()]))->assertOk();
+    }
+
     private function createTestSchema(): void
     {
         Schema::disableForeignKeyConstraints();

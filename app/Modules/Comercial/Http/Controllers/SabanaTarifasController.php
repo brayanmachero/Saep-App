@@ -56,6 +56,38 @@ class SabanaTarifasController
         return view('comercial::tarifas.index', compact('tarifas', 'opciones', 'filtros', 'resumen', 'fuentes', 'vigentesHoy'));
     }
 
+    public function comparar(Request $request, \App\Modules\Comercial\Services\TarifaRevisionService $revision)
+    {
+        $datos = $request->validate(['ids'=>'required|array|min:2|max:4', 'ids.*'=>'required|integer|distinct|exists:comercial_tarifas_referencia,id']);
+        $porId = TarifaReferencia::with('fuente')->whereIn('id', $datos['ids'])->get()->keyBy('id');
+        $tarifas = collect($datos['ids'])->map(fn ($id) => $porId[$id]);
+        $base = $tarifas->first();
+        $diferencias = $tarifas->mapWithKeys(fn ($t) => [$t->id => $revision->diferencia($base, $t)]);
+        $vigentesHoy = app(SabanaTarifasService::class)->consulta(['vista'=>'vigentes'])->whereIn('id', $datos['ids'])->pluck('id')->all();
+        return view('comercial::tarifas.comparar', compact('tarifas', 'base', 'diferencias', 'vigentesHoy'));
+    }
+
+    public function validacion(Request $request, \App\Modules\Comercial\Services\TarifaRevisionService $revision)
+    {
+        $filtros = $request->validate(['cliente'=>'nullable|string|max:255', 'centro'=>'nullable|string|max:255', 'motivo'=>'nullable|in:cliente,unidad,modalidad,categoria,fecha_referencia,vigente_desde,precio']);
+        $query = TarifaReferencia::where('estado', 'pendiente');
+        $clientes = (clone $query)->distinct()->orderBy('cliente')->pluck('cliente');
+        if (!empty($filtros['cliente'])) $query->where('cliente', $filtros['cliente']);
+        $centros = (clone $query)->whereNotNull('centro')->distinct()->orderBy('centro')->pluck('centro');
+        if (!empty($filtros['centro'])) $query->where('centro', $filtros['centro']);
+        $motivo = $filtros['motivo'] ?? null;
+        if ($motivo === 'cliente') $query->where(fn ($q) => $q->whereNull('cliente')->orWhere('cliente', '')->orWhere('cliente', 'Por homologar'));
+        elseif ($motivo) {
+            $query->where(function ($q) use ($motivo) {
+                $q->whereNull($motivo);
+                if (in_array($motivo, ['unidad','modalidad','categoria'])) $q->orWhere($motivo, '');
+            });
+        }
+        $tarifas = $query->orderBy('cliente')->orderBy('centro')->orderBy('cargo')->orderBy('id')->paginate(40)->withQueryString();
+        $pendientes = $tarifas->getCollection()->mapWithKeys(fn ($t) => [$t->id => $revision->pendientes($t)]);
+        return view('comercial::tarifas.validacion', compact('tarifas','clientes','centros','pendientes'));
+    }
+
     public function show(TarifaReferencia $tarifa)
     {
         $tarifa->load('fuente', 'revisiones');
@@ -134,11 +166,12 @@ class SabanaTarifasController
     public function revisar(Request $request, TarifaReferencia $tarifa)
     {
         $datos = $request->validate([
-            'categoria' => 'nullable|string|max:255', 'modalidad' => 'required|string|max:100',
+            'categoria' => 'nullable|string|max:255', 'modalidad' => 'nullable|required_if:estado,confirmada|string|max:100',
             'cliente' => 'sometimes|required|string|max:255', 'centro' => 'sometimes|nullable|string|max:255',
             'cargo' => 'sometimes|required|string|max:255', 'variante' => 'sometimes|nullable|string|max:255',
-            'unidad' => 'required|string|max:100',
+            'unidad' => 'nullable|required_if:estado,confirmada|string|max:100',
             'estado' => ['required', Rule::in(['pendiente', 'confirmada', 'descartada'])],
+            'fecha_referencia' => 'nullable|date_format:Y-m-d',
             'vigente_desde' => 'nullable|required_if:estado,confirmada|date_format:Y-m-d',
             'vigente_hasta' => 'nullable|date_format:Y-m-d|after_or_equal:vigente_desde',
             'motivo' => 'required|string|max:2000',

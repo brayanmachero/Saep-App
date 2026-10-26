@@ -31,6 +31,8 @@ Route::middleware(['auth', 'consentimiento', 'force.password', 'modulo:comercial
     Route::get('tarifas/exportar', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'export'])->name('tarifas.export');
     Route::get('tarifas/create', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'create'])->middleware('modulo:comercial,puede_crear')->name('tarifas.create');
     Route::post('tarifas', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'store'])->middleware('modulo:comercial,puede_crear')->name('tarifas.store');
+    Route::get('tarifas/comparar', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'comparar'])->name('tarifas.comparar');
+    Route::get('tarifas/validacion', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'validacion'])->middleware('modulo:comercial,puede_editar')->name('tarifas.validacion');
     Route::get('tarifas/{tarifa}/archivo', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'archivo'])->name('tarifas.archivo');
     Route::get('tarifas/{tarifa}', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'show'])->name('tarifas.show');
     Route::patch('tarifas/{tarifa}/revision', [\App\Modules\Comercial\Http\Controllers\SabanaTarifasController::class, 'revisar'])->middleware(['modulo:comercial,puede_editar', 'permission:puede_aprobar'])->name('tarifas.revisar');

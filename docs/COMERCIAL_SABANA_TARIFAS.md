@@ -138,3 +138,20 @@ normaliza enlaces con centro o servicio incompatible y muestra un aviso.
 Las opciones dependen de los antecedentes registrados, no de que exista una
 tarifa aprobada en la fecha consultada: una combinación válida puede no tener
 precios vigentes. No se alteran tarifas ni estados.
+
+### Comparador y bandeja de validación
+
+Desde la consulta se seleccionan 2–4 tarifas. La selección persiste en la pestaña
+al navegar por filtros o páginas y puede limpiarse. /comercial/tarifas/comparar
+valida IDs únicos y conserva el orden: la primera tarifa es la base. La diferencia
+solo se calcula con precio, moneda y unidad conocidos y coincidentes; con base
+cero no se calcula porcentaje. Se destacan condiciones diferentes y no se afirma
+equivalencia de servicios ni aprobación de tarifas pendientes.
+
+/comercial/tarifas/validacion requiere permiso de edición y muestra solo pendientes,
+agrupados por cliente/centro, con filtros por dato ausente. Fecha de referencia y
+categoría son datos de organización, no sustituyen vigencia. La revisión individual
+permite registrar fecha de referencia y guardar avances incompletos como pendientes;
+confirmar sigue requiriendo modalidad, unidad, precio, cliente identificado e inicio
+de vigencia, además del permiso de aprobación y auditoría existente. No hay aprobación
+masiva ni cambios automáticos de precios.

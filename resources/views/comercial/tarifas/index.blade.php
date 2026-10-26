@@ -4,7 +4,7 @@
 @include('comercial::tarifas.styles')
 <div class="tarifas">
     <header class="toolbar"><div><p class="muted">COMERCIAL · CONSULTA DE PRECIOS</p><h1>Sábana de tarifas</h1><p class="muted">Encuentra el precio de un servicio, dónde aplica y cómo se cobra.</p></div>
-        <div class="actions"><a class="btn btn-outline-primary" href="{{ route('comercial.tarifas.export', request()->except('page')) }}">Exportar consulta CSV</a>
+        <div class="actions">@if(auth()->user()->tieneAcceso('comercial','puede_editar'))<a class="btn btn-outline-primary" href="{{ route('comercial.tarifas.validacion') }}">Validar precios</a>@endif<a class="btn btn-outline-primary" href="{{ route('comercial.tarifas.export', request()->except('page')) }}">Exportar consulta CSV</a>
         @if(auth()->user()->tieneAcceso('comercial', 'puede_crear'))<a class="btn btn-primary" href="{{ route('comercial.tarifas.create') }}">Registrar tarifa</a>@endif</div>
     </header>
     <div class="stats">@foreach(['referencias'=>'Precios registrados','pendientes'=>'Por confirmar','vigentes'=>'Vigentes hoy'] as $key=>$label)<div class="panel stat"><span class="muted">{{ $label }}</span><strong>{{ number_format($resumen[$key],0,',','.') }}</strong></div>@endforeach</div>
@@ -25,9 +25,12 @@
         <p class="muted" style="margin-top:12px">Al cambiar cliente o centro se actualizan las opciones y se reinician los filtros dependientes. La búsqueda, vista y fechas se conservan.</p>
         <noscript><p class="muted">Pulsa Consultar después de elegir cliente o centro para actualizar las opciones.</p></noscript>
     </form>
+    @if($errors->any())<div class="note error">{{ $errors->first() }}</div>@endif
+    <form id="tarifas-comparador" class="panel" method="GET" action="{{ route('comercial.tarifas.comparar') }}"><div class="toolbar"><div><h2>Comparar precios</h2><p class="muted">Selecciona entre 2 y 4 tarifas. Puedes cambiar filtros o página sin perder la selección.</p><div id="comparador-seleccion" class="actions" aria-live="polite"></div></div><div class="actions"><button id="comparador-abrir" class="btn btn-primary" disabled>Comparar</button><button id="comparador-limpiar" type="button" class="btn">Quitar selección</button></div></div><p id="comparador-aviso" role="status" class="muted"></p></form>
     <section class="panel"><div class="toolbar"><h2>{{ number_format($tarifas->total(),0,',','.') }} precios encontrados</h2><span class="muted">Revisa siempre la unidad de cobro</span></div>
-        <div class="table-wrap"><table><thead><tr><th>Cliente / Centro</th><th>Cargo o servicio</th><th>Modalidad</th><th>Unidad / Variante</th><th class="number">Tarifa</th><th>Fecha de referencia</th><th>Revisión</th><th>Vigencia confirmada</th><th></th></tr></thead><tbody>
+        <div class="table-wrap"><table><thead><tr><th>Comparar</th><th>Cliente / Centro</th><th>Cargo o servicio</th><th>Modalidad</th><th>Unidad / Variante</th><th class="number">Tarifa</th><th>Fecha de referencia</th><th>Revisión</th><th>Vigencia confirmada</th><th></th></tr></thead><tbody>
         @forelse($tarifas as $tarifa)<tr>
+            <td><input type="checkbox" class="comparar-tarifa" value="{{ $tarifa->id }}" data-label="{{ $tarifa->cliente }} · {{ $tarifa->centro }} · {{ $tarifa->cargo }} (#{{ $tarifa->id }})" aria-label="Comparar tarifa {{ $tarifa->id }} de {{ $tarifa->cargo }}"></td>
             <td><strong>{{ $tarifa->cliente }}</strong><div class="muted">{{ $tarifa->centro ?: 'Sin centro informado' }}</div></td>
             <td>{{ $tarifa->cargo }}<div class="muted">{{ $tarifa->categoria ?: 'Sin clasificar' }}</div></td><td>{{ $tarifa->modalidad ?: 'Por confirmar' }}</td>
             <td>{{ $tarifa->unidad ?: 'Por confirmar' }}<div class="muted">{{ $tarifa->variante }}</div></td>
@@ -37,7 +40,7 @@
             <td>{{ $tarifa->vigente_desde?->format('d/m/Y') ?: 'Por confirmar' }}@if($tarifa->vigente_desde)<div class="muted">Hasta {{ $tarifa->vigente_hasta?->format('d/m/Y') ?: 'sin término informado' }}</div>@endif</td>
 
             <td><a href="{{ route('comercial.tarifas.show',$tarifa) }}">Consultar precio</a></td>
-        </tr>@empty<tr><td class="empty" colspan="9">No hay tarifas para estos filtros. Puedes consultar las referencias pendientes o cambiar la fecha.</td></tr>@endforelse
+        </tr>@empty<tr><td class="empty" colspan="10">No hay tarifas para estos filtros. Puedes consultar las referencias pendientes o cambiar la fecha.</td></tr>@endforelse
         </tbody></table></div><div style="margin-top:15px">{{ $tarifas->links() }}</div>
     </section>
 @if(auth()->user()->tieneAcceso('comercial','puede_editar'))
@@ -57,4 +60,5 @@
     });
 })();
 </script>
+<script src="{{ asset('js/comercial-comparador.js') }}" defer></script>
 @endsection
