@@ -127,3 +127,14 @@ operativo. La descarga autenticada /comercial/tarifas/{tarifa}/archivo busca el
 archivo por nombre y SHA-256 en los tres ZIP privados de la evaluación del
 13/10/2026. No extrae archivos al directorio público. Si falta el respaldo o no
 coincide su hash, responde 404 sin entregar otro archivo del mismo nombre.
+
+### Filtros relacionados
+
+Cliente limita centros y servicios; centro limita servicios dentro del cliente.
+Cambiar cliente, centro o servicio envía la consulta y limpia sus filtros
+subordinados, incluidos categoría/modalidad/unidad. Conserva búsqueda, vista,
+año y fecha. Sin JavaScript, Consultar actualiza las opciones. El servidor
+normaliza enlaces con centro o servicio incompatible y muestra un aviso.
+Las opciones dependen de los antecedentes registrados, no de que exista una
+tarifa aprobada en la fecha consultada: una combinación válida puede no tener
+precios vigentes. No se alteran tarifas ni estados.

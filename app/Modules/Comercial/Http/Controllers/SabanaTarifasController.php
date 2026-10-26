@@ -27,11 +27,24 @@ class SabanaTarifasController
     public function index(Request $request, SabanaTarifasService $service)
     {
         $filtros = $this->filtros($request);
-        $tarifas = $service->consulta($filtros)->paginate(40)->withQueryString();
         $opciones = [];
-        foreach (['cliente', 'centro', 'cargo', 'categoria', 'modalidad', 'unidad'] as $campo) {
-            $opciones[$campo] = TarifaReferencia::whereNotNull($campo)->distinct()->orderBy($campo)->pluck($campo);
+        $contexto = TarifaReferencia::query();
+        foreach (['cliente', 'centro', 'cargo'] as $campo) {
+            $opciones[$campo] = (clone $contexto)->whereNotNull($campo)->where($campo, '!=', '')
+                ->distinct()->orderBy($campo)->pluck($campo);
+            if (! empty($filtros[$campo])) {
+                if ($campo !== 'cliente' && ! (clone $contexto)->where($campo, $filtros[$campo])->exists()) {
+                    $limpiar = $campo === 'centro' ? ['centro', 'cargo'] : ['cargo'];
+                    return redirect()->route('comercial.tarifas.index', $request->except(array_merge($limpiar, ['categoria', 'modalidad', 'unidad', 'page'])))
+                        ->with('info', 'Se ajustaron los filtros para mostrar las opciones del cliente y centro seleccionados.');
+                }
+                $contexto->where($campo, $filtros[$campo]);
+            }
         }
+        foreach (['categoria', 'modalidad', 'unidad'] as $campo) {
+            $opciones[$campo] = TarifaReferencia::whereNotNull($campo)->where($campo, '!=', '')->distinct()->orderBy($campo)->pluck($campo);
+        }
+        $tarifas = $service->consulta($filtros)->paginate(40)->withQueryString();
         $resumen = [
             'fuentes' => TarifaFuente::count(), 'referencias' => TarifaReferencia::count(),
             'pendientes' => TarifaReferencia::where('estado', 'pendiente')->count(),

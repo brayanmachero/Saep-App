@@ -592,6 +592,28 @@ class ComercialCotizacionFlowTest extends TestCase
         $this->assertSame('123.456,789012', \App\Modules\Comercial\Services\TarifaPresentacionService::importe('123456.789012'));
     }
 
+    public function test_filtros_comerciales_limitan_centros_y_servicios_y_limpian_enlaces_incompatibles(): void
+    {
+        (require app_path('Modules/Comercial/database/migrations/2026_10_13_000001_create_comercial_tarifas_referencia.php'))->up();
+        $modelo = \App\Modules\Comercial\Models\TarifaReferencia::class;
+        foreach ([['Cliente A','Norte','Operario'], ['Cliente A','Sur','Supervisor'], ['Cliente B','Norte','Conductor']] as $i => [$cliente,$centro,$cargo]) {
+            $modelo::create(['identidad'=>hash('sha256', (string)$i), 'grupo'=>hash('sha256', 'grupo'.$i), 'cliente'=>$cliente,'centro'=>$centro,'cargo'=>$cargo,'precio'=>100,'estado'=>'pendiente']);
+        }
+        $this->actingAs($this->createAdminUser());
+        $this->get(route('comercial.tarifas.index', ['cliente'=>'Cliente A']))->assertOk()
+            ->assertViewHas('opciones', fn ($o) => $o['centro']->all() === ['Norte','Sur'] && $o['cargo']->all() === ['Operario','Supervisor']);
+        $this->get(route('comercial.tarifas.index', ['cliente'=>'Cliente B','centro'=>'Norte']))->assertOk()
+            ->assertViewHas('opciones', fn ($o) => $o['centro']->all() === ['Norte'] && $o['cargo']->all() === ['Conductor']);
+        $this->get(route('comercial.tarifas.index', ['centro'=>'Norte']))->assertOk()
+            ->assertViewHas('opciones', fn ($o) => $o['cargo']->all() === ['Conductor','Operario']);
+        $this->get(route('comercial.tarifas.index', ['cliente'=>'Cliente B','centro'=>'Sur','cargo'=>'Supervisor','q'=>'prueba','vista'=>'historico','anio'=>2026,'page'=>4]))
+            ->assertRedirect(route('comercial.tarifas.index', ['cliente'=>'Cliente B','q'=>'prueba','vista'=>'historico','anio'=>2026]));
+        $this->get(route('comercial.tarifas.index', ['cliente'=>'Cliente A','centro'=>'Sur','cargo'=>'Conductor']))
+            ->assertRedirect(route('comercial.tarifas.index', ['cliente'=>'Cliente A','centro'=>'Sur']));
+        $this->get(route('comercial.tarifas.index'))->assertOk()
+            ->assertViewHas('opciones', fn ($o) => $o['cliente']->count() === 2 && $o['cargo']->count() === 3);
+    }
+
     private function createTestSchema(): void
     {
         Schema::disableForeignKeyConstraints();

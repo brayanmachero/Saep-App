@@ -9,7 +9,8 @@
     </header>
     <div class="stats">@foreach(['referencias'=>'Precios registrados','pendientes'=>'Por confirmar','vigentes'=>'Vigentes hoy'] as $key=>$label)<div class="panel stat"><span class="muted">{{ $label }}</span><strong>{{ number_format($resumen[$key],0,',','.') }}</strong></div>@endforeach</div>
     <div class="note">Los precios <strong>por confirmar</strong> son antecedentes para consulta. Antes de utilizarlos, confirma con Comercial su unidad de cobro y vigencia.</div>
-    <form class="panel" method="GET"><div class="filters">
+    @if(session('info'))<div class="note" role="status">{{ session('info') }}</div>@endif
+    <form id="tarifas-consulta" class="panel" method="GET"><div class="filters">
         <div><label for="q">Buscar</label><input id="q" name="q" value="{{ request('q') }}" placeholder="Cliente, centro o servicio…"></div>
         @foreach(['cliente'=>'Cliente','centro'=>'Centro','cargo'=>'Cargo o servicio'] as $campo=>$label)
         <div><label for="{{ $campo }}">{{ $label }}</label><select id="{{ $campo }}" name="{{ $campo }}"><option value="">Todos</option>@foreach($opciones[$campo] as $opcion)<option value="{{ $opcion }}" @selected(request($campo)===$opcion)>{{ $opcion }}</option>@endforeach</select></div>
@@ -21,6 +22,8 @@
         <div><label for="anio">Año de referencia</label><input id="anio" name="anio" type="number" min="2000" max="2100" value="{{ request('anio') }}" placeholder="Todos"></div>
         <div><label for="fecha">Fecha de consulta (vista vigentes)</label><input type="date" id="fecha" name="fecha" value="{{ request('fecha',now()->toDateString()) }}"></div>
         </div></details>
+        <p class="muted" style="margin-top:12px">Al cambiar cliente o centro se actualizan las opciones y se reinician los filtros dependientes. La búsqueda, vista y fechas se conservan.</p>
+        <noscript><p class="muted">Pulsa Consultar después de elegir cliente o centro para actualizar las opciones.</p></noscript>
     </form>
     <section class="panel"><div class="toolbar"><h2>{{ number_format($tarifas->total(),0,',','.') }} precios encontrados</h2><span class="muted">Revisa siempre la unidad de cobro</span></div>
         <div class="table-wrap"><table><thead><tr><th>Cliente / Centro</th><th>Cargo o servicio</th><th>Modalidad</th><th>Unidad / Variante</th><th class="number">Tarifa</th><th>Fecha de referencia</th><th>Revisión</th><th>Vigencia confirmada</th><th></th></tr></thead><tbody>
@@ -41,4 +44,17 @@
     <details class="panel"><summary>Administrar documentos · {{ $fuentes->count() }} archivos</summary><p class="muted">Un archivo registrado puede seguir pendiente de extracción. Las referencias no se activan automáticamente.</p><div class="table-wrap"><table><thead><tr><th>Carpeta</th><th>Archivo</th><th>Referencias</th><th>Lectura</th><th>Observaciones</th></tr></thead><tbody>@foreach($fuentes as $fuente)<tr><td>{{ $fuente->carpeta }}</td><td>{{ $fuente->archivo }}</td><td>{{ $fuente->tarifas_count }}</td><td>{{ $fuente->estado }}</td><td>{{ $fuente->observaciones }}</td></tr>@endforeach</tbody></table></div></details>
 @endif
 </div>
+<script>
+(() => {
+    const form = document.getElementById('tarifas-consulta');
+    if (!form) return;
+    const dependencias = {cliente: ['centro', 'cargo', 'categoria', 'modalidad', 'unidad'], centro: ['cargo', 'categoria', 'modalidad', 'unidad'], cargo: ['categoria', 'modalidad', 'unidad']};
+    Object.entries(dependencias).forEach(([campo, limpiar]) => {
+        form.elements[campo].addEventListener('change', () => {
+            limpiar.forEach(nombre => { form.elements[nombre].value = ''; });
+            form.requestSubmit();
+        });
+    });
+})();
+</script>
 @endsection
