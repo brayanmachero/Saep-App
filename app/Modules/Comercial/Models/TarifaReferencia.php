@@ -10,6 +10,11 @@ class TarifaReferencia extends Model
 
     protected $guarded = ['id'];
 
+    public function getCargoNormalizadoAttribute(): string
+    {
+        return \App\Modules\Comercial\Services\CargoComercialService::normalizar($this->cargo);
+    }
+
     public function cotizacion()
     {
         return $this->belongsTo(Cotizacion::class)->withTrashed();

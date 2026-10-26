@@ -18,7 +18,7 @@ let
     Otras = if Primera[pagination][last_page] > 1 then
         List.Transform({2..Primera[pagination][last_page]}, each Leer(_, Primera[fecha_consulta])[data]) else {},
     Filas = List.Combine({Primera[data]} & Otras),
-    Columnas = {"tarifa_id","cliente","centro","cargo","categoria","modalidad","unidad","condiciones","moneda","precio",
+    Columnas = {"tarifa_id","cliente","centro","cargo","cargo_original","categoria","modalidad","unidad","condiciones","moneda","precio",
         "estado_revision","vigente_en_fecha","fecha_referencia","vigente_desde","vigente_hasta","cotizacion_id",
         "cotizacion_numero","estado_cotizacion","actualizado_en"},
     Tabla = Table.FromRecords(Filas, Columnas, MissingField.UseNull),

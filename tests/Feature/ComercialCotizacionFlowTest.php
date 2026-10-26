@@ -556,6 +556,34 @@ class ComercialCotizacionFlowTest extends TestCase
         $this->get(route('comercial.cotizaciones.show',$cotizacion))->assertOk()->assertDontSee('Revisión de margen · Comercial');
     }
 
+    public function test_alias_cargos_unifica_consulta_sin_perder_precios_ni_origen(): void
+    {
+        $this->actingAs($this->createAdminUser());
+        $modelo=\App\Modules\Comercial\Models\TarifaReferencia::class;
+        $nombres=['SUPERVISOR DE OPERACIONES','SUPERVISOR OPERACCIONES','SUPERVISOR OPERACIONES','SUPERVISOR(A) DE OPERACIONES','SUPERVISOR(A) OPERACIONES','SUPERVISOR','SUPERVISOR NOCHE','SUPERVISOR SENIOR','SUPERVISOR(A) INBOUND'];
+        foreach($nombres as $i=>$nombre){
+            $datos=['cliente'=>'QA','centro'=>'Centro','cargo'=>$nombre,'precio'=>100+$i,'estado'=>'pendiente','unidad'=>'mes','moneda'=>'CLP','modalidad'=>'EST'];
+            $modelo::create($datos+['identidad'=>hash('sha256',$nombre),'grupo'=>$modelo::grupoPara($datos)]);
+        }
+        $ids=$modelo::orderBy('id')->limit(5)->pluck('id')->all();
+        $response=$this->get(route('comercial.tarifas.index',['cargo'=>'SUPERVISOR OPERACCIONES']));
+        $response->assertOk()->assertViewHas('tarifas',fn($t)=>$t->total()===5)
+            ->assertViewHas('opciones',fn($o)=>$o['cargo']->count()===5 && !$o['cargo']->contains('SUPERVISOR OPERACCIONES'));
+        $this->get(route('comercial.tarifas.index',['q'=>'SUPERVISOR DE OPERACIONES']))->assertViewHas('tarifas',fn($t)=>$t->total()===5);
+        $this->get(route('comercial.tarifas.show',$ids[1]))->assertOk()->assertSee('Nombre de origen: SUPERVISOR OPERACCIONES')
+            ->assertViewHas('versiones',fn($v)=>$v->count()===5);
+        Config::set('comercial.api.sabana.enabled',true);Config::set('comercial.api.sabana.token','qa-key');
+        $this->getJson('/comercial/api/sabana-tarifas?vista=referencias&cargo=SUPERVISOR%20DE%20OPERACIONES',['Authorization'=>'Bearer qa-key'])
+            ->assertOk()->assertJsonPath('pagination.total',5)->assertJsonPath('data.0.cargo','SUPERVISOR DE OPERACIONES');
+        $this->assertSame($nombres,$modelo::orderBy('id')->pluck('cargo')->all());
+        $this->assertSame('101.000000',$modelo::findOrFail($ids[1])->precio);
+        $this->assertSame(0,\App\Modules\Comercial\Models\TarifaRevision::count());
+        $normalizar=fn($v)=>\App\Modules\Comercial\Services\CargoComercialService::normalizar($v);
+        $this->assertSame('SUPERVISOR DE OPERACIONES',$normalizar(' supervisor   operacciones '));
+        $this->assertSame('AUXILIAR DE BODEGA SUB',$normalizar('AUXULIAR DE BODEGA SUB'));
+        $this->assertNotSame($normalizar('SUPERVISOR NOCHE'),$normalizar('SUPERVISOR DE OPERACIONES'));
+    }
+
     private function createAdminUser(): User
     {
         $rol = Rol::create([

@@ -38,7 +38,7 @@ class TarifaApiController
             $cotizacion = $t->cotizacion;
             return [
                 'tarifa_id' => $t->id, 'cliente' => $t->cliente, 'centro' => $t->centro,
-                'cargo' => $t->cargo, 'categoria' => $t->categoria, 'modalidad' => $t->modalidad,
+                'cargo' => $t->cargo_normalizado, 'cargo_original' => $t->cargo, 'categoria' => $t->categoria, 'modalidad' => $t->modalidad,
                 'unidad' => $t->unidad, 'condiciones' => $t->variante, 'moneda' => $t->moneda,
                 // Decimal como texto: conserva los seis decimales guardados, sin redondeos de transporte.
                 'precio' => $t->precio, 'estado_revision' => $t->estado,

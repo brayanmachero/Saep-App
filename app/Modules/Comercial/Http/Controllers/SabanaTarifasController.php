@@ -5,6 +5,7 @@ namespace App\Modules\Comercial\Http\Controllers;
 use App\Modules\Comercial\Models\TarifaFuente;
 use App\Modules\Comercial\Models\TarifaReferencia;
 use App\Modules\Comercial\Services\SabanaTarifasService;
+use App\Modules\Comercial\Services\CargoComercialService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -58,18 +59,21 @@ class SabanaTarifasController
     public function index(Request $request, SabanaTarifasService $service)
     {
         $filtros = $this->filtros($request);
+        if (!empty($filtros['cargo'])) $filtros['cargo'] = CargoComercialService::normalizar($filtros['cargo']);
         $opciones = [];
         $contexto = TarifaReferencia::query();
         foreach (['cliente', 'centro', 'cargo'] as $campo) {
             $opciones[$campo] = (clone $contexto)->whereNotNull($campo)->where($campo, '!=', '')
                 ->distinct()->orderBy($campo)->pluck($campo);
+            if ($campo === 'cargo') $opciones[$campo] = $opciones[$campo]->map(fn ($c) => CargoComercialService::normalizar($c))->unique()->sort()->values();
             if (! empty($filtros[$campo])) {
-                if ($campo !== 'cliente' && ! (clone $contexto)->where($campo, $filtros[$campo])->exists()) {
+                if ($campo !== 'cliente' && !$opciones[$campo]->contains($filtros[$campo])) {
                     $limpiar = $campo === 'centro' ? ['centro', 'cargo'] : ['cargo'];
                     return redirect()->route('comercial.tarifas.index', $request->except(array_merge($limpiar, ['categoria', 'modalidad', 'unidad', 'page'])))
                         ->with('info', 'Se ajustaron los filtros para mostrar las opciones del cliente y centro seleccionados.');
                 }
-                $contexto->where($campo, $filtros[$campo]);
+                if ($campo === 'cargo') $contexto->whereIn('cargo', CargoComercialService::variantes($filtros[$campo]));
+                else $contexto->where($campo, $filtros[$campo]);
             }
         }
         foreach (['categoria', 'modalidad', 'unidad'] as $campo) {
@@ -126,7 +130,12 @@ class SabanaTarifasController
     public function show(TarifaReferencia $tarifa)
     {
         $tarifa->load('fuente', 'revisiones', 'cotizacion');
-        $versiones = TarifaReferencia::with('cotizacion')->where('grupo', $tarifa->grupo)->orderByDesc('fecha_referencia')->get();
+        $versionesQuery = TarifaReferencia::with('cotizacion')->where('grupo', $tarifa->grupo)
+            ->orWhere(function ($query) use ($tarifa) {
+                $query->whereIn('cargo', CargoComercialService::variantes($tarifa->cargo));
+                foreach (['cliente','centro','categoria','modalidad','unidad','variante','moneda'] as $campo) $query->where($campo, $tarifa->$campo);
+            });
+        $versiones = $versionesQuery->orderByDesc('fecha_referencia')->orderByDesc('id')->get();
 
         $grupos = app(\App\Modules\Comercial\Services\TarifaPresentacionService::class)->grupos($tarifa->conceptos ?? []);
         $vigentesHoy = app(SabanaTarifasService::class)->consulta(['vista' => 'vigentes'])
@@ -184,10 +193,12 @@ class SabanaTarifasController
             'observaciones' => 'required|string|max:4000',
             'costo_total' => 'nullable|numeric|min:0.000001|max:999999999999',
         ]);
+        $cargoOriginal = $datos['cargo'];
+        $datos['cargo'] = CargoComercialService::normalizar($datos['cargo']);
         $costo = $datos['costo_total'] ?? null;
         unset($datos['costo_total']);
         if ($costo !== null) $datos['conceptos'] = [['concepto' => 'Costo total del servicio', 'valor' => $costo]];
-        $tarifa = DB::transaction(function () use ($datos, $request) {
+        $tarifa = DB::transaction(function () use ($datos, $request, $cargoOriginal) {
             $identidad = hash('sha256', (string) Str::uuid());
             $fuente = TarifaFuente::create([
                 'identidad' => $identidad, 'hash_sha256' => hash('sha256', json_encode($datos)),
@@ -198,7 +209,7 @@ class SabanaTarifasController
                 'identidad' => $identidad, 'grupo' => TarifaReferencia::grupoPara($datos),
                 'fuente_id' => $fuente->id, 'estado' => 'pendiente',
             ]);
-            $tarifa->revisiones()->create(['usuario_id' => $request->user()->id, 'antes' => [], 'despues' => $tarifa->toArray()]);
+            $tarifa->revisiones()->create(['usuario_id' => $request->user()->id, 'antes' => [], 'despues' => $tarifa->toArray() + ['cargo_ingresado' => $cargoOriginal]]);
 
             return $tarifa;
         });
@@ -252,13 +263,13 @@ class SabanaTarifasController
         return response()->streamDownload(function () use ($query) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['Cliente', 'Centro', 'Cargo', 'Categoría', 'Modalidad', 'Unidad', 'Variante', 'Moneda', 'Tarifa', 'Período origen', 'Fecha referencia', 'Estado revisión', 'Vigente desde', 'Vigente hasta', 'Archivo', 'Hoja', 'Celda', 'Observaciones', 'Cotización', 'Estado cotización'], ';');
+            fputcsv($out, ['Cliente', 'Centro', 'Cargo', 'Categoría', 'Modalidad', 'Unidad', 'Variante', 'Moneda', 'Tarifa', 'Período origen', 'Fecha referencia', 'Estado revisión', 'Vigente desde', 'Vigente hasta', 'Archivo', 'Hoja', 'Celda', 'Observaciones', 'Cotización', 'Estado cotización', 'Cargo original'], ';');
             foreach ($query->lazy(200) as $tarifa) {
-                $fila = [$tarifa->cliente, $tarifa->centro, $tarifa->cargo, $tarifa->categoria, $tarifa->modalidad, $tarifa->unidad, $tarifa->variante, $tarifa->moneda,
+                $fila = [$tarifa->cliente, $tarifa->centro, $tarifa->cargo_normalizado, $tarifa->categoria, $tarifa->modalidad, $tarifa->unidad, $tarifa->variante, $tarifa->moneda,
                     $tarifa->precio, $tarifa->periodo, $tarifa->fecha_referencia?->format('Y-m-d'), $tarifa->estado,
                     $tarifa->vigente_desde?->format('Y-m-d'), $tarifa->vigente_hasta?->format('Y-m-d'),
                     $tarifa->fuente?->archivo, $tarifa->hoja, $tarifa->celda, $tarifa->observaciones,
-                    $tarifa->cotizacion?->numero, $tarifa->cotizacion ? ($tarifa->cotizacion->trashed() ? 'Eliminada' : \App\Modules\Comercial\Models\Cotizacion::etiquetaEstado($tarifa->cotizacion->estado)) : null];
+                    $tarifa->cotizacion?->numero, $tarifa->cotizacion ? ($tarifa->cotizacion->trashed() ? 'Eliminada' : \App\Modules\Comercial\Models\Cotizacion::etiquetaEstado($tarifa->cotizacion->estado)) : null, $tarifa->cargo];
                 fputcsv($out, array_map(fn ($valor) => is_string($valor) && preg_match('/^[\s]*[=+@-]/u', $valor) ? "'".$valor : $valor, $fila), ';');
             }
             fclose($out);

@@ -269,3 +269,7 @@ después de importar esa fuente.
 Validación: pruebas de creación, edición, IPC, aprobación/reemplazo, vencimiento,
 inicio futuro, eliminación, permisos de edición, navegación, exportación,
 idempotencia y rechazo de coincidencias históricas por origen/precio/ambigüedad.
+
+## Nombres de cargos estandarizados (26-10-2026)
+La consulta utiliza equivalencias explícitas en CargoComercialService. Las variantes de SUPERVISOR DE OPERACIONES y otros errores inequívocos se muestran con un nombre común en filtros, fichas, comparación, CSV y API. El campo cargo de la API es el nombre estándar; cargo_original conserva el respaldo. El filtro cargo admite ambos nombres y recupera todas las variantes conocidas.
+No se modifican precios, estados ni nombres históricos almacenados; tampoco se fusionan los grupos de vigencia. Un cargo puede conservar varias tarifas por cliente, centro, condiciones y versión. Turnos, niveles, EST/SUB y funciones distintas siguen separados. No se aplica coincidencia aproximada. Las nuevas tarifas manuales guardan el nombre estándar y el texto ingresado en su auditoría.

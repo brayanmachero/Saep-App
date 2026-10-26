@@ -99,15 +99,18 @@ class SabanaTarifasService
     public function consulta(array $filtros)
     {
         $query = TarifaReferencia::with(['fuente', 'cotizacion']);
-        foreach (['cliente', 'centro', 'cargo', 'categoria', 'modalidad', 'unidad'] as $campo) {
+        foreach (['cliente', 'centro', 'categoria', 'modalidad', 'unidad'] as $campo) {
             if (! empty($filtros[$campo])) {
                 $query->where($campo, $filtros[$campo]);
             }
         }
+        if (!empty($filtros['cargo'])) $query->whereIn('cargo', CargoComercialService::variantes($filtros['cargo']));
         if (! empty($filtros['q'])) {
             $q = '%'.$filtros['q'].'%';
+            $aliases = CargoComercialService::variantes($filtros['q']);
             $query->where(fn ($sub) => $sub->where('cliente', 'like', $q)->orWhere('centro', 'like', $q)
                 ->orWhere('cargo', 'like', $q)->orWhere('categoria', 'like', $q)
+                ->orWhereIn('cargo', $aliases)
                 ->orWhereHas('fuente', fn ($fuente) => $fuente->where('archivo', 'like', $q))
                 ->orWhereHas('cotizacion', fn ($cotizacion) => $cotizacion->where('numero', 'like', $q)));
         }
