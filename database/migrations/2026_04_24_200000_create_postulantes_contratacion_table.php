@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('google_name')->nullable();
             $table->string('google_avatar')->nullable();
 
-            // Documentos (ruta en Azure Blob: contratacion/{rut}/archivo.ext)
+            // Documentos (ruta en el disco de archivos: contratacion/{rut}/archivo.ext)
             $table->string('carnet_frontal')->nullable();
             $table->string('carnet_reverso')->nullable();
             $table->string('certificado_afp')->nullable();

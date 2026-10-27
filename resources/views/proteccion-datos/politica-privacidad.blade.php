@@ -203,7 +203,7 @@
             <li>Dirección IP de acceso</li>
             <li>Información del navegador (user agent)</li>
             <li>Fecha y hora de último acceso</li>
-            <li>Identificador Azure (si aplica SSO)</li>
+            <li>Identificador Microsoft Entra ID (si aplica SSO)</li>
             <li>Identificador de autenticación Google en portales públicos, cuando el titular ingresa por ese medio</li>
         </ul>
 

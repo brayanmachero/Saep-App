@@ -15,7 +15,7 @@ Fecha de revision: 2026-06-25
 ### Usuarios internos
 
 - Tabla principal: `users`.
-- Datos: nombre, apellidos, email, RUT, telefono, fecha de nacimiento, nacionalidad, sexo, estado civil, fecha de ingreso, cargo, departamento, centro de costo, rol, identificadores Azure/Talana.
+- Datos: nombre, apellidos, email, RUT, telefono, fecha de nacimiento, nacionalidad, sexo, estado civil, fecha de ingreso, cargo, departamento, centro de costo, rol, identificadores Microsoft Entra ID/Talana.
 - Controles existentes: autenticacion, roles/modulos, consentimiento obligatorio antes de entrar al sistema, portal ARCO, exportacion JSON, auditoria de tratamiento.
 - Mejora implementada: version unica de politica (`PrivacyPolicy::VERSION`) y ejecucion de supresion autorizada desde solicitud ARCO aprobada.
 
