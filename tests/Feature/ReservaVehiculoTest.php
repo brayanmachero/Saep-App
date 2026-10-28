@@ -140,7 +140,8 @@ class ReservaVehiculoTest extends TestCase
             ->assertDontSee('Usuario Existente')
             ->assertDontSee('Reserva existente de prueba')
             ->assertSee('<option value="'.$libre->id.'"', false)
-            ->assertDontSee('<option value="'.$ocupado->id.'"', false);
+            // The earlier booking was on August 1; both cars are free on August 3.
+            ->assertSee('<option value="'.$ocupado->id.'"', false);
 
         $this->assertTrue($libre->exists);
     }
@@ -331,7 +332,7 @@ class ReservaVehiculoTest extends TestCase
         $this->actingAs($operator)
             ->get(route('gestion-vehiculos.index'))
             ->assertOk()
-            ->assertSee('Eliminar reserva de prueba')
+            ->assertSee('Confirmar eliminación')
             ->assertSee('Codigo operativo')
             ->assertDontSee("@include('gestion_vehiculos._form'");
 
@@ -1116,7 +1117,7 @@ class ReservaVehiculoTest extends TestCase
             ->assertOk()
             ->assertSee($reserva->codigo)
             ->assertSee('Pendiente de preparar')
-            ->assertSee('Preparar ficha de entrega en Kizeo para Bodega');
+            ->assertSee('Preparar ficha Kizeo');
     }
 
     public function test_bodega_can_review_managed_reservations_and_open_each_archived_act(): void

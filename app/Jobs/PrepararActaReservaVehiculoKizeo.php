@@ -24,6 +24,7 @@ class PrepararActaReservaVehiculoKizeo implements ShouldQueue
 
     public function handle(ReservaVehiculoKizeoService $kizeo): void
     {
+        if (config('vehiculos_actas.enabled')) return;
         $reserva = ReservaVehiculo::query()
             ->with(['vehiculo', 'user'])
             ->find($this->reservaId);

@@ -1,3 +1,5 @@
+@include('gestion_vehiculos._actas_saep', ['reserva' => $reserva])
+@if(!config('vehiculos_actas.enabled') || $reserva->actasSaep->isEmpty())
 @if($reserva->kizeo_entrega_sharepoint_path)
     <a class="fleet-doc-link" href="{{ route('gestion-vehiculos.reservas.acta', [$reserva, 'entrega']) }}" target="_blank" rel="noopener" title="Ver acta firmada de entrega"><i class="bi bi-file-earmark-check"></i>&nbsp; Entrega</a>
 @endif
@@ -9,4 +11,6 @@
     <span class="fleet-muted"><i class="bi bi-phone"></i>&nbsp; Completar en Kizeo movil, seccion Recepcion.</span>
 @elseif(! $reserva->kizeo_entrega_sharepoint_path && ! $reserva->kizeo_devolucion_sharepoint_path)
     <span class="fleet-muted">Sin actas registradas</span>
+@endif
+
 @endif

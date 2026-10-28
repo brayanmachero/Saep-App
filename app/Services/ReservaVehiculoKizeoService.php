@@ -126,6 +126,11 @@ class ReservaVehiculoKizeoService
             return ['reserva' => null, 'estado' => 'reserva_no_encontrada'];
         }
 
+        // A delayed legacy webhook must never replace a locally signed act.
+        if ($reserva->actasSaep()->exists()) {
+            return ['reserva' => $reserva, 'estado' => 'gestionada_en_saep'];
+        }
+
         $esDevolucion = str_contains(mb_strtolower($tipoActa), 'devoluci');
         $estadoAnterior = $reserva->estado;
         $nuevoEstado = $this->estadoDesdeActa($reserva, $esDevolucion);

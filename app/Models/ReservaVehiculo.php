@@ -62,6 +62,11 @@ class ReservaVehiculo extends Model
         return $this->hasMany(ReservaVehiculoEvento::class)->latest();
     }
 
+    public function actasSaep(): HasMany
+    {
+        return $this->hasMany(VehiculoActa::class, 'reserva_vehiculo_id');
+    }
+
     public function estaVigente(): bool
     {
         return in_array($this->estado, self::ESTADOS_BLOQUEANTES, true);

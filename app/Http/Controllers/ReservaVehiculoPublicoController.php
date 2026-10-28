@@ -131,7 +131,7 @@ class ReservaVehiculoPublicoController extends Controller
 
         $reserva = $this->reservas->crearReserva($data, $identidad);
 
-        PrepararActaReservaVehiculoKizeo::dispatch($reserva->id);
+        if (!config('vehiculos_actas.enabled')) PrepararActaReservaVehiculoKizeo::dispatch($reserva->id);
 
         try {
             $this->reservas->enviarConfirmacion($reserva);
@@ -142,7 +142,9 @@ class ReservaVehiculoPublicoController extends Controller
         return redirect()->route('reservas-vehiculos.inicio', [
             'inicio' => $reserva->inicio->format('Y-m-d\\TH:i'),
             'termino' => $reserva->termino->format('Y-m-d\\TH:i'),
-        ])->with('success', 'Reserva '.$reserva->codigo.' confirmada. Bodega recibira la ficha de entrega en Kizeo y recibiras un correo de respaldo.');
+        ])->with('success', config('vehiculos_actas.enabled')
+            ? 'Reserva '.$reserva->codigo.' confirmada. Bodega preparará la inspección y el acta de entrega en SAEP.'
+            : 'Reserva '.$reserva->codigo.' confirmada. Bodega recibira la ficha de entrega en Kizeo y recibiras un correo de respaldo.');
     }
 
     public function cancelar(Request $request, ReservaVehiculo $reserva)

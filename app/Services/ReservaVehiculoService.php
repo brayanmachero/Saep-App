@@ -192,6 +192,9 @@ class ReservaVehiculoService
 
     public function cancelarReserva(ReservaVehiculo $reserva, array $identidad, ?string $motivo = null, ?User $operador = null): ReservaVehiculo
     {
+        if ($reserva->actasSaep()->exists()) {
+            throw ValidationException::withMessages(['reserva' => 'La reserva tiene una inspección SAEP iniciada. Coordina con Bodega antes de cancelarla.']);
+        }
         if ($reserva->estado !== 'CONFIRMADA' || ! $reserva->inicio->isFuture()) {
             throw ValidationException::withMessages([
                 'reserva' => 'Solo puedes cancelar una reserva confirmada antes de su hora de inicio.',
@@ -330,6 +333,13 @@ class ReservaVehiculoService
 
     public function actualizarEstado(ReservaVehiculo $reserva, string $estado, User $operador): ReservaVehiculo
     {
+        $cierreAnterior = $estado === 'DEVUELTA' && in_array($reserva->estado, ['EN_USO', 'VENCIDA'], true) && !$reserva->actasSaep()->exists();
+        if (config('vehiculos_actas.enabled') && in_array($estado, ['EN_USO', 'DEVUELTA'], true) && !$cierreAnterior) {
+            throw ValidationException::withMessages(['estado' => 'Registra y firma el acta de entrega o devolución en SAEP para cambiar este estado.']);
+        }
+        if ($reserva->actasSaep()->exists()) {
+            throw ValidationException::withMessages(['estado' => 'Esta reserva se gestiona mediante sus actas SAEP. Registra la entrega o devolución desde el acta.']);
+        }
         if (! array_key_exists($estado, ReservaVehiculo::ESTADOS)) {
             throw ValidationException::withMessages(['estado' => 'El estado indicado no es valido.']);
         }
@@ -372,6 +382,10 @@ class ReservaVehiculoService
 
         $reserva = DB::transaction(function () use ($reserva, $data, $identidad, $operador, $inicio, $termino) {
             $bloqueada = ReservaVehiculo::query()->lockForUpdate()->findOrFail($reserva->id);
+
+            if ($bloqueada->actasSaep()->exists()) {
+                throw ValidationException::withMessages(['reserva' => 'La reserva tiene una inspección SAEP iniciada y no se puede reprogramar.']);
+            }
 
             if ($bloqueada->estado !== 'CONFIRMADA') {
                 throw ValidationException::withMessages([

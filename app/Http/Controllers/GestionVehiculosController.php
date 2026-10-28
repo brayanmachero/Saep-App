@@ -95,6 +95,12 @@ class GestionVehiculosController extends Controller
             ->orderBy('nombre')
             ->get();
 
+        if (config('vehiculos_actas.enabled')) {
+            $reservasEnCurso->loadMissing('actasSaep');
+            $reservasGestionadas->loadMissing('actasSaep');
+            $agendaCalendario->loadMissing('actasSaep');
+        }
+
         return view('gestion_vehiculos.index', compact(
             'vehiculos',
             'proximasReservas',
@@ -117,6 +123,9 @@ class GestionVehiculosController extends Controller
 
     public function prepararActaKizeo(Request $request, ReservaVehiculo $reserva)
     {
+        if (config('vehiculos_actas.enabled')) {
+            return back()->with('error', 'El flujo de firma está habilitado en SAEP. Abre Inspección y firma de entrega.');
+        }
         try {
             $this->kizeo->prepararActa($reserva, $request->user());
         } catch (\Throwable $exception) {
@@ -201,7 +210,7 @@ class GestionVehiculosController extends Controller
         $identidad = $this->identidadSolicitante($data);
         $reserva = $this->reservas->crearReserva($data, $identidad, $request->user());
 
-        if ($this->kizeo->estaConfigurado()) {
+        if (!config('vehiculos_actas.enabled') && $this->kizeo->estaConfigurado()) {
             try {
                 PrepararActaReservaVehiculoKizeo::dispatch($reserva->id);
             } catch (\Throwable $exception) {
@@ -259,6 +268,9 @@ class GestionVehiculosController extends Controller
 
     public function eliminarReserva(Request $request, ReservaVehiculo $reserva)
     {
+        if ($reserva->actasSaep()->exists()) {
+            return back()->with('error', 'La reserva tiene una inspección o un acta SAEP. Se conserva para mantener su trazabilidad.');
+        }
         $reserva->loadMissing('vehiculo');
         $codigo = $reserva->codigo;
 

@@ -40,6 +40,7 @@ use App\Http\Controllers\InspeccionPreventivaPdrDashboardController;
 use App\Http\Controllers\EntregaBodegaDashboardController;
 use App\Http\Controllers\InventarioBodegaController;
 use App\Http\Controllers\GestionVehiculosController;
+use App\Http\Controllers\VehiculoActaController;
 use App\Http\Controllers\ReservaVehiculoPublicoController;
 use App\Http\Controllers\CampoOpcionController;
 use App\Http\Controllers\MisFormulariosController;
@@ -115,6 +116,10 @@ Route::prefix('postulacion')->middleware('throttle:180,1')->group(function () {
 
 // --- RESERVAS DE VEHICULOS (portal publico con cuenta corporativa Microsoft) ---
 Route::prefix('reservas-vehiculos')->middleware('throttle:90,1')->group(function () {
+    Route::get('/actas/{acta}', [VehiculoActaController::class, 'show'])->name('portal-actas.show');
+    Route::post('/actas/{acta}/firmar', [VehiculoActaController::class, 'firmar'])->middleware('throttle:10,1')->name('portal-actas.firmar');
+    Route::get('/actas/{acta}/media/{archivo}', [VehiculoActaController::class, 'media'])->name('portal-actas.media');
+    Route::get('/actas/{acta}/pdf', [VehiculoActaController::class, 'pdf'])->name('portal-actas.pdf');
     Route::get('/', [ReservaVehiculoPublicoController::class, 'inicio'])->name('reservas-vehiculos.inicio');
     Route::get('/auth/microsoft', [ReservaVehiculoPublicoController::class, 'redirectMicrosoft'])->name('reservas-vehiculos.microsoft.redirect');
     Route::get('/auth/microsoft/callback', [ReservaVehiculoPublicoController::class, 'callbackMicrosoft'])->name('reservas-vehiculos.microsoft.callback');
@@ -625,6 +630,18 @@ Route::middleware('auth')->group(function () {
 
       // --- BODEGA: FLOTA Y RESERVAS DE VEHICULOS ---
       Route::middleware('modulo:gestion_vehiculos')->group(function () {
+          Route::get('gestion-vehiculos/actas/{acta}', [VehiculoActaController::class, 'show'])->name('vehiculos-actas.show');
+          Route::get('gestion-vehiculos/actas/{acta}/media/{archivo}', [VehiculoActaController::class, 'media'])->name('vehiculos-actas.media');
+          Route::get('gestion-vehiculos/actas/{acta}/pdf', [VehiculoActaController::class, 'pdf'])->name('vehiculos-actas.pdf');
+          Route::get('gestion-vehiculos/actas/{acta}/correo', [VehiculoActaController::class, 'correo'])->name('vehiculos-actas.correo');
+          Route::middleware('modulo:gestion_vehiculos,puede_editar')->group(function () {
+              Route::get('gestion-vehiculos/reservas/{reserva}/actas-saep/{tipo}', [VehiculoActaController::class, 'editar'])->name('vehiculos-actas.editar');
+              Route::post('gestion-vehiculos/reservas/{reserva}/actas-saep/{tipo}', [VehiculoActaController::class, 'guardar'])->name('vehiculos-actas.guardar');
+              Route::post('gestion-vehiculos/actas/{acta}/firmar', [VehiculoActaController::class, 'firmar'])->middleware('throttle:10,1')->name('vehiculos-actas.firmar');
+              Route::post('gestion-vehiculos/actas/{acta}/reabrir', [VehiculoActaController::class, 'reabrir'])->name('vehiculos-actas.reabrir');
+              Route::post('gestion-vehiculos/actas/{acta}/notificar', [VehiculoActaController::class, 'notificar'])->name('vehiculos-actas.notificar');
+              Route::get('gestion-vehiculos/actas/{acta}/paquete', [VehiculoActaController::class, 'paquete'])->name('vehiculos-actas.paquete');
+          });
           Route::get('gestion-vehiculos', [GestionVehiculosController::class, 'index'])
               ->name('gestion-vehiculos.index');
           Route::post('gestion-vehiculos', [GestionVehiculosController::class, 'store'])
