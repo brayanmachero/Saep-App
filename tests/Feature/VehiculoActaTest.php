@@ -81,6 +81,21 @@ class VehiculoActaTest extends TestCase
         $this->assertSame(0, VehiculoActa::count());
     }
 
+    public function test_pdf_photo_is_bounded_jpeg_without_changing_original_evidence(): void
+    {
+        $im = imagecreatetruecolor(3200, 2400);
+        imagefill($im, 0, 0, imagecolorallocate($im, 130, 170, 200));
+        ob_start(); imagepng($im); $original = ob_get_clean(); imagedestroy($im);
+        Storage::disk('local')->put('evidence.png', $original);
+        $url = app(\App\Services\VehiculoActaDocumentService::class)->fotoPdf('evidence.png');
+        $bytes = base64_decode(explode(',', $url, 2)[1]);
+        $size = getimagesizefromstring($bytes);
+        $this->assertSame(IMAGETYPE_JPEG, $size[2]);
+        $this->assertSame([1600, 1200], [$size[0], $size[1]]);
+        $this->assertLessThan(500000, strlen($bytes));
+        $this->assertSame(hash('sha256', $original), hash('sha256', Storage::disk('local')->get('evidence.png')));
+    }
+
     private function prepare(): VehiculoActa
     {
         $this->post(route('vehiculos-actas.guardar', [$this->reserva, 'entrega']), $this->data())->assertSessionHasNoErrors()->assertRedirect();

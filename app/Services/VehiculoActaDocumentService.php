@@ -14,6 +14,22 @@ class VehiculoActaDocumentService
         return 'data:image/png;base64,'.base64_encode(Storage::disk(config('vehiculos_actas.disk'))->get($path));
     }
 
+    public function fotoPdf(string $path): string
+    {
+        // Only the PDF copy is optimized. Original evidence and its signed hash stay intact.
+        $source = imagecreatefromstring(Storage::disk(config('vehiculos_actas.disk'))->get($path));
+        if (!$source) throw new \RuntimeException('No se pudo leer la fotografía del acta.');
+        $scale = min(1, 1600 / max(imagesx($source), imagesy($source)));
+        $width = max(1, (int) round(imagesx($source) * $scale));
+        $height = max(1, (int) round(imagesy($source) * $scale));
+        $copy = imagecreatetruecolor($width, $height);
+        imagefill($copy, 0, 0, imagecolorallocate($copy, 255, 255, 255));
+        imagecopyresampled($copy, $source, 0, 0, 0, 0, $width, $height, imagesx($source), imagesy($source));
+        ob_start(); imagejpeg($copy, null, 78); $bytes = ob_get_clean();
+        imagedestroy($copy); imagedestroy($source);
+        return 'data:image/jpeg;base64,'.base64_encode($bytes);
+    }
+
     public function pdf(VehiculoActa $acta): string
     {
         return Pdf::loadView('pdf.vehiculo_acta_saep', ['acta' => $acta, 'documentos' => $this])
