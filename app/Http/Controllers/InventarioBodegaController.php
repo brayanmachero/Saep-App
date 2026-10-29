@@ -224,6 +224,7 @@ class InventarioBodegaController extends Controller
             : 'vigentes';
         $kizeoPeriod = $this->kizeoDeliveryPeriod($request);
         $kizeoArticle = trim((string) $request->input('kizeo_articulo', ''));
+        $kizeoDiscountFilter = $request->input('kizeo_descuento') === 'no_descontadas' ? 'no_descontadas' : 'todos';
         $kizeoChangeFilter = in_array($request->input('kizeo_cambios'), ['todos', 'cambiados', 'corregidos'], true)
             ? $request->input('kizeo_cambios')
             : 'todos';
@@ -287,6 +288,8 @@ class InventarioBodegaController extends Controller
                     });
                 })
                 ->when($kizeoChangeFilter === 'corregidos', fn (Builder $query) => $query->whereIn('entregas_bodega.id', $applicationCorrectedIds))
+                ->when($kizeoDiscountFilter === 'no_descontadas', fn (Builder $query) => $this->currentKizeoDeliveryForms($query)
+                    ->where('flujo_inventario', 'SALIDA')->whereDoesntHave('inventarioAplicacion'))
                 ->orderByDesc('fecha_pedido')
                 ->orderByDesc('id')
                 ->paginate(20, ['*'], 'kizeo_pagina')
@@ -452,6 +455,7 @@ class InventarioBodegaController extends Controller
             'kizeoPeriod' => $kizeoPeriod,
             'kizeoArticle' => $kizeoArticle,
             'kizeoChangeFilter' => $kizeoChangeFilter,
+            'kizeoDiscountFilter' => $kizeoDiscountFilter,
             'kizeoLastSyncedAt' => $kizeoLastSyncedAt,
             'kizeoAutoApply' => $this->stock->kizeoAutoApplyState(),
             'kizeoCatalogListId' => config('services.kizeo.inventory_catalog_list_id'),

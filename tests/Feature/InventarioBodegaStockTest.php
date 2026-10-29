@@ -1587,10 +1587,10 @@ class InventarioBodegaStockTest extends TestCase
             ->actingAs($user)
             ->get(route('inventario-bodega.index', ['vista' => 'kizeo']))
             ->assertOk()
-            ->assertSee('Artículos descontados en Kizeo')
+            ->assertSee('Entregas menos devoluciones')
             ->assertSee($variant->producto->nombre)
-            ->assertSee('unidades entregadas')
-            ->assertSee('Comprobantes');
+            ->assertSee('unidades netas')
+            ->assertViewHas('kizeoDeliveredArticles', fn ($articles) => (float) $articles->sum('cantidad_neta') === 2.0);
     }
 
     public function test_catalog_import_sets_stock_by_location_without_confusing_it_with_stock_minimum(): void
@@ -2526,7 +2526,7 @@ class InventarioBodegaStockTest extends TestCase
             ->assertOk()
             ->assertSee('name="items[__INDEX__][variante_id]" class="form-select" required data-inventory-search-select', false)
             ->assertSee('function shouldUseSearchSelect(nativeSelect)', false)
-            ->assertSee('return selectableOptions(nativeSelect).length > 5;', false)
+            ->assertSee('return Boolean(nativeSelect.dataset.createLabel) || selectableOptions(nativeSelect).length > 5;', false)
             ->assertSee("root.querySelectorAll('select.form-select')", false);
 
         $this->withoutMiddleware(VerificarConsentimientoDatos::class)
@@ -2603,6 +2603,32 @@ class InventarioBodegaStockTest extends TestCase
             ->assertOk()
             ->assertSee('Entrega fuera del período que requiere revisión')
             ->assertSee('<article class="inventory-kpi accent-red"><span>Requieren revision</span><strong>1</strong>', false);
+    }
+
+    public function test_kizeo_not_discounted_filter_excludes_applied_returns_and_reversed_deliveries(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContextWithCentralStock(10);
+        $service = app(InventarioStockService::class);
+        $pending = $this->newKizeoDelivery('filter-pending', $variant, 1, now());
+        $pending->update(['nombre' => 'Pendiente filtro exclusivo']);
+        $applied = $this->newKizeoDelivery('filter-applied', $variant, 1, now());
+        $applied->update(['nombre' => 'Aplicada fuera del filtro']);
+        $application = $service->applyKizeoDelivery($applied->load('items'), $origin->id, [
+            $applied->items->first()->id => ['variante_id' => $variant->id],
+        ], $user);
+        $return = $this->newKizeoDelivery('filter-return', $variant, 1, now());
+        $return->update(['nombre' => 'Devolucion fuera del filtro', 'flujo_inventario' => 'ENTRADA']);
+        $historical = $this->newKizeoDelivery('filter-historical', $variant, 1, now());
+        $historical->update(['nombre' => 'Historica fuera del filtro', 'kizeo_form_id' => EntregaBodegaSyncService::LEGACY_FORM_ID]);
+        $url = route('inventario-bodega.index', ['vista' => 'kizeo', 'kizeo_periodo' => 'todo', 'kizeo_descuento' => 'no_descontadas']);
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)->actingAs($user)->get($url)
+            ->assertOk()->assertSee('Pendiente filtro exclusivo')->assertDontSee('Aplicada fuera del filtro')
+            ->assertDontSee('Devolucion fuera del filtro')->assertDontSee('Historica fuera del filtro')
+            ->assertSee('No descontadas')->assertSee('kizeo_descuento=no_descontadas', false);
+        $service->reverseKizeoDelivery($application, 'Reverso de prueba del filtro.', $user);
+        $this->get($url)->assertOk()->assertSee('Pendiente filtro exclusivo')->assertDontSee('Aplicada fuera del filtro');
+        $this->get(route('inventario-bodega.index', ['vista' => 'kizeo', 'kizeo_periodo' => 'todo']))
+            ->assertOk()->assertSee('Aplicada fuera del filtro')->assertSee('Devolucion fuera del filtro');
     }
 
     public function test_saep_catalog_sync_updates_and_creates_advanced_kizeo_list_items_without_deleting_orphans(): void

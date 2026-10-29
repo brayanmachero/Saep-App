@@ -521,6 +521,8 @@
                 'kizeo_hasta' => $kizeoPeriod['to']?->toDateString(),
                 'kizeo_articulo' => $kizeoArticle,
                 'kizeo_cambios' => $kizeoChangeFilter,
+                'kizeo_descuento' => $kizeoDiscountFilter,
+                'kizeo_origen' => $kizeoQueue,
             ], fn ($value) => $value !== null && $value !== '');
             $kizeoPeriodUrl = fn (string $period) => route('inventario-bodega.index', array_merge($kizeoFilterQuery, [
                 'kizeo_periodo' => $period,
@@ -558,6 +560,12 @@
                 </label>
                 <label>Artículo entregado
                     <input type="search" name="kizeo_articulo" class="form-control" value="{{ $kizeoArticle }}" placeholder="Código o nombre del artículo" maxlength="200" autocomplete="off">
+                </label>
+                <label>Descuento de stock
+                    <select name="kizeo_descuento" class="form-select" data-inventory-search-ignore>
+                        <option value="todos" @selected($kizeoDiscountFilter === 'todos')>Todos</option>
+                        <option value="no_descontadas" @selected($kizeoDiscountFilter === 'no_descontadas')>No descontadas</option>
+                    </select>
                 </label>
                 <label>Estado de cambios
                     <select name="kizeo_cambios" class="form-select" data-inventory-search-ignore>
@@ -1256,15 +1264,16 @@
     .inventory-list-row { gap:1rem; }
 
     /* El selector de período y Aplicar nunca comparten ni invaden el mismo espacio. */
-    .inventory-kizeo-period-panel { grid-template-columns:minmax(0,1fr) minmax(33rem,42rem); align-items:end; }
-    .inventory-kizeo-period-form { display:grid; grid-template-columns:minmax(8.5rem,.7fr) minmax(13rem,1.3fr) auto; align-items:end; justify-content:stretch; min-width:0; width:100%; }
+    .inventory-kizeo-period-panel { grid-template-columns:minmax(0,1fr); align-items:end; }
+    .inventory-kizeo-period-form { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr)); align-items:end; justify-content:stretch; min-width:0; width:100%; }
     .inventory-kizeo-period-form > label { width:auto; min-width:0; }
-    .inventory-kizeo-period-form .inventory-btn { grid-column:3; grid-row:1; justify-self:end; min-width:max-content; white-space:nowrap; }
+    .inventory-kizeo-period-form .form-control,.inventory-kizeo-period-form .form-select { width:100%; min-width:0; max-width:100%; box-sizing:border-box; }
+    .inventory-kizeo-period-form .inventory-btn { grid-column:auto; grid-row:auto; justify-self:stretch; min-width:0; white-space:nowrap; }
     .inventory-kizeo-period-form .inventory-kizeo-custom-range { grid-column:1 / -1; }
-    .inventory-kizeo-custom-range.is-visible { grid-column:1 / -1; grid-row:2; }
+    .inventory-kizeo-custom-range.is-visible { grid-column:1 / -1; grid-row:auto; }
     @container (max-width: 1120px) {
         .inventory-kizeo-period-panel { grid-template-columns:1fr; align-items:stretch; }
-        .inventory-kizeo-period-form { max-width:42rem; }
+        .inventory-kizeo-period-form { max-width:none; }
     }
     @container (max-width: 600px) {
         .inventory-kizeo-period-form { grid-template-columns:1fr; max-width:none; }
