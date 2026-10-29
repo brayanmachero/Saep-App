@@ -117,6 +117,8 @@ class InventarioBodegaStockTest extends TestCase
         Cache::flush();
 
         Schema::create('entregas_bodega', function (Blueprint $table) {
+            $table->text('descuento_error')->nullable();
+            $table->timestamp('descuento_intentado_en')->nullable();
             $table->id();
             $table->string('kizeo_data_id', 32)->unique();
             $table->string('kizeo_form_id', 50)->nullable();
@@ -3022,8 +3024,42 @@ class InventarioBodegaStockTest extends TestCase
 
         $insufficient = $this->newKizeoDelivery('kizeo-auto-stock', $variant, 4, now()->addMinute());
         $this->assertNull($service->tryAutoApplyNewKizeoDelivery($insufficient->load('items'), true));
+        $this->assertStringContainsString('Disponible: 1.', $insufficient->fresh()->descuento_error);
+        $this->assertStringContainsString('Solicitado: 4.', $insufficient->fresh()->descuento_error);
+        $this->assertNotNull($insufficient->fresh()->descuento_intentado_en);
+        $this->assertStringContainsString('catálogo', $unmatched->fresh()->descuento_error);
 
         $this->assertSame(1.0, $service->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseCount('inventario_entrega_kizeo_aplicaciones', 0);
+    }
+
+    public function test_daily_close_only_emails_today_pending_and_does_not_duplicate(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        Schema::dropIfExists('inventario_cierre_envios');
+        Schema::create('inventario_cierre_envios', function (Blueprint $table) {
+            $table->id(); $table->date('fecha')->unique(); $table->string('destinatario');
+            $table->string('estado'); $table->timestamp('enviado_en')->nullable(); $table->timestamps();
+        });
+        [, , , $variant] = $this->inventoryContextWithCentralStock(10);
+        $yesterday = $this->newKizeoDelivery('close-old', $variant, 1, now()->subDay());
+        $yesterday->update(['fecha_pedido' => now('America/Santiago')->subDay()->toDateString()]);
+        $this->artisan('inventario:cierre-diario')->assertSuccessful();
+        \Illuminate\Support\Facades\Mail::assertNothingSent();
+        $pending = $this->newKizeoDelivery('close-today', $variant, 1, now());
+        $pending->update(['fecha_pedido' => now('America/Santiago')->toDateString(), 'descuento_error' => 'Stock insuficiente. Disponible: 0.']);
+        $returned = $this->newKizeoDelivery('close-return', $variant, 1, now());
+        $returned->update(['fecha_pedido' => now('America/Santiago')->toDateString(), 'flujo_inventario' => 'ENTRADA']);
+        $this->artisan('inventario:cierre-diario --preview')->assertSuccessful();
+        \Illuminate\Support\Facades\Mail::assertNothingSent();
+        $this->artisan('inventario:cierre-diario')->assertSuccessful();
+        $this->artisan('inventario:cierre-diario')->assertSuccessful();
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\InventarioCierreDiarioMail::class, function ($mail) use ($pending) {
+            $this->assertStringContainsString('Stock insuficiente', $mail->render());
+            return $mail->hasTo('bodega@saep.cl') && $mail->deliveries->pluck('id')->all() === [$pending->id];
+        });
+        \Illuminate\Support\Facades\Mail::assertSentCount(1);
+        $this->assertDatabaseHas('inventario_cierre_envios', ['estado' => 'enviado']);
         $this->assertDatabaseCount('inventario_entrega_kizeo_aplicaciones', 0);
     }
 

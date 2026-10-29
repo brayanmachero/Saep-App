@@ -916,6 +916,7 @@ class InventarioStockService
                 'kizeo_data_id' => $delivery->kizeo_data_id,
                 'reason' => collect($exception->errors())->flatten()->first(),
             ]);
+            $delivery->forceFill(['descuento_error' => collect($exception->errors())->flatten()->implode(' '), 'descuento_intentado_en' => now()])->save();
 
             return null;
         } catch (\Throwable $exception) {
@@ -925,6 +926,7 @@ class InventarioStockService
                 'kizeo_data_id' => $delivery->kizeo_data_id,
                 'error' => $exception->getMessage(),
             ]);
+            $delivery->forceFill(['descuento_error' => 'Error técnico durante el descuento automático. El administrador debe revisar el registro del intento; no se aplicó la entrega.', 'descuento_intentado_en' => now()])->save();
 
             return null;
         }
@@ -2183,8 +2185,10 @@ class InventarioStockService
     {
         $available = $this->stockActual($ubicacionId, $varianteId);
         if ($available + 0.0001 < $quantity) {
+            $variant = InventarioVariante::with('producto')->find($varianteId);
+            $location = InventarioUbicacion::find($ubicacionId);
             throw ValidationException::withMessages([
-                'cantidad' => 'Stock insuficiente en la ubicacion seleccionada. Disponible: '.$this->number($available).'.',
+                'cantidad' => 'Stock insuficiente en la ubicacion seleccionada. Disponible: '.$this->number($available).'. Solicitado: '.$this->number($quantity).'. Variante: '.$variant?->producto?->nombre.' / talla '.($variant?->talla ?: 'Estándar').'. Ubicación: '.($location?->nombre ?: $ubicacionId).'.',
             ]);
         }
     }

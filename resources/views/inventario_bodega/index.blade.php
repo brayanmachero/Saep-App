@@ -700,6 +700,11 @@
                     </summary>
 
                     <div class="inventory-delivery-body">
+                        @if(! $application && ! $isReturn && ! $isHistorical)
+                            <div class="inventory-notice"><div><strong>¿Por qué no se descontó?</strong><p>{{ $delivery->motivoDescuentoPendiente() }}</p>
+                            @if($delivery->descuento_intentado_en)<p>Intento registrado: {{ $delivery->descuento_intentado_en->timezone('America/Santiago')->format('d/m/Y H:i:s') }} (Chile).</p>@endif
+                            <p><strong>Qué hacer:</strong> {{ $delivery->accionDescuentoPendiente() }}</p><small>Los intentos fallidos no se reintentan automáticamente al reponer stock.</small></div></div>
+                        @endif
                         <div class="inventory-delivery-body-actions"><a href="{{ route('entregas-bodega-dashboard.document', $delivery) }}" class="inventory-link" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i>Ver comprobante de Kizeo</a></div>
                         @if($sourceBlocked && ! $application)
                             <div class="inventory-notice"><i class="bi bi-shield-exclamation"></i><div><strong>Conciliación requerida.</strong><br>{{ $delivery->alerta_fuente ?: 'La fuente Kizeo no está disponible para validar esta entrega. No se puede descontar stock.' }}</div></div>
