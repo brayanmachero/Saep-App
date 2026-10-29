@@ -50,7 +50,7 @@ class VehiculoActaTest extends TestCase
     private function data(array $overrides = []): array
     {
         return array_replace([
-            'accion' => 'preparar', 'revision' => 0, 'conductor_nombre' => 'Conductor Prueba', 'conductor_email' => 'conductor@example.test',
+            'ubicacion_motivo' => 'GPS no disponible durante prueba', 'accion' => 'preparar', 'revision' => 0, 'conductor_nombre' => 'Conductor Prueba', 'conductor_email' => 'conductor@example.test',
             'fecha' => now()->subMinute()->format('Y-m-d H:i'), 'kilometraje' => 1000, 'combustible' => 'Lleno',
             'condiciones' => array_fill_keys(array_keys(VehiculoActaService::PARTES), 'Bueno'),
             'kit' => array_fill_keys(array_keys(VehiculoActaService::KIT), 'Presente'), 'observaciones' => 'Inspección de prueba',
@@ -94,6 +94,59 @@ class VehiculoActaTest extends TestCase
         $this->assertSame([1600, 1200], [$size[0], $size[1]]);
         $this->assertLessThan(500000, strlen($bytes));
         $this->assertSame(hash('sha256', $original), hash('sha256', Storage::disk('local')->get('evidence.png')));
+    }
+
+    public function test_location_and_sketch_are_preserved_in_signed_snapshot_and_private_media(): void
+    {
+        $geo = ['latitud' => -33.45, 'longitud' => -70.66, 'precision' => 12, 'capturada_at' => now()->subMinute()->toIso8601String()];
+        // Same dimensions as the five-view guide exported by the mobile editor.
+        $guide = imagecreatetruecolor(1500, 600);
+        imagefill($guide, 0, 0, imagecolorallocate($guide, 255, 255, 255));
+        imagesetthickness($guide, 5);
+        imageellipse($guide, 250, 160, 100, 100, imagecolorallocate($guide, 217, 45, 32));
+        ob_start(); imagepng($guide); $guideBytes = ob_get_clean(); imagedestroy($guide);
+        $this->post(route('vehiculos-actas.guardar', [$this->reserva, 'entrega']), $this->data(['ubicacion' => $geo, 'croquis' => 'data:image/png;base64,'.base64_encode($guideBytes)]))->assertSessionHasNoErrors();
+        $acta = VehiculoActa::firstOrFail();
+        $this->assertEquals($geo, $acta->datos['ubicacion']);
+        $this->assertNull($acta->datos['ubicacion_motivo']);
+        $savedGuide = getimagesizefromstring(Storage::disk('local')->get($acta->datos['croquis']['path']));
+        $this->assertSame([1500, 600], [$savedGuide[0], $savedGuide[1]]);
+        $this->get(route('vehiculos-actas.media', [$acta, 'croquis']))->assertOk()->assertHeader('Content-Type', 'image/png');
+        $this->sign($acta)->assertSessionHasNoErrors();
+        $this->get(route('vehiculos-actas.pdf', $acta))->assertOk();
+        $this->get(route('vehiculos-actas.show', $acta))->assertSee('Croquis de daños')->assertSee('-33.45');
+        $this->get(route('portal-actas.media', [$acta, 'croquis']))->assertForbidden();
+    }
+
+    public function test_location_requires_valid_coordinates_or_explicit_unavailability_reason(): void
+    {
+        $this->post(route('vehiculos-actas.guardar', [$this->reserva, 'entrega']), $this->data(['ubicacion_motivo' => '']))->assertSessionHasErrors('ubicacion');
+        $this->post(route('vehiculos-actas.guardar', [$this->reserva, 'entrega']), $this->data(['ubicacion' => ['latitud' => 99, 'longitud' => 200, 'precision' => -1, 'capturada_at' => now()->addDay()->toIso8601String()]]))->assertSessionHasErrors(['ubicacion.latitud','ubicacion.longitud','ubicacion.precision','ubicacion.capturada_at']);
+        $this->assertSame(0, VehiculoActa::count());
+    }
+
+    public function test_sketch_survives_draft_edits_and_can_only_be_removed_explicitly_before_signing(): void
+    {
+        $route = route('vehiculos-actas.guardar', [$this->reserva, 'entrega']);
+        $this->post($route, $this->data(['accion' => 'borrador', 'croquis' => $this->signature()]))->assertSessionHasNoErrors();
+        $acta = VehiculoActa::firstOrFail();
+        $sketch = $acta->datos['croquis'];
+
+        $this->post($route, $this->data(['accion' => 'borrador', 'revision' => $acta->revision, 'croquis' => '', 'fotos' => []]))->assertSessionHasNoErrors();
+        $this->assertSame($sketch, $acta->fresh()->datos['croquis']);
+
+        $this->post($route, $this->data(['accion' => 'borrador', 'revision' => 0, 'quitar_croquis' => true]))->assertSessionHasErrors('acta');
+        $this->assertSame($sketch, $acta->fresh()->datos['croquis']);
+
+        $this->post($route, $this->data(['accion' => 'borrador', 'revision' => $acta->fresh()->revision, 'quitar_croquis' => true]))->assertSessionHasNoErrors();
+        $this->assertNull($acta->fresh()->datos['croquis']);
+
+        $this->post($route, $this->data(['revision' => $acta->fresh()->revision, 'croquis' => $this->signature()]))->assertSessionHasNoErrors();
+        $acta->refresh();
+        $this->sign($acta)->assertSessionHasNoErrors();
+        $signedSketch = $acta->fresh()->datos['croquis'];
+        $this->post($route, $this->data(['accion' => 'borrador', 'revision' => $acta->revision, 'quitar_croquis' => true]))->assertSessionHasErrors('acta');
+        $this->assertSame($signedSketch, $acta->fresh()->datos['croquis']);
     }
 
     private function prepare(): VehiculoActa

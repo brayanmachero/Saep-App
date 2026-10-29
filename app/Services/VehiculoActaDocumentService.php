@@ -55,6 +55,12 @@ class VehiculoActaDocumentService
             $values['kit_de_seguridad_y_emergencia'] = array_values(VehiculoActaService::PARTES);
         }
         $medias = [];
+        if (!empty($d['ubicacion'])) {
+            $values[$entrega ? 'geolocalizacion' : 'geolocalizacion1'] = $d['ubicacion'];
+        }
+        if (!empty($d['croquis']) && $entrega) {
+            $medias[] = ['field' => 'dibujo', 'name' => 'croquis.png', 'sha256' => $d['croquis']['sha256'], 'data_url' => $this->imagen($d['croquis']['path'])];
+        }
         foreach ($acta->evidencias as $i => $foto) $medias[] = ['field' => $entrega ? 'foto' : 'fotos', 'name' => 'foto-'.($i + 1).'.png', 'sha256' => $foto['sha256'], 'data_url' => $this->imagen($foto['path'])];
         foreach (['conductor', 'encargado'] as $rol) {
             $field = $rol === 'conductor' ? ($entrega ? 'firma' : 'firma1') : ($entrega ? 'firma_encargado' : 'firma_encargado1');
@@ -63,6 +69,15 @@ class VehiculoActaDocumentService
         return [
             'schema' => 'saep.vehicle-act.v1', 'idempotency_key' => $acta->uuid,
             'status' => 'PENDIENTE_VALIDACION_API', 'form_id' => config('vehiculos_actas.form_id'),
+            'propuesta_referencia' => [
+                'estado' => 'PROPUESTA_NO_ENVIADA',
+                'modalidad' => 'Precarga Kizeo con referencia a acta firmada en SAEP',
+                'acta_url' => route('vehiculos-actas.show', $acta),
+                'pdf_url' => route('vehiculos-actas.pdf', $acta),
+                'acceso' => 'Requiere sesión SAEP y permiso de Bodega; no es un enlace público.',
+                'observaciones_adicionales' => 'Acta '.$acta->tipo.' firmada en SAEP. Reserva '.$d['reserva']['codigo'].'. Vehículo '.$d['vehiculo']['patente'].'. Responsable '.$d['conductor_nombre'].'. Referencia '.$acta->uuid.'. Consultar condiciones, fotografías, firmas y PDF: '.route('vehiculos-actas.show', $acta),
+                'pendientes' => ['Definir usuario destinatario de la ficha Kizeo.', 'Resolver códigos de listas de conductor, patente y marca/modelo.', 'Validar en una ficha de prueba que las reglas del formulario admitan una referencia sin fotos ni firmas locales.', 'Decidir si se adapta o duplica el formulario Kizeo para este flujo.', 'Implementar registro del ID de precarga, reintentos sin duplicados y estado separado del acta SAEP.'],
+            ],
             'warning' => 'Paquete interno SAEP, no es un contrato de escritura Kizeo validado. No se ha enviado a Kizeo. Requiere confirmar endpoint de guardado final y carga de medios; resolver códigos de listas de conductor y patente y atributos adicionales antes de enviar.',
             'fields' => collect($values)->map(fn ($value) => ['value' => $value])->all(),
             'saep_snapshot' => $d, 'agreement' => $acta->acuerdo, 'agreement_version' => $acta->acuerdo_version,

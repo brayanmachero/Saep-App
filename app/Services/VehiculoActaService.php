@@ -65,6 +65,15 @@ class VehiculoActaService
                     $archivos[] = $firmaPath;
                 }
                 $datos = collect($data)->only(['conductor_nombre', 'conductor_email', 'fecha', 'kilometraje', 'combustible', 'condiciones', 'kit', 'observaciones', 'danos_nuevos'])->all();
+                $datos['ubicacion'] = $data['ubicacion'] ?? null;
+                $datos['ubicacion_motivo'] = $datos['ubicacion'] ? null : ($data['ubicacion_motivo'] ?? null);
+                $datos['croquis'] = !empty($data['quitar_croquis']) ? null : ($acta?->datos['croquis'] ?? null);
+                if (!empty($data['croquis'])) {
+                    $bytes = $this->firma($data['croquis'], 'croquis');
+                    $path = "vehiculos/actas/{$uuid}/croquis-".Str::uuid().'.png';
+                    $this->escribir($path, $bytes); $archivos[] = $path;
+                    $datos['croquis'] = ['path' => $path, 'sha256' => hash('sha256', $bytes)];
+                }
                 // Identity and notification address come from the reservation, never the handset payload.
                 $datos['conductor_nombre'] = $tipo === 'devolucion' ? $entrega->datos['conductor_nombre'] : $reserva->solicitante_nombre;
                 $datos['conductor_email'] = strtolower(trim($tipo === 'devolucion' ? $entrega->datos['conductor_email'] : $reserva->solicitante_email));
@@ -175,6 +184,7 @@ class VehiculoActaService
         }
         $im = @imagecreatefromstring($bytes);
         if (!$im) $this->error('No fue posible leer la imagen.', 'fotos');
+        imagesavealpha($im, true);
         ob_start(); imagepng($im); $clean = ob_get_clean(); imagedestroy($im);
         return $clean;
     }

@@ -50,10 +50,21 @@ class VehiculoActaController extends Controller
             'kit' => ['required', 'array:'.implode(',', array_keys(VehiculoActaService::KIT))],
             'fotos' => ['nullable', 'array', 'max:4'], 'fotos.*' => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:5120', 'dimensions:max_width=6000,max_height=6000'],
             'firma_encargado' => ['nullable', 'string', 'max:700000'],
+            'croquis' => ['nullable', 'string', 'max:700000'],
+            'quitar_croquis' => ['nullable', 'boolean'],
+            'ubicacion' => ['nullable', 'array:latitud,longitud,precision,capturada_at'],
+            'ubicacion.latitud' => ['required_with:ubicacion', 'numeric', 'between:-90,90'],
+            'ubicacion.longitud' => ['required_with:ubicacion', 'numeric', 'between:-180,180'],
+            'ubicacion.precision' => ['required_with:ubicacion', 'numeric', 'min:0', 'max:100000'],
+            'ubicacion.capturada_at' => ['required_with:ubicacion', 'date', 'before_or_equal:now'],
+            'ubicacion_motivo' => ['nullable', 'string', 'max:300'],
         ];
         foreach (VehiculoActaService::PARTES as $key => $label) $rules['condiciones.'.$key] = ['required', Rule::in(['Bueno', 'Con observaciones'])];
         foreach (VehiculoActaService::KIT as $key => $label) $rules['kit.'.$key] = ['required', Rule::in(['Presente', 'Faltante', 'No aplica'])];
         $data = $request->validate($rules);
+        if ($data['accion'] === 'preparar' && empty($data['ubicacion']) && blank($data['ubicacion_motivo'] ?? null)) {
+            return back()->withInput()->withErrors(['ubicacion' => 'Captura la ubicación o indica por qué no está disponible.']);
+        }
         if ((in_array('Con observaciones', $data['condiciones'], true) || ($data['danos_nuevos'] ?? 'NO') === 'SI') && blank($data['observaciones'] ?? null)) {
             return back()->withInput()->withErrors(['observaciones' => 'Describe los daños u observaciones detectados.']);
         }
@@ -117,6 +128,7 @@ class VehiculoActaController extends Controller
     {
         $this->acceso($request, $acta);
         $path = match ($archivo) {
+            'croquis' => $acta->datos['croquis']['path'] ?? null,
             'encargado' => $acta->firma_encargado_path, 'conductor' => $acta->firma_conductor_path,
             default => ctype_digit($archivo) ? ($acta->evidencias[(int) $archivo]['path'] ?? null) : null,
         };
