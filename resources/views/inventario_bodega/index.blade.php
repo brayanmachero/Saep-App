@@ -742,8 +742,9 @@
                             @elseif($variantOptions->isEmpty())
                                 <div class="inventory-notice"><i class="bi bi-info-circle"></i>Debes tener ubicaciones y articulos activos antes de aplicar entregas Kizeo.</div>
                             @else
-                                <form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.aplicar', $delivery) }}" class="inventory-kizeo-form">
+                                <form method="POST" action="{{ route('inventario-bodega.entregas-kizeo.aplicar', $delivery) }}" class="inventory-kizeo-form" data-kizeo-async-apply>
                                     @csrf
+                                    <div class="inventory-notice" data-kizeo-apply-result role="status" aria-live="polite" hidden></div>
                                     <div class="inventory-kizeo-form-heading">
                                         <label>Ubicacion de salida<input class="form-control" value="{{ $centralKizeoLocation->nombre }}" readonly></label>
                                         <p>Las cantidades vienen de Kizeo. Esta salida se descuenta siempre desde Sede Central SAEP; ajusta la variante solo si el nombre no coincide.</p>
@@ -1270,6 +1271,7 @@
 
     /* El selector de período y Aplicar nunca comparten ni invaden el mismo espacio. */
     .inventory-kizeo-period-panel { grid-template-columns:minmax(0,1fr); align-items:end; }
+    .inventory-delivery-card [hidden] { display:none !important; }
     .inventory-kizeo-period-form { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr)); align-items:end; justify-content:stretch; min-width:0; width:100%; }
     .inventory-kizeo-period-form > label { width:auto; min-width:0; }
     .inventory-kizeo-period-form .form-control,.inventory-kizeo-period-form .form-select { width:100%; min-width:0; max-width:100%; box-sizing:border-box; }
@@ -1386,6 +1388,7 @@
     <script src="{{ asset('vendor/chartjs/chart.umd.js') }}"></script>
 @endif
 
+<script src="{{ asset('js/inventario-kizeo-apply.js') }}?v=20261029"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     @if($vista === 'resumen')
@@ -2158,7 +2161,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var kizeoBatchCount = document.querySelector('[data-kizeo-batch-count]');
     var kizeoBatchCopy = document.querySelector('[data-kizeo-batch-copy]');
     function refreshKizeoBatchSelection() {
-        var selected = kizeoBatchChecks.filter(function (checkbox) { return checkbox.checked; }).length;
+        var selected = kizeoBatchChecks.filter(function (checkbox) { return !checkbox.disabled && checkbox.checked; }).length;
         if (kizeoBatchSubmit) kizeoBatchSubmit.disabled = selected === 0;
         if (kizeoBatchCount) kizeoBatchCount.textContent = selected ? '(' + selected + ')' : '';
         if (kizeoBatchCopy) kizeoBatchCopy.textContent = selected
@@ -2171,7 +2174,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (kizeoBatchAll) {
         kizeoBatchAll.addEventListener('change', function () {
-            kizeoBatchChecks.forEach(function (checkbox) { checkbox.checked = kizeoBatchAll.checked; });
+            kizeoBatchChecks.forEach(function (checkbox) { if (!checkbox.disabled) checkbox.checked = kizeoBatchAll.checked; });
             refreshKizeoBatchSelection();
         });
     }
@@ -2217,6 +2220,12 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('[data-kizeo-stock-select]').forEach(function (select) {
         select.addEventListener('change', function () { refreshKizeoLineStock(select); });
         refreshKizeoLineStock(select);
+    });
+
+    document.addEventListener('inventory:kizeo-stocks', function (event) {
+        Object.assign(kizeoCentralStockByVariant, event.detail || {});
+        document.querySelectorAll('[data-kizeo-stock-select]').forEach(refreshKizeoLineStock);
+        refreshKizeoBatchSelection();
     });
 
     function syncMovementCoordinatorOptions() {

@@ -850,14 +850,39 @@ class InventarioBodegaController extends Controller
                 : 'Descuento automático desactivado. Las nuevas entregas de Kizeo quedarán pendientes para aplicarlas a mano.');
     }
 
-    public function applyKizeoDelivery(Request $request, EntregaBodega $entrega): RedirectResponse
+    public function applyKizeoDelivery(Request $request, EntregaBodega $entrega): RedirectResponse|\Illuminate\Http\JsonResponse
     {
         $data = $request->validate([
             'lineas' => ['required', 'array', 'min:1'],
             'lineas.*.variante_id' => ['required', 'exists:inventario_variantes,id'],
         ]);
         $origin = $this->stock->kizeoOriginLocation();
-        $application = $this->stock->applyKizeoDelivery($entrega->load('items'), $origin->id, $data['lineas'], $request->user());
+        try {
+            $application = $this->stock->applyKizeoDelivery($entrega->load('items'), $origin->id, $data['lineas'], $request->user());
+        } catch (ValidationException $exception) {
+            if (! $entrega->inventarioAplicacion()->exists()) {
+                $entrega->forceFill([
+                    'descuento_error' => collect($exception->errors())->flatten()->implode(' '),
+                    'descuento_intentado_en' => now(),
+                ])->save();
+            }
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => collect($exception->errors())->flatten()->implode(' '),
+                    'errors' => $exception->errors(),
+                    'stocks' => $this->kizeoResponseStocks($origin->id, $data['lineas']),
+                ], 422);
+            }
+            throw $exception;
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => "Entrega aplicada desde {$application->ubicacion->nombre}. Todas las líneas quedaron descontadas y vinculadas al comprobante original.",
+                'aplicacion_id' => $application->id,
+                'stocks' => $this->kizeoResponseStocks($origin->id, $data['lineas']),
+            ]);
+        }
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'kizeo'])
             ->with('success', "Entrega Kizeo aplicada desde {$application->ubicacion->nombre}. El descuento quedó vinculado al comprobante original.");
@@ -880,6 +905,13 @@ class InventarioBodegaController extends Controller
 
         return redirect()->route('inventario-bodega.index', ['vista' => 'kizeo'])
             ->with('success', "Devolución Kizeo ingresada en {$application->ubicacion->nombre} e imputada al centro de costo seleccionado.");
+    }
+
+    private function kizeoResponseStocks(int $locationId, array $lines): array
+    {
+        return collect($lines)->pluck('variante_id')->unique()->mapWithKeys(
+            fn ($id) => [(int) $id => $this->stock->stockActual($locationId, (int) $id)]
+        )->all();
     }
 
     public function applyKizeoDeliveriesBatch(Request $request): RedirectResponse

@@ -3033,6 +3033,34 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertDatabaseCount('inventario_entrega_kizeo_aplicaciones', 0);
     }
 
+    public function test_old_delivery_can_be_applied_with_json_without_redirect_or_duplicate(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContextWithCentralStock(10);
+        $delivery = $this->newKizeoDelivery('old-async', $variant, 2, now()->subMonth());
+        $lines = [$delivery->items->first()->id => ['variante_id' => $variant->id]];
+        $url = route('inventario-bodega.entregas-kizeo.aplicar', $delivery);
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)->actingAs($user)
+            ->postJson($url, ['lineas' => $lines])->assertOk()
+            ->assertJsonPath('stocks.'.$variant->id, 8)->assertJsonStructure(['aplicacion_id', 'message']);
+        $this->postJson($url, ['lineas' => $lines])->assertStatus(422);
+        $this->assertSame(8.0, app(InventarioStockService::class)->stockActual($origin->id, $variant->id));
+        $this->assertDatabaseCount('inventario_entrega_kizeo_aplicaciones', 1);
+    }
+
+    public function test_json_failure_keeps_entire_delivery_unapplied_and_returns_reason(): void
+    {
+        [$user, $origin, , $variant] = $this->inventoryContextWithCentralStock(1);
+        $delivery = $this->newKizeoDelivery('failed-async', $variant, 2, now()->subMonth());
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)->actingAs($user)
+            ->postJson(route('inventario-bodega.entregas-kizeo.aplicar', $delivery), [
+                'lineas' => [$delivery->items->first()->id => ['variante_id' => $variant->id]],
+            ])->assertStatus(422)->assertJsonPath('stocks.'.$variant->id, 1)
+            ->assertJsonValidationErrors('cantidad');
+        $this->assertDatabaseCount('inventario_entrega_kizeo_aplicaciones', 0);
+        $this->assertSame(1.0, app(InventarioStockService::class)->stockActual($origin->id, $variant->id));
+        $this->assertStringContainsString('Solicitado: 2.', $delivery->fresh()->descuento_error);
+    }
+
     public function test_daily_close_only_emails_today_pending_and_does_not_duplicate(): void
     {
         \Illuminate\Support\Facades\Mail::fake();
