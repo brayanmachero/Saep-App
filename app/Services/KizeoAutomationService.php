@@ -693,9 +693,12 @@ class KizeoAutomationService
     private function cleanSharePointPath(string $path): string
     {
         $path = str_replace('\\', '/', $path);
+        $segments = explode('/', $path);
+        $last = array_key_last($segments);
         $segments = array_map(
-            fn (string $segment) => $this->cleanPathSegment($segment),
-            explode('/', $path)
+            fn (string $segment, int $index) => $this->cleanPathSegment($segment, $index === $last && str_ends_with(strtolower($segment), '.pdf') ? 180 : 120),
+            $segments,
+            array_keys($segments)
         );
 
         return trim(implode('/', $segments), '/');
