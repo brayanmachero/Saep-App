@@ -143,9 +143,9 @@
                 <label>Export ID</label>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;">
                     <select id="export_picker" class="form-input">
-                        <option value="">PDF estándar de Kizeo</option>
+                        <option value="">Automático: personalizado; si no existe, estándar</option>
                     </select>
-                    <input name="export_id" id="export_id" class="form-input" value="{{ old('export_id', $rule->export_id) }}" placeholder="Vacío = PDF estándar">
+                    <input name="export_id" id="export_id" class="form-input" value="{{ old('export_id', $rule->export_id) }}" placeholder="Vacío = selección automática">
                 </div>
             </div>
         </div>
@@ -266,7 +266,7 @@ function renderFields(fields) {
 function renderExports(exports) {
     const picker = document.getElementById('export_picker');
     const current = document.getElementById('export_id').value;
-    picker.innerHTML = '<option value="">PDF estándar de Kizeo</option>';
+    picker.innerHTML = '<option value="">Automático: personalizado; si no existe, estándar</option>';
 
     exports.forEach(exp => {
         const option = document.createElement('option');

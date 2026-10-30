@@ -247,6 +247,58 @@ class KizeoAutomationServiceTest extends TestCase
         $this->assertSame('CD Quilicura', $context['cd']);
     }
 
+    public function test_automatic_pdf_prefers_custom_pdf_default_and_ignores_deleted_exports(): void
+    {
+        $kizeo = Mockery::mock(KizeoService::class);
+        $kizeo->shouldReceive('getExports')->once()->with('1213824')->andReturn([
+            ['id' => 'deleted', 'deleted' => true, 'json' => ['is_pdf_default' => true]],
+            ['id' => 'other', 'is_default' => true],
+            ['id' => '1828877', 'json' => ['is_pdf_default' => true]],
+        ]);
+        $kizeo->shouldReceive('downloadExportPdf')->once()->with('1213824', 'test', '1828877')->andReturn('custom');
+        $this->assertSame('custom', $this->downloadPdfForTest($kizeo));
+    }
+
+    public function test_automatic_pdf_uses_standard_only_when_no_custom_export_exists(): void
+    {
+        $kizeo = Mockery::mock(KizeoService::class);
+        $kizeo->shouldReceive('getExports')->once()->andReturn([['id' => 'old', 'deleted' => true]]);
+        $kizeo->shouldReceive('downloadPdf')->once()->with('1213824', 'test')->andReturn('standard');
+        $this->assertSame('standard', $this->downloadPdfForTest($kizeo));
+    }
+
+    public function test_explicit_export_remains_authoritative(): void
+    {
+        $kizeo = Mockery::mock(KizeoService::class);
+        $kizeo->shouldReceive('downloadExportPdf')->once()->with('1213824', 'test', 'chosen')->andReturn('chosen pdf');
+        $this->assertSame('chosen pdf', $this->downloadPdfForTest($kizeo, 'chosen'));
+    }
+
+    public function test_export_lookup_failure_does_not_silently_use_standard_pdf(): void
+    {
+        $kizeo = Mockery::mock(KizeoService::class);
+        $kizeo->shouldReceive('getExports')->once()->andThrow(new \RuntimeException('Kizeo unavailable'));
+        $this->expectException(\RuntimeException::class);
+        $this->downloadPdfForTest($kizeo);
+    }
+
+    public function test_training_uses_activity_date_instead_of_creation_date(): void
+    {
+        $kizeo = Mockery::mock(KizeoService::class);
+        $kizeo->shouldReceive('rawGet')->once()->with('forms/1213824', 20)->andReturn(['form' => ['fields' => []]]);
+        $context = $this->buildContextForForm($kizeo, '1213824', [
+            'fields' => ['fecha_de_actividad_' => ['value' => ['date' => '2026-10-28', 'hour' => '10:00']]],
+            'create_time' => '2026-10-30 12:00:00',
+        ]);
+        $this->assertSame('2026-10-28', $context['fecha']);
+    }
+
+    private function downloadPdfForTest(KizeoService $kizeo, ?string $exportId = null): ?string
+    {
+        $service = new KizeoAutomationService($kizeo, Mockery::mock(OneDriveService::class));
+        return (new ReflectionMethod($service, 'downloadPreferredPdf'))->invoke($service, '1213824', 'test', $exportId);
+    }
+
     private function buildContext(KizeoService $kizeo, array $record): array
     {
         return $this->buildContextForForm($kizeo, '1156826', $record);

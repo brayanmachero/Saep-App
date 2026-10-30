@@ -134,9 +134,7 @@ class KizeoAutomationService
 
     private function executeRule(KizeoAutomationRule $rule, string $formId, string $dataId, array $context): array
     {
-        $pdfContent = $rule->export_id
-            ? $this->kizeo->downloadExportPdf($formId, $dataId, $rule->export_id)
-            : $this->kizeo->downloadPdf($formId, $dataId);
+        $pdfContent = $this->downloadPreferredPdf($formId, $dataId, $rule->export_id);
 
         if (!$pdfContent || strlen($pdfContent) < 100) {
             throw new \RuntimeException('PDF descargado desde Kizeo está vacío o inválido');
@@ -158,6 +156,22 @@ class KizeoAutomationService
         }
 
         return ['filename' => basename($remotePath), 'path' => $remotePath];
+    }
+
+    private function downloadPreferredPdf(string $formId, string $dataId, ?string $exportId): ?string
+    {
+        if (!$exportId) {
+            // Un error consultando las plantillas debe quedar registrado, no
+            // confundirse con la ausencia de un documento personalizado.
+            $exports = collect($this->kizeo->getExports($formId))
+                ->filter(fn ($export) => !($export['deleted'] ?? false) && !empty($export['id']))
+                ->sortByDesc(fn ($export) => ($export['json']['is_pdf_default'] ?? false) ? 2 : (($export['is_default'] ?? false) ? 1 : 0));
+            $exportId = $exports->first()['id'] ?? null;
+        }
+
+        return $exportId
+            ? $this->kizeo->downloadExportPdf($formId, $dataId, (string) $exportId)
+            : $this->kizeo->downloadPdf($formId, $dataId);
     }
 
     private function runRule(
@@ -297,6 +311,7 @@ class KizeoAutomationService
         // propia del suceso. Se prioriza por sobre la fecha de creación para
         // que la carpeta y el nombre del PDF representen el evento real.
         $dateValue = $context['fecha']
+            ?? $context['fecha_de_actividad_']
             ?? $context['fecha_del_accidente']
             ?? $context['fecha_del_evento']
             ?? $context['fecha_y_hora']
