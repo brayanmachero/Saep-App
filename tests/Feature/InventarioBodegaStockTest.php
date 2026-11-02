@@ -103,6 +103,7 @@ class InventarioBodegaStockTest extends TestCase
 
         $migration = require dirname(__DIR__, 2).'/database/migrations/2026_08_07_120000_create_inventario_bodega_tables.php';
         $migration->up();
+        (require dirname(__DIR__, 2).'/database/migrations/2026_11_02_120000_link_recreated_stocktakes.php')->up();
         $receiptReversalMigration = require dirname(__DIR__, 2).'/database/migrations/2026_08_13_150000_add_reversal_fields_to_inventario_ingresos.php';
         $receiptReversalMigration->up();
         $operationalMastersMigration = require dirname(__DIR__, 2).'/database/migrations/2026_08_13_190000_add_operational_masters_to_inventario.php';
@@ -437,6 +438,19 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertSame(10.0, (float) $replacementLine->cantidad_sistema);
         $this->assertSame(9.0, (float) $replacementLine->cantidad_fisica);
         $this->assertSame('Validado en terreno', $replacementLine->observacion);
+        $this->assertSame($source->id, $replacement->conteo_origen_id);
+        $this->assertFalse($replacement->puedeEliminarse());
+        // Editing the notes must not remove the protection of the successor.
+        $replacement->update(['observacion' => 'Revisión de Gabriela']);
+        try {
+            $service->deleteStocktake($replacement);
+            $this->fail('El consolidado debe conservarse aunque cambien sus notas.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('conteo', $exception->errors());
+        }
+        $this->assertDatabaseHas('inventario_conteos', ['id' => $replacement->id]);
+        $this->assertDatabaseHas('inventario_conteo_lineas', ['id' => $replacementLine->id, 'cantidad_fisica' => 9]);
+        $this->assertSame(10.0, $service->stockActual($origin->id, $variant->id));
     }
 
     public function test_draft_stocktake_can_be_deleted_without_touching_kardex(): void

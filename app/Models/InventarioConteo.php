@@ -19,7 +19,7 @@ class InventarioConteo extends Model
 
     protected $fillable = [
         'codigo', 'ubicacion_id', 'fecha_corte', 'estado', 'observacion', 'creado_por',
-        'aprobado_por', 'aprobado_en',
+        'aprobado_por', 'aprobado_en', 'conteo_origen_id',
     ];
 
     protected $casts = ['fecha_corte' => 'date', 'aprobado_en' => 'datetime'];
@@ -36,6 +36,8 @@ class InventarioConteo extends Model
 
     public function puedeEliminarse(): bool
     {
-        return in_array($this->estado, ['BORRADOR', 'EN_REVISION'], true);
+        return ! $this->conteo_origen_id
+            && ! str_starts_with($this->observacion ?? '', 'Recreado desde ')
+            && in_array($this->estado, ['BORRADOR', 'EN_REVISION'], true);
     }
 }

@@ -622,6 +622,7 @@ class InventarioStockService
 
             $previousLines = $source->lineas->keyBy('variante_id');
             $replacement = InventarioConteo::create([
+                'conteo_origen_id' => $source->id,
                 'codigo' => $this->code('CNT', Carbon::parse($source->fecha_corte)),
                 'ubicacion_id' => $location->id,
                 'fecha_corte' => $source->fecha_corte,
@@ -722,24 +723,25 @@ class InventarioStockService
 
     public function deleteStocktake(InventarioConteo $conteo): void
     {
-        if ($conteo->estado === 'APROBADO' || ! $conteo->puedeEliminarse()) {
-            throw ValidationException::withMessages([
-                'conteo' => 'No se puede eliminar un conteo aprobado o reemplazado: se conserva por trazabilidad.',
-            ]);
-        }
-
-        $hasAdjustments = InventarioMovimiento::query()
-            ->where('referencia_tipo', InventarioConteo::class)
-            ->where('referencia_id', $conteo->id)
-            ->exists();
-
-        if ($hasAdjustments) {
-            throw ValidationException::withMessages([
-                'conteo' => 'Este conteo ya tiene ajustes en el kardex y no se puede eliminar.',
-            ]);
-        }
-
         DB::transaction(function () use ($conteo) {
+            $conteo = InventarioConteo::query()->lockForUpdate()->findOrFail($conteo->id);
+            if ($conteo->estado === 'APROBADO' || ! $conteo->puedeEliminarse()) {
+                throw ValidationException::withMessages([
+                    'conteo' => 'No se puede eliminar un conteo aprobado, reemplazado o generado por consolidaciÃ³n: se conserva por trazabilidad.',
+                ]);
+            }
+
+            $hasAdjustments = InventarioMovimiento::query()
+                ->where('referencia_tipo', InventarioConteo::class)
+                ->where('referencia_id', $conteo->id)
+                ->exists();
+
+            if ($hasAdjustments) {
+                throw ValidationException::withMessages([
+                    'conteo' => 'Este conteo ya tiene ajustes en el kardex y no se puede eliminar.',
+                ]);
+            }
+
             $conteo->lineas()->delete();
             $conteo->delete();
         });
