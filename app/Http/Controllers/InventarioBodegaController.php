@@ -165,6 +165,7 @@ class InventarioBodegaController extends Controller
         $masterCenters = null;
         $masterCoordinators = null;
         $masterCoordinatorOptions = collect();
+        $masterSuggestions = [];
         $masterEditorKind = null;
         $masterEditRecord = null;
         $masterCreateKind = null;
@@ -205,6 +206,12 @@ class InventarioBodegaController extends Controller
                 ->orderByDesc('activo')
                 ->orderBy('nombre')
                 ->get();
+
+            $allCenters = InventarioCentroCosto::all();
+            foreach (['tipo', 'comuna', 'direccion', 'jefe_operaciones', 'coordinador_nombre_origen', 'cargo_contacto', 'correo_contacto', 'telefono_contacto'] as $field) {
+                $coordinatorField = ['coordinador_nombre_origen' => 'nombre', 'cargo_contacto' => 'cargo', 'correo_contacto' => 'correo', 'telefono_contacto' => 'telefono'][$field] ?? $field;
+                $masterSuggestions[$field] = $allCenters->pluck($field)->merge($masterCoordinatorOptions->pluck($coordinatorField))->filter()->unique()->sort()->values()->all();
+            }
 
             $editorKind = $request->input('maestro_editar');
             if ($editorKind === 'centro' && $request->integer('maestro_id')) {
@@ -412,6 +419,7 @@ class InventarioBodegaController extends Controller
             'masterCenters' => $masterCenters,
             'masterCoordinators' => $masterCoordinators,
             'masterCoordinatorOptions' => $masterCoordinatorOptions,
+            'masterSuggestions' => $masterSuggestions,
             'masterEditorKind' => $masterEditorKind,
             'masterEditRecord' => $masterEditRecord,
             'masterCreateKind' => $masterCreateKind,
@@ -1134,14 +1142,14 @@ class InventarioBodegaController extends Controller
 
     public function storeOperationalCostCenter(Request $request): RedirectResponse
     {
-        InventarioCentroCosto::create($this->operationalCostCenterData($request));
+        DB::transaction(fn () => InventarioCentroCosto::create($this->operationalCostCenterData($request)));
 
         return back()->with('success', 'Centro de costo agregado. Ya queda disponible en Movimientos.');
     }
 
     public function updateOperationalCostCenter(Request $request, InventarioCentroCosto $centroCosto): RedirectResponse
     {
-        $centroCosto->update($this->operationalCostCenterData($request, $centroCosto));
+        DB::transaction(fn () => $centroCosto->update($this->operationalCostCenterData($request, $centroCosto)));
 
         return back()->with('success', 'Centro de costo actualizado. Sus movimientos históricos se conservan.');
     }
@@ -1873,6 +1881,7 @@ class InventarioBodegaController extends Controller
     private function operationalCostCenterData(Request $request, ?InventarioCentroCosto $costCenter = null): array
     {
         $data = $request->validate([
+            'crear_coordinador' => ['nullable', 'boolean'],
             'numero_maestro' => ['nullable', 'integer', 'min:0', Rule::unique('inventario_centros_costo', 'numero_maestro')->ignore($costCenter?->id)],
             'nombre' => ['required', 'string', 'max:220'],
             'tipo' => ['nullable', 'string', 'max:20'],
@@ -1901,6 +1910,17 @@ class InventarioBodegaController extends Controller
         foreach (['tipo', 'comuna', 'direccion', 'jefe_operaciones', 'coordinador_nombre_origen', 'cargo_contacto', 'correo_contacto', 'telefono_contacto'] as $field) {
             $data[$field] = filled($data[$field] ?? null) ? trim((string) $data[$field]) : null;
         }
+        if ($request->boolean('crear_coordinador')) {
+            if (empty($data['coordinador_nombre_origen']) || ! $this->normalizeOperationalMasterName($data['coordinador_nombre_origen'])) {
+                throw ValidationException::withMessages(['coordinador_nombre_origen' => 'Ingresa el nombre del coordinador nuevo.']);
+            }
+            $coordinator = InventarioCoordinador::firstOrCreate(
+                ['nombre_normalizado' => $this->normalizeOperationalMasterName($data['coordinador_nombre_origen'])],
+                ['nombre' => $data['coordinador_nombre_origen'], 'cargo' => $data['cargo_contacto'], 'correo' => $data['correo_contacto'], 'telefono' => $data['telefono_contacto'], 'jefe_operaciones' => $data['jefe_operaciones'], 'activo' => true],
+            );
+            $data['coordinador_id'] = $coordinator->id;
+        }
+        unset($data['crear_coordinador']);
         if ($data['coordinador_id'] ?? null) {
             $data['coordinador_nombre_origen'] = InventarioCoordinador::query()->find($data['coordinador_id'])?->nombre;
         }

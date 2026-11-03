@@ -2192,6 +2192,23 @@ class InventarioBodegaStockTest extends TestCase
         ]);
     }
 
+    public function test_center_editor_creates_and_reuses_coordinator_without_overwriting_contacts(): void
+    {
+        [$user] = $this->inventoryContext();
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)->actingAs($user);
+        $payload = ['nombre' => 'Centro nuevo EST', 'activo' => 1, 'crear_coordinador' => 1, 'coordinador_nombre_origen' => 'Persona nueva', 'correo_contacto' => 'persona@example.com', 'cargo_contacto' => 'Coordinador', 'telefono_contacto' => '123', 'jefe_operaciones' => 'Jefe nuevo'];
+        $this->post(route('inventario-bodega.maestros.centros.store'), $payload)->assertSessionHasNoErrors()->assertRedirect();
+        $coordinator = InventarioCoordinador::where('nombre_normalizado', 'persona nueva')->firstOrFail();
+        $this->assertSame('persona@example.com', $coordinator->correo);
+        $this->assertDatabaseHas('inventario_centros_costo', ['nombre' => 'Centro nuevo EST', 'coordinador_id' => $coordinator->id]);
+        $payload['nombre'] = 'Otro centro EST';
+        $payload['correo_contacto'] = 'otro@example.com';
+        $this->post(route('inventario-bodega.maestros.centros.store'), $payload)->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertSame(1, InventarioCoordinador::where('nombre_normalizado', 'persona nueva')->count());
+        $this->assertSame('persona@example.com', $coordinator->fresh()->correo);
+        $this->get(route('inventario-bodega.index', ['vista' => 'maestros', 'maestro_editar' => 'centro', 'maestro_id' => InventarioCentroCosto::where('nombre', 'Centro nuevo EST')->value('id')]))->assertOk()->assertSee('Código Talana')->assertSee('Número interno de Bodega')->assertSee('master-options-jefe_operaciones', false)->assertSee('data-profile', false);
+    }
+
     public function test_manual_movement_accepts_a_document_type_from_the_catalog(): void
     {
         [$user, $origin, , $variant] = $this->inventoryContext();
