@@ -945,7 +945,7 @@
                             @forelse($masterCenters as $center)
                                 <tr>
                                     <td>{{ $center->codigo_origen ?: ($center->numero_maestro ?: '—') }}</td>
-                                    <td><strong>{{ $center->nombre }}</strong><small>{{ $center->tipo ?: 'Sin tipo' }}{{ $center->jefe_operaciones ? ' · ' . $center->jefe_operaciones : '' }}</small></td>
+                                    <td><strong>{{ $center->nombre }}</strong><small>{{ $center->tipo ?: 'Sin tipo' }}{{ $center->jefe_operaciones ? ' · ' . $center->jefe_operaciones : '' }}</small>@if(!$center->coordinador_id && !$center->coordinador_nombre_origen)<small class="text-warning">Pendiente de completar datos de Bodega: coordinador</small>@endif</td>
                                     <td>{{ $center->comuna ?: '—' }}<small>{{ $center->direccion ?: '' }}</small>@if($center->ruta)<small>Ruta {{ $center->ruta }} · {{ $center->dias_despacho ?: 'Días por definir' }}</small>@endif</td>
                                     <td>{{ $center->coordinador?->nombre ?: ($center->coordinador_nombre_origen ?: 'Sin asignar') }}<small>{{ $center->coordinador?->cargo ?: $center->cargo_contacto ?: '' }}</small></td>
                                     <td>{{ $center->correo_contacto ?: '—' }}<small>{{ $center->telefono_contacto ?: '' }}</small></td>

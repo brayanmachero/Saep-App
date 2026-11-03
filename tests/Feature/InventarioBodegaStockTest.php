@@ -166,6 +166,42 @@ class InventarioBodegaStockTest extends TestCase
         $manualReturnCostCenterMigration->up();
     }
 
+    public function test_talana_centers_sync_preserves_bodega_data_and_is_idempotent(): void
+    {
+        $center = InventarioCentroCosto::create(['codigo_origen' => '1-EST', 'nombre' => 'Nombre anterior', 'nombre_normalizado' => 'nombre anterior', 'tipo' => 'EST', 'activo' => false, 'direccion' => 'Dirección Gabriela', 'coordinador_nombre_origen' => 'Coordinador Gabriela', 'ruta' => 'Ruta norte', 'numero_maestro' => 99]);
+        config(['services.talana.inventory_companies' => ['EST' => 1081]]);
+        $api = \Mockery::mock(\App\Services\TalanaService::class);
+        $api->shouldReceive('centrosCosto')->with(1081)->andReturn([
+            ['empresa' => 1081, 'codigo' => '1', 'nombre' => 'Nombre nuevo EST', 'vigente' => true],
+            ['empresa' => 1081, 'codigo' => '153', 'nombre' => 'KUEHNE + NAGEL EST', 'vigente' => true],
+            ['empresa' => 1081, 'codigo' => '200', 'nombre' => 'Histórico EST', 'vigente' => false],
+            ['empresa' => 1081, 'codigo' => '300', 'nombre' => 'Duplicado uno EST', 'vigente' => true],
+            ['empresa' => 1081, 'codigo' => '300', 'nombre' => 'Duplicado dos EST', 'vigente' => true],
+        ]);
+        $service = new \App\Services\InventarioTalanaCentroSyncService($api);
+        $preview = $service->synchronize(true);
+        $this->assertSame(['153-EST'], $preview['created']);
+        $this->assertSame(['300-EST'], $preview['conflicts']);
+        $this->assertDatabaseMissing('inventario_centros_costo', ['codigo_origen' => '153-EST']);
+        $service->synchronize();
+        $center->refresh();
+        $this->assertSame('Nombre nuevo EST', $center->nombre);
+        $this->assertSame('Dirección Gabriela', $center->direccion);
+        $this->assertSame('Coordinador Gabriela', $center->coordinador_nombre_origen);
+        $this->assertSame('Ruta norte', $center->ruta);
+        $this->assertSame(99, $center->numero_maestro);
+        $this->assertFalse($center->activo);
+        $new = InventarioCentroCosto::where('codigo_origen', '153-EST')->firstOrFail();
+        $this->assertNull($new->coordinador_id);
+        $this->assertNull($new->direccion);
+        $this->assertDatabaseMissing('inventario_centros_costo', ['codigo_origen' => '200-EST']);
+        $this->assertDatabaseMissing('inventario_centros_costo', ['codigo_origen' => '300-EST']);
+        $again = $service->synchronize();
+        $this->assertSame([], $again['created']);
+        $this->assertSame([], $again['updated']);
+        $this->assertSame(2, $again['unchanged']);
+    }
+
     public function test_receipt_and_transfer_update_stock_without_losing_traceability(): void
     {
         [$user, $origin, $destination, $variant] = $this->inventoryContext();
