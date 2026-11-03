@@ -366,6 +366,13 @@
                     </div>
                 @endif
 
+                @if (session('error'))
+                    <div class="global-error" role="alert">
+                        <i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i>
+                        {{ session('error') }}
+                    </div>
+                @endif
+
                 @if ($errors->any())
                     <div class="global-error">
                         <i class="bi bi-exclamation-circle-fill"></i>

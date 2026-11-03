@@ -9,8 +9,9 @@ use App\Http\Middleware\AuthenticateWallmarAttendanceApi;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Session\TokenMismatchException;
-use Symfony\Component\HttpKernel\Exception\HttpException;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -30,9 +31,32 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        // 419 Page Expired (CSRF token expirado) → redirigir al login
-        $exceptions->renderable(function (TokenMismatchException $e, $request) {
-            return redirect()->route('login')
-                ->with('error', 'Tu sesión expiró. Por favor inicia sesión nuevamente.');
+        // Laravel converts TokenMismatchException to an HTTP 419 before rendering.
+        $exceptions->respond(function (Response $response, \Throwable $e, Request $request) {
+            if ($response->getStatusCode() !== 419) {
+                return $response;
+            }
+
+            // Do not log request bodies, URLs, cookies, identifiers or CSRF tokens.
+            Log::notice('session.csrf_expired', [
+                'route' => $request->route()?->getName(),
+                'method' => $request->method(),
+                'json' => $request->expectsJson() || $request->ajax(),
+            ]);
+
+            $message = 'La sesión o el formulario venció. Vuelve a ingresar y repite la operación; no se guardaron los cambios de esta solicitud.';
+
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'message' => $message,
+                    'code' => 'SESSION_EXPIRED',
+                    'login_url' => route('login'),
+                ], 419)->header('Cache-Control', 'no-store');
+            }
+
+            // A 303 always follows with GET, never replaying the rejected POST.
+            return redirect()->route('login', [], 303)
+                ->with('error', $message)
+                ->header('Cache-Control', 'no-store');
         });
     })->create();
