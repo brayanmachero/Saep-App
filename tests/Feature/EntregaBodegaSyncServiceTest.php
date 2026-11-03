@@ -247,6 +247,7 @@ class EntregaBodegaSyncServiceTest extends TestCase
         ]);
 
         $kizeo = Mockery::mock(KizeoService::class);
+        $kizeo->shouldReceive('getRecord')->once()->with('1196386', 'deleted-response')->andThrow(new \RuntimeException('[404] Not found'));
         $kizeo->shouldReceive('getFormData')->once()->with('1196386', false)->andReturn([]);
         $kizeo->shouldReceive('getFormData')->once()->with('1195951', false)->andReturn([]);
 
@@ -257,6 +258,22 @@ class EntregaBodegaSyncServiceTest extends TestCase
         $this->assertSame('ELIMINADA_EN_KIZEO', $delivery->estado_fuente);
         $this->assertNotNull($delivery->fuente_ausente_desde);
         $this->assertStringContainsString('ya no está disponible', $delivery->alerta_fuente);
+    }
+
+    public function test_absence_from_cached_list_requires_individual_confirmation(): void
+    {
+        $kizeo = Mockery::mock(KizeoService::class);
+        $kizeo->shouldReceive('getFormData')->with('1196386', false)->andReturn([]);
+        $kizeo->shouldReceive('getFormData')->with('1195951', false)->andReturn([]);
+        foreach (['exists', 'empty', 'timeout'] as $id) {
+            EntregaBodega::create(['kizeo_form_id' => '1195951', 'kizeo_data_id' => $id, 'estado_fuente' => 'ACTIVA']);
+        }
+        $kizeo->shouldReceive('getRecord')->once()->with('1195951', 'exists')->andReturn(['id' => 'exists']);
+        $kizeo->shouldReceive('getRecord')->once()->with('1195951', 'empty')->andReturn(null);
+        $kizeo->shouldReceive('getRecord')->once()->with('1195951', 'timeout')->andThrow(new \RuntimeException('[503] Temporary failure'));
+        (new EntregaBodegaSyncService($kizeo))->sync(10);
+        $this->assertSame(3, EntregaBodega::where('estado_fuente', 'ACTIVA')->whereNull('fuente_ausente_desde')->count());
+        $this->assertDatabaseCount('inventario_entrega_kizeo_aplicaciones', 0);
     }
 
     public function test_webhook_signal_synchronizes_its_record_from_kizeo_immediately(): void
@@ -356,6 +373,7 @@ class EntregaBodegaSyncServiceTest extends TestCase
         ]);
 
         $kizeo = Mockery::mock(KizeoService::class);
+        $kizeo->shouldReceive('getRecord')->once()->with('1195951', 'deleted-after-application')->andThrow(new \RuntimeException('[404] Not found'));
         $kizeo->shouldReceive('getFormData')->once()->with('1196386', false)->andReturn([]);
         $kizeo->shouldReceive('getFormData')->once()->with('1195951', false)->andReturn([]);
 

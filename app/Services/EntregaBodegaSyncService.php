@@ -123,16 +123,6 @@ class EntregaBodegaSyncService
         }
 
         if (! $record) {
-            $delivery = $this->markSourceRecordMissing(
-                $formId,
-                $dataId,
-                'El registro ya no está disponible en Kizeo. No puede aplicarse como una nueva salida de stock.',
-            );
-
-            if ($delivery) {
-                return $delivery;
-            }
-
             throw new \RuntimeException("Kizeo no devolvió la respuesta {$dataId} del formulario {$formId}.");
         }
 
@@ -498,7 +488,22 @@ class EntregaBodegaSyncService
         }
 
         foreach ($query->get() as $delivery) {
-            $this->markDeliverySourceMissing($delivery, $alert);
+            // A cached list can predate a record received through the webhook.
+            // Absence from that list (or a failed form lookup) is not deletion.
+            Cache::forget("kizeo_record_{$formId}_{$delivery->kizeo_data_id}");
+            try {
+                $this->kizeo->getRecord($formId, $delivery->kizeo_data_id);
+            } catch (\Throwable $exception) {
+                if (str_contains($exception->getMessage(), '[404]')) {
+                    $this->markDeliverySourceMissing($delivery, $alert);
+                } else {
+                    Log::warning('No se pudo confirmar la ausencia de una entrega Kizeo; se conserva su estado.', [
+                        'form_id' => $formId,
+                        'data_id' => $delivery->kizeo_data_id,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            }
         }
     }
 
