@@ -173,7 +173,7 @@ class InventarioBodegaStockTest extends TestCase
         $api = \Mockery::mock(\App\Services\TalanaService::class);
         $api->shouldReceive('centrosCosto')->with(1081)->andReturn([
             ['empresa' => 1081, 'codigo' => '1', 'nombre' => 'Nombre nuevo EST', 'vigente' => true],
-            ['empresa' => 1081, 'codigo' => '153', 'nombre' => 'KUEHNE + NAGEL EST', 'vigente' => true],
+            ['empresa' => 1081, 'codigo' => '153', 'nombre' => 'KUEHNE + NAGEL', 'vigente' => true],
             ['empresa' => 1081, 'codigo' => '200', 'nombre' => 'Histórico EST', 'vigente' => false],
             ['empresa' => 1081, 'codigo' => '300', 'nombre' => 'Duplicado uno EST', 'vigente' => true],
             ['empresa' => 1081, 'codigo' => '300', 'nombre' => 'Duplicado dos EST', 'vigente' => true],
@@ -192,6 +192,7 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertSame(99, $center->numero_maestro);
         $this->assertFalse($center->activo);
         $new = InventarioCentroCosto::where('codigo_origen', '153-EST')->firstOrFail();
+        $this->assertSame('KUEHNE + NAGEL EST', $new->nombre);
         $this->assertNull($new->coordinador_id);
         $this->assertNull($new->direccion);
         $this->assertDatabaseMissing('inventario_centros_costo', ['codigo_origen' => '200-EST']);

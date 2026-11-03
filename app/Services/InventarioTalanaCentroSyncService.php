@@ -31,6 +31,11 @@ class InventarioTalanaCentroSyncService
                     if ((int) ($row['empresa'] ?? 0) !== (int) $company || $code === '' || $name === '') {
                         throw new \RuntimeException('Respuesta Talana inválida: empresa, código o nombre.');
                     }
+                    // Un mismo nombre puede existir en ambas empresas Talana.
+                    // La modalidad forma parte de la identidad visible del maestro.
+                    if (! preg_match('/\b'.preg_quote($mode, '/').'$/i', $name)) {
+                        $name .= ' '.$mode;
+                    }
                     $key = $code.'-'.$mode;
                     if (isset($source[$key]) || isset($conflicts[$key])) {
                         unset($source[$key]);
