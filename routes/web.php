@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccidenteSstController;
 use App\Http\Controllers\Api\RecruitmentCatalogController;
+use App\Http\Controllers\Api\RecruitmentDocumentsController;
 use App\Http\Controllers\OpcionAccidenteSstController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PasswordResetController;
@@ -62,6 +63,13 @@ Route::get('/api/reclutamiento/catalogo', [RecruitmentCatalogController::class, 
 Route::post('/api/reclutamiento/catalogo/cargos', [RecruitmentCatalogController::class, 'storeJobRoles'])
     ->middleware('throttle:20,1')
     ->name('reclutamiento.catalogo.cargos');
+Route::get('/api/reclutamiento/contratacion/documentos', [RecruitmentDocumentsController::class, 'index'])
+    ->middleware('throttle:60,1')
+    ->name('reclutamiento.contratacion.documentos');
+Route::get('/api/reclutamiento/contratacion/documentos/{postulante}/{campo}', [RecruitmentDocumentsController::class, 'download'])
+    ->whereNumber('postulante')
+    ->middleware('throttle:60,1')
+    ->name('reclutamiento.contratacion.documento');
 
 // Auth (con throttle para prevenir fuerza bruta)
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');

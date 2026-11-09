@@ -186,6 +186,10 @@ return [
         'token' => env('RECRUITMENT_CATALOG_API_TOKEN'),
     ],
 
+    'recruitment_documents' => [
+        'token' => env('RECRUITMENT_DOCUMENTS_API_TOKEN'),
+    ],
+
     'google_drive' => [
         'credentials_path' => env('GOOGLE_DRIVE_CREDENTIALS_PATH', 'google-credentials.json'),
         'folder_id'        => env('GOOGLE_DRIVE_FOLDER_ID'),
