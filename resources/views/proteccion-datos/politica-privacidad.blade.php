@@ -132,7 +132,7 @@
     <h1>Política de Protección de Datos Personales</h1>
     <p>Conforme a la Ley N° 21.719 y la Ley N° 19.628 reformada</p>
     <div class="policy-meta">
-        <span><i class="bi bi-calendar3"></i> Versión 1.1 — Junio 2026</span>
+        <span><i class="bi bi-calendar3"></i> Versión 1.2 — Noviembre 2026</span>
         <span><i class="bi bi-building"></i> SAEP SpA</span>
         <span><i class="bi bi-shield-check"></i> Ley 21.719</span>
     </div>
@@ -165,11 +165,9 @@
         <h2 id="s1"><i class="bi bi-building"></i> 1. Identificación del Responsable de Datos</h2>
         <table>
             <tr><td><strong>Responsable</strong></td><td>SAEP SpA</td></tr>
-            <tr><td><strong>Representante Legal</strong></td><td>[Nombre del Representante Legal]</td></tr>
-            <tr><td><strong>Domicilio</strong></td><td>[Dirección comercial de SAEP]</td></tr>
-            <tr><td><strong>Correo electrónico</strong></td><td>protecciondatos@saep.cl</td></tr>
-            <tr><td><strong>Teléfono</strong></td><td>[Teléfono de contacto]</td></tr>
-            <tr><td><strong>Encargado de Protección de Datos</strong></td><td>[Nombre del DPO designado]</td></tr>
+            <tr><td><strong>Domicilio</strong></td><td>San Gerardo #1095, Recoleta, Santiago</td></tr>
+            <tr><td><strong>Teléfono</strong></td><td>+56 9 3422 4500</td></tr>
+            <tr><td><strong>Contacto de protección de datos</strong></td><td><a href="mailto:bmachero@saep.cl">bmachero@saep.cl</a></td></tr>
         </table>
 
         <h2 id="s2"><i class="bi bi-file-earmark-text"></i> 2. Objeto y Alcance</h2>
@@ -209,13 +207,22 @@
 
         <h3>3.4 Datos sensibles</h3>
         <div class="highlight-box warning">
-            <strong>⚠ Datos Sensibles:</strong> En el módulo de Accidentes SST y Ley Karin se pueden tratar datos relativos a la salud y situaciones de acoso laboral/sexual. Estos datos reciben protección reforzada conforme al artículo 16 bis de la ley reformada.
+            <strong>⚠ Datos Sensibles:</strong> En el módulo de Accidentes SST y Ley Karin se pueden tratar datos relativos a la salud y situaciones de acoso laboral/sexual. En postulaciones se consulta si la persona cuenta con credencial de discapacidad y su sistema de salud. Estos datos reciben acceso restringido a personal autorizado para la finalidad correspondiente.
         </div>
         <h3>3.5 Documentos de postulación y contratación</h3>
         <ul>
             <li>Documentos de identidad, certificados previsionales y de salud, licencias de conducir y otros antecedentes requeridos para el proceso de reclutamiento.</li>
             <li>Archivos en formato imagen o PDF aportados por el postulante o registrados por RRHH.</li>
             <li>Ficha PDF consolidada generada por la plataforma para revisión documental y archivo del proceso.</li>
+        </ul>
+
+        <h3>3.5 Datos de postulación y eventual contratación</h3>
+        <ul>
+            <li>Domicilio, ciudad, comuna y contacto de emergencia.</li>
+            <li>Educación, previsión, disponibilidad para el cargo y licencia de conducir declarada.</li>
+            <li>Forma de pago y, si se elige transferencia, banco, tipo y número de cuenta para una eventual contratación.</li>
+            <li>Tallas de vestuario y calzado, centro de costo, cargo al que postula, persona que contactó al postulante y comentarios aportados voluntariamente.</li>
+            <li>Autorización opcional para recibir mensajes de WhatsApp sobre la postulación, registrada por separado de la aceptación de esta política.</li>
         </ul>
 
         <h2 id="s4"><i class="bi bi-bullseye"></i> 4. Finalidad del Tratamiento</h2>
@@ -233,6 +240,7 @@
                 <tr><td>Investigación y registro de accidentes laborales</td><td>Accidentes SST</td></tr>
                 <tr><td>Gestión de denuncias de Ley Karin</td><td>Ley Karin</td></tr>
                 <tr><td>Gestión de postulaciones, documentación de ingreso y revisión por RRHH</td><td>Contratación pública</td></tr>
+                <tr><td>Evaluación de candidaturas, contacto y preparación de una eventual contratación</td><td>Formulario público de postulación y Reclutamiento</td></tr>
                 <tr><td>Generación de reportes y documentos PDF</td><td>Exportaciones</td></tr>
                 <tr><td>Firma electrónica de documentos</td><td>Firmas</td></tr>
             </tbody>
@@ -290,7 +298,7 @@
 
         <div class="highlight-box">
             <strong><i class="bi bi-info-circle"></i> ¿Cómo ejercer sus derechos?</strong><br>
-            Puede ejercer sus derechos ARCO directamente desde la plataforma SAEP en la sección <strong>"Protección de Datos"</strong>, o enviando una solicitud a <strong>protecciondatos@saep.cl</strong>. El plazo máximo de respuesta es de <strong>30 días corridos</strong> desde la recepción de su solicitud.
+            Puede ejercer sus derechos ARCO directamente desde la plataforma SAEP en la sección <strong>"Protección de Datos"</strong>, o enviando una solicitud a <strong>bmachero@saep.cl</strong>. El plazo máximo de respuesta es de <strong>30 días corridos</strong> desde la recepción de su solicitud.
         </div>
 
         <p>En caso de que su solicitud sea rechazada o no reciba respuesta oportuna, tiene derecho a recurrir ante la <strong>Agencia de Protección de Datos Personales</strong> conforme al artículo 41 de la ley reformada.</p>
@@ -342,10 +350,10 @@
         <div class="highlight-box">
             <p style="margin: 0;">Para cualquier consulta, solicitud o reclamo relacionado con la protección de sus datos personales, puede contactarnos en:</p>
             <ul style="margin-top: 0.8rem; margin-bottom: 0;">
-                <li><strong>Correo:</strong> protecciondatos@saep.cl</li>
+                <li><strong>Correo:</strong> <a href="mailto:bmachero@saep.cl">bmachero@saep.cl</a></li>
                 <li><strong>Plataforma:</strong> Sección "Protección de Datos" dentro de SAEP</li>
                 <li><strong>Canal público ARCO:</strong> <a href="{{ route('proteccion-datos.publico.crear') }}">Crear solicitud sin cuenta interna</a></li>
-                <li><strong>Dirección postal:</strong> [Dirección de SAEP]</li>
+                <li><strong>Dirección postal:</strong> San Gerardo #1095, Recoleta, Santiago</li>
             </ul>
             <p style="margin: 0.9rem 0 0;">
                 Las acciones técnicas ejecutadas desde esta plataforma aplican sobre los datos que la plataforma administra directamente. Cuando una solicitud comprenda datos alojados en otros sistemas internos, repositorios documentales, correos, respaldos o proveedores tecnológicos, SAEP evaluará la solicitud como responsable del tratamiento y coordinará las acciones correspondientes con las áreas o encargados externos aplicables, considerando las obligaciones legales de conservación que correspondan.
@@ -354,7 +362,7 @@
 
         <h2 id="s14"><i class="bi bi-arrow-repeat"></i> 14. Modificaciones a la Política</h2>
         <p>SAEP se reserva el derecho de modificar esta política en cualquier momento. Cualquier cambio será notificado a los titulares a través de la plataforma y requerirá la renovación del consentimiento cuando los cambios sean sustanciales.</p>
-        <p>Última actualización: <strong>Junio 2026</strong> | Versión: <strong>1.1</strong></p>
+        <p>Última actualización: <strong>Noviembre 2026</strong> | Versión: <strong>1.2</strong></p>
 
         <div style="text-align: center; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 2px solid #e5e7eb;">
             <a href="{{ url()->previous() !== url()->current() ? url()->previous() : url('/') }}" class="btn-back">
