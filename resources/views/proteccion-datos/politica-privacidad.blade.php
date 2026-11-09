@@ -331,7 +331,7 @@
         </table>
 
         <h2 id="s10"><i class="bi bi-globe"></i> 10. Transferencias Internacionales</h2>
-        <p>Los datos personales son almacenados y procesados en servidores ubicados en Chile. En caso de utilizar servicios cloud con servidores en el extranjero, se verificará que el país de destino ofrezca un nivel adecuado de protección conforme al artículo 27 de la ley reformada, o se adoptarán las garantías contractuales correspondientes.</p>
+        <p>SAEP utiliza infraestructura tecnológica en Chile y en el extranjero. Las postulaciones enviadas mediante SAEP Recruit se almacenan en infraestructura cloud ubicada en Estados Unidos (región de Nueva York). SAEP debe evaluar y documentar las garantías aplicables a estas transferencias, además de mantener cifrado, controles de acceso y medidas de seguridad acordes con los datos tratados.</p>
 
         <h2 id="s11"><i class="bi bi-cpu"></i> 11. Decisiones Automatizadas</h2>
         <p>SAEP no realiza decisiones basadas únicamente en el tratamiento automatizado de datos personales, incluida la elaboración de perfiles, que produzcan efectos jurídicos en el titular o le afecten significativamente de modo similar.</p>
