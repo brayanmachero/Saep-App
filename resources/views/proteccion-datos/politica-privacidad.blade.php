@@ -331,7 +331,7 @@
         </table>
 
         <h2 id="s10"><i class="bi bi-globe"></i> 10. Transferencias Internacionales</h2>
-        <p>SAEP utiliza infraestructura tecnológica en Chile y en el extranjero. Las postulaciones enviadas mediante SAEP Recruit se almacenan en infraestructura cloud ubicada en Estados Unidos (región de Nueva York). SAEP debe evaluar y documentar las garantías aplicables a estas transferencias, además de mantener cifrado, controles de acceso y medidas de seguridad acordes con los datos tratados.</p>
+        <p>SAEP es responsable del tratamiento y administra desde Chile sus cuentas y procesos de reclutamiento. La ubicación de los servidores utilizados por proveedores tecnológicos puede ser distinta del lugar desde el que SAEP gestiona la información. En el caso de SAEP Recruit, las postulaciones se almacenan y procesan técnicamente en infraestructura cloud ubicada en Estados Unidos (región de Nueva York). La transmisión se realiza por HTTPS y el contenido de las postulaciones se almacena cifrado, con acceso restringido al personal autorizado.</p>
 
         <h2 id="s11"><i class="bi bi-cpu"></i> 11. Decisiones Automatizadas</h2>
         <p>SAEP no realiza decisiones basadas únicamente en el tratamiento automatizado de datos personales, incluida la elaboración de perfiles, que produzcan efectos jurídicos en el titular o le afecten significativamente de modo similar.</p>
