@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 
 class DescargaContenedorController extends Controller
 {
@@ -182,10 +183,10 @@ class DescargaContenedorController extends Controller
                 $this->stampSupervisorFromLogin($data);
             }
 
-            $this->applyTarifaSnapshot($data);
+            $this->applyTarifaSnapshot($data, $descarga);
             $descarga->update($data);
             $descarga->refresh();
-            $this->syncParticipantes($descarga, $this->extractParticipantesFromRequest($request));
+            $this->syncOrRecalculateParticipantes($descarga, $request);
             $this->storeEvidencias($descarga, $request);
         });
 
@@ -295,13 +296,10 @@ class DescargaContenedorController extends Controller
                 $this->stampSupervisorFromLogin($data);
             }
 
-            $this->applyTarifaSnapshot($data);
+            $this->applyTarifaSnapshot($data, $descarga);
             $descarga->update($data);
             $descarga->refresh();
-
-            if ($request->exists('participantes_json')) {
-                $this->syncParticipantes($descarga, $this->extractParticipantesFromRequest($request));
-            }
+            $this->syncOrRecalculateParticipantes($descarga, $request);
             $this->storeEvidencias($descarga, $request);
         });
 
@@ -426,6 +424,7 @@ class DescargaContenedorController extends Controller
             return back()->with('error', 'Solo se pueden validar registros en borrador.');
         }
 
+        $this->recalcularMontosParticipantes($descarga);
         $blockers = $descarga->validationBlockers();
         if ($blockers->isNotEmpty()) {
             return back()->with('error', 'No se puede validar: ' . $blockers->implode(', ') . '.');
@@ -467,6 +466,7 @@ class DescargaContenedorController extends Controller
             return back()->with('error', 'Solo se pueden liquidar registros validados.');
         }
 
+        $this->recalcularMontosParticipantes($descarga);
         $blockers = $descarga->validationBlockers();
         if ($blockers->isNotEmpty()) {
             return back()->with('error', 'No se puede liquidar: ' . $blockers->implode(', ') . '.');
@@ -519,9 +519,17 @@ class DescargaContenedorController extends Controller
             abort(404);
         }
 
+        $nombre = $archivo->nombre_original ?: $archivo->nombre_archivo;
+        $nombreAscii = Str::ascii($nombre);
+        $nombreAscii = preg_replace('/[^A-Za-z0-9._ -]/', '_', $nombreAscii) ?: 'evidencia';
+
         return response()->file(Storage::disk('local')->path($archivo->ruta), [
             'Content-Type' => $archivo->mime_type,
-            'Content-Disposition' => 'inline; filename="' . $archivo->nombre_original . '"',
+            'Content-Disposition' => HeaderUtils::makeDisposition(
+                HeaderUtils::DISPOSITION_INLINE,
+                str_replace(['/', '\\', '%'], '_', $nombre),
+                $nombreAscii
+            ),
         ]);
     }
 
@@ -575,14 +583,22 @@ class DescargaContenedorController extends Controller
             $creadas = 0;
             $alertas = 0;
             $omitidas = 0;
-            $seenKeys = $this->existingContainerDateKeys();
+            $contenedoresTanda = collect($payload)
+                ->map(fn ($row) => is_array($row) ? $this->cleanUpper($row['contenedor'] ?? null) : null)
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            $seenKeys = $this->existingContainerDateKeys($contenedoresTanda);
+            $centrosValidos = CentroCosto::pluck('id')->map(fn ($id) => (int) $id)->flip();
+            $tarifasValidas = DescargaContenedorTarifa::pluck('id')->map(fn ($id) => (int) $id)->flip();
 
             foreach ($payload as $row) {
                 if (!is_array($row) || $this->rowIsEmpty($row)) {
                     continue;
                 }
 
-                $data = $this->normalizeBulkRow($row);
+                $data = $this->sanitizeBulkRow($this->normalizeBulkRow($row), $centrosValidos, $tarifasValidas);
                 $duplicateKey = $this->containerDateKey($data['contenedor'] ?? null, $data['fecha'] ?? null);
                 if ($omitDuplicates && $duplicateKey && isset($seenKeys[$duplicateKey])) {
                     $omitidas++;
@@ -1659,21 +1675,35 @@ class DescargaContenedorController extends Controller
         return $data;
     }
 
-    private function applyTarifaSnapshot(array &$data): void
+    /**
+     * Resuelve la tarifa del registro y copia sus valores (snapshot).
+     *
+     * $current: registro existente. Si ya salió de borrador y mantiene la misma
+     * tarifa, se conserva el snapshot congelado al validar en vez de tomar los
+     * valores vigentes de la tarifa.
+     * $tarifasActivas: catálogo precargado para evitar una consulta por registro.
+     */
+    private function applyTarifaSnapshot(array &$data, ?DescargaContenedor $current = null, $tarifasActivas = null): void
     {
         $tarifa = null;
 
         if (!empty($data['tarifa_id'])) {
-            $tarifa = DescargaContenedorTarifa::find($data['tarifa_id']);
+            $tarifa = $tarifasActivas?->firstWhere('id', (int) $data['tarifa_id'])
+                ?? DescargaContenedorTarifa::find($data['tarifa_id']);
         }
 
         if (!$tarifa && !empty($data['fact_codigo'])) {
-            $tarifasCoincidentes = DescargaContenedorTarifa::where('activo', true)
-                ->where('codigo', $data['fact_codigo'])
-                ->orderBy('cliente')
-                ->orderBy('centro_costo_id')
-                ->orderBy('id')
-                ->get();
+            $tarifasCoincidentes = $tarifasActivas !== null
+                ? $tarifasActivas
+                    ->filter(fn (DescargaContenedorTarifa $item) => (string) $item->codigo === (string) $data['fact_codigo'])
+                    ->sortBy([['cliente', 'asc'], ['centro_costo_id', 'asc'], ['id', 'asc']])
+                    ->values()
+                : DescargaContenedorTarifa::where('activo', true)
+                    ->where('codigo', $data['fact_codigo'])
+                    ->orderBy('cliente')
+                    ->orderBy('centro_costo_id')
+                    ->orderBy('id')
+                    ->get();
 
             $cliente = $this->clienteFromOperacion($data['operacion'] ?? null);
             if ($cliente) {
@@ -1719,6 +1749,20 @@ class DescargaContenedorController extends Controller
             return;
         }
 
+        if ($current
+            && $current->estado !== 'borrador'
+            && (int) $current->tarifa_id === (int) $tarifa->id
+        ) {
+            $data['tarifa_id'] = $current->tarifa_id;
+            $data['fact_codigo'] = $current->fact_codigo ?: $tarifa->codigo;
+            $data['tarifa_cliente_snapshot'] = $current->tarifa_cliente_snapshot;
+            $data['tarifa_proceso_snapshot'] = $current->tarifa_proceso_snapshot;
+            $data['costo_unitario_snapshot'] = $current->costo_unitario_snapshot;
+            $data['pago_colaborador_snapshot'] = $current->pago_colaborador_snapshot;
+            $data['requiere_revision_tarifa'] = (bool) $current->requiere_revision_tarifa;
+            return;
+        }
+
         $data['tarifa_id'] = $tarifa->id;
         $data['fact_codigo'] = $tarifa->codigo;
         $data['tarifa_cliente_snapshot'] = $tarifa->cliente;
@@ -1730,18 +1774,31 @@ class DescargaContenedorController extends Controller
 
     private function associateMissingUniqueTarifas(): void
     {
-        DescargaContenedor::query()
+        $pendientes = DescargaContenedor::query()
             ->where('estado', 'borrador')
             ->whereNull('tarifa_id')
             ->whereNotNull('fact_codigo')
             ->where('fact_codigo', '<>', '')
             ->orderBy('id')
             ->limit(200)
-            ->get()
-            ->each(fn (DescargaContenedor $descarga) => $this->associateUniqueTarifaIfMissing($descarga));
+            ->get();
+
+        if ($pendientes->isEmpty()) {
+            return;
+        }
+
+        $tarifasActivas = DescargaContenedorTarifa::where('activo', true)
+            ->whereIn('codigo', $pendientes->pluck('fact_codigo')->unique()->values())
+            ->get();
+
+        if ($tarifasActivas->isEmpty()) {
+            return;
+        }
+
+        $pendientes->each(fn (DescargaContenedor $descarga) => $this->associateUniqueTarifaIfMissing($descarga, $tarifasActivas));
     }
 
-    private function associateUniqueTarifaIfMissing(DescargaContenedor $descarga): bool
+    private function associateUniqueTarifaIfMissing(DescargaContenedor $descarga, $tarifasActivas = null): bool
     {
         if ($descarga->tarifa_id || $descarga->estado === 'liquidado' || blank($descarga->fact_codigo)) {
             return false;
@@ -1753,7 +1810,7 @@ class DescargaContenedorController extends Controller
             'operacion' => $descarga->operacion,
             'centro_costo_id' => $descarga->centro_costo_id,
         ];
-        $this->applyTarifaSnapshot($data);
+        $this->applyTarifaSnapshot($data, null, $tarifasActivas);
 
         if (empty($data['tarifa_id'])) {
             return false;
@@ -1769,7 +1826,46 @@ class DescargaContenedorController extends Controller
             'requiere_revision_tarifa' => $data['requiere_revision_tarifa'],
         ])->save();
 
+        // El equipo pudo asignarse antes de existir la tarifa: sus montos quedaron en null.
+        $this->recalcularMontosParticipantes($descarga);
+
         return true;
+    }
+
+    private function syncOrRecalculateParticipantes(DescargaContenedor $descarga, Request $request): void
+    {
+        if ($request->exists('participantes_json')) {
+            $this->syncParticipantes($descarga, $this->extractParticipantesFromRequest($request));
+            return;
+        }
+
+        $this->recalcularMontosParticipantes($descarga);
+    }
+
+    /**
+     * Recalcula monto_calculado de cada participante desde el pago colaborador
+     * congelado en el registro y su porcentaje de participación.
+     */
+    private function recalcularMontosParticipantes(DescargaContenedor $descarga): void
+    {
+        $pagoTotal = $this->pagoTotalColaboradores($descarga);
+
+        $descarga->participantes()->get()->each(function ($participante) use ($pagoTotal) {
+            $monto = $pagoTotal !== null
+                ? round($pagoTotal * (float) $participante->porcentaje_participacion / 100, 2)
+                : null;
+
+            $actual = $participante->monto_calculado;
+            $cambio = $monto === null
+                ? $actual !== null
+                : $actual === null || abs((float) $actual - $monto) > 0.004;
+
+            if ($cambio) {
+                $participante->update(['monto_calculado' => $monto]);
+            }
+        });
+
+        $descarga->unsetRelation('participantes');
     }
 
     private function normalizeBulkRow(array $row): array
@@ -1794,6 +1890,50 @@ class DescargaContenedorController extends Controller
             'fact_codigo' => $this->cleanUpper($row['fact_codigo'] ?? null),
             'observacion' => $this->cleanText($row['observacion'] ?? null),
         ];
+    }
+
+    /**
+     * Evita que una fila con datos fuera de rango haga fallar toda la tanda:
+     * IDs inexistentes quedan en null y los textos se recortan al largo de la columna.
+     */
+    private function sanitizeBulkRow(array $data, $centrosValidos, $tarifasValidas): array
+    {
+        if ($data['centro_costo_id'] !== null && !$centrosValidos->has($data['centro_costo_id'])) {
+            $data['centro_costo_id'] = null;
+        }
+
+        if ($data['tarifa_id'] !== null && !$tarifasValidas->has($data['tarifa_id'])) {
+            $data['tarifa_id'] = null;
+        }
+
+        $limites = [
+            'operacion' => 120,
+            'bodega' => 160,
+            'supervisor_nombre' => 200,
+            'facturacion_mes' => 60,
+            'contenedor' => 120,
+            'equipo_descarga' => 120,
+            'producto' => 260,
+            'fact_codigo' => 40,
+        ];
+
+        foreach ($limites as $campo => $max) {
+            if ($data[$campo] !== null) {
+                $data[$campo] = mb_substr($data[$campo], 0, $max);
+            }
+        }
+
+        foreach (['item', 'cajas'] as $campo) {
+            if ($data[$campo] !== null && ($data[$campo] < 0 || $data[$campo] > 2147483647)) {
+                $data[$campo] = null;
+            }
+        }
+
+        if ($data['pallets'] !== null && ($data['pallets'] < 0 || $data['pallets'] >= 100000000)) {
+            $data['pallets'] = null;
+        }
+
+        return $data;
     }
 
     private function syncParticipantes(DescargaContenedor $descarga, array $participantesPayload): void
@@ -2010,13 +2150,18 @@ class DescargaContenedorController extends Controller
             return null;
         }
 
-        $formats = ['Y-m-d', 'd/m/Y', 'd-m-Y', 'm/d/Y', 'Y/m/d', 'd.m.Y'];
+        $formats = ['Y-m-d', 'd/m/Y', 'd-m-Y', 'm/d/Y', 'Y/m/d', 'd.m.Y', 'Y.m.d'];
 
         foreach ($formats as $format) {
-            try {
-                return Carbon::createFromFormat($format, $value)->format('Y-m-d');
-            } catch (\Throwable) {
+            $date = $this->strictDate($format, $value);
+            if ($date) {
+                return $date;
             }
+        }
+
+        // Formatos libres ("10 nov 2026"); se descartan fechas numéricas imposibles.
+        if (preg_match('/^\d{1,4}[\/\-.]\d{1,2}[\/\-.]\d{1,4}$/', $value)) {
+            return null;
         }
 
         try {
@@ -2024,6 +2169,21 @@ class DescargaContenedorController extends Controller
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * createFromFormat sin desbordes: "31/02/2026" no se convierte en 3 de marzo.
+     */
+    private function strictDate(string $format, string $value): ?string
+    {
+        $date = \DateTime::createFromFormat('!' . $format, $value);
+        $errors = \DateTime::getLastErrors();
+
+        if (!$date || ($errors && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
+            return null;
+        }
+
+        return $date->format('Y-m-d');
     }
 
     private function normalizeEstado($value): string
@@ -2127,12 +2287,17 @@ class DescargaContenedorController extends Controller
         return $contenedor.'|'.$fecha;
     }
 
-    private function existingContainerDateKeys(): array
+    private function existingContainerDateKeys(?array $contenedores = null): array
     {
+        if ($contenedores === []) {
+            return [];
+        }
+
         return DescargaContenedor::query()
             ->whereNotNull('contenedor')
             ->where('contenedor', '<>', '')
             ->whereNotNull('fecha')
+            ->when($contenedores !== null, fn ($q) => $q->whereIn(DB::raw('UPPER(contenedor)'), $contenedores))
             ->get(['contenedor', 'fecha'])
             ->reduce(function (array $keys, DescargaContenedor $descarga) {
                 $key = $this->containerDateKey($descarga->contenedor, optional($descarga->fecha)->format('Y-m-d'));

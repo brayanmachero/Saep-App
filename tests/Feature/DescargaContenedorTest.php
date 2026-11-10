@@ -15,7 +15,7 @@ use App\Models\Rol;
 use App\Models\TalanaTrabajador;
 use App\Models\User;
 use App\Support\PrivacyPolicy;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile;
@@ -23,7 +23,7 @@ use Tests\TestCase;
 
 class DescargaContenedorTest extends TestCase
 {
-    use DatabaseTransactions;
+    use RefreshDatabase;
 
     protected function setUp(): void
     {
@@ -1970,6 +1970,255 @@ class DescargaContenedorTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('descargas')
             ->assertJsonFragment(['Puedes seleccionar hasta 200 contenedores por tanda.']);
+    }
+
+    public function test_drawer_quick_save_works_as_multipart_post_with_method_spoofing(): void
+    {
+        Storage::fake('local');
+
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Multipart QA');
+        $tarifa = $this->createTarifa('CNTMULTI', 75000, 36000, 'MULTIPART QA', false, $centro);
+        $worker = $this->createTalanaWorker('Trabajador Multipart QA', $centro);
+
+        $descarga = DescargaContenedor::create([
+            'estado' => 'borrador',
+            'origen' => 'manual',
+            'operacion' => 'Walmart',
+            'centro_costo_id' => $centro->id,
+            'fecha' => '2026-11-10',
+            'contenedor' => 'CONT-MULTI-001',
+            'hora_cita' => '08:00:00',
+            'creado_por' => $user->id,
+        ]);
+
+        // Igual que el panel lateral: POST multipart con _method=PATCH, todos los campos y una foto.
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.rapido', $descarga), [
+                '_method' => 'PATCH',
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'fecha' => '2026-11-10',
+                'contenedor' => 'CONT-MULTI-001',
+                'hora_cita' => '09:15',
+                'hora_inicio_descarga' => '09:30',
+                'hora_termino_descarga' => '11:00',
+                'cajas' => 500,
+                'tarifa_id' => $tarifa->id,
+                'fact_codigo' => 'CNTMULTI',
+                'participantes_json' => json_encode([$worker->id]),
+                'evidencias' => [UploadedFile::fake()->image('cinta.jpg', 600, 400)],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+
+        $descarga->refresh();
+        $this->assertSame('09:15', substr((string) $descarga->hora_cita, 0, 5));
+        $this->assertSame('11:00', substr((string) $descarga->hora_termino_descarga, 0, 5));
+        $this->assertSame(500, (int) $descarga->cajas);
+        $this->assertSame($tarifa->id, $descarga->tarifa_id);
+        $this->assertSame(1, $descarga->participantes()->count());
+        $this->assertSame(1, $descarga->evidencias()->count());
+    }
+
+    public function test_quick_save_without_crew_payload_keeps_workers_and_recalculates_amounts(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Sin Equipo Payload QA');
+        $tarifa = $this->createTarifa('CNTKEEP', 75000, 40000, 'KEEP QA', false, $centro);
+        $worker = $this->createTalanaWorker('Trabajador Keep QA', $centro);
+
+        $descarga = DescargaContenedor::create([
+            'estado' => 'borrador',
+            'origen' => 'manual',
+            'operacion' => 'Walmart',
+            'centro_costo_id' => $centro->id,
+            'fecha' => '2026-11-10',
+            'contenedor' => 'CONT-KEEP-001',
+            'creado_por' => $user->id,
+        ]);
+        $descarga->participantes()->create([
+            'talana_trabajador_id' => $worker->id,
+            'nombre_snapshot' => $worker->nombre,
+            'rol_en_descarga' => 'descargador',
+            'porcentaje_participacion' => 100,
+            'monto_calculado' => null,
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('descarga-contenedores.update', $descarga), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'fecha' => '2026-11-10',
+                'contenedor' => 'CONT-KEEP-001',
+                'tarifa_id' => $tarifa->id,
+            ])
+            ->assertRedirect();
+
+        $participante = $descarga->participantes()->sole();
+        $this->assertEquals(40000.0, (float) $participante->monto_calculado);
+    }
+
+    public function test_late_tariff_association_fills_participant_amounts_for_liquidation(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Tarifa Tardia QA');
+        $workerA = $this->createTalanaWorker('Trabajador Tardio A', $centro);
+        $workerB = $this->createTalanaWorker('Trabajador Tardio B', $centro);
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store-bulk'), [
+                'nombre' => 'Carga tarifa tardia QA',
+                'registros_json' => json_encode([[
+                    'operacion' => 'Walmart',
+                    'centro_costo_id' => $centro->id,
+                    'fecha' => '05/11/2026',
+                    'contenedor' => 'CONT-TARDIO-001',
+                    'fact_codigo' => 'CNTTARDIO',
+                    'participantes' => [$workerA->id, $workerB->id],
+                ]]),
+            ])
+            ->assertRedirect();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-TARDIO-001')->firstOrFail();
+        $this->assertNull($descarga->tarifa_id);
+        $this->assertSame([null, null], $descarga->participantes()->orderBy('id')->pluck('monto_calculado')->all());
+
+        // La tarifa se crea después de la carga; al abrir el listado se asocia sola.
+        $this->createTarifa('CNTTARDIO', 75000, 36000, 'TARDIA QA');
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.index'))
+            ->assertOk();
+
+        $descarga->refresh();
+        $this->assertNotNull($descarga->tarifa_id);
+        $this->assertSame(
+            [18000.0, 18000.0],
+            $descarga->participantes()->orderBy('id')->pluck('monto_calculado')->map(fn ($m) => (float) $m)->all()
+        );
+
+        $this->actingAs($user)
+            ->patch(route('descarga-contenedores.validar', $descarga))
+            ->assertSessionHas('success');
+
+        $response = $this->actingAs($user)
+            ->get(route('descarga-contenedores.liquidacion'))
+            ->assertOk();
+        $this->assertEquals(36000.0, (float) $response->viewData('stats')['monto']);
+    }
+
+    public function test_editing_validated_record_keeps_frozen_collaborator_payment(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('CD Congelado QA');
+        $tarifa = $this->createTarifa('CNTFROZEN', 75000, 36000, 'CONGELADO QA', false, $centro);
+        $worker = $this->createTalanaWorker('Trabajador Congelado QA', $centro);
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store'), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'fecha' => '2026-11-10',
+                'contenedor' => 'CONT-FROZEN-001',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([$worker->id]),
+            ])
+            ->assertRedirect();
+
+        $descarga = DescargaContenedor::where('contenedor', 'CONT-FROZEN-001')->firstOrFail();
+        $this->actingAs($user)
+            ->patch(route('descarga-contenedores.validar', $descarga))
+            ->assertSessionHas('success');
+
+        $tarifa->update(['pago_colaborador' => 50000, 'costo_unitario' => 90000]);
+
+        $this->actingAs($user)
+            ->patchJson(route('descarga-contenedores.rapido', $descarga), [
+                'operacion' => 'Walmart',
+                'centro_costo_id' => $centro->id,
+                'fecha' => '2026-11-10',
+                'contenedor' => 'CONT-FROZEN-001',
+                'producto' => 'CORRECCION POST VALIDACION',
+                'tarifa_id' => $tarifa->id,
+                'participantes_json' => json_encode([$worker->id]),
+            ])
+            ->assertOk();
+
+        $descarga->refresh();
+        $this->assertSame('validado', $descarga->estado);
+        $this->assertSame('CORRECCION POST VALIDACION', $descarga->producto);
+        $this->assertEquals(36000.0, (float) $descarga->pago_colaborador_snapshot);
+        $this->assertEquals(75000.0, (float) $descarga->costo_unitario_snapshot);
+        $this->assertEquals(36000.0, (float) $descarga->participantes()->sole()->monto_calculado);
+    }
+
+    public function test_bulk_store_tolerates_invalid_ids_long_text_and_impossible_dates(): void
+    {
+        $user = $this->createSuperAdminUser();
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store-bulk'), [
+                'nombre' => 'Carga datos sucios QA',
+                'registros_json' => json_encode([
+                    [
+                        'operacion' => 'Walmart',
+                        'centro_costo_id' => 999999,
+                        'tarifa_id' => 999999,
+                        'fecha' => '31/02/2026',
+                        'contenedor' => 'CONT-SUCIO-' . str_repeat('X', 150),
+                    ],
+                    [
+                        'operacion' => 'Walmart',
+                        'fecha' => '10/11/2026',
+                        'contenedor' => 'CONT-LIMPIO-001',
+                    ],
+                ]),
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $sucio = DescargaContenedor::where('contenedor', 'like', 'CONT-SUCIO-%')->firstOrFail();
+        $this->assertNull($sucio->centro_costo_id);
+        $this->assertNull($sucio->tarifa_id);
+        $this->assertNull($sucio->fecha);
+        $this->assertSame(120, mb_strlen($sucio->contenedor));
+
+        $limpio = DescargaContenedor::where('contenedor', 'CONT-LIMPIO-001')->firstOrFail();
+        $this->assertSame('2026-11-10', $limpio->fecha->format('Y-m-d'));
+    }
+
+    public function test_evidence_download_escapes_original_file_name(): void
+    {
+        Storage::fake('local');
+
+        $user = $this->createSuperAdminUser();
+        $descarga = DescargaContenedor::create([
+            'estado' => 'borrador',
+            'origen' => 'manual',
+            'contenedor' => 'CONT-HEADER-001',
+            'creado_por' => $user->id,
+        ]);
+        Storage::disk('local')->put('descarga_contenedores/header/foto.jpg', 'img');
+        $archivo = $descarga->evidencias()->create([
+            'entidad_tipo' => 'descarga_contenedor',
+            'nombre_original' => 'foto "cámara".jpg',
+            'nombre_archivo' => 'foto.jpg',
+            'ruta' => 'descarga_contenedores/header/foto.jpg',
+            'mime_type' => 'image/jpeg',
+            'tamanio' => 3,
+            'campo_formulario' => 'evidencias',
+            'subido_por' => $user->id,
+        ]);
+
+        $disposition = $this->actingAs($user)
+            ->get(route('descarga-contenedores.evidencias.ver', $archivo))
+            ->assertOk()
+            ->headers->get('Content-Disposition');
+
+        $this->assertStringStartsWith('inline;', $disposition);
+        $this->assertStringContainsString("filename*=utf-8''", $disposition);
+        $this->assertStringNotContainsString('"cámara"', $disposition);
     }
 
     private function createSuperAdminUser(): User

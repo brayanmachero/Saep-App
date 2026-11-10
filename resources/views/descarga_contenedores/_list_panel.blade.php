@@ -1225,9 +1225,11 @@
             }
 
             const data = await api(`{{ url('descarga-contenedores') }}/${currentId}/rapido`, {
-                method: 'PATCH',
+                // PHP solo interpreta multipart/form-data en POST: se envía POST con _method=PATCH.
+                method: 'POST',
                 body: (() => {
                     const form = new FormData();
+                    form.append('_method', 'PATCH');
                     appendRecordForm(form);
                     return form;
                 })(),
