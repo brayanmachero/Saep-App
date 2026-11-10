@@ -116,6 +116,7 @@
 <script type="application/json" id="contenedores_trabajadores_data">@json($trabajadores)</script>
 <script type="application/json" id="contenedores_tarifas_data">@json($tarifasPickerData)</script>
 <script type="application/json" id="contenedores_centros_data">@json($centrosPicker)</script>
+<script src="{{ asset('js/contenedores-floating-anchor.js') }}?v=20261110"></script>
 <script>
 (function () {
     const canViewCosts = @json($puedeGestionarCostos);
@@ -527,14 +528,26 @@
             const available = Math.max(1, window.innerWidth - pad * 2);
             const width = Math.min(Math.max(bounds.width, 280), Math.min(540, available));
             const left = Math.min(Math.max(pad, bounds.left), window.innerWidth - width - pad);
+            const gap = 5;
             menu.style.width = width + 'px';
             menu.style.left = left + 'px';
             menu.style.right = 'auto';
-            menu.style.top = (bounds.bottom + 5) + 'px';
-            const menuBounds = menu.getBoundingClientRect();
-            if (menuBounds.bottom > window.innerHeight - pad && bounds.top - menuBounds.height - 5 >= pad) {
-                menu.style.top = Math.max(pad, bounds.top - menuBounds.height - 5) + 'px';
+
+            // Abrir hacia el lado con más espacio y limitar la lista para no salir de la pantalla.
+            results.style.maxHeight = '';
+            const spaceBelow = window.innerHeight - pad - bounds.bottom - gap;
+            const spaceAbove = bounds.top - pad - gap;
+            const naturalHeight = menu.offsetHeight;
+            const openUp = naturalHeight > spaceBelow && spaceAbove > spaceBelow;
+            const space = Math.max(120, openUp ? spaceAbove : spaceBelow);
+            if (naturalHeight > space) {
+                const chrome = naturalHeight - results.offsetHeight;
+                results.style.maxHeight = Math.max(72, space - chrome) + 'px';
             }
+            const height = menu.offsetHeight;
+            menu.style.top = (openUp
+                ? Math.max(pad, bounds.top - gap - height)
+                : bounds.bottom + gap) + 'px';
         }
 
         function render() {
@@ -575,6 +588,8 @@
             });
         }
 
+        let stopTracking = null;
+
         function open() {
             closeAllPortals(api);
             wrapper.classList.add('is-open');
@@ -583,10 +598,20 @@
             searchInput.value = '';
             render();
             position();
+            stopTracking?.();
+            stopTracking = window.SaepFloatingAnchor
+                ? window.SaepFloatingAnchor.track(trigger, {
+                    onMove: position,
+                    onLost: close,
+                    isOpen: () => !menu.hidden,
+                })
+                : null;
             requestAnimationFrame(() => searchInput.focus());
         }
 
         function close() {
+            stopTracking?.();
+            stopTracking = null;
             menu.hidden = true;
             wrapper.classList.remove('is-open');
             trigger.setAttribute('aria-expanded', 'false');
@@ -604,6 +629,7 @@
         searchInput.addEventListener('input', () => {
             render();
             if (config.onSearch) config.onSearch(searchInput.value);
+            position();
         });
         searchInput.addEventListener('keydown', event => {
             if (event.key === 'Escape') {
@@ -1357,7 +1383,12 @@
             toggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
             details.hidden = expanded;
         }
-        if (!event.target.closest('.contenedores-search-select, .contenedores-search-select-menu')) {
+        // composedPath() conserva la ruta original: al elegir una opción la lista se
+        // redibuja y el botón clicado ya no está en el DOM, por lo que closest() fallaría.
+        const insideSelect = event.composedPath().some(node =>
+            node.classList?.contains('contenedores-search-select')
+            || node.classList?.contains('contenedores-search-select-menu'));
+        if (!insideSelect) {
             closeAllPortals();
         }
     });

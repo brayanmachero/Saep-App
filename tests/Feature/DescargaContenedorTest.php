@@ -1972,6 +1972,52 @@ class DescargaContenedorTest extends TestCase
             ->assertJsonFragment(['Puedes seleccionar hasta 200 contenedores por tanda.']);
     }
 
+    public function test_new_container_centers_exist_and_feed_center_and_worker_selectors(): void
+    {
+        $user = $this->createSuperAdminUser();
+
+        foreach (config('descarga_contenedores.centros_requeridos') as $centro) {
+            $this->assertDatabaseHas('centros_costo', ['nombre' => $centro['nombre'], 'activo' => true]);
+        }
+        $this->assertDatabaseHas('centros_costo', ['codigo' => '150-EST', 'razon_social' => 'TRANSITORIO']);
+        $this->assertDatabaseHas('centros_costo', ['codigo' => '28-SUB', 'razon_social' => 'NORMAL']);
+
+        $nuevos = [
+            'MAERSK BUENAVENTURA SUB' => 'Trabajador Buenaventura QA',
+            'DHL GLOBAL SUB' => 'Trabajador DHL Global QA',
+            'LTS LO AGUIRRE SUB' => 'Trabajador Lo Aguirre QA',
+            'CLUB DE PERROS Y GATOS EST' => 'Trabajador Perros Gatos QA',
+        ];
+        foreach ($nuevos as $centroNombre => $trabajador) {
+            $centro = CentroCosto::where('nombre', $centroNombre)->firstOrFail();
+            $this->createTalanaWorker($trabajador, $centro, ['centro_costo_nombre' => $centroNombre]);
+        }
+
+        foreach (['descarga-contenedores.create', 'descarga-contenedores.carga-rapida', 'descarga-contenedores.dotacion'] as $ruta) {
+            $response = $this->actingAs($user)->get(route($ruta))->assertOk();
+            foreach ($nuevos as $centroNombre => $trabajador) {
+                $response->assertSee($centroNombre)->assertSee($trabajador);
+            }
+        }
+    }
+
+    public function test_container_centers_migration_does_not_duplicate_existing_centers(): void
+    {
+        CentroCosto::where('nombre', 'DHL GLOBAL SUB')->delete();
+        CentroCosto::create([
+            'codigo' => 'DHL-PREVIO',
+            'nombre' => 'Dhl Global',
+            'razon_social' => 'NORMAL',
+            'activo' => true,
+        ]);
+        $antes = CentroCosto::count();
+
+        (require database_path('migrations/2026_11_10_000001_ensure_descarga_contenedores_centros.php'))->up();
+
+        $this->assertSame($antes, CentroCosto::count());
+        $this->assertSame(1, CentroCosto::whereRaw('UPPER(nombre) LIKE ?', ['%DHL GLOBAL%'])->count());
+    }
+
     public function test_drawer_quick_save_works_as_multipart_post_with_method_spoofing(): void
     {
         Storage::fake('local');

@@ -179,6 +179,7 @@
 <script type="application/json" id="centros_data">@json($centros->map(fn($c) => ['id' => $c->id, 'nombre' => $c->nombre])->values())</script>
 <script type="application/json" id="tarifas_data">@json($tarifasData)</script>
 <script type="application/json" id="existing_container_dates">@json(array_keys($existingContainerDates ?? []))</script>
+<script src="{{ asset('js/contenedores-floating-anchor.js') }}?v=20261110"></script>
 <script>
 const workers = JSON.parse(document.getElementById('trabajadores_data').textContent || '[]');
 const centers = JSON.parse(document.getElementById('centros_data').textContent || '[]');
@@ -731,13 +732,29 @@ function initTarifaPicker(container, tarifaInput, factInput) {
         dropdown.style.bottom = openUp ? `${window.innerHeight - rect.top + gap}px` : 'auto';
     }
 
+    let stopTracking = null;
+
     function showDropdown() {
         closeFactDropdowns(dropdown);
         dropdown.style.display = 'block';
         positionDropdown();
+        // closeFactDropdowns() oculta los demás sin pasar por aquí: isOpen detiene su seguimiento.
+        if (!stopTracking && window.SaepFloatingAnchor) {
+            stopTracking = window.SaepFloatingAnchor.track(search, {
+                onMove: positionDropdown,
+                onLost: hideDropdown,
+                isOpen: () => {
+                    const open = dropdown.style.display !== 'none';
+                    if (!open) stopTracking = null;
+                    return open;
+                },
+            });
+        }
     }
 
     function hideDropdown() {
+        stopTracking?.();
+        stopTracking = null;
         dropdown.style.display = 'none';
     }
 

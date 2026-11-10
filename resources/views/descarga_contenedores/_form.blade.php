@@ -203,6 +203,7 @@
 
 <script type="application/json" id="trabajadores_data">@json($trabajadores)</script>
 <script type="application/json" id="tarifas_data">@json($tarifasPickerData)</script>
+<script src="{{ asset('js/contenedores-floating-anchor.js') }}?v=20261110"></script>
 <script>
 const canViewCosts = @json($puedeGestionarCostos);
 
@@ -675,9 +676,20 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
 
         dropdown.style.display = 'block';
         positionWorkerDropdown();
+        if (!stopWorkerTracking && window.SaepFloatingAnchor) {
+            stopWorkerTracking = window.SaepFloatingAnchor.track(input, {
+                onMove: positionWorkerDropdown,
+                onLost: hideWorkerDropdown,
+                isOpen: () => dropdown.style.display !== 'none',
+            });
+        }
     }
 
+    let stopWorkerTracking = null;
+
     function hideWorkerDropdown() {
+        stopWorkerTracking?.();
+        stopWorkerTracking = null;
         dropdown.style.display = 'none';
         dropdown.style.top = '';
         dropdown.style.bottom = '';
@@ -758,6 +770,10 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
     }
 
     input.addEventListener('focus', () => render(input.value.trim()));
+    // Tras agregar un trabajador el campo sigue enfocado: un clic debe volver a abrir la lista.
+    input.addEventListener('click', () => {
+        if (dropdown.style.display === 'none') render(input.value.trim());
+    });
     input.addEventListener('input', () => render(input.value.trim()));
     input.addEventListener('blur', () => setTimeout(hideWorkerDropdown, 150));
     centerFilter.addEventListener('change', () => {
@@ -793,16 +809,8 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
     window.addEventListener('resize', () => {
         if (dropdown.style.display !== 'none') positionWorkerDropdown();
     });
-    const closeDropdownOnViewportMove = event => {
-        if (dropdown.style.display === 'none') return;
-        if (event.target === dropdown || dropdown.contains(event.target)) return;
-
-        hideWorkerDropdown();
-    };
-    window.addEventListener('scroll', closeDropdownOnViewportMove, true);
-    document.addEventListener('scroll', closeDropdownOnViewportMove, true);
-    window.addEventListener('wheel', closeDropdownOnViewportMove, { capture: true, passive: true });
-    window.addEventListener('touchmove', closeDropdownOnViewportMove, { capture: true, passive: true });
+    // El scroll ya no cierra la lista: SaepFloatingAnchor la mantiene pegada al campo
+    // y la cierra solo si el campo sale de la vista.
     sync();
 }
 

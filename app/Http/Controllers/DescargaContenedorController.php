@@ -1473,40 +1473,20 @@ class DescargaContenedorController extends Controller
 
     private function descargaDotacionCenterKeywords(): array
     {
-        return [
-            'CAMPOS DE CHILE',
-            'LTS CAMPOS DE CHILE',
-            'LTS PEÑON',
-            'LTS PEÑÓN',
-            'LTS PENON',
-            'LTS QUILICURA',
-            'MAERSK PUMA',
-            'MAERSK LA VARA',
-            'MAERSK MATTEL',
-        ];
+        return (array) config('descarga_contenedores.centros', []);
     }
 
     private function descargaDotacionCargoKeywords(): array
     {
-        return [
-            'DESCARGA',
-            'ESTIBA',
-            'DESCARGADOR',
-            'OPERARIO',
-            'ENCARGADO DE TURNO',
-            'SUPERVISOR DE OPERACIONES',
-        ];
+        return (array) config('descarga_contenedores.cargos', []);
     }
 
     private function descargaOperacionCenterKeywords(): array
     {
-        return array_values(array_unique(array_merge($this->descargaDotacionCenterKeywords(), [
-            'DHL',
-            'ECOMMERCE',
-            'E-COMMERCE',
-            'TRANSPORTE',
-            'BRAZO',
-        ])));
+        return array_values(array_unique(array_merge(
+            $this->descargaDotacionCenterKeywords(),
+            (array) config('descarga_contenedores.centros_operacion_extra', [])
+        )));
     }
 
     private function formData(?DescargaContenedor $descarga = null): array
