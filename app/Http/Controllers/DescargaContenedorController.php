@@ -11,6 +11,7 @@ use App\Models\TalanaTrabajador;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\HeaderUtils;
@@ -1407,13 +1408,22 @@ class DescargaContenedorController extends Controller
             ->where(function ($q) use ($keywords, $codigos) {
                 if ($codigos) {
                     // Código oficial Talana (preferido) o código local igual al de Talana.
-                    $q->whereIn('codigo_talana', $codigos)
-                        ->orWhereIn(DB::raw('UPPER(codigo)'), $codigos);
+                    $q->whereIn(DB::raw('UPPER(codigo)'), $codigos);
+                    if ($this->centrosTienenVinculoTalana()) {
+                        $q->orWhereIn('codigo_talana', $codigos);
+                    }
                 }
                 $q->orWhere(fn ($nombre) => $this->applyKeywordFilter($nombre, 'nombre', $keywords));
             });
 
         return $query->orderBy('nombre')->get();
+    }
+
+    private function centrosTienenVinculoTalana(): bool
+    {
+        static $tiene = null;
+
+        return $tiene ??= Schema::hasColumn('centros_costo', 'codigo_talana');
     }
 
     private function applyTrabajadoresDotacionFilter($query): void
