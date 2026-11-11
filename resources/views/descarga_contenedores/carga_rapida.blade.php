@@ -180,6 +180,7 @@
 <script type="application/json" id="tarifas_data">@json($tarifasData)</script>
 <script type="application/json" id="existing_container_dates">@json(array_keys($existingContainerDates ?? []))</script>
 <script src="{{ asset('js/contenedores-floating-anchor.js') }}?v=20261110"></script>
+<script src="{{ asset('js/contenedores-paste-parser.js') }}?v=20261111"></script>
 <script>
 const workers = JSON.parse(document.getElementById('trabajadores_data').textContent || '[]');
 const centers = JSON.parse(document.getElementById('centros_data').textContent || '[]');
@@ -253,166 +254,13 @@ function uniqueTarifaByCode(code, centerId = '', cliente = '') {
     return matches.length === 1 ? matches[0] : null;
 }
 
-const legacyColumns = [
-    'operacion',
-    'bodega',
-    'supervisor_nombre',
-    'facturacion_mes',
-    'fecha',
-    'contenedor',
-    'equipo_descarga',
-    'hora_cita',
-    'hora_inicio_descarga',
-    'hora_termino_descarga',
-    'item',
-    'cajas',
-    'pallets',
-    'producto',
-    'observacion',
-    'fact_codigo',
-];
-
-const emailScheduleColumns = [
-    'operacion',
-    'bodega',
-    'supervisor_nombre',
-    'facturacion_mes',
-    'fecha',
-    'contenedor',
-    'equipo_descarga',
-    'hora_cita',
-    'hora_inicio_descarga',
-    'hora_termino_descarga',
-    'item',
-    'cajas',
-    'pallets',
-    'producto',
-    'observacion',
-    'anio',
-    'mes',
-    'semana',
-    'dia',
-    'dato',
-    'fact_codigo',
-];
-
-const headerAliases = {
-    operacion: 'operacion',
-    bodega: 'bodega',
-    supequipo: 'supervisor_nombre',
-    supervisor: 'supervisor_nombre',
-    supervisorencargado: 'supervisor_nombre',
-    facturacion: 'facturacion_mes',
-    facturacionmes: 'facturacion_mes',
-    mesfacturacion: 'facturacion_mes',
-    fecha: 'fecha',
-    contenedor: 'contenedor',
-    edescarga: 'equipo_descarga',
-    equipodescarga: 'equipo_descarga',
-    hdescarga: 'equipo_descarga',
-    hcita: 'hora_cita',
-    horacita: 'hora_cita',
-    hicitacion: 'hora_cita',
-    hidescarga: 'hora_inicio_descarga',
-    inicio: 'hora_inicio_descarga',
-    iniciodescarga: 'hora_inicio_descarga',
-    horainicio: 'hora_inicio_descarga',
-    htdescarga: 'hora_termino_descarga',
-    termino: 'hora_termino_descarga',
-    terminodescarga: 'hora_termino_descarga',
-    horatermino: 'hora_termino_descarga',
-    item: 'item',
-    items: 'item',
-    cajas: 'cajas',
-    pallets: 'pallets',
-    producto: 'producto',
-    productos: 'producto',
-    observacion: 'observacion',
-    obs: 'observacion',
-    ano: 'anio',
-    anio: 'anio',
-    mes: 'mes',
-    semana: 'semana',
-    dia: 'dia',
-    dato: 'dato',
-    fact: 'fact_codigo',
-    factcodigo: 'fact_codigo',
-    codigofact: 'fact_codigo',
-};
-
-function splitRow(line) {
-    if (line.includes('\t')) return line.split('\t');
-    if (line.includes(';')) return line.split(';');
-    return line.split(',');
-}
-
-function normalizeHeader(value) {
-    return normalizeText(value).replace(/[^a-z0-9]/g, '');
-}
-
-function buildHeaderIndexes(row) {
-    return row.reduce((indexes, cell, index) => {
-        const key = headerAliases[normalizeHeader(cell)];
-        if (key && indexes[key] === undefined) {
-            indexes[key] = index;
-        }
-        return indexes;
-    }, {});
-}
-
-function hasRecognizableHeader(row) {
-    const indexes = buildHeaderIndexes(row);
-    const mappedCount = Object.keys(indexes).length;
-    return mappedCount >= 4 && (
-        indexes.fecha !== undefined
-        || indexes.contenedor !== undefined
-        || indexes.operacion !== undefined
-        || indexes.fact_codigo !== undefined
-    );
-}
-
-function makeEmptyImportRow() {
-    return { estado: 'borrador', participantes: [] };
-}
-
-function parseRowByHeaders(row, indexes) {
-    const item = makeEmptyImportRow();
-
-    Object.entries(indexes).forEach(([key, index]) => {
-        item[key] = row[index] || '';
-    });
-
-    return item;
-}
-
-function parseRowByPosition(row) {
-    const item = makeEmptyImportRow();
-    const columns = row.length >= emailScheduleColumns.length ? emailScheduleColumns : legacyColumns;
-
-    columns.forEach((key, index) => {
-        if (!key) return;
-        item[key] = row[index] || '';
-    });
-
-    return item;
-}
+let lastParseInfo = { mode: 'posicion', offset: 0 };
 
 function parsePastedTable(text) {
-    const rows = text.replace(/\r/g, '').split('\n')
-        .map(line => splitRow(line).map(cell => cell.trim()))
-        .filter(row => row.some(cell => cell !== ''));
+    const parsed = window.SaepContenedoresParser.parse(text);
+    lastParseInfo = { mode: parsed.mode, offset: parsed.offset };
 
-    if (!rows.length) return [];
-
-    const hasHeader = hasRecognizableHeader(rows[0]);
-    const headerIndexes = hasHeader ? buildHeaderIndexes(rows[0]) : {};
-    const dataRows = hasHeader ? rows.slice(1) : rows;
-
-    return dataRows.map(row => {
-        const item = hasHeader
-            ? parseRowByHeaders(row, headerIndexes)
-            : parseRowByPosition(row);
-
+    return parsed.rows.map(item => {
         item.centro_costo_id = inferCenterId(item.bodega);
         const tarifa = uniqueTarifaByCode(
             item.fact_codigo,
@@ -425,6 +273,15 @@ function parsePastedTable(text) {
         }
         return item;
     });
+}
+
+function parseAlignmentMessage() {
+    const offset = lastParseInfo.offset || 0;
+    if (lastParseInfo.mode !== 'posicion' || offset === 0) return '';
+    const n = Math.abs(offset);
+    return offset < 0
+        ? `La tabla venía sin ${n} columna${n === 1 ? '' : 's'} inicial${n === 1 ? '' : 'es'} (Operación, Bodega, Sup/Equipo…); alineé las filas por contenedor y fecha. Completa lo que falte antes de guardar.`
+        : `La tabla traía ${n} columna${n === 1 ? '' : 's'} extra al inicio; alineé las filas por contenedor y fecha.`;
 }
 
 function inferCenterId(bodega) {
@@ -852,6 +709,7 @@ function refreshPreviewHealth() {
     let withTarifa = 0;
     let pendingFact = 0;
     let duplicates = 0;
+    let withIssues = 0;
     let withoutTeam = 0;
 
     rows.forEach(tr => {
@@ -867,6 +725,15 @@ function refreshPreviewHealth() {
         const isDup = key && (existingContainerDates.has(key) || seen[key]);
         if (key) seen[key] = (seen[key] || 0) + 1;
 
+        const issues = window.SaepContenedoresParser.rowIssues({
+            fecha,
+            contenedor,
+            hora_cita: tr.querySelector('[data-key="hora_cita"]')?.value || '',
+            hora_inicio_descarga: tr.querySelector('[data-key="hora_inicio_descarga"]')?.value || '',
+            hora_termino_descarga: tr.querySelector('[data-key="hora_termino_descarga"]')?.value || '',
+        });
+        if (issues.length) withIssues += 1;
+
         if (tarifaId) withTarifa += 1;
         else if (fact) pendingFact += 1;
         if (isDup) duplicates += 1;
@@ -876,7 +743,11 @@ function refreshPreviewHealth() {
         tr.classList.toggle('is-duplicate', !!isDup);
         if (!badge) return;
         badge.className = 'badge';
-        if (isDup) {
+        badge.title = issues.join(' · ');
+        if (issues.length) {
+            badge.classList.add('danger');
+            badge.textContent = 'Revisar columnas';
+        } else if (isDup) {
             badge.classList.add('danger');
             badge.textContent = 'Duplicado';
         } else if (tarifaId) {
@@ -895,6 +766,7 @@ function refreshPreviewHealth() {
     const parts = [`${count} fila${count === 1 ? '' : 's'}`];
     if (withTarifa) parts.push(`${withTarifa} con FACT`);
     if (pendingFact) parts.push(`${pendingFact} por elegir proceso`);
+    if (withIssues) parts.push(`${withIssues} con datos fuera de columna`);
     if (duplicates) parts.push(`${duplicates} duplicado${duplicates === 1 ? '' : 's'}`);
     if (withoutTeam) parts.push(`${withoutTeam} sin equipo`);
     const el = document.getElementById('preview-count');
@@ -1001,7 +873,7 @@ function renderPreview(rows) {
             tr.remove();
             refreshPreviewHealth();
         });
-        ['fecha', 'contenedor', 'operacion'].forEach(key => {
+        ['fecha', 'contenedor', 'operacion', 'hora_cita', 'hora_inicio_descarga', 'hora_termino_descarga'].forEach(key => {
             tr.querySelector(`[data-key="${key}"]`)?.addEventListener('change', refreshPreviewHealth);
         });
     });
@@ -1078,6 +950,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 renderPreview(rows);
+                const alignment = parseAlignmentMessage();
+                if (alignment) notifyUser(alignment, 'warning');
                 previewCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             } catch (error) {
                 console.error('Error generando vista previa de contenedores:', error);
@@ -1120,6 +994,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!rows.length) {
             event.preventDefault();
             notifyUser('No hay filas para guardar.', 'warning');
+            return;
+        }
+        const conProblemas = rows.filter(row => window.SaepContenedoresParser.rowIssues(row).length).length;
+        if (conProblemas && !window.confirm(`${conProblemas} fila${conProblemas === 1 ? '' : 's'} tiene${conProblemas === 1 ? '' : 'n'} fecha, contenedor u horas fuera de columna (marcadas "Revisar columnas"). ¿Guardar de todas formas?`)) {
+            event.preventDefault();
             return;
         }
         if (registrosInput) registrosInput.value = JSON.stringify(rows);

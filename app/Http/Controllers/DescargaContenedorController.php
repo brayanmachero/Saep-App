@@ -2167,6 +2167,11 @@ class DescargaContenedorController extends Controller
             return null;
         }
 
+        // Una hora suelta ("8:30:00") o un número no son fechas: Carbon los tomaría como "hoy".
+        if (preg_match('/^\d{1,2}:\d{2}(:\d{2})?(\s*[ap]\.?\s?m\.?)?$/i', $value) || preg_match('/^\d+([.,]\d+)?$/', $value)) {
+            return null;
+        }
+
         try {
             return Carbon::parse($value)->format('Y-m-d');
         } catch (\Throwable) {

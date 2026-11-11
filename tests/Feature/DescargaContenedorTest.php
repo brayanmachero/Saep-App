@@ -430,6 +430,25 @@ class DescargaContenedorTest extends TestCase
         $this->assertEquals(300.0, round((float) $participantes->sum('monto_calculado'), 2));
     }
 
+    public function test_bulk_store_does_not_turn_a_bare_time_into_todays_date(): void
+    {
+        $user = $this->createSuperAdminUser();
+
+        $this->actingAs($user)
+            ->post(route('descarga-contenedores.store-bulk'), [
+                'registros_json' => json_encode([
+                    ['fecha' => '8:30:00', 'contenedor' => 'HORA-COMO-FECHA'],
+                    ['fecha' => '3875', 'contenedor' => 'NUMERO-COMO-FECHA'],
+                    ['fecha' => '02/11/2026', 'contenedor' => 'MSBU5332438'],
+                ]),
+            ])
+            ->assertRedirect();
+
+        $this->assertNull(DescargaContenedor::where('contenedor', 'HORA-COMO-FECHA')->value('fecha'));
+        $this->assertNull(DescargaContenedor::where('contenedor', 'NUMERO-COMO-FECHA')->value('fecha'));
+        $this->assertStringStartsWith('2026-11-02', (string) DescargaContenedor::where('contenedor', 'MSBU5332438')->value('fecha'));
+    }
+
     public function test_bulk_store_does_not_guess_duplicated_fact_code_without_tarifa_id(): void
     {
         $user = $this->createSuperAdminUser();
