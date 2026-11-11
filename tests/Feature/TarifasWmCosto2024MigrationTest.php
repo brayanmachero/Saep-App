@@ -2,8 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\ForcePasswordChange;
+use App\Http\Middleware\VerificarConsentimientoDatos;
+use App\Models\DescargaContenedor;
 use App\Models\DescargaContenedorTarifa;
+use App\Models\Rol;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class TarifasWmCosto2024MigrationTest extends TestCase
@@ -65,5 +71,53 @@ class TarifasWmCosto2024MigrationTest extends TestCase
         $this->assertSame($total, DescargaContenedorTarifa::count());
         $this->assertSame('33000.00', $this->wm('CNT001')->pago_colaborador);
         $this->assertTrue((bool) $this->wm('AHL001')->activo);
+    }
+
+    public function test_maersk_has_the_same_table_and_draft_amounts_are_refreshed(): void
+    {
+        $maersk = DescargaContenedorTarifa::where('cliente', 'MAERSK')->where('activo', true)->get();
+        $this->assertCount(22, $maersk);
+        $this->assertSame('33000.00', $maersk->firstWhere('codigo', 'CNT001')->pago_colaborador);
+        $this->assertSame('320.83', $maersk->firstWhere('codigo', 'AHL001')->pago_colaborador);
+
+        // Borrador creado con la tarifa MAERSK previa ($36.000) y dos participantes al 50%.
+        $tarifa = $maersk->firstWhere('codigo', 'CNT001');
+        $tarifa->update(['pago_colaborador' => 36000]);
+        $base = ['origen' => 'pegado', 'fecha' => '2026-11-02', 'fact_codigo' => 'CNT001', 'tarifa_id' => $tarifa->id,
+            'pago_colaborador_snapshot' => 36000, 'costo_unitario_snapshot' => 75000, 'tarifa_cliente_snapshot' => 'MAERSK',
+            'requiere_revision_tarifa' => false, 'created_at' => now(), 'updated_at' => now()];
+        $id = DB::table('descarga_contenedores')->insertGetId($base + ['estado' => 'borrador', 'contenedor' => 'TXGU5578197']);
+        $validado = DB::table('descarga_contenedores')->insertGetId($base + ['estado' => 'validado', 'contenedor' => 'MSBU5332438']);
+        foreach ([1, 2] as $n) {
+            DB::table('descarga_contenedor_participantes')->insert([
+                'descarga_contenedor_id' => $id, 'nombre_snapshot' => "Trabajador {$n}", 'rol_en_descarga' => 'descargador',
+                'porcentaje_participacion' => 50, 'monto_calculado' => 18000, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        (require database_path('migrations/2026_11_11_000002_create_tarifas_maersk_costo_2024.php'))->up();
+
+        $this->assertSame('33000.00', DescargaContenedor::find($id)->pago_colaborador_snapshot);
+        $this->assertSame([16500.0, 16500.0], DB::table('descarga_contenedor_participantes')
+            ->where('descarga_contenedor_id', $id)->pluck('monto_calculado')->map(fn ($v) => (float) $v)->all());
+        $this->assertSame('36000.00', DescargaContenedor::find($validado)->pago_colaborador_snapshot, 'validados no se tocan');
+        $this->assertSame(22, DescargaContenedorTarifa::where('cliente', 'MAERSK')->count(), 'sin duplicados al repetir');
+    }
+
+    public function test_bulk_row_from_maersk_center_takes_maersk_tariff(): void
+    {
+        $rol = Rol::firstOrCreate(['codigo' => 'SUPER_ADMIN'], ['nombre' => 'Super Admin']);
+        $user = User::factory()->create(['rol_id' => $rol->id]);
+        $this->withoutMiddleware([ForcePasswordChange::class, VerificarConsentimientoDatos::class]);
+
+        $this->actingAs($user)->post(route('descarga-contenedores.store-bulk'), [
+            'registros_json' => json_encode([
+                ['bodega' => 'MAERSK LA VARA', 'fecha' => '02/11/2026', 'contenedor' => 'MAEU1234567', 'fact_codigo' => 'CNT001'],
+                ['operacion' => 'WALMART', 'fecha' => '02/11/2026', 'contenedor' => 'WMTU1234567', 'fact_codigo' => 'CNT001'],
+            ]),
+        ])->assertRedirect();
+
+        $this->assertSame('MAERSK', DescargaContenedor::where('contenedor', 'MAEU1234567')->value('tarifa_cliente_snapshot'));
+        $this->assertSame('WM', DescargaContenedor::where('contenedor', 'WMTU1234567')->value('tarifa_cliente_snapshot'));
     }
 }

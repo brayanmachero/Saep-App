@@ -242,6 +242,7 @@ function clienteFromOperacion(operacion) {
     if (!text) return '';
     if (text.includes('smu') || text.includes('unimarc')) return 'SMU';
     if (text.includes('walmart') || text === 'wm' || text.startsWith('wm ')) return 'WM';
+    if (text.includes('maersk')) return 'MAERSK';
     return '';
 }
 
@@ -278,6 +279,8 @@ function enrichImportRows(rows) {
             item.fact_codigo,
             item.centro_costo_id,
             clienteFromOperacion(item.operacion)
+                || clienteFromOperacion(item.bodega)
+                || clienteFromOperacion((centers.find(c => String(c.id) === String(item.centro_costo_id)) || {}).nombre)
         );
         if (tarifa) {
             item.tarifa_id = String(tarifa.id);

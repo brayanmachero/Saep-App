@@ -281,6 +281,7 @@ function initWorkerPicker(container, hiddenInput, initialIds) {
             if (!text) return '';
             if (text.includes('smu') || text.includes('unimarc')) return 'SMU';
             if (text.includes('walmart') || text === 'wm' || text.startsWith('wm ')) return 'WM';
+            if (text.includes('maersk')) return 'MAERSK';
             return '';
         }
 

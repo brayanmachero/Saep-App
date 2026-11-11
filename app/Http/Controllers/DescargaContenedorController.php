@@ -1737,7 +1737,9 @@ class DescargaContenedorController extends Controller
                     ->orderBy('id')
                     ->get();
 
-            $cliente = $this->clienteFromOperacion($data['operacion'] ?? null);
+            $cliente = $this->clienteFromOperacion($data['operacion'] ?? null)
+                ?? $this->clienteFromOperacion($data['bodega'] ?? null)
+                ?? $this->clienteFromOperacion(!empty($data['centro_costo_id']) ? CentroCosto::whereKey($data['centro_costo_id'])->value('nombre') : null);
             if ($cliente) {
                 $porCliente = $tarifasCoincidentes
                     ->filter(fn (DescargaContenedorTarifa $item) => strtoupper((string) $item->cliente) === $cliente)
@@ -2309,6 +2311,10 @@ class DescargaContenedorController extends Controller
 
         if (str_contains($value, 'WALMART') || $value === 'WM' || str_starts_with($value, 'WM ')) {
             return 'WM';
+        }
+
+        if (str_contains($value, 'MAERSK')) {
+            return 'MAERSK';
         }
 
         return null;
