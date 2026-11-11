@@ -1397,8 +1397,21 @@ class DescargaContenedorController extends Controller
 
     private function centrosByKeywords(array $keywords)
     {
-        $query = CentroCosto::where('activo', true);
-        $this->applyKeywordFilter($query, 'nombre', $keywords);
+        $codigos = collect(config('descarga_contenedores.centros_talana', []))
+            ->map(fn ($codigo) => strtoupper(trim((string) $codigo)))
+            ->filter()
+            ->values()
+            ->all();
+
+        $query = CentroCosto::where('activo', true)
+            ->where(function ($q) use ($keywords, $codigos) {
+                if ($codigos) {
+                    // Código oficial Talana (preferido) o código local igual al de Talana.
+                    $q->whereIn('codigo_talana', $codigos)
+                        ->orWhereIn(DB::raw('UPPER(codigo)'), $codigos);
+                }
+                $q->orWhere(fn ($nombre) => $this->applyKeywordFilter($nombre, 'nombre', $keywords));
+            });
 
         return $query->orderBy('nombre')->get();
     }

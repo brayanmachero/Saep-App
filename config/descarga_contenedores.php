@@ -10,8 +10,23 @@
 
 return [
 
-    // Centros cuya dotación aparece en los desplegables de personal y en el
-    // listado de centros del módulo.
+    // Centros del módulo por código oficial Talana (CODIGO-MODALIDAD). Es la forma
+    // preferida: coincide exacto con centros_costo.codigo_talana (o codigo) una
+    // vez ejecutado `php artisan centros:sync-talana --aplicar`.
+    'centros_talana' => [
+        '35-SUB',   // MAERSK LA VARA SUB
+        '28-SUB',   // MAERSK BUENAVENTURA SUB
+        '106-SUB',  // LTS QUILICURA SUB
+        '136-SUB',  // LTS PEÑON SUB
+        '23-SUB',   // LTS CAMPOS DE CHILE SUB
+        '37-SUB',   // DHL GLOBAL SUB
+        '9-SUB',    // LTS LO AGUIRRE SUB
+        '150-EST',  // CLUB DE PERROS Y GATOS EST
+    ],
+
+    // Respaldo por nombre (LIKE %texto%) para centros aún no vinculados a Talana
+    // y para nombres de centro que traen los trabajadores. Retirar cuando todos
+    // los centros del módulo estén vinculados por código.
     'centros' => [
         'CAMPOS DE CHILE',
         'LTS CAMPOS DE CHILE',

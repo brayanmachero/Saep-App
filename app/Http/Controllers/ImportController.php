@@ -104,7 +104,7 @@ class ImportController extends Controller
         // Cache de lookups para evitar queries repetidas
         $cargos = Cargo::all()->keyBy(fn ($c) => mb_strtolower(trim($c->nombre)));
         $departamentos = Departamento::all()->keyBy(fn ($d) => mb_strtolower(trim($d->nombre)));
-        $centrosCosto = CentroCosto::all()->keyBy(fn ($cc) => mb_strtolower(trim($cc->nombre)));
+        $centrosCosto = $this->centrosCostoLookup();
         $rolTrabajador = Rol::where('nombre', 'TRABAJADOR')->first();
 
         $columnMap = $this->talanaColumnMap();
@@ -259,7 +259,7 @@ class ImportController extends Controller
 
         $cargos = Cargo::all()->keyBy(fn ($c) => mb_strtolower(trim($c->nombre)));
         $departamentos = Departamento::all()->keyBy(fn ($d) => mb_strtolower(trim($d->nombre)));
-        $centrosCosto = CentroCosto::all()->keyBy(fn ($cc) => mb_strtolower(trim($cc->nombre)));
+        $centrosCosto = $this->centrosCostoLookup();
         $columnMap = $this->talanaColumnMap();
 
         foreach ($rows as $i => $row) {
@@ -353,6 +353,40 @@ class ImportController extends Controller
             'estado'            => ['estado', 'situacion', 'situación', 'estado trabajador', 'vigencia'],
             'telefono'          => ['telefono', 'teléfono', 'telefono contacto', 'celular', 'fono'],
         ];
+    }
+
+    /**
+     * Centros indexados por nombre en minúsculas, más alias sin ambigüedad:
+     * nombre oficial Talana y nombre sin sufijo de modalidad (" sub"/" est").
+     * Evita crear "LTS PEÑON" cuando ya existe "LTS PEÑON SUB".
+     */
+    private function centrosCostoLookup()
+    {
+        $centros = CentroCosto::all();
+        $lookup = $centros->keyBy(fn ($cc) => mb_strtolower(trim($cc->nombre)));
+
+        $alias = [];
+        foreach ($centros as $cc) {
+            $nombre = mb_strtolower(trim($cc->nombre));
+            $candidatos = array_filter([
+                $cc->nombre_talana ? mb_strtolower(trim($cc->nombre_talana)) : null,
+                preg_replace('/\s+(sub|est)$/u', '', $nombre),
+            ]);
+            foreach (array_unique($candidatos) as $key) {
+                if ($key === '' || $key === $nombre || $lookup->has($key)) {
+                    continue;
+                }
+                $alias[$key][$cc->id] = $cc;
+            }
+        }
+
+        foreach ($alias as $key => $porId) {
+            if (count($porId) === 1) {
+                $lookup->put($key, reset($porId));
+            }
+        }
+
+        return $lookup;
     }
 
     private function upsertTalanaTrabajador(array $mapped, array $rawRow, ?int $cargoId, ?int $depId, ?int $ccId): bool

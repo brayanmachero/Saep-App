@@ -2001,6 +2001,23 @@ class DescargaContenedorTest extends TestCase
         }
     }
 
+    public function test_container_centers_are_selected_by_talana_code_even_with_unrelated_name(): void
+    {
+        $user = $this->createSuperAdminUser();
+        $centro = $this->createCentroCosto('SUCURSAL RENOMBRADA SIN PALABRA CLAVE');
+        $centro->update(['codigo_talana' => '37-SUB', 'modalidad_talana' => 'SUB']);
+        $this->createTalanaWorker('Trabajador Por Codigo QA', $centro, ['centro_costo_nombre' => $centro->nombre]);
+        $fuera = $this->createCentroCosto('OTRO CENTRO SIN CODIGO');
+        $fuera->update(['codigo_talana' => '999-SUB']);
+
+        $this->actingAs($user)
+            ->get(route('descarga-contenedores.create'))
+            ->assertOk()
+            ->assertSee('SUCURSAL RENOMBRADA SIN PALABRA CLAVE')
+            ->assertSee('Trabajador Por Codigo QA')
+            ->assertDontSee('OTRO CENTRO SIN CODIGO');
+    }
+
     public function test_container_centers_migration_does_not_duplicate_existing_centers(): void
     {
         CentroCosto::where('nombre', 'DHL GLOBAL SUB')->delete();
