@@ -26,6 +26,7 @@
         'title' => 'Uso de programación',
         'items' => [
             'Pega la tabla tal como llega por correo o desde Excel; la vista previa corrige FACT, duplicados y centro antes de guardar.',
+            'Acepta formatos distintos: con o sin encabezado, columnas en otro orden o incompletas. El resumen bajo el botón indica cómo se detectó y qué revisar.',
             'WALMART se asocia a tarifas WM y SMU a tarifas SMU. Si el código tiene más de un proceso, hay que elegir.',
             'Por defecto no se vuelven a guardar contenedores que ya existen en la misma fecha.',
             'Participantes base aplica el mismo equipo a todas las filas. Sin eso, quedan pendientes de cuadrilla.',
@@ -35,6 +36,7 @@
     <form method="POST" action="{{ route('descarga-contenedores.store-bulk') }}" id="bulk-form">
         @csrf
         <input type="hidden" name="registros_json" id="registros_json">
+        <input type="hidden" name="interpretado_ia" id="interpretado_ia" value="0">
 
         <div class="glass-card" style="margin-bottom:1rem">
             <div class="quick-grid">
@@ -51,10 +53,16 @@
                         <button type="button" class="btn-premium" id="preview-btn">
                             <i class="bi bi-table"></i> Generar vista previa
                         </button>
+                        @if($iaDisponible ?? false)
+                        <button type="button" class="btn-secondary" id="ia-btn" title="Para tablas en otro formato o texto de correo. La IA propone; tú revisas la vista previa antes de guardar.">
+                            <i class="bi bi-stars"></i> Interpretar con IA
+                        </button>
+                        @endif
                         <button type="button" class="btn-secondary" id="clear-btn">
                             <i class="bi bi-eraser"></i> Limpiar
                         </button>
                     </div>
+                    <div id="parse-summary" class="parse-summary" hidden></div>
                 </div>
 
                 <div>
@@ -180,7 +188,7 @@
 <script type="application/json" id="tarifas_data">@json($tarifasData)</script>
 <script type="application/json" id="existing_container_dates">@json(array_keys($existingContainerDates ?? []))</script>
 <script src="{{ asset('js/contenedores-floating-anchor.js') }}?v=20261110"></script>
-<script src="{{ asset('js/contenedores-paste-parser.js') }}?v=20261111"></script>
+<script src="{{ asset('js/contenedores-paste-parser.js') }}?v=20261111b"></script>
 <script>
 const workers = JSON.parse(document.getElementById('trabajadores_data').textContent || '[]');
 const centers = JSON.parse(document.getElementById('centros_data').textContent || '[]');
@@ -254,13 +262,17 @@ function uniqueTarifaByCode(code, centerId = '', cliente = '') {
     return matches.length === 1 ? matches[0] : null;
 }
 
-let lastParseInfo = { mode: 'posicion', offset: 0 };
+let lastParseInfo = { mode: 'posicion', offset: 0, sinIdentificar: [], filasConProblemas: 0 };
 
 function parsePastedTable(text) {
-    const parsed = window.SaepContenedoresParser.parse(text);
-    lastParseInfo = { mode: parsed.mode, offset: parsed.offset };
+    const parsed = window.SaepContenedoresParser.parse(text, { centers: centers.map(c => c.nombre) });
+    lastParseInfo = parsed;
+    return enrichImportRows(parsed.rows);
+}
 
-    return parsed.rows.map(item => {
+function enrichImportRows(rows) {
+    return rows.map(row => {
+        const item = { estado: 'borrador', participantes: [], ...row };
         item.centro_costo_id = inferCenterId(item.bodega);
         const tarifa = uniqueTarifaByCode(
             item.fact_codigo,
@@ -273,6 +285,42 @@ function parsePastedTable(text) {
         }
         return item;
     });
+}
+
+function renderParseSummary(origen = 'tabla') {
+    const box = document.getElementById('parse-summary');
+    if (!box) return;
+    const info = lastParseInfo;
+    const total = (info.rows || []).length;
+    const modos = {
+        encabezado: 'por encabezados',
+        posicion: 'por posición de la planilla',
+        contenido: 'por el contenido de las columnas (formato distinto al habitual)',
+    };
+    const sinId = (info.sinIdentificar || []).length;
+    const dudoso = origen !== 'ia' && (info.filasConProblemas || (sinId && info.mode !== 'encabezado'));
+    const parts = [];
+    if (origen === 'ia') {
+        parts.push(`<strong>Interpretado con IA:</strong> ${total} fila${total === 1 ? '' : 's'}. Revisa cada valor antes de guardar.`);
+    } else {
+        parts.push(`<strong>${total} fila${total === 1 ? '' : 's'}</strong> detectada${total === 1 ? '' : 's'} ${modos[info.mode] || ''}.`);
+        const align = parseAlignmentMessage();
+        if (align) parts.push(escapeAttr(align));
+        if ((info.encabezadosIgnorados || []).length) {
+            parts.push(`Columnas no usadas: ${info.encabezadosIgnorados.map(escapeAttr).join(', ')}.`);
+        } else if (sinId) {
+            parts.push(`${sinId} columna${sinId === 1 ? '' : 's'} con datos sin identificar.`);
+        }
+        if (info.filasConProblemas) {
+            parts.push(`${info.filasConProblemas} fila${info.filasConProblemas === 1 ? '' : 's'} con fecha, contenedor u horas dudosas.`);
+        }
+        if (dudoso && document.getElementById('ia-btn')) {
+            parts.push('Si el formato es muy distinto, prueba <strong>Interpretar con IA</strong>.');
+        }
+    }
+    box.innerHTML = parts.join(' ');
+    box.className = 'parse-summary ' + (dudoso ? 'is-warning' : 'is-ok');
+    box.hidden = false;
 }
 
 function parseAlignmentMessage() {
@@ -940,6 +988,48 @@ document.addEventListener('DOMContentLoaded', () => {
     const previewCard = document.getElementById('preview-card');
     const previewWrap = document.querySelector('.preview-wrap');
     const registrosInput = document.getElementById('registros_json');
+    const iaFlag = document.getElementById('interpretado_ia');
+    const iaBtn = document.getElementById('ia-btn');
+
+    iaBtn?.addEventListener('click', async () => {
+        const texto = (pasteSource?.value || '').trim();
+        if (!texto) {
+            notifyUser('Pega primero la programación que quieres interpretar.', 'warning');
+            return;
+        }
+        const original = iaBtn.innerHTML;
+        iaBtn.disabled = true;
+        iaBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Interpretando...';
+        try {
+            const response = await fetch(@json(route('descarga-contenedores.interpretar-ia')), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('#bulk-form input[name="_token"]').value,
+                },
+                body: JSON.stringify({ texto }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.message || 'No pude interpretar la programación con IA.');
+            const filas = Array.isArray(data.filas) ? data.filas : [];
+            if (!filas.length) {
+                notifyUser('La IA no encontró contenedores en el texto pegado.', 'warning');
+                return;
+            }
+            lastParseInfo = { mode: 'ia', rows: filas, sinIdentificar: [], filasConProblemas: 0 };
+            renderPreview(enrichImportRows(filas));
+            if (iaFlag) iaFlag.value = '1';
+            renderParseSummary('ia');
+            previewCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (error) {
+            console.error('Error interpretando con IA:', error);
+            notifyUser(error.message || 'No pude interpretar la programación con IA.', 'error');
+        } finally {
+            iaBtn.disabled = false;
+            iaBtn.innerHTML = original;
+        }
+    });
 
     if (previewBtn && pasteSource) {
         previewBtn.addEventListener('click', () => {
@@ -950,6 +1040,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 renderPreview(rows);
+                if (iaFlag) iaFlag.value = '0';
+                renderParseSummary('tabla');
                 const alignment = parseAlignmentMessage();
                 if (alignment) notifyUser(alignment, 'warning');
                 previewCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1020,6 +1112,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <style>
 .quick-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, .8fr); gap: 1.5rem; align-items: start; }
+.parse-summary { margin-top: .75rem; padding: .6rem .8rem; border-radius: 10px; font-size: .86rem; line-height: 1.45; border: 1px solid rgba(100, 116, 139, .3); }
+.parse-summary.is-ok { background: rgba(16, 185, 129, .08); border-color: rgba(16, 185, 129, .35); }
+.parse-summary.is-warning { background: rgba(245, 158, 11, .1); border-color: rgba(245, 158, 11, .45); }
 .paste-area { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; min-height: 230px; }
 .helper-text { color: var(--text-muted); font-size: .86rem; line-height: 1.45; margin: 0 0 .75rem; }
 .readonly-control { background: var(--surface-bg); color: var(--text-main); cursor: default; }

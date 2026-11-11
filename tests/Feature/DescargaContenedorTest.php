@@ -430,6 +430,64 @@ class DescargaContenedorTest extends TestCase
         $this->assertEquals(300.0, round((float) $participantes->sum('monto_calculado'), 2));
     }
 
+    public function test_ia_interpretation_is_hidden_and_rejected_without_api_key(): void
+    {
+        config(['services.openai.key' => null, 'services.gemini.key' => null]);
+        $user = $this->createSuperAdminUser();
+
+        $this->actingAs($user)->get(route('descarga-contenedores.carga-rapida'))
+            ->assertOk()
+            ->assertDontSee('id="ia-btn"', false);
+
+        $this->actingAs($user)
+            ->postJson(route('descarga-contenedores.interpretar-ia'), ['texto' => 'MSBU5332438 02/11/2026'])
+            ->assertStatus(503);
+    }
+
+    public function test_ia_interpretation_returns_only_known_fields_and_marks_origin(): void
+    {
+        config(['services.openai.key' => 'test-key', 'descarga_contenedores.ia.provider' => 'openai']);
+        \Illuminate\Support\Facades\Http::fake([
+            'api.openai.com/*' => \Illuminate\Support\Facades\Http::response([
+                'choices' => [['message' => ['content' => json_encode(['filas' => [
+                    ['contenedor' => 'MSBU5332438', 'fecha' => '02/11/2026', 'hora_inicio_descarga' => '08:40', 'cajas' => 3875, 'campo_inventado' => 'x', 'producto' => ['no' => 'escalar']],
+                    ['contenedor' => '', 'fecha' => ''],
+                ]])]]],
+            ]),
+        ]);
+        $user = $this->createSuperAdminUser();
+
+        $this->actingAs($user)->get(route('descarga-contenedores.carga-rapida'))->assertSee('id="ia-btn"', false);
+
+        $filas = $this->actingAs($user)
+            ->postJson(route('descarga-contenedores.interpretar-ia'), ['texto' => "Llegan hoy\nMSBU5332438 02/11 8:40 3875 cajas"])
+            ->assertOk()
+            ->json('filas');
+
+        $this->assertCount(1, $filas, 'las filas vacías se descartan');
+        $this->assertSame('MSBU5332438', $filas[0]['contenedor']);
+        $this->assertSame('3875', $filas[0]['cajas']);
+        $this->assertSame('', $filas[0]['producto']);
+        $this->assertArrayNotHasKey('campo_inventado', $filas[0]);
+
+        $this->actingAs($user)->post(route('descarga-contenedores.store-bulk'), [
+            'interpretado_ia' => '1',
+            'registros_json' => json_encode([$filas[0]]),
+        ])->assertRedirect();
+        $this->assertSame('pegado_ia', DescargaContenedorCarga::latest('id')->value('origen'));
+    }
+
+    public function test_ia_service_failure_returns_friendly_error(): void
+    {
+        config(['services.openai.key' => 'test-key', 'descarga_contenedores.ia.provider' => 'openai']);
+        \Illuminate\Support\Facades\Http::fake(['api.openai.com/*' => \Illuminate\Support\Facades\Http::response([], 500)]);
+
+        $this->actingAs($this->createSuperAdminUser())
+            ->postJson(route('descarga-contenedores.interpretar-ia'), ['texto' => 'MSBU5332438'])
+            ->assertStatus(502)
+            ->assertJsonPath('message', 'No pude interpretar la programación con IA. Intenta de nuevo o ajusta la tabla.');
+    }
+
     public function test_bulk_store_does_not_turn_a_bare_time_into_todays_date(): void
     {
         $user = $this->createSuperAdminUser();

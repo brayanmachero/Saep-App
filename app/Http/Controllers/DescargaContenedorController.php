@@ -8,9 +8,11 @@ use App\Models\DescargaContenedor;
 use App\Models\DescargaContenedorCarga;
 use App\Models\DescargaContenedorTarifa;
 use App\Models\TalanaTrabajador;
+use App\Services\ContenedoresIaInterpreter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -545,11 +547,38 @@ class DescargaContenedorController extends Controller
         return back()->with('success', 'Evidencia eliminada.');
     }
 
-    public function cargaRapida()
+    public function cargaRapida(ContenedoresIaInterpreter $interprete)
     {
         return view('descarga_contenedores.carga_rapida', array_merge($this->formData(), [
             'existingContainerDates' => $this->existingContainerDateKeys(),
+            'iaDisponible' => $interprete->enabled(),
         ]));
+    }
+
+    public function interpretarConIa(Request $request, ContenedoresIaInterpreter $interprete)
+    {
+        $maxChars = (int) config('descarga_contenedores.ia.max_chars', 20000);
+        $request->validate(['texto' => ['required', 'string', 'max:' . $maxChars]]);
+
+        if (! $interprete->enabled()) {
+            return response()->json(['message' => 'La interpretación con IA no está configurada.'], 503);
+        }
+
+        try {
+            $filas = $interprete->interpret((string) $request->input('texto'));
+        } catch (\Throwable $e) {
+            Log::warning('Contenedores: interpretación con IA falló', ['error' => $e->getMessage(), 'user' => auth()->id()]);
+
+            return response()->json(['message' => 'No pude interpretar la programación con IA. Intenta de nuevo o ajusta la tabla.'], 502);
+        }
+
+        Log::info('Contenedores: programación interpretada con IA', [
+            'user' => auth()->id(),
+            'provider' => $interprete->provider(),
+            'filas' => count($filas),
+        ]);
+
+        return response()->json(['filas' => $filas]);
     }
 
     public function storeBulk(Request $request)
@@ -573,7 +602,7 @@ class DescargaContenedorController extends Controller
         $resultado = DB::transaction(function () use ($request, $payload, $omitDuplicates) {
             $carga = DescargaContenedorCarga::create([
                 'nombre' => $request->input('nombre') ?: 'Carga rápida ' . now()->format('d/m/Y H:i'),
-                'origen' => 'pegado',
+                'origen' => $request->boolean('interpretado_ia') ? 'pegado_ia' : 'pegado',
                 'filas_detectadas' => count($payload),
                 'filas_creadas' => 0,
                 'filas_con_alertas' => 0,

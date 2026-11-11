@@ -219,6 +219,9 @@ Route::middleware('auth')->group(function () {
         Route::post('descarga-contenedores/carga-rapida', [DescargaContenedorController::class, 'storeBulk'])
             ->name('descarga-contenedores.store-bulk')
             ->middleware('modulo:descarga_contenedores,puede_crear');
+        Route::post('descarga-contenedores/carga-rapida/interpretar-ia', [DescargaContenedorController::class, 'interpretarConIa'])
+            ->name('descarga-contenedores.interpretar-ia')
+            ->middleware(['modulo:descarga_contenedores,puede_crear', 'throttle:20,1']);
         Route::get('descarga-contenedores/cargas', [DescargaContenedorController::class, 'cargas'])
             ->name('descarga-contenedores.cargas');
         Route::get('descarga-contenedores/dotacion', [DescargaContenedorController::class, 'dotacion'])

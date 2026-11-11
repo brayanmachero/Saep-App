@@ -10,6 +10,15 @@
 
 return [
 
+    // Interpretación con IA de programaciones en formatos no reconocidos (botón opcional
+    // en Programación). Se activa solo si hay clave: OPENAI_API_KEY o GEMINI_API_KEY.
+    'ia' => [
+        'provider' => env('CONTENEDORES_IA_PROVIDER', 'openai'), // openai | gemini
+        'model' => env('CONTENEDORES_IA_MODEL'),                 // vacío = modelo económico por defecto
+        'timeout' => (int) env('CONTENEDORES_IA_TIMEOUT', 45),
+        'max_chars' => 20000,
+    ],
+
     // Centros del módulo por código oficial Talana (CODIGO-MODALIDAD). Es la forma
     // preferida: coincide exacto con centros_costo.codigo_talana (o codigo) una
     // vez ejecutado `php artisan centros:sync-talana --aplicar`.

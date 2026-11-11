@@ -139,6 +139,10 @@ return [
         'key' => env('OPENAI_API_KEY'),
     ],
 
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+    ],
+
     'talana' => [
         'inventory_companies' => ['SUB' => (int) env('TALANA_EMPRESA_SAEP_ID', 1039), 'EST' => (int) env('TALANA_EMPRESA_SAEP_EST_ID', 1081)],
         'base_url'    => env('TALANA_API_BASE_URL', 'https://talana.com/es/api'),

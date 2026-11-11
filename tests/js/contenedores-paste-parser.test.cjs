@@ -74,3 +74,63 @@ test('detecta datos corridos que no se pudieron alinear', () => {
     const issues = rowIssues({ fecha: '8:30:00', contenedor: '8:40:00', hora_cita: '2', hora_inicio_descarga: '', hora_termino_descarga: '' });
     assert.strictEqual(issues.length, 3);
 });
+
+const j = v => JSON.stringify(v);
+
+test('sin encabezado y con columnas en otro orden se asigna por contenido', () => {
+    const filas = [
+        ['TXGU5578197', 'LUNES', '02/11/2026', '8:30', '8:55', '12:20', 'JUGUETES VARIOS', '24', '4652', '41', 'LTS PEÑON', 'OK, DESCARGADO', 'CNT001'],
+        ['MSBU5332438', 'LUNES', '02/11/2026', '8:30', '8:40', '11:50', 'JUGUETES VARIOS', '2', '3875', '38', 'LTS PEÑON', 'OK, DESCARGADO', 'CNT001'],
+    ];
+    const res = parse(tsv(filas), { centers: ['LTS PEÑON SUB', 'MAERSK LA VARA SUB'] });
+    assert.strictEqual(res.mode, 'contenido');
+    const r = res.rows[0];
+    assert.strictEqual(r.contenedor, 'TXGU5578197');
+    assert.strictEqual(r.fecha, '02/11/2026');
+    assert.strictEqual(r.dia, 'LUNES');
+    assert.strictEqual(r.hora_cita, '8:30');
+    assert.strictEqual(r.hora_inicio_descarga, '8:55');
+    assert.strictEqual(r.hora_termino_descarga, '12:20');
+    assert.strictEqual(r.producto, 'JUGUETES VARIOS');
+    assert.strictEqual(r.item, '24');
+    assert.strictEqual(r.cajas, '4652');
+    assert.strictEqual(r.pallets, '41');
+    assert.strictEqual(r.bodega, 'LTS PEÑON');
+    assert.strictEqual(r.observacion, 'OK, DESCARGADO');
+    assert.strictEqual(r.fact_codigo, 'CNT001');
+    assert.strictEqual(res.filasConProblemas, 0);
+    assert.strictEqual(j(res.sinIdentificar), j([]));
+});
+
+test('encabezados con sinónimos y en otro orden', () => {
+    const res = parse(tsv([
+        ['N° Contenedor', 'Fecha Llegada', 'Cliente', 'CD', 'Hora Llegada', 'H. Inicio', 'Hora Fin', 'Bultos', 'Paletas', 'Descripción', 'Comentarios', 'Patente'],
+        ['MSMU6301712', '02-11-2026', 'MAERSK', 'LTS QUILICURA', '08:30', '12:10', '14:20', '6139', '43', 'JUGUETES', 'OK', 'ABCD12'],
+    ]));
+    assert.strictEqual(res.mode, 'encabezado');
+    const r = res.rows[0];
+    assert.strictEqual(r.contenedor, 'MSMU6301712');
+    assert.strictEqual(r.fecha, '02-11-2026');
+    assert.strictEqual(r.operacion, 'MAERSK');
+    assert.strictEqual(r.bodega, 'LTS QUILICURA');
+    assert.strictEqual(r.hora_cita, '08:30');
+    assert.strictEqual(r.hora_inicio_descarga, '12:10');
+    assert.strictEqual(r.hora_termino_descarga, '14:20');
+    assert.strictEqual(r.cajas, '6139');
+    assert.strictEqual(r.pallets, '43');
+    assert.strictEqual(r.producto, 'JUGUETES');
+    assert.strictEqual(r.observacion, 'OK');
+    assert.strictEqual(j(res.encabezadosIgnorados), j(['Patente']));
+    assert.strictEqual(j(res.sinIdentificar), j([11]));
+});
+
+test('una fila de datos no se confunde con encabezado', () => {
+    const res = parse(tsv([['MAERSK', 'BODEGA', 'FECHA', '02/11/2026', 'TXGU5578197']]));
+    assert.notStrictEqual(res.mode, 'encabezado');
+    assert.strictEqual(res.rows.length, 1);
+});
+
+test('texto que no es una tabla queda con problemas para sugerir IA', () => {
+    const res = parse('Hola equipo, mañana llegan 2 contenedores a Quilicura a las 9 y a las 11');
+    assert.strictEqual(res.filasConProblemas, 1);
+});
