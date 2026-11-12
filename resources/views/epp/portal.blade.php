@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Solicitud de EPP | SAEP</title><link rel="stylesheet" href="{{ asset('css/epp-portal.css') }}?v=20261112c"></head>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Solicitud de EPP | SAEP</title><link rel="stylesheet" href="{{ asset('css/epp-portal.css') }}?v=20261112e"></head>
 <body><header><div><img src="{{ asset('brand/wp/Logo_Saep.svg') }}" alt="SAEP"><span>Bodega</span></div></header>
 <main><div class="epp-hero"><div><h1>Solicitud de EPP</h1><p>Solicita equipos de protección, ropa de trabajo e insumos para tu centro.</p></div></div>
 @if($errors->any())<section role="alert"><strong>Revisa la solicitud</strong><ul>@foreach($errors->messages() as $field => $messages)
