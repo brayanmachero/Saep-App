@@ -3,9 +3,9 @@
  const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
  const centers=[...$('centro').options];
  $('buscar-centro').oninput=()=>{const id=$('centro').value; $('centro').replaceChildren(...centers.filter(o=>!o.value||o.value===id||norm(o.text).includes(norm($('buscar-centro').value)))); $('centro').value=id;};
- const label=i=>[i.nombre,i.talla,i.codigo].filter(Boolean).join(' · ');
+ const label = item => [item.nombre, item.talla?.trim()].filter(Boolean).join(' · ');
  function filter(){const words=norm($('buscar').value).split(/\s+/).filter(Boolean);
- const found=catalog.filter(i=>(!$('categoria').value||$('categoria').value===i.categoria)&&(!$('talla').value||$('talla').value===i.talla)&&words.every(w=>norm(label(i)+' '+i.categoria).includes(w)));
+ const found=catalog.filter(i=>(!$('categoria').value||$('categoria').value===i.categoria)&&(!$('talla').value||$('talla').value===i.talla)&&words.every(w=>norm([label(i), i.codigo, i.categoria].join(' ')).includes(w)));
  $('variante').replaceChildren(...found.map(i=>new Option(label(i),i.id))); $('agregar').disabled=!found.length;
  if(!found.length)$('variante').add(new Option('Sin coincidencias','')); }
  for(const id of ['buscar','categoria','talla']) $(id).addEventListener('input',filter);
