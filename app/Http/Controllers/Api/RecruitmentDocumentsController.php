@@ -24,6 +24,7 @@ class RecruitmentDocumentsController extends Controller
             ->where('rut', $rut)
             ->orderByDesc('es_vigente')
             ->latest('id')
+            ->limit(1)
             ->get();
 
         return response()->json([
