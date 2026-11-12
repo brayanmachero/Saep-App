@@ -1,1 +1,61 @@
-*{box-sizing:border-box}body{margin:0;background:#f4f6fb;color:#172447;font:16px/1.5 system-ui,sans-serif}header{background:white;border-bottom:3px solid #ee7935}header>div,main{max-width:840px;margin:auto;padding:18px 20px}header>div,.person,.line{display:flex;align-items:center;justify-content:space-between;gap:12px}header img{width:91px;height:44px;object-fit:contain}header span,small{color:#53627b;font-size:.85rem}main{padding-bottom:60px}h1{font-size:clamp(1.8rem,5vw,2.6rem);margin:0}h2{font-size:1.2rem;margin:0 0 12px}.kicker,small{font-weight:750;letter-spacing:.09em}.kicker{color:#a24515;font-size:.8rem;margin-bottom:4px}section{background:#fff;padding:clamp(16px,4vw,26px);border:1px solid #dce1ec;border-radius:12px;margin:16px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}label,.person>div{display:grid;gap:4px}label{font-weight:600;margin-bottom:12px}input,textarea,select,button,.button{font:inherit;border-radius:7px;padding:10px 12px}input,textarea,select{border:1px solid #bdc8d7;width:100%;min-width:0;background:white}.button,button{display:inline-block;cursor:pointer;background:#1d2858;color:white;font-weight:650;text-decoration:none;border:0}.secondary{background:#edf0f9;color:#1d2858}.line{padding:10px 0;border-bottom:1px solid #ddd}.line span{flex:1}.line input{width:78px}.line button{font-size:.85rem}.line small{display:block}summary{cursor:pointer;padding:8px 0}button:disabled{opacity:.6}h3{font-size:1rem}@media(max-width:560px){.grid{grid-template-columns:1fr;gap:0}.line{flex-wrap:wrap}.line span{min-width:55%}header span{font-size:.72rem}}
+@font-face {
+    font-family: Onest;
+    src: url("../brand/wp/fonts/onest-regular.woff2") format("woff2");
+    font-display: swap;
+}
+@font-face {
+    font-family: Onest;
+    src: url("../brand/wp/fonts/onest-bold-1.woff2") format("woff2");
+    font-weight: 700;
+    font-display: swap;
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    color: #162347;
+    background: #f3f5f8;
+    font: 16px/1.5 Onest, system-ui, sans-serif;
+}
+header { background: #101b40; border-bottom: 3px solid #ff7a41; }
+header > div, main { max-width: 980px; margin: auto; padding: 20px; }
+header > div, .person, .line { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+header img { width: 154px; max-width: 45%; height: auto; }
+header span { color: white; font-weight: 700; }
+main { padding-bottom: 60px; }
+.epp-hero {
+    color: #fff;
+    background: linear-gradient(90deg, #101b40 12%, rgba(16,27,64,.94) 42%, rgba(16,27,64,.28) 100%), url("../brand/wp/optimized/header_servicios_logistica.webp") center 45% / cover;
+    border-radius: 16px;
+    padding: clamp(24px, 5vw, 52px);
+}
+.epp-hero > div { max-width: 510px; }
+.epp-hero p { margin: 12px 0 0; }
+h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.06; letter-spacing: -.035em; margin: 0; }
+h2 { font-size: 1.3rem; margin: 0 0 12px; }
+h3 { font-size: 1rem; }
+small { color: #52617c; font-size: .8rem; font-weight: 700; }
+section { background: white; border: 1px solid #dbe0e8; border-radius: 14px; padding: clamp(18px,4vw,30px); margin: 16px 0; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+label, .person > div { display: grid; gap: 5px; }
+label { font-weight: 700; margin-bottom: 14px; }
+input, select, textarea, button, .button { font: inherit; padding: 11px 14px; border-radius: 8px; }
+input, select, textarea { width: 100%; min-width: 0; color: inherit; border: 1px solid #acb6c7; background: white; font-weight: 400; }
+.button, button { display: inline-block; color: white; background: #152552; border: 0; font-weight: 700; cursor: pointer; text-decoration: none; }
+.button:hover, button:hover { background: #263d73; }
+.secondary { background: #edf0f7; color: #182c54; }
+.secondary:hover { background: #dde5f1; }
+:focus-visible { outline: 3px solid #da682c; outline-offset: 2px; }
+.line { padding: 10px 0; border-bottom: 1px solid #dbe0e8; }
+.line span { flex: 1; }
+.line input { width: 82px; }
+.line small { display: block; }
+summary { cursor: pointer; padding: 8px 0; }
+button:disabled { opacity: .55; }
+@media (max-width: 580px) {
+    header > div, main { padding: 15px; }
+    header img { width: 128px; }
+    .grid { grid-template-columns: 1fr; gap: 0; }
+    .line { flex-wrap: wrap; }
+    .line span { min-width: 55%; }
+    .epp-hero { background-position: 61% center; }
+}

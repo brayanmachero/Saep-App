@@ -3243,7 +3243,7 @@ class InventarioBodegaStockTest extends TestCase
     public function test_epp_portal_verifies_identity_catalog_and_receives_request_only_once(): void
     {
         (require database_path('migrations/2026_11_12_180000_create_solicitudes_epp.php'))->up();
-        [, , , $variant] = $this->inventoryContext();
+        [$manager, , , $variant] = $this->inventoryContext();
         $center = InventarioCentroCosto::create(['nombre'=>'Centro prueba','nombre_normalizado'=>'centro prueba','activo'=>true]);
         $payload = ['folio'=>(string) \Illuminate\Support\Str::uuid(),'centro_id'=>$center->id,'mes'=>'2026-11','cantidades'=>[$variant->id=>3],'email'=>'falso@saep.cl','nombre'=>'Falso'];
         $this->get(route('epp.portal'))->assertOk()->assertSee('Continuar con Microsoft')->assertDontSee('Centro prueba');
@@ -3267,6 +3267,11 @@ class InventarioBodegaStockTest extends TestCase
         $this->post(route('epp.store'),$payload)->assertSessionHasNoErrors();
         $this->assertDatabaseCount('solicitudes_epp',2);
         $this->get(route('inventario-bodega.epp.index'))->assertRedirect();
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)->actingAs($manager);
+        $this->get(route('inventario-bodega.epp.index', ['buscar' => 'Centro prueba', 'mes' => '2026-11']))
+            ->assertOk()->assertSee('Pedidos recibidos')->assertSee('2 resmas');
+        $this->get(route('inventario-bodega.epp.index', ['mes' => '2026-10']))
+            ->assertOk()->assertSee('No hay pedidos con estos filtros')->assertDontSee('2 resmas');
     }
 
     private function inventoryContext(): array

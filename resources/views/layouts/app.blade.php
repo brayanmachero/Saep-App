@@ -76,9 +76,13 @@
                 </button>
                 <div class="nav-section-items">
                     @if(auth()->user()->tieneAcceso('inventario_bodega') && \Illuminate\Support\Facades\Route::has('inventario-bodega.index'))
-                    <a href="{{ route('inventario-bodega.index') }}" class="nav-item {{ request()->routeIs('inventario-bodega.*') ? 'active' : '' }}">
+                    <a href="{{ route('inventario-bodega.index') }}" class="nav-item {{ request()->routeIs('inventario-bodega.*') && !request()->routeIs('inventario-bodega.epp.index') ? 'active' : '' }}">
                         <i class="bi bi-boxes"></i>
                         <span>Inventario</span>
+                    </a>
+                    <a href="{{ route('inventario-bodega.epp.index') }}" class="nav-item {{ request()->routeIs('inventario-bodega.epp.index') ? 'active' : '' }}">
+                        <i class="bi bi-clipboard-check"></i>
+                        <span>Solicitudes de EPP</span>
                     </a>
                     @endif
                     @if(auth()->user()->tieneAcceso('entregas_bodega_dashboard') && \Illuminate\Support\Facades\Route::has('entregas-bodega-dashboard.index'))

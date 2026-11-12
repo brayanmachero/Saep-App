@@ -71,8 +71,30 @@ class SolicitudEppController extends Controller
         return redirect()->route('epp.portal')->with('pedido_ok', $data['folio']);
     }
 
-    public function inbox()
+    public function inbox(Request $request)
     {
-        return view('epp.inbox', ['requests'=>DB::table('solicitudes_epp')->latest('id')->paginate(30)]);
+        $filters = $request->validate([
+            'buscar' => ['nullable', 'string', 'max:150'],
+            'mes' => ['nullable', 'date_format:Y-m'],
+        ]);
+        $query = DB::table('solicitudes_epp');
+        if (filled($filters['buscar'] ?? null)) {
+            $term = trim($filters['buscar']);
+            $query->where(function ($query) use ($term) {
+                foreach (['centro', 'nombre', 'email'] as $field) {
+                    $query->orWhere($field, 'like', '%'.$term.'%');
+                }
+                if (ctype_digit(ltrim($term, '#'))) {
+                    $query->orWhere('id', (int) ltrim($term, '#'));
+                }
+            });
+        }
+        if (filled($filters['mes'] ?? null)) {
+            $query->where('mes', $filters['mes']);
+        }
+        return view('epp.inbox', [
+            'requests' => $query->latest('id')->paginate(30)->withQueryString(),
+            'filters' => $filters,
+        ]);
     }
 }

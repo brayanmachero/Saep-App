@@ -1,0 +1,26 @@
+.epp-inbox { display: grid; gap: 16px; }
+.epp-heading {
+    padding: clamp(20px, 4vw, 36px);
+    background: #101b40;
+    color: white;
+    border-left: 5px solid #ff7a41;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+.epp-heading h2, .epp-heading p { margin: 0; color: inherit; }
+.epp-heading p { color: #ffc5a8; font-size: .9rem; }
+.epp-filters, .epp-empty, .epp-request { background: white; border: 1px solid #dbe0e8; border-radius: 12px; padding: 18px; }
+.epp-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.epp-filters label { display: grid; gap: 4px; }
+.epp-filters label:first-child { flex: 1 1 260px; }
+.epp-empty { text-align: center; padding: 40px 16px; }
+.epp-empty i { color: #a5451e; font-size: 1.7rem; }
+.epp-empty h3 { font-size: 1.15rem; margin: 10px 0; }
+.epp-request summary { cursor: pointer; }
+.epp-request summary span { display: block; color: #54627a; margin-top: 4px; }
+.epp-request > div { margin-top: 12px; border-top: 1px solid #dbe0e8; padding-top: 12px; }
+@media (max-width: 540px) { .epp-filters label { width: 100%; } }
