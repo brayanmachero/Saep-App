@@ -3240,6 +3240,35 @@ class InventarioBodegaStockTest extends TestCase
             ->assertDontSee('Aplicar salida de stock');
     }
 
+    public function test_epp_portal_verifies_identity_catalog_and_receives_request_only_once(): void
+    {
+        (require database_path('migrations/2026_11_12_180000_create_solicitudes_epp.php'))->up();
+        [, , , $variant] = $this->inventoryContext();
+        $center = InventarioCentroCosto::create(['nombre'=>'Centro prueba','nombre_normalizado'=>'centro prueba','activo'=>true]);
+        $payload = ['folio'=>(string) \Illuminate\Support\Str::uuid(),'centro_id'=>$center->id,'mes'=>'2026-11','cantidades'=>[$variant->id=>3],'email'=>'falso@saep.cl','nombre'=>'Falso'];
+        $this->get(route('epp.portal'))->assertOk()->assertSee('Continuar con Microsoft')->assertDontSee('Centro prueba');
+        $this->post(route('epp.store'),$payload)->assertForbidden();
+        $this->withSession(['epp.microsoft_identity'=>['name'=>'Persona prueba','email'=>'prueba@saep.cl']]);
+        $this->get(route('epp.portal'))->assertOk()->assertSee('Centro prueba')->assertSee('Persona prueba');
+        $this->post(route('epp.store'),$payload)->assertSessionHasNoErrors()->assertRedirect(route('epp.portal'));
+        $this->post(route('epp.store'),$payload)->assertSessionHasNoErrors()->assertRedirect(route('epp.portal'));
+        $this->assertDatabaseCount('solicitudes_epp',1);
+        $stored = DB::table('solicitudes_epp')->first();
+        $this->assertSame('prueba@saep.cl',$stored->email);
+        $this->assertSame(3,json_decode($stored->articulos,true)[0]['cantidad']);
+        $this->assertDatabaseCount('inventario_movimientos',0);
+        $this->get(route('epp.portal'))->assertOk()->assertSee('Pedido #1');
+        $variant->update(['activo'=>false]);
+        $payload['folio']=(string) \Illuminate\Support\Str::uuid();
+        $this->post(route('epp.store'),$payload)->assertSessionHasErrors('cantidades');
+        unset($payload['cantidades']);
+        $this->post(route('epp.store'),$payload)->assertSessionHasErrors('cantidades');
+        $payload['insumos']='2 resmas';
+        $this->post(route('epp.store'),$payload)->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('solicitudes_epp',2);
+        $this->get(route('inventario-bodega.epp.index'))->assertRedirect();
+    }
+
     private function inventoryContext(): array
     {
         $role = Rol::create(['codigo' => 'SUPER_ADMIN', 'nombre' => 'Super Admin']);

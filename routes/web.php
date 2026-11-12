@@ -43,6 +43,7 @@ use App\Http\Controllers\InventarioBodegaController;
 use App\Http\Controllers\GestionVehiculosController;
 use App\Http\Controllers\VehiculoActaController;
 use App\Http\Controllers\ReservaVehiculoPublicoController;
+use App\Http\Controllers\SolicitudEppController;
 use App\Http\Controllers\CampoOpcionController;
 use App\Http\Controllers\MisFormulariosController;
 use App\Http\Controllers\ContratacionController;
@@ -120,6 +121,16 @@ Route::prefix('postulacion')->middleware('throttle:180,1')->group(function () {
     Route::post('/enviar',         [ContratacionPublicoController::class, 'store'])->middleware('throttle:20,1')->name('contratacion-publico.store');
     Route::get('/confirmacion/{folio}', [ContratacionPublicoController::class, 'confirmacion'])->name('contratacion-publico.confirmacion')->middleware('signed');
     Route::post('/logout',         [ContratacionPublicoController::class, 'logout'])->name('contratacion-publico.logout');
+});
+
+Route::prefix('solicitud-epp')->middleware('throttle:90,1,epp-read')->group(function () {
+    Route::get('/', [SolicitudEppController::class, 'portal'])->name('epp.portal');
+    Route::get('/ingresar', [SolicitudEppController::class, 'login'])->name('epp.login');
+    Route::post('/', [SolicitudEppController::class, 'store'])->middleware('throttle:12,1,epp-write')->name('epp.store');
+    Route::post('/salir', function (Illuminate\Http\Request $request) {
+        $request->session()->forget('epp.microsoft_identity');
+        return redirect()->route('epp.portal');
+    })->name('epp.logout');
 });
 
 // --- RESERVAS DE VEHICULOS (portal publico con cuenta corporativa Microsoft) ---
@@ -524,6 +535,7 @@ Route::middleware('auth')->group(function () {
 
       // --- BODEGA: INVENTARIO Y CONTEOS FISICOS ---
       Route::middleware('modulo:inventario_bodega')->prefix('inventario-bodega')->name('inventario-bodega.')->group(function () {
+        Route::get('solicitudes-epp', [SolicitudEppController::class, 'inbox'])->name('epp.index');
           Route::get('/', [InventarioBodegaController::class, 'index'])->name('index');
           Route::get('stock/{variante}/detalle', [InventarioBodegaController::class, 'stockDetail'])->name('stock.detalle');
           Route::get('exportar', [InventarioBodegaController::class, 'exportBalances'])->name('export');

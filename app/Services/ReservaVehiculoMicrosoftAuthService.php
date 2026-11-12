@@ -14,12 +14,13 @@ class ReservaVehiculoMicrosoftAuthService
 
     private const SESSION_IDENTITY = 'reserva_vehiculo_microsoft_identity';
 
-    public function urlAutorizacion(Request $request): string
+    public function urlAutorizacion(Request $request, bool $epp = false): string
     {
         $this->asegurarConfiguracion();
 
         $state = Str::random(64);
         $request->session()->put(self::SESSION_STATE, $state);
+        $request->session()->put('corporate.oauth.epp', $epp);
 
         return 'https://login.microsoftonline.com/'.rawurlencode($this->tenantId()).'/oauth2/v2.0/authorize?'.http_build_query([
             'client_id' => $this->config('client_id'),
@@ -32,7 +33,7 @@ class ReservaVehiculoMicrosoftAuthService
         ], '', '&', PHP_QUERY_RFC3986);
     }
 
-    public function verificarCallback(Request $request): array
+    public function verificarCallback(Request $request, bool $epp = false): array
     {
         $this->asegurarConfiguracion();
 
@@ -74,7 +75,7 @@ class ReservaVehiculoMicrosoftAuthService
             throw new RuntimeException('Este portal de reservas esta disponible solo para cuentas corporativas SAEP con correo @'.$domain.'.');
         }
 
-        if ($this->config('require_approved_requester', false)
+        if (! $epp && $this->config('require_approved_requester', false)
             && ! SolicitanteReservaVehiculo::query()->where('email', $email)->where('activo', true)->exists()) {
             throw new RuntimeException('Tu cuenta corporativa no esta habilitada aun para solicitar vehiculos. Contacta a Bodega.');
         }
@@ -85,7 +86,8 @@ class ReservaVehiculoMicrosoftAuthService
             'name' => trim((string) ($profile['displayName'] ?? $email)),
         ];
 
-        $request->session()->put(self::SESSION_IDENTITY, $identidad);
+        $request->session()->regenerate();
+        $request->session()->put($epp ? 'epp.microsoft_identity' : self::SESSION_IDENTITY, $identidad);
 
         return $identidad;
     }

@@ -28,6 +28,7 @@
             <button class="btn btn-light inventory-btn" type="button" onclick="document.getElementById('stock-export-dialog').showModal()" title="Elegir bodegas para exportar">
                 <i class="bi bi-file-earmark-excel"></i><span>Exportar stock</span>
             </button>
+            <a class="btn btn-light inventory-btn" href="{{ route('inventario-bodega.epp.index') }}">Solicitudes de EPP</a>
             @if($canCreate)
                 <a class="btn btn-primary inventory-btn" href="{{ route('inventario-bodega.index', ['vista' => 'ingresos']) }}#registrar-ingreso">
                     <i class="bi bi-plus-lg"></i><span>Registrar ingreso</span>

@@ -459,6 +459,15 @@ class ReservaVehiculoTest extends TestCase
         $this->assertStringContainsString('scope=openid%20profile%20email%20User.Read', $location);
     }
 
+    public function test_epp_login_uses_corporate_callback_without_granting_vehicle_identity(): void
+    {
+        config(['services.reservas_vehiculos_microsoft.tenant_id'=>'tenant-saep-id','services.reservas_vehiculos_microsoft.client_id'=>'id','services.reservas_vehiculos_microsoft.client_secret'=>'secret-for-test','services.reservas_vehiculos_microsoft.require_approved_requester'=>true]);
+        Http::fake(['https://login.microsoftonline.com/*'=>Http::response(['access_token'=>'fake']), 'https://graph.microsoft.com/*'=>Http::response(['id'=>'oid','displayName'=>'Persona SAEP','mail'=>'persona@saep.cl'])]);
+        $this->get(route('epp.login'))->assertRedirect()->assertSessionHas('corporate.oauth.epp', true);
+        $this->get(route('reservas-vehiculos.microsoft.callback',['state'=>session('reserva_vehiculo_microsoft_state'),'code'=>'authorization-code']))
+            ->assertRedirect(route('epp.portal'))->assertSessionHas('epp.microsoft_identity.email','persona@saep.cl')->assertSessionMissing('reserva_vehiculo_microsoft_identity');
+    }
+
     public function test_microsoft_callback_rejects_an_external_account_with_a_clear_saep_domain_message(): void
     {
         config([

@@ -1,0 +1,1 @@
+<ul>@foreach(json_decode($r->articulos, true) as $item)<li>{{ $item['cantidad'] }} × {{ $item['nombre'] }} · {{ $item['talla'] }} ({{ $item['codigo'] }})</li>@endforeach</ul>@if($r->insumos)<p><strong>Insumos generales:</strong> {{ $r->insumos }}</p>@endif

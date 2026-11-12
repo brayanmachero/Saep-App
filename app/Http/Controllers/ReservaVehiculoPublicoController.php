@@ -91,12 +91,15 @@ class ReservaVehiculoPublicoController extends Controller
     public function callbackMicrosoft(Request $request)
     {
         try {
-            $this->microsoft->verificarCallback($request);
+            $epp = (bool) $request->session()->pull('corporate.oauth.epp', false);
+            $this->microsoft->verificarCallback($request, $epp);
+            if ($epp) return redirect()->route('epp.portal');
 
             return redirect()->route('reservas-vehiculos.inicio')
                 ->with('success', 'Cuenta corporativa verificada. Ya puedes reservar un vehiculo.');
         } catch (\Throwable $exception) {
             report($exception);
+            if ($epp ?? false) return redirect()->route('epp.portal')->withErrors(['login' => 'No se pudo verificar tu cuenta SAEP. Vuelve a iniciar sesión.']);
 
             return redirect()->route('reservas-vehiculos.inicio')
                 ->with('error', $exception->getMessage());
@@ -143,7 +146,7 @@ class ReservaVehiculoPublicoController extends Controller
             'inicio' => $reserva->inicio->format('Y-m-d\\TH:i'),
             'termino' => $reserva->termino->format('Y-m-d\\TH:i'),
         ])->with('success', config('vehiculos_actas.enabled')
-            ? 'Reserva '.$reserva->codigo.' confirmada. Bodega preparará la inspección y el acta de entrega en SAEP.'
+            ? 'Reserva '.$reserva->codigo.' confirmada. Bodega prepararÃ¡ la inspecciÃ³n y el acta de entrega en SAEP.'
             : 'Reserva '.$reserva->codigo.' confirmada. Bodega recibira la ficha de entrega en Kizeo y recibiras un correo de respaldo.');
     }
 
@@ -354,12 +357,12 @@ class ReservaVehiculoPublicoController extends Controller
             ->push(trim((string) ($data['destino_otro'] ?? '')))
             ->filter()
             ->unique()
-            ->implode(' · ');
+            ->implode(' Â· ');
         $motivo = ReservaVehiculoMotivo::query()->where('activo', true)->findOrFail($data['motivo_id']);
         $detalle = trim((string) ($data['motivo_detalle'] ?? ''));
 
         $data['destino'] = $destino !== '' ? $destino : null;
-        $data['motivo'] = $motivo->nombre.($detalle !== '' ? ' — '.$detalle : '');
+        $data['motivo'] = $motivo->nombre.($detalle !== '' ? ' â€” '.$detalle : '');
 
         return $data;
     }
