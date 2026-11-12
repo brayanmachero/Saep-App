@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Solicitudes de EPP')
 @push('styles')
-<link rel="stylesheet" href="{{ asset('css/epp-inbox.css') }}?v=20261112f">
+<link rel="stylesheet" href="{{ asset('css/epp-inbox.css') }}?v=20261112g">
 @endpush
 @section('content')
 <div class="epp-inbox">
@@ -28,8 +28,9 @@
             <span>{{ $r->estado }}　›</span>
         </button>
         <dialog class="epp-panel" id="pedido-{{ $r->id }}" aria-labelledby="titulo-{{ $r->id }}" data-open="{{ request('pedido') == $r->id ? '1' : '0' }}">
-            <header><h2 id="titulo-{{ $r->id }}">Pedido #{{ $r->id }}</h2><button type="button" data-close aria-label="Cerrar detalle">Cerrar ×</button></header>
-            <div><strong>{{ $r->estado }} · {{ $r->centro }}</strong><p>{{ $r->nombre }} · {{ $r->email }} · Mes solicitado {{ $r->mes }}</p>
+            <header><img class="epp-brand" src="{{ asset('brand/wp/Logo_Saep.svg') }}" alt="SAEP"><h2 id="titulo-{{ $r->id }}">Pedido #{{ $r->id }}</h2><button type="button" data-close aria-label="Cerrar detalle">Cerrar ×</button></header>
+            <div><div class="epp-order-summary"><strong>{{ $r->centro }}</strong><span>{{ $r->estado }}</span></div>
+            <p>{{ $r->nombre }} · {{ $r->email }}<br>Mes solicitado {{ $r->mes }}</p>
             @if($r->items)
                 <div class="epp-scroll"><table>
                     <caption>Disponibilidad actual en Sede Central SAEP</caption>
@@ -47,9 +48,21 @@
                                     @csrf @method('PATCH')
                                     <input type="hidden" name="linea" value="{{ $line }}">
                                     <input type="hidden" name="actual" value="{{ $item['id'] }}">
-                                    <label>Alternativa con stock<select required name="reemplazo"><option value="">Selecciona artículo y talla</option>
-                                        @foreach($r->options[$line] as $variant)<option value="{{ $variant->id }}">{{ $variant->producto->nombre }} {{ $variant->talla }} · Stock {{ (float)$variant->stock_actual }}</option>@endforeach
-                                    </select></label><button class="epp-action">Proponer reemplazo</button>
+                                    <fieldset><legend>Alternativa con stock</legend>
+                                        <details class="epp-picker">
+                                            <summary><span data-picked>Selecciona artículo y talla</span></summary>
+                                            <div class="epp-options">
+                                                @foreach($r->options[$line] as $variant)
+                                                    <label class="epp-option">
+                                                        <input required type="radio" name="reemplazo" value="{{ $variant->id }}">
+                                                        <span data-option>{{ $variant->producto->nombre }}@if(filled($variant->talla)) · Talla {{ $variant->talla }}@endif</span>
+                                                        <small>Stock {{ (float)$variant->stock_actual }}</small>
+                                                    </label>
+                                                @endforeach
+                                            </div>
+                                        </details>
+                                    </fieldset>
+                                    <button type="submit" class="epp-action">Proponer reemplazo</button>
                                 </form>
                             @else Sin alternativas con stock suficiente para esta cantidad.
                             @endif
@@ -73,5 +86,5 @@
     @endforelse
     {{ $requests->links() }}
 </div>
-<script defer src="{{ asset('js/epp-inbox.js') }}"></script>
+<script defer src="{{ asset('js/epp-inbox.js') }}?v=20261112g"></script>
 @endsection

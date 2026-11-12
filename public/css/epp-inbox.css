@@ -60,8 +60,61 @@
 .epp-panel caption { text-align:left; padding:12px 0; font-weight:700; }
 .epp-panel th,.epp-panel td { padding:10px 6px; border-bottom:1px solid #d9dfeb; }
 .epp-panel th { background:#f2f5fa; }
-.epp-replace { display:flex; flex-wrap:wrap; align-items:end; gap:8px; }
-.epp-replace label { flex:1 1 180px; min-width:0; }
-.epp-replace select { width:100%; padding:8px; }
 .epp-history { padding-left:1.4rem; }
 .epp-history li { margin:0 0 .7rem; }
+.epp-panel {
+    --panel-ink: #26334d;
+    --panel-muted: #54627a;
+    --panel-line: #d4dceb;
+    --panel-paper: #fff;
+    --panel-tint: #f7f5ff;
+    --panel-accent: #452580;
+    background: var(--panel-paper);
+    color: var(--panel-ink);
+}
+.dark-mode .epp-panel {
+    --panel-paper: #181f30;
+    --panel-ink: #eef2ff;
+    --panel-muted: #bec8dc;
+    --panel-line: #4b506a;
+    --panel-tint: #29233c;
+    --panel-accent: #dac9ff;
+}
+.epp-panel header { gap: 14px; background: var(--panel-tint); border-bottom: 1px solid var(--panel-line); }
+.epp-panel .epp-brand { width: 68px; height: 30px; object-fit: contain; }
+.epp-panel header h2 { flex: 1; color: var(--panel-ink); font-size: 1.2rem; }
+.epp-panel header button { background: var(--panel-paper); color: var(--panel-ink); border: 1px solid var(--panel-line); }
+.epp-order-summary { display:flex; gap:.8rem; align-items:center; justify-content:space-between; }
+.epp-order-summary strong { font-size:1.1rem; }
+.epp-order-summary span { border-radius:1rem; padding:.3rem .7rem; color:var(--panel-accent); background:var(--panel-tint); font-weight:650; white-space:nowrap; }
+.epp-panel p, .epp-panel small { color:var(--panel-muted); overflow-wrap:anywhere; }
+.epp-panel th { color:var(--panel-muted); background:var(--panel-tint); font-size:.8rem; }
+.epp-panel th, .epp-panel td { border-color:var(--panel-line); }
+.epp-panel table { table-layout:fixed; }
+.epp-panel th:first-child { width:48%; }
+.epp-panel td { overflow-wrap:anywhere; }
+.epp-replace { display:grid; gap:12px; padding:16px; background:var(--panel-tint); border:1px solid var(--panel-line); border-left:3px solid #8757ec; border-radius:10px; }
+.epp-replace fieldset { margin:0; padding:0; min-width:0; border:0; }
+.epp-replace legend { color:var(--panel-accent); font-weight:700; margin-bottom:7px; }
+.epp-picker { border:1px solid var(--panel-line); border-radius:8px; background:var(--panel-paper); }
+.epp-picker summary { display:flex; align-items:center; justify-content:space-between; gap:.8rem; padding:12px; cursor:pointer; list-style:none; }
+.epp-picker summary::-webkit-details-marker { display:none; }
+.epp-picker summary::after { content:''; width:.5rem; height:.5rem; flex:none; border:solid var(--panel-accent); border-width:0 2px 2px 0; transform:rotate(45deg); }
+.epp-picker[open] summary::after { transform:rotate(225deg); }
+.epp-picker summary:focus-visible, .epp-option:focus-within { outline:2px solid #8757ec; outline-offset:-2px; }
+.epp-options { max-height:245px; overflow:auto; overscroll-behavior:contain; border-top:1px solid var(--panel-line); padding:4px; }
+.epp-option { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:8px; padding:10px 7px; cursor:pointer; border-radius:6px; }
+.epp-option:hover, .epp-option:has(:checked) { background:var(--panel-tint); }
+.epp-option input { width:16px; height:16px; margin:0; accent-color:#643ba9; }
+.epp-panel .epp-option small { border-radius:5px; padding:3px 6px; background:#e3f4e9; color:#175734; white-space:nowrap; }
+.epp-replace .epp-action { justify-self:end; background:#321568; }
+.epp-panel .epp-history { margin:12px 0 20px; padding-left:20px; border-left:2px solid var(--panel-line); list-style:disc; }
+.epp-panel .epp-history li::marker { color:#8757ec; }
+@media(max-width:560px) {
+    .epp-panel > div, .epp-panel header { padding:14px; }
+    .epp-panel th:first-child { width:41%; }
+    .epp-panel th, .epp-panel td { padding:8px 3px; font-size:.81rem; }
+    .epp-replace { padding:10px; }
+    .epp-replace .epp-action { width:100%; }
+}
+.epp-replace .epp-action:disabled { opacity:.55; cursor:default; }
