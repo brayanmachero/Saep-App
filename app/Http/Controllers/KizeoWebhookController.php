@@ -564,7 +564,13 @@ class KizeoWebhookController extends Controller
             $actividad  = $getVal('actividad_de_');
             $relator    = $getVal('nombre_relator_');
             $supervisor = $getVal('supervisor');
-            $lugar      = $getVal('lugar_de_la_capacitacion');
+            $lugar      = $this->automations->fieldDisplayValue($formId, $fields, 'lugar_de_la_capacitacion');
+            if (\Illuminate\Support\Str::isUuid($lugar)) {
+                throw new \RuntimeException('No se pudo resolver el centro de la charla en la lista de Kizeo.');
+            }
+            if ($lugar === '') $lugar = '-';
+            // Mantener la carpeta histórica del centro tras el cambio de etiqueta en Kizeo.
+            if ($lugar === 'SODIMAC CONT LO ESPEJO SUB') $lugar = 'SODIMAC CONT. LO ESPEJO SUB';
 
             // Fallbacks
             if ($fecha === '-') $fecha = date('Y-m-d');
@@ -1600,10 +1606,13 @@ class KizeoWebhookController extends Controller
     private function cleanSharePointPath(string $path): string
     {
         $path = str_replace('\\', '/', $path);
-        $segments = array_map(
-            fn (string $segment) => $this->cleanPathSegment($segment),
-            explode('/', $path)
-        );
+        $segments = explode('/', $path);
+        $last = array_key_last($segments);
+        foreach ($segments as $index => &$segment) {
+            $limit = $index === $last && str_ends_with(strtolower($segment), '.pdf') ? 255 : 120;
+            $segment = $this->cleanPathSegment($segment, 'Sin especificar', $limit);
+        }
+        unset($segment);
 
         return trim(implode('/', $segments), '/');
     }
@@ -1620,7 +1629,7 @@ class KizeoWebhookController extends Controller
             $value = $fallback;
         }
 
-        return substr($value, 0, $maxLength);
+        return mb_strcut($value, 0, $maxLength, 'UTF-8');
     }
 
     /**

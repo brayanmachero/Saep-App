@@ -384,6 +384,13 @@ class KizeoAutomationService
         return array_values($aliases);
     }
 
+    public function fieldDisplayValue(string $formId, array $fields, string $key): string
+    {
+        $definitions = $this->formFieldDefinitions($formId);
+
+        return $this->extractValue($fields[$key] ?? null, $definitions[$key] ?? []);
+    }
+
     private function extractValue(mixed $value, array $definition = []): string
     {
         if (is_bool($value)) {
