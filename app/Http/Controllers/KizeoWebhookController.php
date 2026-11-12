@@ -840,7 +840,14 @@ class KizeoWebhookController extends Controller
 
             // Extraer datos
             $fecha       = $getVal('fecha_');
-            $cd          = $getVal('centro_de_distribucion');
+            $cd = $this->automations->fieldDisplayValue($formId, $fields, 'cd');
+            if ($cd === '' || \Illuminate\Support\Str::isUuid($cd)) {
+                $cd = $this->automations->fieldDisplayValue($formId, $fields, 'centro_de_distribucion');
+            }
+            if (\Illuminate\Support\Str::isUuid($cd)) {
+                throw new \RuntimeException('No se pudo resolver el centro de la inspeccion.');
+            }
+            $cd = $cd !== '' ? $cd : '-';
             $inspector   = $getVal('inspeccion_efectuada_por_');
             $cargoInsp   = $getVal('cargo_');
             $responsable = $getVal('responsable_area_');

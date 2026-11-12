@@ -270,6 +270,15 @@ class KizeoAutomationService
     {
         $payloadRecord = $payload['data'] ?? [];
 
+        if ($formId === '1213824') {
+            // El aviso de guardado puede omitir las referencias calculadas de la actividad.
+            $record = $this->kizeo->getRecord($formId, $dataId);
+            if (empty($record['fields'])) {
+                throw new \RuntimeException('No se pudo obtener la actividad completa en Kizeo.');
+            }
+            return $record;
+        }
+
         if (!empty($payloadRecord['fields'])) {
             return $payloadRecord;
         }
@@ -292,6 +301,10 @@ class KizeoAutomationService
         $fields = $record['fields'] ?? $payload['data']['fields'] ?? [];
         $formFields = $this->formFieldDefinitions($formId);
         $context = $this->flattenFields($fields, $formFields);
+
+        if ($formId === '1213824') {
+            $context['relator_actividad'] = trim($context['nombre_relator'] ?? '') ?: ($context['nombre_relator_'] ?? '');
+        }
 
         $formName = $record['form_name']
             ?? $payload['data']['form_name']
@@ -719,7 +732,7 @@ class KizeoAutomationService
         $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
         $value = trim($value, " \t\n\r\0\x0B.");
 
-        return substr($value !== '' ? $value : 'Sin especificar', 0, $maxLength);
+        return mb_strcut($value !== '' ? $value : 'Sin especificar', 0, $maxLength, 'UTF-8');
     }
 
     private function compactContext(array $context): array
