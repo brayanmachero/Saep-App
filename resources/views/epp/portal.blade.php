@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Solicitud de EPP | SAEP</title><link rel="stylesheet" href="{{ asset('css/epp-portal.css') }}?v=20261112b"></head>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Solicitud de EPP | SAEP</title><link rel="stylesheet" href="{{ asset('css/epp-portal.css') }}?v=20261112c"></head>
 <body><header><div><img src="{{ asset('brand/wp/Logo_Saep.svg') }}" alt="SAEP"><span>Bodega</span></div></header>
-<main><div class="epp-hero"><div><h1>Solicitud mensual de EPP</h1><p>Solicita equipos de protección, ropa de trabajo e insumos para tu centro.</p></div></div>
+<main><div class="epp-hero"><div><h1>Solicitud de EPP</h1><p>Solicita equipos de protección, ropa de trabajo e insumos para tu centro.</p></div></div>
 @if($errors->any())<section role="alert"><strong>Revisa la solicitud</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></section>@endif
 @if(!$identity)<section><h2>Ingresa con tu cuenta SAEP</h2><p>Tu nombre y correo se completarán con los datos de tu cuenta corporativa.</p><a class="button" href="{{ route('epp.login') }}">Continuar con Microsoft</a></section>
 @else

@@ -13,7 +13,7 @@
 body {
     margin: 0;
     color: #162347;
-    background: #f3f5f8;
+    background: #f3f5f8 url("../brand/wp/trama-epp.svg") repeat;
     font: 16px/1.5 Onest, system-ui, sans-serif;
 }
 header { background: #101b40; border-bottom: 3px solid #ff7a41; }
