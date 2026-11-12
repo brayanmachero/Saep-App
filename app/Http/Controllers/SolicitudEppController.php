@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\InventarioCentroCosto;
 use App\Models\InventarioVariante;
+use App\Models\InventarioUbicacion;
+use App\Services\InventarioStockService;
+use Carbon\CarbonImmutable;
 use App\Services\ReservaVehiculoMicrosoftAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -76,8 +79,14 @@ class SolicitudEppController extends Controller
         $filters = $request->validate([
             'buscar' => ['nullable', 'string', 'max:150'],
             'mes' => ['nullable', 'date_format:Y-m'],
+            'estado' => ['nullable', 'in:pendientes,completadas,todas'],
         ]);
-        $query = DB::table('solicitudes_epp');
+        $filters['mes'] ??= now()->format('Y-m');
+        $filters['estado'] ??= 'pendientes';
+        $start = CarbonImmutable::parse($filters['mes'].'-01')->startOfDay();
+        $query = DB::table('solicitudes_epp')
+            ->where('created_at', '>=', $start)
+            ->where('created_at', '<', $start->addMonth());
         if (filled($filters['buscar'] ?? null)) {
             $term = trim($filters['buscar']);
             $query->where(function ($query) use ($term) {
@@ -89,12 +98,40 @@ class SolicitudEppController extends Controller
                 }
             });
         }
-        if (filled($filters['mes'] ?? null)) {
-            $query->where('mes', $filters['mes']);
+        $total = (clone $query)->count();
+        $completed = (clone $query)->whereNotNull('completada_en')->count();
+        $counts = ['pendientes' => $total - $completed, 'completadas' => $completed, 'todas' => $total];
+        if ($filters['estado'] === 'pendientes') {
+            $query->whereNull('completada_en');
+        } elseif ($filters['estado'] === 'completadas') {
+            $query->whereNotNull('completada_en');
         }
-        return view('epp.inbox', [
-            'requests' => $query->latest('id')->paginate(30)->withQueryString(),
-            'filters' => $filters,
+
+        $requests = $query->latest('id')->paginate(30)->withQueryString();
+        $ids = $requests->getCollection()->flatMap(function ($order) {
+            $order->items = json_decode($order->articulos, true);
+            return array_column($order->items, 'id');
+        })->unique();
+        $central = InventarioUbicacion::where('activo', true)
+            ->where('codigo', InventarioStockService::KIZEO_ORIGIN_LOCATION_CODE)->value('id');
+        $stock = $central && $ids->isNotEmpty()
+            ? DB::table('inventario_movimientos')->where('ubicacion_id', $central)
+                ->whereIn('variante_id', $ids)->groupBy('variante_id')
+                ->selectRaw('variante_id, SUM(cantidad) AS saldo')->pluck('saldo', 'variante_id')
+            : collect();
+
+        return view('epp.inbox', compact('requests', 'filters', 'counts', 'central', 'stock'));
+    }
+
+    public function complete(Request $request, int $pedido)
+    {
+        $order = DB::table('solicitudes_epp')->where('id', $pedido);
+        abort_unless((clone $order)->exists(), 404);
+        $order->whereNull('completada_en')->update([
+            'completada_en' => now(),
+            'completada_por' => $request->user()->id,
+            'updated_at' => now(),
         ]);
+        return back()->with('epp_status', 'Solicitud marcada como completada.');
     }
 }

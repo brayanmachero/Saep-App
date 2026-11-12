@@ -24,3 +24,26 @@
 .epp-request summary span { display: block; color: #54627a; margin-top: 4px; }
 .epp-request > div { margin-top: 12px; border-top: 1px solid #dbe0e8; padding-top: 12px; }
 @media (max-width: 540px) { .epp-filters label { width: 100%; } }
+.epp-heading { background: #101b40 url("../brand/wp/trama-epp.svg"); }
+.epp-inbox .epp-action, .epp-tabs a { display: inline-flex; align-items: center; justify-content: center; gap: .55rem; min-height: 40px; border-radius: 8px; padding: .55rem 1rem; text-decoration: none; font: inherit; font-weight: 650; cursor: pointer; }
+.epp-inbox .epp-action { background: #142349; color: white; border: 1px solid #142349; }
+.epp-heading .epp-action { background: white; color: #152446; }
+.epp-filters label:first-child { flex: 0 1 auto; }
+.epp-filters label:nth-child(2) { flex: 1 1 245px; }
+.epp-filters input:not([type=hidden]) { min-height: 42px; padding: .55rem .8rem; border: 1px solid #b3bed0; border-radius: 7px; font: inherit; min-width: 0; width: 100%; box-sizing: border-box; }
+.epp-tabs { display: flex; flex-wrap: wrap; gap: 7px; }
+.epp-tabs a { background: white; border: 1px solid #ccd3df; color: #263752; }
+.epp-tabs a[aria-current] { background: #152446; color: white; }
+.epp-tabs b { font-size: .85em; }
+.epp-scroll { overflow-x: auto; }
+.epp-request table { width: 100%; border-collapse: collapse; text-align: left; }
+.epp-request caption { text-align: left; padding: .8rem 0; font-weight: 700; }
+.epp-request td, .epp-request th { padding: .7rem; border-bottom: 1px solid #d9dfeb; }
+.epp-request th { background: #f2f5fa; color: #283850; }
+.epp-request small { display: block; color: #526079; }
+.epp-ok, .epp-warn { white-space: nowrap; border-radius: 5px; padding: .2em .45em; }
+.epp-ok { background: #e3f4e9; color: #175734; }
+.epp-warn { background: #fff1db; color: #7d4109; }
+.epp-request, .epp-empty, .epp-filters { color: #192741; min-width: 0; }
+.epp-inbox { grid-template-columns: minmax(0,1fr); }
+@media(max-width:540px) { .epp-filters label:nth-child(2) { flex-basis: 100%; } .epp-tabs a { padding-inline: .6rem; } }

@@ -3243,7 +3243,10 @@ class InventarioBodegaStockTest extends TestCase
     public function test_epp_portal_verifies_identity_catalog_and_receives_request_only_once(): void
     {
         (require database_path('migrations/2026_11_12_180000_create_solicitudes_epp.php'))->up();
-        [$manager, , , $variant] = $this->inventoryContext();
+        (require database_path('migrations/2026_11_12_190000_add_completion_to_solicitudes_epp.php'))->up();
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-12 12:00'));
+        [$manager, $origin, , $variant] = $this->inventoryContext();
+        $origin->update(['codigo'=>'SAEP-CENTRAL']);
         $center = InventarioCentroCosto::create(['nombre'=>'Centro prueba','nombre_normalizado'=>'centro prueba','activo'=>true]);
         $payload = ['folio'=>(string) \Illuminate\Support\Str::uuid(),'centro_id'=>$center->id,'mes'=>'2026-11','cantidades'=>[$variant->id=>3],'email'=>'falso@saep.cl','nombre'=>'Falso'];
         $this->get(route('epp.portal'))->assertOk()->assertSee('Continuar con Microsoft')->assertDontSee('Centro prueba');
@@ -3270,6 +3273,12 @@ class InventarioBodegaStockTest extends TestCase
         $this->withoutMiddleware(VerificarConsentimientoDatos::class)->actingAs($manager);
         $this->get(route('inventario-bodega.epp.index', ['buscar' => 'Centro prueba', 'mes' => '2026-11']))
             ->assertOk()->assertSee('Pedidos recibidos')->assertSee('2 resmas');
+        $this->get(route('inventario-bodega.epp.index'))->assertOk()->assertSee('Faltan 3');
+        $this->patch(route('inventario-bodega.epp.complete', $stored->id))->assertRedirect();
+        $this->get(route('inventario-bodega.epp.index'))->assertDontSee('Pedido #'.$stored->id.' ·');
+        $this->get(route('inventario-bodega.epp.index', ['estado'=>'completadas']))
+            ->assertOk()->assertSee('Pedido #'.$stored->id.' ·')->assertDontSee('2 resmas');
+        $this->assertDatabaseCount('inventario_movimientos', 0);
         $this->get(route('inventario-bodega.epp.index', ['mes' => '2026-10']))
             ->assertOk()->assertSee('No hay pedidos con estos filtros')->assertDontSee('2 resmas');
     }
