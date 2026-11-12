@@ -7,6 +7,7 @@ use App\Models\InventarioVariante;
 use App\Models\InventarioUbicacion;
 use App\Services\InventarioStockService;
 use Carbon\CarbonImmutable;
+use App\Services\SolicitudEppCorreo;
 use App\Services\ReservaVehiculoMicrosoftAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,9 +41,21 @@ class SolicitudEppController extends Controller
     public function portal(Request $request)
     {
         $identity = $this->identity($request);
+        $target = $request->integer('pedido');
+        if ($target && !$identity) {
+            $request->session()->put('epp.pedido', $target);
+        }
+        if ($identity && !$target && $request->session()->has('epp.pedido')) {
+            $target = $request->session()->pull('epp.pedido');
+            return redirect()->route('epp.portal', ['pedido'=>$target])->withFragment('pedido-'.$target);
+        }
         $centers = $identity ? InventarioCentroCosto::where('activo', true)->orderBy('nombre')->get(['id','nombre','codigo_origen']) : collect();
         $catalog = $identity ? $this->variants()->get()->map(fn ($v) => $this->item($v))->sortBy('nombre')->values() : collect();
         $history = $identity ? $this->orders()->where('email', $identity['email'])->latest('id')->limit(10)->get() : collect();
+        if ($identity && $target && !$history->contains('id', $target)) {
+            $requested = $this->orders()->where('email',$identity['email'])->find($target);
+            if ($requested) $history->prepend($requested);
+        }
         $history->each(fn ($order) => $this->prepareOrder($order));
         return view('epp.portal', compact('identity','centers','catalog','history'));
     }
@@ -104,7 +117,9 @@ class SolicitudEppController extends Controller
             $variants = $this->variants()->whereKey($ids)->lockForUpdate()->get();
             if ($variants->count() !== count($ids)) throw ValidationException::withMessages(['cantidades'=>'Un artículo ya no está disponible en el catálogo. Revisa el pedido.'])->redirectTo(route('epp.portal'));
             $items = $variants->map(fn ($v) => $this->item($v) + ['cantidad'=>(int)$quantities[$v->id]])->values();
-            return DB::table('solicitudes_epp')->insertGetId(['folio'=>$data['folio'],'nombre'=>$identity['name'],'email'=>$identity['email'],'centro_id'=>$center->id,'centro'=>trim($center->codigo_origen.' '.$center->nombre),'mes'=>$data['mes'],'articulos'=>$items->toJson(),'insumos'=>$data['insumos'] ?? null,'created_at'=>now(),'updated_at'=>now()]);
+            $id = DB::table('solicitudes_epp')->insertGetId(['folio'=>$data['folio'],'nombre'=>$identity['name'],'email'=>$identity['email'],'centro_id'=>$center->id,'centro'=>trim($center->codigo_origen.' '.$center->nombre),'mes'=>$data['mes'],'articulos'=>$items->toJson(),'insumos'=>$data['insumos'] ?? null,'created_at'=>now(),'updated_at'=>now()]);
+            SolicitudEppCorreo::registrar($id, 'Solicitud recibida');
+            return $id;
         });
         return redirect()->route('epp.portal')->with('pedido_ok', $number);
     }
@@ -178,8 +193,14 @@ class SolicitudEppController extends Controller
     {
         $order->items = json_decode($order->articulos, true);
         $order->events = json_decode($order->cambios ?? '[]', true);
+        $order->pending = [];
         foreach ($order->events as $event) {
-            $order->items[$event['linea']] = $event['nuevo'];
+            $answer = $event['respuesta'] ?? 'aceptada';
+            if ($answer === 'pendiente') {
+                $order->pending[$event['linea']] = $event;
+            } elseif ($answer === 'aceptada') {
+                $order->items[$event['linea']] = $event['nuevo'];
+            }
         }
         $order->demand = collect($order->items)->groupBy('id')->map(fn ($lines) => $lines->sum('cantidad'));
         $order->estado = $order->completada_en ? 'Completada' : ($order->events ? 'En gestión' : 'Pendiente');
@@ -188,10 +209,14 @@ class SolicitudEppController extends Controller
     private function alternatives($order, $balances, $stock): array
     {
         $options = [];
-        $demand = $order->demand;
+        $demand = clone $order->demand;
+        foreach ($order->pending as $proposal) {
+            $id = $proposal['nuevo']['id'];
+            $demand->put($id, $demand->get($id,0) + $proposal['nuevo']['cantidad']);
+        }
         $originals = json_decode($order->articulos, true);
         foreach ($order->items as $line => $item) {
-            if ($order->completada_en || $stock->get($item['id'], 0) >= $demand[$item['id']]) {
+            if (isset($order->pending[$line]) || $order->completada_en || $stock->get($item['id'], 0) >= $demand[$item['id']]) {
                 continue;
             }
             $original = $originals[$line];
@@ -229,7 +254,7 @@ class SolicitudEppController extends Controller
             $this->prepareOrder($order);
             $line = $data['linea'];
             $previous = $order->items[$line] ?? null;
-            if ($order->completada_en || ! $previous || $previous['id'] != $data['actual']) {
+            if (isset($order->pending[$line]) || $order->completada_en || ! $previous || $previous['id'] != $data['actual']) {
                 throw ValidationException::withMessages(['pedido' => 'El pedido cambió. Revisa su estado actual.']);
             }
             $central = $this->central();
@@ -238,28 +263,61 @@ class SolicitudEppController extends Controller
             if (! $variant) {
                 throw ValidationException::withMessages(['reemplazo' => 'El reemplazo ya no corresponde al faltante o al stock disponible. Revisa el detalle.']);
             }
-            $order->events[] = [
+            $proposal = [
+                'id' => (string) Str::uuid(), 'respuesta' => 'pendiente',
                 'linea' => (int) $line, 'anterior' => $previous,
                 'nuevo' => $this->item($variant) + ['cantidad' => $previous['cantidad']],
                 'usuario_id' => $request->user()->id, 'gestor' => $request->user()->name,
                 'fecha' => now()->toDateTimeString(),
             ];
+            $order->events[] = $proposal;
             $query->update(['cambios' => json_encode($order->events, JSON_THROW_ON_ERROR), 'updated_at' => now()]);
+            SolicitudEppCorreo::registrar($pedido, 'En gestión · Reemplazo propuesto', $proposal);
         });
         return redirect()->route('inventario-bodega.epp.index', [
             'mes' => $request->query('mes'), 'estado' => 'gestion', 'pedido' => $pedido,
-        ])->with('epp_status', 'Reemplazo registrado.');
+        ])->with('epp_status', 'Propuesta registrada. Pendiente de respuesta del solicitante.');
+    }
+
+    public function respond(Request $request, int $pedido, string $propuesta)
+    {
+        $identity = $this->identity($request);
+        abort_unless($identity, 403);
+        $answer = $request->validate(['respuesta'=>'required|in:aceptada,rechazada'])['respuesta'];
+        DB::transaction(function () use ($pedido, $propuesta, $answer, $identity) {
+            $query = DB::table('solicitudes_epp')->where('id',$pedido)->where('email',$identity['email']);
+            $order = (clone $query)->lockForUpdate()->first();
+            abort_unless($order,404);
+            $events = json_decode($order->cambios ?? '[]',true);
+            $index = collect($events)->search(fn ($event) => ($event['id'] ?? null) === $propuesta);
+            abort_if($index === false,404);
+            $event = $events[$index];
+            if ($event['respuesta'] === $answer) return;
+            abort_if($order->completada_en || $event['respuesta'] !== 'pendiente',409,'Esta propuesta ya fue resuelta.');
+            $event['respuesta'] = $answer;
+            $event['respondida_en'] = now()->toDateTimeString();
+            $event['respondida_por'] = $identity['email'];
+            $events[$index] = $event;
+            $query->update(['cambios'=>json_encode($events, JSON_THROW_ON_ERROR),'updated_at'=>now()]);
+            SolicitudEppCorreo::registrar($pedido, $answer === 'aceptada' ? 'Reemplazo aceptado' : 'Reemplazo rechazado', $event);
+        });
+        return redirect()->route('epp.portal',['pedido'=>$pedido])->withFragment('pedido-'.$pedido);
     }
 
     public function complete(Request $request, int $pedido)
     {
-        $order = DB::table('solicitudes_epp')->where('id', $pedido);
-        abort_unless((clone $order)->exists(), 404);
-        $order->whereNull('completada_en')->update([
-            'completada_en' => now(),
-            'completada_por' => $request->user()->id,
-            'updated_at' => now(),
-        ]);
+        DB::transaction(function () use ($request, $pedido) {
+            $query = DB::table('solicitudes_epp')->where('id',$pedido);
+            $order = (clone $query)->lockForUpdate()->first();
+            abort_unless($order,404);
+            if ($order->completada_en) return;
+            $this->prepareOrder($order);
+            if ($order->pending) {
+                throw ValidationException::withMessages(['pedido'=>'Hay propuestas pendientes de respuesta.']);
+            }
+            $query->update(['completada_en'=>now(),'completada_por'=>$request->user()->id,'updated_at'=>now()]);
+            SolicitudEppCorreo::registrar($pedido,'Solicitud completada');
+        });
         return back()->with('epp_status', 'Solicitud marcada como completada.');
     }
 }

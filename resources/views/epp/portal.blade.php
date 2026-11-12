@@ -19,6 +19,6 @@
 <h3>Artículos del pedido</h3><div id="lineas"></div><p id="vacio">Todavía no agregaste artículos.</p><p id="aviso" aria-live="polite"></p></section>
 <section><h2>Insumos generales</h2><label>Elemento y cantidad (opcional)<textarea name="insumos" maxlength="3000" rows="3" placeholder="Ej.: 2 resmas de papel tamaño carta">{{ old('insumos') }}</textarea></label></section>
 <button class="button" type="submit">Enviar solicitud a Bodega</button></form>
-<section><h2>Mis solicitudes recientes</h2>@forelse($history as $r)<details><summary>Pedido #{{ $r->id }} · {{ $r->mes }} · {{ $r->centro }} · <strong>{{ $r->estado }}</strong></summary>@include('epp.lines',['r'=>$r])</details>@empty<p>Aún no tienes solicitudes registradas.</p>@endforelse</section>
+<section><h2>Mis solicitudes recientes</h2>@forelse($history as $r)<details id="pedido-{{ $r->id }}" @if(request('pedido') == $r->id) open @endif><summary>Pedido #{{ $r->id }} · {{ $r->mes }} · {{ $r->centro }} · <strong>{{ $r->estado }}</strong></summary>@include('epp.lines',['r'=>$r])</details>@empty<p>Aún no tienes solicitudes registradas.</p>@endforelse</section>
 <script>window.eppCatalog={{ Illuminate\Support\Js::from($catalog) }};window.eppOld={{ Illuminate\Support\Js::from(old('cantidades', [])) }};</script><script src="{{ asset('js/epp-portal.js') }}?v=20261112d"></script>
 @endif</main></body></html>

@@ -150,3 +150,5 @@ Schedule::command('contratacion:cierre-diario')->dailyAt('17:00')->timezone('Ame
 Schedule::command('vehiculos:procesar-reservas')->everyFifteenMinutes()->timezone('America/Santiago')->withoutOverlapping();
 
 Schedule::command('inventario:cierre-diario')->dailyAt('17:00')->timezone('America/Santiago')->withoutOverlapping();
+
+Schedule::command('epp:enviar-correos')->everyMinute()->withoutOverlapping(15);

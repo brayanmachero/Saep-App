@@ -125,6 +125,8 @@ Route::prefix('postulacion')->middleware('throttle:180,1')->group(function () {
 
 Route::prefix('solicitud-epp')->middleware('throttle:90,1,epp-read')->group(function () {
     Route::get('/', [SolicitudEppController::class, 'portal'])->name('epp.portal');
+    Route::post('{pedido}/propuestas/{propuesta}', [SolicitudEppController::class, 'respond'])
+        ->whereNumber('pedido')->whereUuid('propuesta')->name('epp.respond');
     Route::get('/ingresar', [SolicitudEppController::class, 'login'])->name('epp.login');
     Route::post('/', [SolicitudEppController::class, 'store'])->middleware('throttle:12,1,epp-write')->name('epp.store');
     Route::post('/salir', function (Illuminate\Http\Request $request) {

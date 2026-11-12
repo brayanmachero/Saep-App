@@ -46,6 +46,12 @@ return Application::configure(basePath: dirname(__DIR__))
 
             $message = 'La sesión o el formulario venció. Vuelve a ingresar y repite la operación; no se guardaron los cambios de esta solicitud.';
 
+            if ($request->routeIs('epp.respond') && ! $request->expectsJson()) {
+                return redirect()->route('epp.portal', ['pedido' => $request->route('pedido')], 303)
+                    ->withErrors(['sesion' => 'La sesión venció. Vuelve a revisar y responder la propuesta.'])
+                    ->header('Cache-Control', 'no-store');
+            }
+
             if ($request->routeIs('epp.store') && ! $request->expectsJson()) {
                 return redirect()->route('epp.portal', [], 303)
                     ->withErrors(['sesion' => 'El formulario venció antes del envío. Vuelve a completar el pedido en este portal.'])

@@ -40,7 +40,7 @@
                         <tr><td><strong>{{ $item['nombre'] }}</strong><small>{{ $item['talla'] }}</small></td>
                             <td>{{ $item['cantidad'] }}</td><td>{{ $central ? $balance : '—' }}</td>
                             <td><span class="{{ $central && $balance >= $needed ? 'epp-ok' : 'epp-warn' }}">{{ !$central ? 'Sin ubicación activa' : ($balance >= $needed ? 'Disponible' : 'Faltan '.($needed - max(0, $balance))) }}</span></td></tr>
-                        @if($central && !$r->completada_en && $balance < $needed && auth()->user()->tieneAcceso('inventario_bodega','puede_editar'))
+                        @if(!isset($r->pending[$line]) && $central && !$r->completada_en && $balance < $needed && auth()->user()->tieneAcceso('inventario_bodega','puede_editar'))
                             <tr><td colspan="4">
                             @if(!empty($r->options[$line]))
                                 <form class="epp-replace" method="post" action="{{ route('inventario-bodega.epp.substitute', ['pedido'=>$r->id, 'mes'=>$filters['mes']]) }}">
@@ -49,7 +49,7 @@
                                     <input type="hidden" name="actual" value="{{ $item['id'] }}">
                                     <label>Alternativa con stock<select required name="reemplazo"><option value="">Selecciona artículo y talla</option>
                                         @foreach($r->options[$line] as $variant)<option value="{{ $variant->id }}">{{ $variant->producto->nombre }} {{ $variant->talla }} · Stock {{ (float)$variant->stock_actual }}</option>@endforeach
-                                    </select></label><button class="epp-action">Guardar reemplazo</button>
+                                    </select></label><button class="epp-action">Proponer reemplazo</button>
                                 </form>
                             @else Sin alternativas con stock suficiente para esta cantidad.
                             @endif
@@ -60,7 +60,7 @@
             @endif
             @if($r->insumos)<p><strong>Insumos fuera del catálogo</strong> · {{ $r->insumos }}</p>@endif
             @include('epp.timeline')
-            @if(!$r->completada_en && auth()->user()->tieneAcceso('inventario_bodega','puede_editar'))
+            @if(!$r->pending && !$r->completada_en && auth()->user()->tieneAcceso('inventario_bodega','puede_editar'))
                 <form method="post" action="{{ route('inventario-bodega.epp.complete', $r->id) }}">@csrf @method('PATCH')
                     <p>Completa la solicitud cuando hayas terminado su gestión. La salida de stock se registra en Inventario.</p>
                     <button class="epp-action">Marcar como completada</button>

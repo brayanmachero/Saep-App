@@ -3245,6 +3245,7 @@ class InventarioBodegaStockTest extends TestCase
         (require database_path('migrations/2026_11_12_180000_create_solicitudes_epp.php'))->up();
         (require database_path('migrations/2026_11_12_190000_add_completion_to_solicitudes_epp.php'))->up();
         (require database_path('migrations/2026_11_12_210000_add_cambios_to_solicitudes_epp.php'))->up();
+        (require database_path('migrations/2026_11_12_220000_create_epp_correos.php'))->up();
         $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-12 12:00'));
         [$manager, $origin, , $variant] = $this->inventoryContext();
         $origin->update(['codigo'=>'SAEP-CENTRAL']);
@@ -3291,7 +3292,7 @@ class InventarioBodegaStockTest extends TestCase
 
     public function test_epp_substitution_tracks_actor_and_original_and_checks_the_live_balance(): void
     {
-        foreach (['180000_create_solicitudes_epp', '190000_add_completion_to_solicitudes_epp', '210000_add_cambios_to_solicitudes_epp'] as $migration) {
+        foreach (['180000_create_solicitudes_epp', '190000_add_completion_to_solicitudes_epp', '210000_add_cambios_to_solicitudes_epp','220000_create_epp_correos'] as $migration) {
             (require database_path('migrations/2026_11_12_'.$migration.'.php'))->up();
         }
         [$manager, , , $available] = $this->inventoryContextWithCentralStock(5);
@@ -3305,7 +3306,7 @@ class InventarioBodegaStockTest extends TestCase
         $this->withoutMiddleware(VerificarConsentimientoDatos::class)->actingAs($manager);
         $url = route('inventario-bodega.epp.substitute', 1);
         $payload = ['linea'=>0,'actual'=>$other->id,'reemplazo'=>$available->id];
-        $this->get(route('inventario-bodega.epp.index'))->assertSee('Guardar reemplazo');
+        $this->get(route('inventario-bodega.epp.index'))->assertSee('Proponer reemplazo');
         $this->patch($url, array_replace($payload,['reemplazo'=>$other->id]))->assertSessionHasErrors('reemplazo');
         $this->patch($url,$payload)->assertSessionHasNoErrors();
         $row = DB::table('solicitudes_epp')->first();
@@ -3316,7 +3317,28 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertDatabaseCount('inventario_movimientos',1);
         $this->patch($url,$payload)->assertSessionHasErrors('pedido');
         $this->get(route('epp.portal'))->assertOk()->assertSee('En gestión')->assertSee($manager->name);
+        $this->patch(route('inventario-bodega.epp.complete',1))->assertSessionHasErrors('pedido');
+        $decision = route('epp.respond',[1,$event['id']]);
+        $this->withSession(['epp.microsoft_identity'=>['name'=>'Otra','email'=>'otra@saep.cl']])
+            ->post($decision,['respuesta'=>'aceptada'])->assertNotFound();
+        $this->withSession(['epp.microsoft_identity'=>['name'=>'Solicitante','email'=>'solicitante@saep.cl']])
+            ->post($decision,['respuesta'=>'rechazada'])->assertRedirect();
+        $this->post($decision,['respuesta'=>'rechazada'])->assertRedirect();
+        $this->post($decision,['respuesta'=>'aceptada'])->assertStatus(409);
+        $this->patch($url,$payload)->assertSessionHasNoErrors();
+        $proposal = json_decode(DB::table('solicitudes_epp')->value('cambios'),true)[1];
+        $this->post(route('epp.respond',[1,$proposal['id']]),['respuesta'=>'aceptada'])->assertRedirect();
         $this->patch(route('inventario-bodega.epp.complete',1))->assertRedirect();
+        $this->assertDatabaseCount('epp_correos',6);
+        $messages = DB::table('epp_correos')->orderBy('id')->pluck('mensaje')->map(fn ($msg)=>json_decode($msg,true));
+        $this->assertContains('bodega@saep.cl',$messages[0]['to']);
+        $this->assertContains('bmachero@saep.cl',$messages[0]['cc']);
+        $this->assertContains('solicitante@saep.cl',$messages[1]['to']);
+        $this->assertContains('bodega@saep.cl',$messages[2]['cc']);
+        \Illuminate\Support\Facades\Http::fake(['api.resend.com/*'=>\Illuminate\Support\Facades\Http::response(['id'=>'test-mail-id'])]);
+        $this->artisan('epp:enviar-correos')->assertSuccessful();
+        $this->assertDatabaseHas('epp_correos',['resend_id'=>'test-mail-id']);
+
         $this->patch($url,$payload)->assertSessionHasErrors('pedido');
         $this->get(route('epp.portal'))->assertOk()->assertSee('Completada');
     }
