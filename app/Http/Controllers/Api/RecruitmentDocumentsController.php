@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\ContratacionController;
 use App\Models\PostulanteContratacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -43,7 +44,17 @@ class RecruitmentDocumentsController extends Controller
     {
         $this->authorizeService($request);
         $rut = $this->rut($request->header('X-SAEP-RUT'));
-        abort_unless($postulante->rut === $rut && in_array($campo, self::FIELDS, true), 404);
+        abort_unless($postulante->rut === $rut, 404);
+        if ($campo === 'ficha_pdf') {
+            $response = app(ContratacionController::class)->fichaPdf($postulante);
+            $disposition = $response->headers->get('Content-Disposition');
+
+            return $response
+                ->header('Content-Disposition', str_replace('attachment;', 'inline;', $disposition))
+                ->header('Cache-Control', 'private, no-store')
+                ->header('X-Content-Type-Options', 'nosniff');
+        }
+        abort_unless(in_array($campo, self::FIELDS, true), 404);
         $path = $postulante->$campo;
         abort_unless($path && Storage::disk('local')->exists($path), 404);
 
