@@ -54,24 +54,58 @@ class SolicitudEppController extends Controller
     public function store(Request $request)
     {
         abort_unless($identity = $this->identity($request), 403);
-        $data = $request->validate(['folio'=>'required|uuid', 'centro_id'=>'required|integer','mes'=>'required|date_format:Y-m','cantidades'=>'nullable|array|max:200','cantidades.*'=>'required|integer|min:1|max:99999','insumos'=>'nullable|string|max:3000']);
+        $input = $request->all();
+        if (is_array($input['cantidades'] ?? null)) {
+            foreach ($input['cantidades'] as $id => $quantity) {
+                if (is_string($quantity) && preg_match('/^0*([0-9]{1,5})(?:[.,]0+)?$/D', $quantity, $parts)) {
+                    $input['cantidades'][$id] = (int) $parts[1];
+                }
+            }
+        }
+        $validator = \Illuminate\Support\Facades\Validator::make($input, [
+            'folio' => 'required|uuid',
+            'centro_id' => 'required|integer',
+            'mes' => 'required|date_format:Y-m',
+            'cantidades' => 'nullable|array|max:200',
+            'cantidades.*' => 'bail|required|integer|min:1|max:99999',
+            'insumos' => 'nullable|string|max:3000',
+        ], [
+            'folio.required' => 'Vuelve a abrir el formulario para generar el número de envío.',
+            'folio.uuid' => 'Vuelve a abrir el formulario para generar el número de envío.',
+            'centro_id.required' => 'Selecciona un centro de trabajo de la lista.',
+            'centro_id.integer' => 'Selecciona un centro de trabajo de la lista.',
+            'mes.required' => 'Selecciona el mes del pedido.',
+            'mes.date_format' => 'Selecciona el mes del pedido.',
+            'cantidades.array' => 'Vuelve a seleccionar los artículos del pedido.',
+            'cantidades.max' => 'Puedes agregar hasta 200 artículos por solicitud.',
+            'cantidades.*.required' => 'Ingresa la cantidad del artículo indicado.',
+            'cantidades.*.integer' => 'Ingresa una cantidad entera entre 1 y 99.999.',
+            'cantidades.*.min' => 'La cantidad mínima es 1.',
+            'cantidades.*.max' => 'La cantidad máxima es 99.999.',
+            'insumos.string' => 'Describe los insumos en un máximo de 3.000 caracteres.',
+            'insumos.max' => 'Describe los insumos en un máximo de 3.000 caracteres.',
+        ]);
+        if ($validator->fails()) {
+            return redirect()->route('epp.portal')->withErrors($validator)->withInput($request->except('_token'));
+        }
+        $data = $validator->validated();
         $quantities = $data['cantidades'] ?? [];
         if (! $quantities && blank($data['insumos'] ?? null)) {
-            throw ValidationException::withMessages(['cantidades'=>'Agrega un artículo o describe el insumo y su cantidad.']);
+            throw ValidationException::withMessages(['cantidades'=>'Agrega un artículo o describe el insumo y su cantidad.'])->redirectTo(route('epp.portal'));
         }
-        DB::transaction(function () use ($identity, $data, $quantities) {
+        $number = DB::transaction(function () use ($identity, $data, $quantities) {
             $center = InventarioCentroCosto::whereKey($data['centro_id'])->where('activo', true)->lockForUpdate()->first();
-            if (! $center) throw ValidationException::withMessages(['centro_id'=>'El centro ya no está activo. Selecciona otro.']);
+            if (! $center) throw ValidationException::withMessages(['centro_id'=>'El centro ya no está activo. Selecciona otro.'])->redirectTo(route('epp.portal'));
             $existing = DB::table('solicitudes_epp')->where('folio',$data['folio'])->first();
-            if ($existing) { abort_unless($existing->email === $identity['email'], 409); return; }
+            if ($existing) { abort_unless($existing->email === $identity['email'], 409); return $existing->id; }
             $ids = array_keys($quantities);
-            if (array_filter($ids, fn ($id) => !ctype_digit((string)$id) || (int)$id < 1)) throw ValidationException::withMessages(['cantidades'=>'Selección de artículo inválida.']);
+            if (array_filter($ids, fn ($id) => !ctype_digit((string)$id) || (int)$id < 1)) throw ValidationException::withMessages(['cantidades'=>'Selección de artículo inválida.'])->redirectTo(route('epp.portal'));
             $variants = $this->variants()->whereKey($ids)->lockForUpdate()->get();
-            if ($variants->count() !== count($ids)) throw ValidationException::withMessages(['cantidades'=>'Un artículo ya no está disponible en el catálogo. Revisa el pedido.']);
+            if ($variants->count() !== count($ids)) throw ValidationException::withMessages(['cantidades'=>'Un artículo ya no está disponible en el catálogo. Revisa el pedido.'])->redirectTo(route('epp.portal'));
             $items = $variants->map(fn ($v) => $this->item($v) + ['cantidad'=>(int)$quantities[$v->id]])->values();
-            DB::table('solicitudes_epp')->insert(['folio'=>$data['folio'],'nombre'=>$identity['name'],'email'=>$identity['email'],'centro_id'=>$center->id,'centro'=>trim($center->codigo_origen.' '.$center->nombre),'mes'=>$data['mes'],'articulos'=>$items->toJson(),'insumos'=>$data['insumos'] ?? null,'created_at'=>now(),'updated_at'=>now()]);
+            return DB::table('solicitudes_epp')->insertGetId(['folio'=>$data['folio'],'nombre'=>$identity['name'],'email'=>$identity['email'],'centro_id'=>$center->id,'centro'=>trim($center->codigo_origen.' '.$center->nombre),'mes'=>$data['mes'],'articulos'=>$items->toJson(),'insumos'=>$data['insumos'] ?? null,'created_at'=>now(),'updated_at'=>now()]);
         });
-        return redirect()->route('epp.portal')->with('pedido_ok', $data['folio']);
+        return redirect()->route('epp.portal')->with('pedido_ok', $number);
     }
 
     public function inbox(Request $request)

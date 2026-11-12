@@ -36,6 +36,16 @@ class ExpiredSessionResponseTest extends TestCase
         ]);
     }
 
+    public function test_expired_epp_submission_returns_to_the_epp_portal(): void
+    {
+        $request = $this->request();
+        $request->setRouteResolver(fn () => app('router')->getRoutes()->getByName('epp.store'));
+        $response = $this->app->make(ExceptionHandler::class)->render($request, new TokenMismatchException());
+        $this->assertSame(303, $response->getStatusCode());
+        $this->assertSame(route('epp.portal'), $response->headers->get('Location'));
+        $this->assertTrue(session('errors')->has('sesion'));
+    }
+
     public function test_json_and_ajax_keep_419_with_machine_readable_recovery(): void
     {
         Log::spy();

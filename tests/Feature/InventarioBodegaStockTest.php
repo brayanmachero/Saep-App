@@ -3253,7 +3253,12 @@ class InventarioBodegaStockTest extends TestCase
         $this->post(route('epp.store'),$payload)->assertForbidden();
         $this->withSession(['epp.microsoft_identity'=>['name'=>'Persona prueba','email'=>'prueba@saep.cl']]);
         $this->get(route('epp.portal'))->assertOk()->assertSee('Centro prueba')->assertSee('Persona prueba');
+        $invalid = array_replace($payload, ['cantidades' => [$variant->id => '1.5']]);
+        $this->from('/')->post(route('epp.store'), $invalid)->assertRedirect(route('epp.portal'));
+        $this->get(route('epp.portal'))->assertOk()->assertSee('Ingresa una cantidad entera')->assertDontSee('validation.integer');
+        $payload['cantidades'][$variant->id] = '003.0';
         $this->post(route('epp.store'),$payload)->assertSessionHasNoErrors()->assertRedirect(route('epp.portal'));
+        $this->get(route('epp.portal'))->assertSee('Bodega recibió tu solicitud #1.');
         $this->post(route('epp.store'),$payload)->assertSessionHasNoErrors()->assertRedirect(route('epp.portal'));
         $this->assertDatabaseCount('solicitudes_epp',1);
         $stored = DB::table('solicitudes_epp')->first();
