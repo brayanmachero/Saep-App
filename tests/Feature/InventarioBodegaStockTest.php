@@ -3244,6 +3244,7 @@ class InventarioBodegaStockTest extends TestCase
     {
         (require database_path('migrations/2026_11_12_180000_create_solicitudes_epp.php'))->up();
         (require database_path('migrations/2026_11_12_190000_add_completion_to_solicitudes_epp.php'))->up();
+        (require database_path('migrations/2026_11_12_210000_add_cambios_to_solicitudes_epp.php'))->up();
         $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-12 12:00'));
         [$manager, $origin, , $variant] = $this->inventoryContext();
         $origin->update(['codigo'=>'SAEP-CENTRAL']);
@@ -3286,6 +3287,38 @@ class InventarioBodegaStockTest extends TestCase
         $this->assertDatabaseCount('inventario_movimientos', 0);
         $this->get(route('inventario-bodega.epp.index', ['mes' => '2026-10']))
             ->assertOk()->assertSee('No hay pedidos con estos filtros')->assertDontSee('2 resmas');
+    }
+
+    public function test_epp_substitution_tracks_actor_and_original_and_checks_the_live_balance(): void
+    {
+        foreach (['180000_create_solicitudes_epp', '190000_add_completion_to_solicitudes_epp', '210000_add_cambios_to_solicitudes_epp'] as $migration) {
+            (require database_path('migrations/2026_11_12_'.$migration.'.php'))->up();
+        }
+        [$manager, , , $available] = $this->inventoryContextWithCentralStock(5);
+        $other = InventarioVariante::create(['producto_id'=>$available->producto_id,'codigo'=>'CASCO-L','talla'=>'L','activo'=>true]);
+        $center = InventarioCentroCosto::create(['nombre'=>'Centro prueba','nombre_normalizado'=>'centro prueba','activo'=>true]);
+        $this->withSession(['epp.microsoft_identity'=>['name'=>'Solicitante','email'=>'solicitante@saep.cl']]);
+        $this->post(route('epp.store'), [
+            'folio'=>(string) \Illuminate\Support\Str::uuid(),'centro_id'=>$center->id,'mes'=>now()->format('Y-m'),
+            'cantidades'=>[$other->id=>3],
+        ])->assertSessionHasNoErrors();
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)->actingAs($manager);
+        $url = route('inventario-bodega.epp.substitute', 1);
+        $payload = ['linea'=>0,'actual'=>$other->id,'reemplazo'=>$available->id];
+        $this->get(route('inventario-bodega.epp.index'))->assertSee('Guardar reemplazo');
+        $this->patch($url, array_replace($payload,['reemplazo'=>$other->id]))->assertSessionHasErrors('reemplazo');
+        $this->patch($url,$payload)->assertSessionHasNoErrors();
+        $row = DB::table('solicitudes_epp')->first();
+        $event = json_decode($row->cambios,true)[0];
+        $this->assertEquals($other->id,json_decode($row->articulos,true)[0]['id']);
+        $this->assertEquals($available->id,$event['nuevo']['id']);
+        $this->assertEquals($manager->id,$event['usuario_id']);
+        $this->assertDatabaseCount('inventario_movimientos',1);
+        $this->patch($url,$payload)->assertSessionHasErrors('pedido');
+        $this->get(route('epp.portal'))->assertOk()->assertSee('En gestión')->assertSee($manager->name);
+        $this->patch(route('inventario-bodega.epp.complete',1))->assertRedirect();
+        $this->patch($url,$payload)->assertSessionHasErrors('pedido');
+        $this->get(route('epp.portal'))->assertOk()->assertSee('Completada');
     }
 
     private function inventoryContext(): array

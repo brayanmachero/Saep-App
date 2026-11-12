@@ -1,1 +1,7 @@
-<ul>@foreach(json_decode($r->articulos, true) as $item)<li>{{ $item['cantidad'] }} × {{ $item['nombre'] }} · {{ $item['talla'] }} ({{ $item['codigo'] }})</li>@endforeach</ul>@if($r->insumos)<p><strong>Insumos generales:</strong> {{ $r->insumos }}</p>@endif
+<ul>
+@foreach($r->items as $item)
+    <li>{{ $item['cantidad'] }} × {{ $item['nombre'] }} {{ $item['talla'] }}</li>
+@endforeach
+</ul>
+@if($r->insumos)<p><strong>Insumos generales</strong> · {{ $r->insumos }}</p>@endif
+@include('epp.timeline')

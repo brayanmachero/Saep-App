@@ -536,6 +536,8 @@ Route::middleware('auth')->group(function () {
       // --- BODEGA: INVENTARIO Y CONTEOS FISICOS ---
       Route::middleware('modulo:inventario_bodega')->prefix('inventario-bodega')->name('inventario-bodega.')->group(function () {
         Route::get('solicitudes-epp', [SolicitudEppController::class, 'inbox'])->name('epp.index');
+        Route::patch('solicitudes-epp/{pedido}/reemplazar', [SolicitudEppController::class, 'substitute'])
+            ->whereNumber('pedido')->middleware('modulo:inventario_bodega,puede_editar')->name('epp.substitute');
         Route::patch('solicitudes-epp/{pedido}/completar', [SolicitudEppController::class, 'complete'])
             ->whereNumber('pedido')->middleware('modulo:inventario_bodega,puede_editar')->name('epp.complete');
           Route::get('/', [InventarioBodegaController::class, 'index'])->name('index');

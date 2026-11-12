@@ -42,7 +42,8 @@ class SolicitudEppController extends Controller
         $identity = $this->identity($request);
         $centers = $identity ? InventarioCentroCosto::where('activo', true)->orderBy('nombre')->get(['id','nombre','codigo_origen']) : collect();
         $catalog = $identity ? $this->variants()->get()->map(fn ($v) => $this->item($v))->sortBy('nombre')->values() : collect();
-        $history = $identity ? DB::table('solicitudes_epp')->where('email', $identity['email'])->latest('id')->limit(10)->get() : collect();
+        $history = $identity ? $this->orders()->where('email', $identity['email'])->latest('id')->limit(10)->get() : collect();
+        $history->each(fn ($order) => $this->prepareOrder($order));
         return view('epp.portal', compact('identity','centers','catalog','history'));
     }
 
@@ -113,12 +114,12 @@ class SolicitudEppController extends Controller
         $filters = $request->validate([
             'buscar' => ['nullable', 'string', 'max:150'],
             'mes' => ['nullable', 'date_format:Y-m'],
-            'estado' => ['nullable', 'in:pendientes,completadas,todas'],
+            'estado' => ['nullable', 'in:pendientes,gestion,completadas,todas'],
         ]);
         $filters['mes'] ??= now()->format('Y-m');
         $filters['estado'] ??= 'pendientes';
         $start = CarbonImmutable::parse($filters['mes'].'-01')->startOfDay();
-        $query = DB::table('solicitudes_epp')
+        $query = $this->orders()
             ->where('created_at', '>=', $start)
             ->where('created_at', '<', $start->addMonth());
         if (filled($filters['buscar'] ?? null)) {
@@ -134,27 +135,120 @@ class SolicitudEppController extends Controller
         }
         $total = (clone $query)->count();
         $completed = (clone $query)->whereNotNull('completada_en')->count();
-        $counts = ['pendientes' => $total - $completed, 'completadas' => $completed, 'todas' => $total];
+        $managing = (clone $query)->whereNull('completada_en')->whereNotNull('cambios')->count();
+        $counts = ['gestion' => $managing, 'pendientes' => $total - $completed - $managing, 'completadas' => $completed, 'todas' => $total];
         if ($filters['estado'] === 'pendientes') {
-            $query->whereNull('completada_en');
+            $query->whereNull('completada_en')->whereNull('cambios');
+        } elseif ($filters['estado'] === 'gestion') {
+            $query->whereNull('completada_en')->whereNotNull('cambios');
         } elseif ($filters['estado'] === 'completadas') {
             $query->whereNotNull('completada_en');
         }
 
         $requests = $query->latest('id')->paginate(30)->withQueryString();
-        $ids = $requests->getCollection()->flatMap(function ($order) {
-            $order->items = json_decode($order->articulos, true);
-            return array_column($order->items, 'id');
-        })->unique();
-        $central = InventarioUbicacion::where('activo', true)
-            ->where('codigo', InventarioStockService::KIZEO_ORIGIN_LOCATION_CODE)->value('id');
-        $stock = $central && $ids->isNotEmpty()
-            ? DB::table('inventario_movimientos')->where('ubicacion_id', $central)
-                ->whereIn('variante_id', $ids)->groupBy('variante_id')
-                ->selectRaw('variante_id, SUM(cantidad) AS saldo')->pluck('saldo', 'variante_id')
-            : collect();
-
+        $central = $this->central();
+        $balances = $central && $requests->isNotEmpty() ? app(InventarioStockService::class)->balances($central) : collect();
+        $stock = $this->stockByVariant($central);
+        foreach ($requests as $order) {
+            $this->prepareOrder($order);
+            $order->options = $this->alternatives($order, $balances, $stock);
+        }
         return view('epp.inbox', compact('requests', 'filters', 'counts', 'central', 'stock'));
+    }
+
+    private function orders()
+    {
+        return DB::table('solicitudes_epp')->select('solicitudes_epp.*')
+            ->selectSub(DB::table('users')->select('name')->whereColumn('users.id', 'solicitudes_epp.completada_por'), 'gestor_cierre');
+    }
+
+    private function central()
+    {
+        return InventarioUbicacion::where('activo', true)
+            ->where('codigo', InventarioStockService::KIZEO_ORIGIN_LOCATION_CODE)->value('id');
+    }
+
+    private function stockByVariant($central)
+    {
+        return $central ? DB::table('inventario_movimientos')->where('ubicacion_id', $central)
+            ->groupBy('variante_id')->selectRaw('variante_id, SUM(cantidad) AS saldo')->pluck('saldo', 'variante_id') : collect();
+    }
+
+    private function prepareOrder($order): void
+    {
+        $order->items = json_decode($order->articulos, true);
+        $order->events = json_decode($order->cambios ?? '[]', true);
+        foreach ($order->events as $event) {
+            $order->items[$event['linea']] = $event['nuevo'];
+        }
+        $order->demand = collect($order->items)->groupBy('id')->map(fn ($lines) => $lines->sum('cantidad'));
+        $order->estado = $order->completada_en ? 'Completada' : ($order->events ? 'En gestión' : 'Pendiente');
+    }
+
+    private function alternatives($order, $balances, $stock): array
+    {
+        $options = [];
+        $demand = $order->demand;
+        $originals = json_decode($order->articulos, true);
+        foreach ($order->items as $line => $item) {
+            if ($order->completada_en || $stock->get($item['id'], 0) >= $demand[$item['id']]) {
+                continue;
+            }
+            $original = $originals[$line];
+            $source = InventarioVariante::with('producto')->find($original['id']);
+            if (! $source || ! $source->producto) {
+                continue;
+            }
+            foreach ($balances as $variant) {
+                if ($variant->id == $item['id'] || $variant->stock_actual - $demand->get($variant->id, 0) < $item['cantidad']) {
+                    continue;
+                }
+                $sameCategory = filled($source->producto->categoria)
+                    && $variant->producto->categoria === $source->producto->categoria
+                    && $variant->producto->tipo === $source->producto->tipo;
+                if (($variant->producto_id == $source->producto_id || $sameCategory)
+                    && $variant->producto->unidad_medida === $source->producto->unidad_medida) {
+                    $options[$line][$variant->id] = $variant;
+                }
+            }
+        }
+        return $options;
+    }
+
+    public function substitute(Request $request, int $pedido)
+    {
+        $data = $request->validate([
+            'linea' => 'required|integer|min:0',
+            'actual' => 'required|integer',
+            'reemplazo' => 'required|integer',
+        ]);
+        DB::transaction(function () use ($pedido, $request, $data) {
+            $query = DB::table('solicitudes_epp')->where('id', $pedido);
+            $order = (clone $query)->lockForUpdate()->first();
+            abort_unless($order, 404);
+            $this->prepareOrder($order);
+            $line = $data['linea'];
+            $previous = $order->items[$line] ?? null;
+            if ($order->completada_en || ! $previous || $previous['id'] != $data['actual']) {
+                throw ValidationException::withMessages(['pedido' => 'El pedido cambió. Revisa su estado actual.']);
+            }
+            $central = $this->central();
+            $balances = $central ? app(InventarioStockService::class)->balances($central) : collect();
+            $variant = $this->alternatives($order, $balances, $this->stockByVariant($central))[$line][$data['reemplazo']] ?? null;
+            if (! $variant) {
+                throw ValidationException::withMessages(['reemplazo' => 'El reemplazo ya no corresponde al faltante o al stock disponible. Revisa el detalle.']);
+            }
+            $order->events[] = [
+                'linea' => (int) $line, 'anterior' => $previous,
+                'nuevo' => $this->item($variant) + ['cantidad' => $previous['cantidad']],
+                'usuario_id' => $request->user()->id, 'gestor' => $request->user()->name,
+                'fecha' => now()->toDateTimeString(),
+            ];
+            $query->update(['cambios' => json_encode($order->events, JSON_THROW_ON_ERROR), 'updated_at' => now()]);
+        });
+        return redirect()->route('inventario-bodega.epp.index', [
+            'mes' => $request->query('mes'), 'estado' => 'gestion', 'pedido' => $pedido,
+        ])->with('epp_status', 'Reemplazo registrado.');
     }
 
     public function complete(Request $request, int $pedido)

@@ -59,3 +59,4 @@ button:disabled { opacity: .55; }
     .line span { min-width: 55%; }
     .epp-hero { background-position: 61% center; }
 }
+.epp-history small { display:block; color:#526079; } .epp-history li { margin-bottom:.7rem; }
