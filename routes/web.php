@@ -107,7 +107,7 @@ Route::prefix('denuncia-ley-karin')->group(function () {
     Route::post('/logout',         [LeyKarinPublicoController::class, 'logout'])->name('ley-karin-publico.logout');
 });
 
-// --- PORTAL PÚBLICO CONTRATACIÓN (sin autenticación SAEP, requiere Google OAuth) ---
+// --- PORTAL PÚBLICO CONTRATACIÓN (acceso libre, Google opcional para postulaciones vinculadas) ---
 // Portal público con margen para postulantes desde redes compartidas.
 // El POST final mantiene un límite más estricto que la navegación y pre-subida.
 Route::prefix('postulacion')->middleware('throttle:180,1')->group(function () {

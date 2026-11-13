@@ -47,10 +47,7 @@ class ContratacionPublicoController extends Controller
     // ─── Paso 1: Landing ────────────────────────────────────────
     public function inicio()
     {
-        if (Session::has('contratacion_google_user')) {
-            return redirect()->route('contratacion-publico.formulario');
-        }
-        return view('contratacion.publico.inicio');
+        return redirect()->route('contratacion-publico.formulario');
     }
 
     // ─── Paso 2: Redirigir a Google ──────────────────────────────
@@ -85,28 +82,26 @@ class ContratacionPublicoController extends Controller
     }
 
     // ─── Paso 4: Formulario ──────────────────────────────────────
+    private function uploadOwner(): string
+    {
+        return Session::get('contratacion_google_user.id') ?? 'guest-' . hash('sha256', Session::getId());
+    }
+
     public function formulario()
     {
         $googleUser = Session::get('contratacion_google_user');
-        if (!$googleUser) {
-            return redirect()->route('contratacion-publico.inicio')
-                ->with('error', 'Debes iniciar sesión con Google para continuar.');
-        }
 
         // Si ya tiene postulación, llevar a edición
-        $postulante = PostulanteContratacion::where('google_id', $googleUser['id'])->first();
+        $postulante = $googleUser ? PostulanteContratacion::where('google_id', $googleUser['id'])->first() : null;
         $this->purgeExpiredTempUploads();
-        $tempUploadsByField = $this->tempUploadsByField($googleUser['id']);
+        $tempUploadsByField = $this->tempUploadsByField($this->uploadOwner());
 
         return view('contratacion.publico.formulario', compact('googleUser', 'postulante', 'tempUploadsByField'));
     }
 
     public function preuploadDocumento(Request $request)
     {
-        $googleUser = Session::get('contratacion_google_user');
-        if (!$googleUser) {
-            return response()->json(['message' => 'Sesión expirada. Inicia sesión con Google nuevamente.'], 401);
-        }
+        $owner = $this->uploadOwner();
 
         $this->purgeExpiredTempUploads();
 
@@ -126,7 +121,7 @@ class ContratacionPublicoController extends Controller
             $file = $preparedDocument['file'];
             $ext = strtolower($file->getClientOriginalExtension());
             $token = Str::random(48);
-            $folder = self::TEMP_UPLOAD_DIR . '/' . hash('sha256', $googleUser['id'] . '|' . Session::getId());
+            $folder = self::TEMP_UPLOAD_DIR . '/' . hash('sha256', $owner . '|' . Session::getId());
             $filename = $campo . '_' . now()->format('YmdHis') . '_' . Str::lower(Str::random(8)) . '.' . $ext;
             $path = $file->storeAs($folder, $filename, 'local');
 
@@ -138,7 +133,7 @@ class ContratacionPublicoController extends Controller
             $uploads[$token] = [
                 'token'         => $token,
                 'campo'         => $campo,
-                'google_id'     => $googleUser['id'],
+                'google_id'     => $owner,
                 'path'          => $path,
                 'original_name' => $file->getClientOriginalName(),
                 'extension'     => $ext,
@@ -147,7 +142,7 @@ class ContratacionPublicoController extends Controller
                 'uploaded_at'   => now()->timestamp,
             ];
             Session::put(self::TEMP_UPLOAD_SESSION_KEY, $uploads);
-            $this->discardTempUploadForField($campo, $googleUser['id'], '', $token);
+            $this->discardTempUploadForField($campo, $owner, '', $token);
 
             return response()->json([
                 'ok'                  => true,
@@ -165,10 +160,7 @@ class ContratacionPublicoController extends Controller
 
     public function descartarPreuploadDocumento(Request $request)
     {
-        $googleUser = Session::get('contratacion_google_user');
-        if (!$googleUser) {
-            return response()->json(['message' => 'Sesión expirada. Inicia sesión con Google nuevamente.'], 401);
-        }
+        $owner = $this->uploadOwner();
 
         $request->validate([
             'campo' => 'required|string|in:' . implode(',', self::DOCUMENT_FIELDS),
@@ -177,7 +169,7 @@ class ContratacionPublicoController extends Controller
 
         $removed = $this->discardTempUploadForField(
             (string) $request->input('campo'),
-            $googleUser['id'],
+            $owner,
             (string) $request->input('token', '')
         );
 
@@ -187,9 +179,6 @@ class ContratacionPublicoController extends Controller
     public function registrarErrorDocumento(Request $request)
     {
         $googleUser = Session::get('contratacion_google_user');
-        if (!$googleUser) {
-            return response()->json(['message' => 'Sesión expirada. Inicia sesión con Google nuevamente.'], 401);
-        }
 
         $data = $request->validate([
             'campo'             => 'nullable|string|max:80',
@@ -228,16 +217,12 @@ class ContratacionPublicoController extends Controller
     public function store(Request $request)
     {
         $googleUser = Session::get('contratacion_google_user');
-        if (!$googleUser) {
-            return redirect()->route('contratacion-publico.inicio')
-                ->with('error', 'Sesión expirada. Inicia sesión con Google nuevamente.');
-        }
 
         // Buscar postulación existente ANTES de validar para aplicar reglas condicionales
-        $postulante = PostulanteContratacion::where('google_id', $googleUser['id'])->first();
+        $postulante = $googleUser ? PostulanteContratacion::where('google_id', $googleUser['id'])->first() : null;
         $esNuevo    = !$postulante;
         $this->purgeExpiredTempUploads();
-        $tempUploads = $this->validTempUploadsFromRequest($request, $googleUser['id']);
+        $tempUploads = $this->validTempUploadsFromRequest($request, $this->uploadOwner());
 
         // Documentos obligatorios: required si no existe registro previo O si aún no han sido subidos
         $requeridosObligatorios = ['carnet_frontal', 'carnet_reverso', 'certificado_afp', 'certificado_fonasa'];
@@ -256,6 +241,7 @@ class ContratacionPublicoController extends Controller
 
         $request->validate(array_merge([
             'nombre' => 'required|string|max:200',
+            'email' => $googleUser ? 'exclude' : 'required|email|max:255',
             'rut'    => ['required', 'string', 'max:20', function ($attr, $val, $fail) {
                 if (!PostulanteContratacion::validarRut($val)) {
                     $fail('El RUT ingresado no es válido.');
@@ -304,15 +290,14 @@ class ContratacionPublicoController extends Controller
             $datos = [
                 'nombre'        => $request->nombre,
                 'rut'           => $rutFormateado,
-                'email'         => $googleUser['email'],
-                'google_id'     => $googleUser['id'],
-                'google_name'   => $googleUser['name'],
-                'google_avatar' => $googleUser['avatar'],
+                'email'         => $googleUser['email'] ?? $request->input('email'),
+                'google_id'     => $googleUser['id'] ?? null,
+                'google_name'   => $googleUser['name'] ?? null,
+                'google_avatar' => $googleUser['avatar'] ?? null,
                 'postulacion_anterior_id' => $postulacionAnterior?->id,
-                // La ficha principal siempre representa la última versión
-                // enviada. Su estado de RRHH se mantiene en revisión hasta que
-                // la persona responsable la apruebe o rechace.
-                'es_vigente' => true,
+                // Las repostulaciones sin identidad verificada quedan en el historial
+                // hasta que RRHH apruebe la nueva versión.
+                'es_vigente' => !$esRepostulacion || $googleUser !== null,
             ];
         } else {
             $datos = [
@@ -344,7 +329,7 @@ class ContratacionPublicoController extends Controller
         if ($esNuevo) {
             $postulante = PostulanteContratacion::create($datos);
 
-            if ($esRepostulacion && $postulacionAnterior) {
+            if ($esRepostulacion && $postulante->es_vigente && $postulacionAnterior) {
                 $postulacionAnterior->update(['es_vigente' => false]);
             }
         } else {
@@ -383,16 +368,16 @@ class ContratacionPublicoController extends Controller
             // La ficha anterior se archiva antes de reemplazar la principal.
             // No se modifica cómo se genera el PDF consolidado.
             $historialActualizado = true;
-            if ($esNuevo && $esRepostulacion && $postulacionAnterior) {
+            if ($esNuevo && $esRepostulacion && $postulante->es_vigente && $postulacionAnterior) {
                 $historialActualizado = $this->subirASharePoint($postulacionAnterior->fresh(), 'historial');
             }
 
             if ($historialActualizado) {
-                $principalActualizada = $this->subirASharePoint($postulante, 'vigente');
+                $principalActualizada = $this->subirASharePoint($postulante, $postulante->es_vigente ? 'vigente' : 'historial');
 
                 // La copia de raíz se borra solo si la anterior ya quedó en
                 // Historial y la nueva ficha principal se publicó con éxito.
-                if ($principalActualizada && $esNuevo && $esRepostulacion && $postulacionAnterior) {
+                if ($principalActualizada && $postulante->es_vigente && $esNuevo && $esRepostulacion && $postulacionAnterior) {
                     $this->retirarFichaPrincipalAnterior($postulacionAnterior->fresh());
                 }
             }
@@ -400,7 +385,11 @@ class ContratacionPublicoController extends Controller
             Log::warning('SharePoint contratacion upload falló (no crítico): ' . $e->getMessage());
         }
 
-        $this->clearTempUploadsForGoogle($googleUser['id']);
+        $this->clearTempUploadsForGoogle($this->uploadOwner());
+
+        if (!$googleUser) {
+            Session::put('contratacion_confirmacion_folio', $postulante->folio);
+        }
 
         return redirect(URL::temporarySignedRoute(
             'contratacion-publico.confirmacion',
@@ -413,13 +402,11 @@ class ContratacionPublicoController extends Controller
     public function confirmacion(string $folio)
     {
         $googleUser = Session::get('contratacion_google_user');
-        if (!$googleUser) {
-            return redirect()->route('contratacion-publico.inicio')
-                ->with('error', 'Debes iniciar sesión con Google para revisar tu confirmación.');
-        }
+
+        abort_unless($googleUser || Session::get('contratacion_confirmacion_folio') === $folio, 404);
 
         $postulante = PostulanteContratacion::where('folio', $folio)
-            ->where('google_id', $googleUser['id'])
+            ->where('google_id', $googleUser['id'] ?? null)
             ->firstOrFail();
 
         return view('contratacion.publico.confirmacion', compact('postulante'));
@@ -428,7 +415,8 @@ class ContratacionPublicoController extends Controller
     // ─── Logout ──────────────────────────────────────────────────
     public function logout()
     {
-        Session::forget('contratacion_google_user');
+        $this->clearTempUploadsForGoogle($this->uploadOwner());
+        Session::forget(['contratacion_google_user', 'contratacion_confirmacion_folio']);
         return redirect()->route('contratacion-publico.inicio')
             ->with('success', 'Sesión cerrada correctamente.');
     }

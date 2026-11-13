@@ -103,7 +103,7 @@
                     <td style="padding:16px;">
                         <p style="font-size:13px;color:#854d0e;margin:0;">
                             <strong>⚠️ Documentos pendientes</strong><br>
-                            Puedes ingresar nuevamente al portal con tu cuenta de Google para completar tu postulación.
+                            Puedes ingresar nuevamente al portal para enviar la documentación completa.
                         </p>
                     </td>
                 </tr>

@@ -18,6 +18,39 @@ class ContratacionRepostulacionTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_guest_can_submit_documents_and_only_the_submitting_session_can_view_confirmation(): void
+    {
+        $this->withCookie(config('session.cookie'), str_repeat('a', 40));
+        Storage::fake('local');
+        Mail::fake();
+        $this->mock(OneDriveService::class)->shouldReceive('isConfigured')->andReturn(false);
+
+        $this->get(route('contratacion-publico.formulario'))->assertOk()->assertSee('name="email"', false);
+        $this->post(route('contratacion-publico.store'), ['email' => 'incorrecto'])
+            ->assertSessionHasErrors(['email', 'consentimiento_datos', 'carnet_frontal']);
+
+        $upload = $this->post(route('contratacion-publico.documento.preupload'), [
+            'campo' => 'carnet_frontal',
+            'documento' => UploadedFile::fake()->create('frente.pdf', 10, 'application/pdf'),
+        ])->assertOk();
+
+        $response = $this->post(route('contratacion-publico.store'), [
+            'nombre' => 'Postulante de prueba',
+            'rut' => '18.527.794-1',
+            'email' => 'postulante@example.test',
+            'consentimiento_datos' => '1',
+            'uploaded_documents' => ['carnet_frontal' => $upload->json('token')],
+            'carnet_reverso' => UploadedFile::fake()->create('reverso.pdf', 10, 'application/pdf'),
+            'certificado_afp' => UploadedFile::fake()->create('afp.pdf', 10, 'application/pdf'),
+            'certificado_fonasa' => UploadedFile::fake()->create('fonasa.pdf', 10, 'application/pdf'),
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $confirmation = $response->headers->get('Location');
+        $this->get($confirmation)->assertOk()->assertSee('postulante@example.test');
+        $this->post(route('contratacion-publico.logout'))->assertRedirect();
+        $this->get($confirmation)->assertNotFound();
+    }
+
     public function test_public_portal_creates_a_reapplication_for_the_same_rut_with_another_google_account(): void
     {
         Storage::fake('local');
