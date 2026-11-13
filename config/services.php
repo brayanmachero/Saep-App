@@ -143,6 +143,11 @@ return [
         'key' => env('GEMINI_API_KEY'),
     ],
 
+    'talana_documents' => [
+        'token' => env('TALANA_DOCUMENT_TOKEN'),
+        'writes' => env('TALANA_DOCUMENT_WRITES', false),
+    ],
+
     'talana' => [
         'inventory_companies' => ['SUB' => (int) env('TALANA_EMPRESA_SAEP_ID', 1039), 'EST' => (int) env('TALANA_EMPRESA_SAEP_EST_ID', 1081)],
         'base_url'    => env('TALANA_API_BASE_URL', 'https://talana.com/es/api'),

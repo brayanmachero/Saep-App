@@ -894,6 +894,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/baterias', [\App\Http\Controllers\RrhhDocumentController::class, 'battery'])->middleware('modulo:gestion_documental,puede_crear')->name('battery');
         Route::post('/lotes', [\App\Http\Controllers\RrhhDocumentController::class, 'store'])->middleware('modulo:gestion_documental,puede_crear')->name('store');
         Route::post('/lotes/{id}/revision', [\App\Http\Controllers\RrhhDocumentController::class, 'review'])->middleware('modulo:gestion_documental,puede_editar')->name('review');
+        Route::post('/lotes/{id}/contratos/{item}/pdf', [\App\Http\Controllers\RrhhDocumentFileController::class, 'store'])->whereNumber('item')->middleware('modulo:gestion_documental,puede_editar')->name('prepare');
+        Route::get('/lotes/{id}/contratos/{item}/pdf/{position}', [\App\Http\Controllers\RrhhDocumentFileController::class, 'download'])->whereNumber(['item', 'position'])->name('pdf');
         Route::get('/lotes/{id}', [\App\Http\Controllers\RrhhDocumentController::class, 'show'])->name('show');
     });
     // --- CONTRATACIÓN RRHH (panel admin) ---

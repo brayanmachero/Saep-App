@@ -13,7 +13,7 @@ class RrhhDocumentReviewService
             $batch = DB::table('rrhh_document_batches')->where('id', $id)->lockForUpdate()->first();
             abort_unless($batch, 404);
             if ($batch->estado !== 'BORRADOR') {
-                throw ValidationException::withMessages(['accion' => 'El lote está cancelado y no admite cambios.']);
+                throw ValidationException::withMessages(['accion' => 'Solo se pueden modificar lotes en borrador.']);
             }
             $detail = ['motivo' => $data['motivo']];
             if ($data['accion'] === 'cancelar') {

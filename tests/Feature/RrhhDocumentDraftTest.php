@@ -9,6 +9,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -20,7 +21,7 @@ class RrhhDocumentDraftTest extends TestCase
     {
         parent::setUp();
         Http::preventStrayRequests();
-        foreach (['rrhh_document_batch_events', 'rrhh_document_batch_items', 'rrhh_document_batches', 'rrhh_document_batteries', 'talana_contratos', 'modulos'] as $t) {
+        foreach (['rrhh_document_deliveries', 'rrhh_document_batch_events', 'rrhh_document_batch_items', 'rrhh_document_batches', 'rrhh_document_batteries', 'talana_contratos', 'modulos'] as $t) {
             Schema::dropIfExists($t);
         }
         Schema::create('modulos', function (Blueprint $t) {
@@ -45,6 +46,7 @@ class RrhhDocumentDraftTest extends TestCase
         });
         (require base_path('database/migrations/2026_10_15_200000_create_rrhh_document_drafts.php'))->up();
         (require base_path('database/migrations/2026_10_15_210000_add_document_batch_review.php'))->up();
+        (require base_path('database/migrations/2026_11_13_130000_create_rrhh_document_deliveries.php'))->up();
         DB::table('rrhh_document_batteries')->insert(['id' => 1, 'nombre' => 'Prueba', 'version' => 1, 'documentos' => '["Contrato","Anexo"]', 'reglas' => '{}', 'created_by' => 1, 'created_at' => now(), 'updated_at' => now()]);
     }
 
@@ -56,6 +58,91 @@ class RrhhDocumentDraftTest extends TestCase
     private function data(array $extra = []): array
     {
         return array_merge(['nombre' => 'Lote prueba', 'request_id' => (string) Str::uuid(), 'battery_id' => 1, 'seleccion' => 'todos'], $extra);
+    }
+
+    public function test_dispatch_uploads_once_then_requests_each_signature_once(): void
+    {
+        $this->contract(1);
+        $batch = (new RrhhDocumentDraftService)->create($this->data(), 1);
+        $item = DB::table('rrhh_document_batch_items')->value('id');
+        $disk = Storage::fake('local');
+        foreach ([0, 1] as $slot) {
+            $pdf = '%PDF-1.4 synthetic '.$slot;
+            $disk->put("private/$slot.pdf", $pdf);
+            DB::table('rrhh_document_deliveries')->insert(['item_id' => $item, 'position' => $slot, 'category' => 'Prueba', 'path' => "private/$slot.pdf", 'sha256' => hash('sha256', $pdf), 'prepared_by' => 1]);
+        }
+        config(['services.talana_documents.token' => 'fake', 'services.talana_documents.writes' => false]);
+        $this->artisan('rrhh:documentos', ['lote' => $batch])->assertSuccessful();
+        $this->artisan('rrhh:documentos', ['lote' => $batch, '--ejecutar' => true])->assertFailed();
+        Http::assertNothingSent();
+        config(['services.talana_documents.writes' => true]);
+        Http::fake(['*/documentos/' => Http::sequence()->push(['id' => 101], 201)->push(['id' => 102], 201),
+            '*/integration-signature-requests-paginated/*' => Http::response(['results' => [['id' => 201, 'signed' => true], ['id' => 202, 'signed' => false]]]),
+            '*/requestSignature' => Http::sequence()->push(['sr_id' => 201])->push(['sr_id' => 202])]);
+        foreach (['--ejecutar', '--ejecutar', '--firmar', '--firmar'] as $option) {
+            $this->artisan('rrhh:documentos', ['lote' => $batch, $option => true])->assertSuccessful();
+        }
+        Http::assertSentCount(4);
+        $this->assertSame(2, DB::table('rrhh_document_deliveries')->where('state', 'firma_solicitada')->count());
+        $this->artisan('rrhh:documentos', ['lote' => $batch, '--consultar' => true])->assertSuccessful();
+        $this->assertSame(1, DB::table('rrhh_document_deliveries')->where('state', 'firmado')->count());
+    }
+
+    public function test_batch_supports_fifty_workers_with_twenty_documents(): void
+    {
+        DB::table('rrhh_document_batteries')->update(['documentos' => json_encode(array_map(fn ($i) => 'Documento '.$i, range(1, 20)))]);
+        for ($i = 1; $i <= 50; $i++) {
+            $this->contract($i, ['persona_rut' => "test-{$i}"]);
+        }
+        $batch = (new RrhhDocumentDraftService)->create($this->data(), 1);
+        $this->assertSame(1000, (int) DB::table('rrhh_document_batches')->where('id', $batch)->value('documentos'));
+        Http::assertNothingSent();
+    }
+
+    public function test_ambiguous_response_is_not_retried(): void
+    {
+        $this->contract(1);
+        DB::table('rrhh_document_batteries')->update(['documentos' => '["Contrato"]']);
+        $batch = (new RrhhDocumentDraftService)->create($this->data(), 1);
+        Storage::fake('local')->put('file.pdf', 'synthetic');
+        DB::table('rrhh_document_deliveries')->insert(['item_id' => DB::table('rrhh_document_batch_items')->value('id'), 'position' => 0, 'category' => 'Contrato', 'path' => 'file.pdf', 'sha256' => hash('sha256', 'synthetic'), 'prepared_by' => 1]);
+        config(['services.talana_documents.token' => 'fake', 'services.talana_documents.writes' => true]);
+        Http::fake(['*/documentos/' => Http::response([], 502)]);
+        for ($i = 0; $i < 2; $i++) {
+            $this->artisan('rrhh:documentos', ['lote' => $batch, '--ejecutar' => true])->assertFailed();
+        }
+        Http::assertSentCount(1);
+        $this->assertSame('revisar_carga', DB::table('rrhh_document_deliveries')->value('state'));
+    }
+
+    public function test_manifest_is_atomic_and_repeatable(): void
+    {
+        $this->contract(1);
+        $batch = (new RrhhDocumentDraftService)->create($this->data(), 1);
+        $disk = Storage::fake('local');
+        $dir = sys_get_temp_dir().'/'.Str::uuid();
+        mkdir($dir);
+        try {
+            $args = ['lote' => $batch, 'directorio' => $dir];
+            $this->artisan('rrhh:preparar-pdfs', $args)->assertSuccessful();
+            $csv = file_get_contents("$dir/manifiesto.csv");
+            file_put_contents("$dir/manifiesto.csv", preg_replace('/,(\r?\n)/', ',Personal$1', $csv));
+            file_put_contents("$dir/contrato-1-doc-1.pdf", "%PDF-1.4\n%%EOF");
+            $this->artisan('rrhh:preparar-pdfs', $args + ['--importar' => true])->assertFailed();
+            $this->assertSame(0, DB::table('rrhh_document_deliveries')->count());
+            $this->assertEmpty($disk->allFiles());
+            file_put_contents("$dir/contrato-1-doc-2.pdf", "%PDF-1.4\n%%EOF");
+            for ($i = 0; $i < 2; $i++) {
+                $this->artisan('rrhh:preparar-pdfs', $args + ['--importar' => true])->assertSuccessful();
+            }
+            $this->assertSame(2, DB::table('rrhh_document_deliveries')->count());
+            Http::assertNothingSent();
+        } finally {
+            foreach (glob("$dir/*") as $f) {
+                unlink($f);
+            }
+            rmdir($dir);
+        }
     }
 
     public function test_selects_all_results_beyond_page_and_excludes_expired_future_terminated(): void

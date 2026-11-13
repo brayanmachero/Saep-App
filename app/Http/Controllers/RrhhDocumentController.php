@@ -67,7 +67,9 @@ class RrhhDocumentController extends Controller
         $items = $query->orderBy('id')->paginate(50)->withQueryString();
         $events = DB::table('rrhh_document_batch_events')->where('batch_id', $id)->orderByDesc('id')->paginate(20, ['*'], 'historial_pagina')->withQueryString();
 
-        return view('rrhh_documentos.show', compact('batch', 'items', 'filter', 'events'));
+        $files = DB::table('rrhh_document_deliveries')->whereIn('item_id', $items->pluck('id'))->get()->groupBy('item_id');
+
+        return view('rrhh_documentos.show', compact('batch', 'items', 'filter', 'events', 'files'));
     }
 
     public function review(Request $request, string $id, RrhhDocumentReviewService $service)
