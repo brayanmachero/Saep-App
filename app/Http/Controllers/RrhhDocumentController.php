@@ -75,7 +75,7 @@ class RrhhDocumentController extends Controller
 
     public function battery(Request $r)
     {
-        $d = $r->validate(['nombre' => 'required|string|max:150', 'version' => 'required|integer|min:1|max:9999', 'documentos' => 'required|string|max:12000', 'empresa_id' => 'nullable|integer', 'centro_costo_nombre' => 'nullable|string|max:200', 'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200']);
+        $d = $r->validate(['nombre' => 'required|string|max:150', 'version' => 'required|integer|min:1|max:9999', 'documentos' => 'required|string|max:12000', 'empresa_id' => 'nullable|integer', 'centro_costo_nombre' => $r->boolean('origen_est') ? 'required|string|max:200|exists:talana_contratos,centro_costo_nombre' : 'nullable|string|max:200', 'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200']);
         $docs = array_values(array_unique(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $d['documentos'])))));
         if (! $docs || count($docs) > 50 || collect($docs)->contains(fn ($v) => mb_strlen($v) > 200)) {
             return back()->withErrors(['documentos' => 'Incluye entre 1 y 50 nombres de documentos, de hasta 200 caracteres.'])->withInput();

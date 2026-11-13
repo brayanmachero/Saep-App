@@ -55,6 +55,30 @@ class RrhhDocumentDraftTest extends TestCase
         return TalanaContrato::create(array_merge(['talana_id' => $n, 'persona_talana_id' => $n, 'empresa_id' => 1039, 'empresa_nombre' => 'SAEP SUB', 'persona_nombre' => 'Persona '.$n, 'persona_rut' => '12345678-9', 'cargo_nombre' => 'Operario', 'centro_costo_nombre' => 'CCU', 'tipo_contrato_nombre' => 'Indefinido', 'finiquitado' => false, 'desde' => today()->subMonth(), 'synced_at' => now()], $extra));
     }
 
+    public function test_est_view_search_and_saving_a_reviewed_version(): void
+    {
+        $user = new class extends \App\Models\User {
+            public function tieneConsentimientoDatosVigente(): bool { return true; }
+            public function tieneAcceso(string $moduloSlug, string $accion = 'puede_ver'): bool
+            {
+                return $moduloSlug === 'gestion_documental';
+            }
+        };
+        $user->id = 7;
+        $user->setRelation('rol', new \App\Models\Rol);
+        $this->actingAs($user)->withoutVite();
+        $this->contract(1);
+        config(['services.talana_documents.token' => 'test']);
+        Http::fake(['*/documentos/*' => Http::response(['results'=>[['nombre'=>'Ejemplo.pdf'],['nombre'=>'Ejemplo.pdf']], 'next'=>null, 'count'=>2])]);
+        $url = route('rrhh-documentos.est', ['grupo'=>'IDL Macul', 'buscar'=>'Ejemplo']);
+        $this->get($url)->assertOk()->assertSee('20 referencias')->assertSee('Ejemplo.pdf')->assertSee('1 título distinto');
+        $post = ['nombre'=>'QA IDL', 'centro_costo_nombre'=>'CCU', 'documentos'=>"Anexo\nIRL", 'version'=>1,'origen_est'=>1];
+        $this->from($url)->post(route('rrhh-documentos.battery'),$post)->assertRedirect(route('rrhh-documentos.index'));
+        $this->assertDatabaseHas('rrhh_document_batteries',['nombre'=>'QA IDL','created_by'=>7]);
+        $this->from($url)->post(route('rrhh-documentos.battery'),$post)->assertSessionHasErrors('nombre');
+        $this->get($url)->assertSee('Ya existe esa batería')->assertSee('QA IDL');
+    }
+
     private function data(array $extra = []): array
     {
         return array_merge(['nombre' => 'Lote prueba', 'request_id' => (string) Str::uuid(), 'battery_id' => 1, 'seleccion' => 'todos'], $extra);
