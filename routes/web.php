@@ -891,6 +891,7 @@ Route::middleware('auth')->group(function () {
     // Preparación documental: sin endpoints de escritura o firma hacia Talana.
     Route::middleware('modulo:gestion_documental')->prefix('rrhh/documentos')->name('rrhh-documentos.')->group(function () {
         Route::get('/', [\App\Http\Controllers\RrhhDocumentController::class, 'index'])->name('index');
+        Route::get('/mantenedor-est', [\App\Http\Controllers\RrhhDocumentController::class, 'est'])->name('est');
         Route::post('/baterias', [\App\Http\Controllers\RrhhDocumentController::class, 'battery'])->middleware('modulo:gestion_documental,puede_crear')->name('battery');
         Route::post('/lotes', [\App\Http\Controllers\RrhhDocumentController::class, 'store'])->middleware('modulo:gestion_documental,puede_crear')->name('store');
         Route::post('/lotes/{id}/revision', [\App\Http\Controllers\RrhhDocumentController::class, 'review'])->middleware('modulo:gestion_documental,puede_editar')->name('review');

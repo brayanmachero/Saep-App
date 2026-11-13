@@ -1,0 +1,88 @@
+{
+  "Base EST": [
+    "010-DERECHO A SABER EST",
+    "011- AUTORIZACIÓN DE PAGO DE REMUNERACIONES EST",
+    "Test Genérico (EPP)",
+    "RG Estándar SsT SAEP Est rv.00",
+    "RG Pro-Epp-SAEP EST-rv.00",
+    "RG RIOHS SAEP EST-rv.01",
+    "RG Uso-ManejoExt-SAEP EST-rv.00",
+    "RG Ley Karin-SAEP EST-rv.00",
+    "RG QUE HACER EN EMERGENCIA",
+    "RG CEAL-SM SUSESO-(nuevo)rv.01",
+    "RG MMC-(nuevo)-rv.00",
+    "RG PREXOR-(nuevo)-rv.00",
+    "RG RUV-(nuevo)-rv.00",
+    "RG TMERT-(nuevo)rv.00",
+    "IRL-SAEP-EST (SEGÚN CARGO- INTERNO SAEP)"
+  ],
+  "Unimarc EST": [
+    "010-DERECHO A SABER.pdf",
+    "011-AUTORIZACIÓN DE PAGO DE REMUNERACIONES.pdf",
+    "Test Genérico (ENTREGA EPP).pdf",
+    "RG Pro-Epp-SAEP EST-rv.00",
+    "RG Uso-ManejoExt-SAEP EST-rv.00",
+    "RG RIOHS SAEP EST-rv.01",
+    "RG Ley Karin-SAEP EST-rv.00",
+    "RG Estándar SsT SAEP EST rv.00",
+    "218-ODI\"UNIMARC CENTRAL\"V1.0",
+    "RG QUE HACER EN EMERGENCIA",
+    "RG CEAL-SM SUSESO-(nuevo)rv.01",
+    "RG MMC-(nuevo)-rv.00",
+    "RG PREXOR-(nuevo)-rv.00",
+    "RG RUV-(nuevo)-rv.00",
+    "RG TMERT-(nuevo)rv.00",
+    "218-ANEXO DE VINCULACION LABORAL\"UNIMARC EST\"V1.0"
+  ],
+  "IDL": [
+    "IRL-IDL (ES EL IRL DEL CLIENTE)",
+    "(135-306-298-020-079-071-144-90-94)-CONTROL ENTREGA,TOMA DE CONOCIMIENTO Y ACUSE DE RECIBO-RIOHS\"IDL\"V1.2",
+    "(135-306-298-020-079-071-144-90-94)-ACUSO DE RECEPCION DE INDUCCIONES ID LOGISTICS\"IDL\"V1.0",
+    "(144-20-135-146-90-306-298-79-94-71)-PACTO DE HORAS EXTRAS INDIVIDUAL\"IDL EST OCTUBRE\"V1.3"
+  ],
+  "IDL Macul": [
+    "135-DIFUSIÓN DE REGLAMENTO INTERNO DE SALUD-SEGURIDAD Y AMBIENTE\"IDL MACUL EST\"V1.0"
+  ],
+  "IDL Panamericana": [
+    "090-Difusion Ley.16744-IDL PANAMERICANA EST\"(NUEVO)rv.00",
+    "090-Difusion Plan de emergencia - PANAMERICANA(nuevo)rv.00"
+  ],
+  "IDL Cencocal": [
+    "PRO-21-SST-1 (IDL Cencocal-Nuevo)rv.00",
+    "PRO-21-SST-2(IDL Cencocal-nuevo)rv.00",
+    "PRO-21-SST-3 (IDL Cencocal-Nuevo)rv.00",
+    "PRO-21-SST-4 (IDL Cencocal-Nuevo)rv.00",
+    "PRO-21-SST-5 (IDL Cencocal-Nuevo)rv.00",
+    "PRO-21-SST-6 (IDL Cencocal-Nuevo)rv.00",
+    "PRO-21-SST-7 (IDL Cenconcal-Nuevo)rv.00"
+  ],
+  "Walmart": [
+    "09-CONSTANCIA - ANEXO 3 WALMART",
+    "RIOHS\"LTS",
+    "IRL-SAEP-EST (SEGÚN CARGO- INTERNO SAEP)",
+    "Reglamento Especial EECC Walmart- SAEP EST-rv.00"
+  ],
+  "CCU EST": [
+    "RG CCU-SAEP EST-POLITICA-SIG-rv.00"
+  ],
+  "Maersk Puma y Buenaventura": [
+    "TEST MAERSK (RIOHS)",
+    "(045-050-052-069-072-074-084-085)-REGISTRO DE ASISTENCIA Y CONTROL DE ACCESO\"MAERSK EST\"V1.0"
+  ],
+  "Maersk Depósito y Malvilla": [
+    "MAERSK-DIFUSIÓN POLITICA DE ALCOHOL Y DROGAS(Nuevo)-rv.00",
+    "MAERSK-DIFUSIÓN POLITICA DE HSSE(Nuevo)-rv.00",
+    "MAERSK-DIFUSIÓN POLITICA DE FATIGA Y SOMNOLENCIA(nuevo)-rv.00",
+    "MAERSK-DIFUSIÓN POLITICA DE SUSPENSION DE TAREAS Y NEGATIVA AL TRABAJO INSEGURO(Nuevo)-rv.00"
+  ],
+  "DHL": [
+    "(311-12-60-140-210-67-315-142-37-227-38-47-21-279-316)-RIOHS\"DHL\"V1.0.pdf"
+  ],
+  "DHL Teva": [
+    "021-EXIGENCIA DEL ISP–DHL TEVA EST",
+    "021-ANEXO-DE-CTTO-NORMA 147\"DHL TEVA EST\"V1.1"
+  ],
+  "DHL Atlantis": [
+    "067-ANEXO-DE-CTTO-NORMA 147\"DHL ATLANTIS EST\"V1.1"
+  ]
+}

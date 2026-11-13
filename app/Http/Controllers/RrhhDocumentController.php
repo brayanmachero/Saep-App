@@ -28,6 +28,51 @@ class RrhhDocumentController extends Controller
         return view('rrhh_documentos.index', compact('contracts', 'filters', 'options', 'companies') + ['batteries' => DB::table('rrhh_document_batteries')->orderByDesc('id')->get(), 'batches' => DB::table('rrhh_document_batches')->orderByDesc('created_at')->paginate(10, ['*'], 'lotes_pagina')]);
     }
 
+    public function est(Request $request, \App\Services\TalanaDocumentApi $api)
+    {
+        $groups = json_decode(file_get_contents(resource_path('data/rrhh-est.json')), true, 512, JSON_THROW_ON_ERROR);
+        $matches = json_decode(file_get_contents(resource_path('data/rrhh-est-talana.json')), true, 512, JSON_THROW_ON_ERROR);
+        $input = $request->validate([
+            'grupo' => ['nullable', \Illuminate\Validation\Rule::in(array_keys($groups))],
+            'buscar' => 'nullable|string|min:2|max:255',
+            'pagina' => 'nullable|integer|min:1',
+        ]);
+        $group = $input['grupo'] ?? 'Base EST';
+        $sources = ['Base EST'];
+        foreach (['IDL', 'DHL'] as $client) {
+            if (str_starts_with($group, $client.' ')) {
+                $sources[] = $client;
+            }
+        }
+        $sources[] = $group;
+        $documents = [];
+        foreach (array_unique($sources) as $source) {
+            foreach ($groups[$source] as $name) {
+                $documents[$name][] = $source;
+            }
+        }
+        $page = (int) ($input['pagina'] ?? 1);
+        $term = $input['buscar'] ?? '';
+        $names = [];
+        $total = null;
+        $next = false;
+        $error = null;
+        if ($term !== '') {
+            try {
+                $response = $api->searchDocuments($term, $page)->throw();
+                foreach ($response->json('results') as $entry) {
+                    $names[$entry['nombre']] = true;
+                }
+                $total = $response->json('count');
+                $next = filled($response->json('next'));
+            } catch (\Illuminate\Http\Client\HttpClientException|\RuntimeException $e) {
+                $error = 'La consulta a Talana no está disponible. Vuelve a intentarlo.';
+            }
+        }
+        $centres = TalanaContrato::whereNotNull('centro_costo_nombre')->distinct()->orderBy('centro_costo_nombre')->pluck('centro_costo_nombre');
+        return view('rrhh_documentos.est', compact('matches','groups','group','documents','centres','term','names','page','total','next','error'));
+    }
+
     public function battery(Request $r)
     {
         $d = $r->validate(['nombre' => 'required|string|max:150', 'version' => 'required|integer|min:1|max:9999', 'documentos' => 'required|string|max:12000', 'empresa_id' => 'nullable|integer', 'centro_costo_nombre' => 'nullable|string|max:200', 'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200']);

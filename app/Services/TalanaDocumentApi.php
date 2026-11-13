@@ -20,6 +20,11 @@ class TalanaDocumentApi
             ->withoutRedirecting()->acceptJson()->connectTimeout(8)->timeout(45);
     }
 
+    public function searchDocuments(string $term, int $page): Response
+    {
+        return $this->client()->get('documentos/', ['search' => $term, 'page' => $page, 'page_size' => 50]);
+    }
+
     public function upload(string $rut, string $name, string $category, string $pdf): Response
     {
         return $this->client()->post('documentos/', [

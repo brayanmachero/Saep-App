@@ -3,7 +3,7 @@
 @include('rrhh_documentos.style')
 @section('content')
 <div class="gdm">
- <div class="hero"><div><p class="muted">RRHH · PREPARACIÓN DOCUMENTAL</p><h2>Organiza un lote, revisa cada caso</h2><p class="muted">Selecciona contratos por empresa, centro y cargo. Trabaja con todos los resultados del filtro.</p></div><span class="badge-draft">Etapa de preparación</span></div>
+ <div class="hero"><div><p class="muted">RRHH · PREPARACIÓN DOCUMENTAL</p><h2>Organiza un lote, revisa cada caso</h2><p class="muted">Selecciona contratos por empresa, centro y cargo. Trabaja con todos los resultados del filtro.</p></div><a class="cta" href="{{ route('rrhh-documentos.est') }}">Mantenedor de baterías EST</a></div>
  <div class="note">Los lotes se guardan como borradores en SAEP. En el detalle puedes preparar los PDF por contrato y revisar el estado de cada documento.</div>
  @if(session('success'))<p class="success" role="status">{{ session('success') }}</p>@endif
  @if($errors->any())<div class="panel err" role="alert"><strong>Revisa estos datos</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
