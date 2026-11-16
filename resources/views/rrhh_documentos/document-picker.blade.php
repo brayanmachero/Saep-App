@@ -22,6 +22,12 @@ foreach ((array)old('documentos',[]) as $token) {
 @push('styles')
 <style>
 .document-picker{margin:16px 0;min-width:0}.document-picker .document-results{max-height:280px;overflow:auto}.document-picker .document-result,.document-picker li{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border-color,#ddd);padding:10px 0}.document-picker span{min-width:0;overflow-wrap:anywhere;font-size:13px}.document-picker button{flex-shrink:0;min-height:42px}.document-picker ul{padding:0;list-style:none}.document-picker h4{margin:16px 0 8px}.document-picker [hidden]{display:none!important}.document-picker .document-search{margin-top:8px}.document-picker :focus-visible{outline:3px solid #458bef;outline-offset:2px}
+
+.document-picker .document-results:has(.document-result),.document-picker .document-selected:has(li){border:1px solid var(--border-color,#dce3ed);border-radius:10px;margin:10px 0;padding:0 12px}
+.document-picker .document-status{margin:10px 0;line-height:1.5;font-size:12px}
+.document-picker .document-result:last-child,.document-picker li:last-child{border-bottom:0}
+.document-picker .document-results span,.document-picker .document-selected span{line-height:1.5}
+.document-picker .muted{margin:10px 0;color:var(--text-muted,#64748b);font-size:12px;line-height:1.5}
 </style>
 @endpush
 @push('scripts')
