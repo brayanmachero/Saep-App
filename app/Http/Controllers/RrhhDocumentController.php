@@ -69,12 +69,21 @@ class RrhhDocumentController extends Controller
                 $error = 'La consulta a Talana no está disponible. Vuelve a intentarlo.';
             }
         }
-        $centres = TalanaContrato::whereNotNull('centro_costo_nombre')->distinct()->orderBy('centro_costo_nombre')->pluck('centro_costo_nombre');
+        $companyId = (int) config('services.talana.inventory_companies.EST', 1081);
+        $centres = TalanaContrato::where('empresa_id', $companyId)->whereNotNull('centro_costo_nombre')->distinct()->orderBy('centro_costo_nombre')->pluck('centro_costo_nombre');
         return view('rrhh_documentos.est', compact('matches','groups','group','documents','centres','term','names','page','total','next','error'));
     }
 
     public function battery(Request $r)
     {
+        if ($r->boolean('origen_est')) {
+            $companyId = (int) config('services.talana.inventory_companies.EST', 1081);
+            $r->merge(['empresa_id' => $companyId]);
+            $r->validate(['centro_costo_nombre' => [
+                'required', 'string',
+                \Illuminate\Validation\Rule::exists('talana_contratos', 'centro_costo_nombre')->where('empresa_id', $companyId),
+            ]]);
+        }
         $d = $r->validate(['nombre' => 'required|string|max:150', 'version' => 'required|integer|min:1|max:9999', 'documentos' => 'required|string|max:12000', 'empresa_id' => 'nullable|integer', 'centro_costo_nombre' => $r->boolean('origen_est') ? 'required|string|max:200|exists:talana_contratos,centro_costo_nombre' : 'nullable|string|max:200', 'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200']);
         $docs = array_values(array_unique(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $d['documentos'])))));
         if (! $docs || count($docs) > 50 || collect($docs)->contains(fn ($v) => mb_strlen($v) > 200)) {

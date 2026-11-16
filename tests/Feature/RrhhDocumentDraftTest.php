@@ -67,7 +67,7 @@ class RrhhDocumentDraftTest extends TestCase
         $user->id = 7;
         $user->setRelation('rol', new \App\Models\Rol);
         $this->actingAs($user)->withoutVite();
-        $this->contract(1);
+        $this->contract(1, ['empresa_id' => 1081]);
         config(['services.talana_documents.token' => 'test']);
         Http::fake(['*/documentos/*' => Http::response(['results'=>[['nombre'=>'Ejemplo.pdf'],['nombre'=>'Ejemplo.pdf']], 'next'=>null, 'count'=>2])]);
         $url = route('rrhh-documentos.est', ['grupo'=>'IDL Macul', 'buscar'=>'Ejemplo']);
