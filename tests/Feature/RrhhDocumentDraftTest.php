@@ -112,6 +112,8 @@ class RrhhDocumentDraftTest extends TestCase
         $this->get($detail.'?documento=0')->assertOk()->assertSee('<h3 class="doc-review-title">Contrato</h3>',false);
         DB::table('rrhh_document_batteries')->where('id',1)->update(['documentos'=>'["Contrato"]','document_details'=>'{"Contrato":{"talana_id":123}}']);
 
+        DB::table('rrhh_document_batteries')->where('id',1)->update(['document_details'=>json_encode(['Contrato'=>['talana_id'=>123,'review_note'=>'Confirmar EST antes de vincular','candidate_names'=>['Candidato <EST>.pdf'],'checked_at'=>'2026-11-16T12:00:00Z']])]);
+        $this->get($detail)->assertOk()->assertSee('Resultado de la conciliación')->assertSee('Candidato &lt;EST&gt;.pdf',false)->assertDontSee('Candidato <EST>.pdf',false);
         $user->allowEdits=false;
         $this->get($detail)->assertOk()->assertDontSee('Quitar de esta batería');
         $this->post(route('rrhh-documentos.battery-change',1),['revision'=>1,'action'=>'remove','position'=>0])->assertForbidden();
@@ -135,7 +137,7 @@ class RrhhDocumentDraftTest extends TestCase
         }
         $this->assertSame(2,DB::table('rrhh_document_batteries')->count());
         $draft=route('rrhh-documentos.battery-show',2);
-        $this->get($draft)->assertSee('Pendiente de revisión');
+        $this->get($draft)->assertSee('PDF vinculado · pendiente de revisión');
         $this->post(route('rrhh-documentos.battery-change',2),['revision'=>1,'action'=>'remove','position'=>0])->assertRedirect($draft);
         $this->get($draft)->assertSee('La batería está vacía');
         $this->from($draft)->post(route('rrhh-documentos.battery-activate',2),['revision'=>2])->assertSessionHasErrors('bateria');

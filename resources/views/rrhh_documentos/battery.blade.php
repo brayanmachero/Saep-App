@@ -29,10 +29,14 @@ $pending=count($documents)-$validated;
 <div class="doc-review-grid">
 <section class="panel"><h3>Documentos de la batería</h3><p class="muted">Selecciona un archivo para revisarlo.</p>
 <ul class="doc-list" aria-label="Documentos">
-@foreach($documents as $position=>$name)<li><a href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'documento'=>$position]) }}#review" aria-current="{{ $selectedPosition===$position ? 'true' : 'false' }}"><strong>{{ $name }}</strong><small>{{ !empty($details[$name]['validated_at']) ? 'Validado' : 'Pendiente de revisión' }}</small></a></li>@endforeach
+@foreach($documents as $position=>$name)<li><a href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'documento'=>$position]) }}#review" aria-current="{{ $selectedPosition===$position ? 'true' : 'false' }}"><strong>{{ $name }}</strong><small>{{ !empty($details[$name]['validated_at']) ? 'Validado' : (!empty($details[$name]['talana_id']) ? 'PDF vinculado · pendiente de revisión' : 'Pendiente de vincular') }}</small></a></li>@endforeach
 </ul></section>
 <section class="panel" id="review">
 <h3 class="doc-review-title">{{ $selectedName }}</h3>
+@if(!empty($selectedDetails['review_note']))<div class="note"><strong>Resultado de la conciliación</strong><p>{{ $selectedDetails['review_note'] }}</p>
+@if(!empty($selectedDetails['candidate_names']))<p>Posibles títulos encontrados; requieren confirmar equivalencia:</p><ul>@foreach($selectedDetails['candidate_names'] as $candidate)<li>{{ $candidate }}</li>@endforeach</ul>@endif
+@if(!empty($selectedDetails['checked_at']))<p class="muted">Consulta realizada {{ \Carbon\Carbon::parse($selectedDetails['checked_at'])->timezone('America/Santiago')->format('d/m/Y H:i') }}.</p>@endif
+</div>@endif
 @if(!empty($selectedDetails['validated_at']))<p class="muted">Validado por {{ $selectedDetails['validated_name'] ?? ('usuario #'.$selectedDetails['validated_by']) }} · {{ \Carbon\Carbon::parse($selectedDetails['validated_at'])->timezone('America/Santiago')->format('d/m/Y H:i') }}</p>@endif
 @if(!empty($selectedDetails['talana_id']))
 <p class="doc-field-hint">Archivo de referencia Talana #{{ $selectedDetails['talana_id'] }}. Puede contener datos del trabajador al que pertenece.</p>
