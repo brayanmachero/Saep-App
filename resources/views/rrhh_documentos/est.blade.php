@@ -49,7 +49,7 @@
 @if($next)<a href="{{ request()->fullUrlWithQuery(['pagina'=>$page+1]) }}#talana">Siguiente</a>@endif</nav>
 @endif</section>
 @if(auth()->user()->tieneAcceso('gestion_documental','puede_crear'))
-<section class="panel" id="guardar"><h2>Guardar batería revisada</h2>
+<section class="panel" id="guardar"><h2>Crear borrador de batería</h2>
 <form method="post" action="{{ route('rrhh-documentos.battery') }}">@csrf
 <input type="hidden" name="origen_est" value="1">
 <div class="fields">
@@ -58,5 +58,5 @@
 <label>Cargo (opcional) <input name="cargo_nombre" maxlength="200" value="{{ old('cargo_nombre') }}"></label>
 <label>Versión <input type="number" required min="1" max="9999" value="{{ old('version',1) }}" name="version"></label></div>
 @include('rrhh_documentos.document-picker')
-<p><button class="cta">Guardar versión</button></p></form></section>@endif
+<p><button class="cta">Crear borrador y revisar</button></p></form></section>@endif
 </div>@endsection

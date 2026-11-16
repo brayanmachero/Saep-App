@@ -893,6 +893,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [\App\Http\Controllers\RrhhDocumentController::class, 'index'])->name('index');
         Route::get('/documentos-talana', [\App\Http\Controllers\RrhhDocumentController::class, 'documentOptions'])->middleware('modulo:gestion_documental,puede_crear')->name('document-options');
         Route::get('/mantenedor-est', [\App\Http\Controllers\RrhhDocumentController::class, 'est'])->name('est');
+        Route::get('/baterias/{battery}', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'show'])->whereNumber('battery')->name('battery-show');
+        Route::post('/baterias/{battery}/cambios', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'change'])->whereNumber('battery')->middleware('modulo:gestion_documental,puede_editar')->name('battery-change');
+        Route::post('/baterias/{battery}/version', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'clone'])->whereNumber('battery')->middleware('modulo:gestion_documental,puede_crear')->name('battery-clone');
+        Route::get('/baterias/{battery}/documentos/{position}/pdf', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'pdf'])->whereNumber(['battery','position'])->name('battery-pdf');
+        Route::get('/baterias/{battery}/documentos/{position}', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'preview'])->whereNumber(['battery','position'])->name('battery-preview');
+        Route::post('/baterias/{battery}/documentos/{position}/validar', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'validateDocument'])->whereNumber(['battery','position'])->middleware('modulo:gestion_documental,puede_editar')->name('battery-validate');
+        Route::post('/baterias/{battery}/activar', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'activate'])->whereNumber('battery')->middleware('modulo:gestion_documental,puede_editar')->name('battery-activate');
         Route::post('/baterias', [\App\Http\Controllers\RrhhDocumentController::class, 'battery'])->middleware('modulo:gestion_documental,puede_crear')->name('battery');
         Route::post('/lotes', [\App\Http\Controllers\RrhhDocumentController::class, 'store'])->middleware('modulo:gestion_documental,puede_crear')->name('store');
         Route::post('/lotes/{id}/revision', [\App\Http\Controllers\RrhhDocumentController::class, 'review'])->middleware('modulo:gestion_documental,puede_editar')->name('review');

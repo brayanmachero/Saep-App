@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -30,13 +31,13 @@ class TalanaDocumentApi
         $documents = [];
         foreach ($entries as $entry) {
             $name = $entry['nombre'] ?? '';
-            if (!is_string($name) || $name === '' || mb_strlen($name) > 255) {
+            if (! is_string($name) || $name === '' || mb_strlen($name) > 255) {
                 continue;
             }
             $date = null;
             try {
                 if (filled($entry['fechaCreacion'] ?? null)) {
-                    $date = \Carbon\CarbonImmutable::parse($entry['fechaCreacion'])->setTimezone('America/Santiago');
+                    $date = CarbonImmutable::parse($entry['fechaCreacion'])->setTimezone('America/Santiago');
                 }
             } catch (\Throwable) {
                 // Unavailable dates remain explicitly empty.
@@ -45,8 +46,8 @@ class TalanaDocumentApi
                 continue;
             }
             preg_match('/(?:rv\.?|v)\s*(\d+(?:\.\d+)*)/iu', $name, $version);
-            $documents[$name] = ['name'=>$name, 'timestamp'=>$date?->timestamp,
-                'date'=>$date?->format('d/m/Y H:i'), 'version'=>$version[1] ?? null];
+            $documents[$name] = ['name' => $name, 'id' => isset($entry['id']) ? (int) $entry['id'] : null, 'timestamp' => $date?->timestamp,
+                'date' => $date?->format('d/m/Y H:i'), 'version' => $version[1] ?? null];
         }
         uasort($documents, function ($a, $b) use ($order) {
             if ($order === 'name') {
@@ -56,9 +57,46 @@ class TalanaDocumentApi
                 return ($a['timestamp'] === null) <=> ($b['timestamp'] === null);
             }
             $comparison = $a['timestamp'] <=> $b['timestamp'];
-            return ($order === 'oldest' ? $comparison : -$comparison) ?: strnatcasecmp($a['name'],$b['name']);
+
+            return ($order === 'oldest' ? $comparison : -$comparison) ?: strnatcasecmp($a['name'], $b['name']);
         });
+
         return $documents;
+    }
+
+    public function document(int $id): Response
+    {
+        return $this->client()->get('documentos/'.$id.'/');
+    }
+
+    public function previewPdf(string $url): string
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        if (! str_starts_with($url, 'https://') || ($host !== 'talana.com' && ! str_ends_with($host, '.talana.com'))) {
+            throw new RuntimeException('El adjunto requiere revisión.');
+        }
+        $response = Http::withoutRedirecting()->connectTimeout(8)->timeout(45)
+            ->withOptions(['stream' => true])->get($url)->throw();
+        if (! $response->successful()) {
+            throw new RuntimeException('El archivo no está disponible.');
+        }
+        $stream = $response->toPsrResponse()->getBody();
+        $pdf = '';
+        try {
+            while (! $stream->eof()) {
+                $pdf .= $stream->read(65536);
+                if (strlen($pdf) > 25 * 1024 * 1024) {
+                    throw new RuntimeException('El archivo supera el tamaño de la vista previa (25 MB).');
+                }
+            }
+        } finally {
+            $stream->close();
+        }
+        if (! str_starts_with($pdf, '%PDF-')) {
+            throw new RuntimeException('El adjunto no es un PDF disponible para previsualizar.');
+        }
+
+        return $pdf;
     }
 
     public function upload(string $rut, string $name, string $category, string $pdf): Response

@@ -89,7 +89,7 @@ class RrhhDocumentController extends Controller
                 continue;
             }
             $options[$name] = $entry + ['value'=>\Illuminate\Support\Facades\Crypt::encryptString(json_encode([
-                'name'=>$name, 'user'=>(int)$request->user()->id,
+                'name'=>$name, 'id'=>$entry['id'], 'user'=>(int)$request->user()->id,
             ]))];
         }
         return response()->json(['options'=>array_values($options), 'next'=>filled($response->json('next'))])->header('Cache-Control','private, no-store');
@@ -106,25 +106,22 @@ class RrhhDocumentController extends Controller
             ]]);
         }
         $d = $r->validate(['nombre' => 'required|string|max:150', 'version' => 'required|integer|min:1|max:9999', 'documentos' => 'required|array|min:1|max:50', 'documentos.*'=>'required|string|max:4096', 'empresa_id' => 'nullable|integer', 'centro_costo_nombre' => $r->boolean('origen_est') ? 'required|string|max:200|exists:talana_contratos,centro_costo_nombre' : 'nullable|string|max:200', 'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200']);
-        $docs = [];
-        foreach ($d['documentos'] as $token) {
-            try {
-                $selection = json_decode(\Illuminate\Support\Facades\Crypt::decryptString($token), true, 512, JSON_THROW_ON_ERROR);
-                if (($selection['user'] ?? null) !== (int)$r->user()->id || !is_string($selection['name'] ?? null)) {
-                    throw new \RuntimeException;
-                }
-                $docs[] = $selection['name'];
-            } catch (\Throwable $e) {
-                return back()->withErrors(['documentos'=>'Selecciona los documentos desde los resultados de Talana.'])->withInput();
-            }
-        }
-        $docs = array_values(array_unique($docs));
+        $details = app(\App\Services\RrhhDocumentBatteryService::class)->selections($d['documentos'], (int)$r->user()->id);
+        $docs = array_keys($details);
         if (DB::table('rrhh_document_batteries')->where('nombre', $d['nombre'])->where('version', $d['version'])->exists()) {
             return back()->withErrors(['nombre' => 'Ya existe esa batería y versión. Crea una nueva versión.'])->withInput();
         }
-        DB::table('rrhh_document_batteries')->insert(['nombre' => $d['nombre'], 'version' => $d['version'], 'documentos' => json_encode($docs, JSON_UNESCAPED_UNICODE), 'reglas' => json_encode(array_intersect_key($d, array_flip(['empresa_id', 'centro_costo_nombre', 'cargo_nombre', 'tipo_contrato_nombre']))), 'created_by' => $r->user()->id, 'created_at' => now(), 'updated_at' => now()]);
+        try {
+            $batteryId = DB::transaction(function () use ($details,$d,$docs,$r) {
+                $id = DB::table('rrhh_document_batteries')->insertGetId(['document_details'=>json_encode($details), 'nombre' => $d['nombre'], 'version' => $d['version'], 'documentos' => json_encode($docs, JSON_UNESCAPED_UNICODE), 'reglas' => json_encode(array_intersect_key($d, array_flip(['empresa_id', 'centro_costo_nombre', 'cargo_nombre', 'tipo_contrato_nombre']))), 'created_by' => $r->user()->id, 'created_at' => now(), 'updated_at' => now()]);
+                app(\App\Services\RrhhDocumentBatteryService::class)->event($id,(int)$r->user()->id,'create');
+                return $id;
+            });
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            return back()->withErrors(['nombre'=>'Ya existe esa batería y versión. Abre su detalle para continuar.'])->withInput();
+        }
 
-        return redirect()->route('rrhh-documentos.index')->with('success', 'Batería en borrador creada. Es una definición documental; aún no contiene plantillas ni genera PDFs.');
+        return redirect()->route('rrhh-documentos.battery-show', $batteryId)->with('success', 'Borrador creado. Abre y valida los documentos antes de activar la batería.');
     }
 
     public function store(Request $r, RrhhDocumentDraftService $service)

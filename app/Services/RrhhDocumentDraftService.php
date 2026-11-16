@@ -34,9 +34,12 @@ class RrhhDocumentDraftService
 
                 return $existing->id;
             }
-            $battery = DB::table('rrhh_document_batteries')->find($data['battery_id']);
+            $battery = DB::table('rrhh_document_batteries')->where('id',$data['battery_id'])->lockForUpdate()->first();
             if (! $battery) {
                 throw ValidationException::withMessages(['battery_id' => 'Selecciona una batería existente.']);
+            }
+            if ($battery->estado !== 'ACTIVA') {
+                throw ValidationException::withMessages(['battery_id'=>'Selecciona una batería activa y validada.']);
             }
             $docs = json_decode($battery->documentos, true, 512, JSON_THROW_ON_ERROR);
             $rules = json_decode($battery->reglas, true, 512, JSON_THROW_ON_ERROR);
@@ -87,7 +90,7 @@ class RrhhDocumentDraftService
                 }
                 $rows[] = ['batch_id' => $id, 'contrato_id' => $c->id, 'snapshot' => json_encode($c->only(['talana_id', 'persona_talana_id', 'persona_nombre', 'persona_rut', 'empresa_id', 'empresa_nombre', 'cargo_nombre', 'centro_costo_nombre', 'tipo_contrato_nombre', 'desde', 'hasta', 'synced_at']), JSON_UNESCAPED_UNICODE), 'observaciones' => json_encode($warnings, JSON_UNESCAPED_UNICODE)];
             }
-            DB::table('rrhh_document_batches')->insert(['id' => $id, 'nombre' => $data['nombre'], 'battery_id' => $battery->id, 'battery_snapshot' => json_encode(['nombre' => $battery->nombre, 'version' => $battery->version, 'documentos' => $docs, 'reglas' => $rules], JSON_UNESCAPED_UNICODE), 'filtros' => json_encode($filters), 'created_by' => $userId, 'estado' => 'BORRADOR', 'trabajadores' => $contracts->count(), 'documentos' => $contracts->count() * count($docs), 'observados' => $observed, 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('rrhh_document_batches')->insert(['id' => $id, 'nombre' => $data['nombre'], 'battery_id' => $battery->id, 'battery_snapshot' => json_encode(['nombre' => $battery->nombre, 'version' => $battery->version, 'documentos' => $docs, 'reglas' => $rules, 'document_details'=>json_decode($battery->document_details ?? '{}',true)], JSON_UNESCAPED_UNICODE), 'filtros' => json_encode($filters), 'created_by' => $userId, 'estado' => 'BORRADOR', 'trabajadores' => $contracts->count(), 'documentos' => $contracts->count() * count($docs), 'observados' => $observed, 'created_at' => now(), 'updated_at' => now()]);
             foreach (array_chunk($rows, 200) as $chunk) {
                 DB::table('rrhh_document_batch_items')->insert($chunk);
             }
