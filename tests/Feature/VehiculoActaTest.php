@@ -54,7 +54,7 @@ class VehiculoActaTest extends TestCase
             'fecha' => now()->subMinute()->format('Y-m-d H:i'), 'kilometraje' => 1000, 'combustible' => 'Lleno',
             'condiciones' => array_fill_keys(array_keys(VehiculoActaService::PARTES), 'Bueno'),
             'kit' => array_fill_keys(array_keys(VehiculoActaService::KIT), 'Presente'), 'observaciones' => 'Inspección de prueba',
-            'firma_encargado' => $this->signature(), 'fotos' => [UploadedFile::fake()->image('vehiculo.jpg', 400, 300)],
+            'firma_encargado' => $this->signature(), 'fotos' => array_map(fn ($i) => UploadedFile::fake()->image('vehiculo-'.$i.'.jpg', 400, 300), range(1, 5)),
         ], $overrides);
     }
 
@@ -118,11 +118,36 @@ class VehiculoActaTest extends TestCase
         $this->get(route('portal-actas.media', [$acta, 'croquis']))->assertForbidden();
     }
 
-    public function test_location_requires_valid_coordinates_or_explicit_unavailability_reason(): void
+    public function test_preparation_uses_five_photos_without_location(): void
     {
-        $this->post(route('vehiculos-actas.guardar', [$this->reserva, 'entrega']), $this->data(['ubicacion_motivo' => '']))->assertSessionHasErrors('ubicacion');
-        $this->post(route('vehiculos-actas.guardar', [$this->reserva, 'entrega']), $this->data(['ubicacion' => ['latitud' => 99, 'longitud' => 200, 'precision' => -1, 'capturada_at' => now()->addDay()->toIso8601String()]]))->assertSessionHasErrors(['ubicacion.latitud','ubicacion.longitud','ubicacion.precision','ubicacion.capturada_at']);
-        $this->assertSame(0, VehiculoActa::count());
+        $route = route('vehiculos-actas.guardar', [$this->reserva, 'entrega']);
+        $this->post($route, $this->data(['fotos' => [UploadedFile::fake()->image('uno.jpg')]]))->assertSessionHasErrors('fotos');
+        $this->post($route, $this->data(['ubicacion_motivo' => '']))->assertSessionHasNoErrors();
+        $this->assertCount(5, VehiculoActa::firstOrFail()->evidencias);
+        $this->get(route('vehiculos-actas.show', VehiculoActa::first()))->assertDontSee('Ubicación de la inspección');
+    }
+
+    public function test_damage_requires_a_comment_and_photo_and_is_in_the_pdf(): void
+    {
+        $route = route('vehiculos-actas.guardar', [$this->reserva, 'entrega']);
+        $parts = array_fill_keys(array_keys(VehiculoActaService::PARTES), 'Bueno');
+        $parts['carroceria'] = 'Con observaciones';
+        $this->post($route, $this->data(['condiciones'=>$parts,'observaciones'=>'']))->assertSessionHasErrors('observaciones');
+        $this->post($route, $this->data(['condiciones'=>$parts]))->assertSessionHasErrors('foto_dano');
+        $this->post($route, $this->data(['condiciones'=>$parts,'foto_dano'=>UploadedFile::fake()->image('dano.jpg')]))->assertSessionHasNoErrors();
+        $acta = VehiculoActa::firstOrFail();
+        $this->get(route('vehiculos-actas.media',[$acta,'dano']))->assertOk();
+        $this->get(route('portal-actas.media',[$acta,'dano']))->assertForbidden();
+        $this->sign($acta)->assertSessionHasNoErrors();
+        $this->get(route('vehiculos-actas.pdf',$acta))->assertOk();
+        $this->get(route('vehiculos-actas.show',$acta))->assertSee('Fotografía de daños');
+    }
+
+    public function test_kit_incidents_require_a_comment(): void
+    {
+        $kit = array_fill_keys(array_keys(VehiculoActaService::KIT),'Presente');
+        $kit['gata'] = 'Con desperfecto';
+        $this->post(route('vehiculos-actas.guardar',[$this->reserva,'entrega']),$this->data(['kit'=>$kit,'observaciones'=>'']))->assertSessionHasErrors('observaciones');
     }
 
     public function test_sketch_survives_draft_edits_and_can_only_be_removed_explicitly_before_signing(): void
