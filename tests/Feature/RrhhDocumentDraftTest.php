@@ -72,7 +72,13 @@ class RrhhDocumentDraftTest extends TestCase
         config(['services.talana_documents.token' => 'test']);
         Http::fake(['*/documentos/*' => Http::response(['results'=>[['nombre'=>'Ejemplo.pdf','id'=>10],['nombre'=>'Ejemplo.pdf','id'=>11]], 'next'=>null, 'count'=>2])]);
         $url = route('rrhh-documentos.est', ['grupo'=>'IDL Macul', 'buscar'=>'Ejemplo']);
-        $this->get($url)->assertOk()->assertSee('20 referencias')->assertSee('Ejemplo.pdf')->assertSee('1 título distinto');
+        $this->get($url)->assertOk()->assertSee('20 referencias')->assertSee('Guía de documentos EST')->assertDontSee('Pendiente de validar');
+        Http::assertNothingSent();
+        $url = route('rrhh-documentos.battery-create', ['grupo'=>'IDL Macul','buscar'=>'Ejemplo']);
+        $this->get($url)->assertOk()->assertSee('Crear borrador y abrir documentos')->assertSee('Ejemplo');
+        $this->get(route('rrhh-documentos.index'))->assertOk()->assertSee('Prueba')->assertSee('Activas');
+        $this->get(route('rrhh-documentos.index',['estado'=>'BORRADOR']))->assertOk()->assertDontSee('Ver batería y documentos');
+        $this->get(route('rrhh-documentos.lots'))->assertOk()->assertSee('Lotes de trabajadores');
         $options = $this->getJson(route('rrhh-documentos.document-options',['q'=>'Ejemplo']))->assertOk()->json('options');
         $post = ['nombre'=>'QA IDL', 'centro_costo_nombre'=>'CCU', 'documentos'=>[$options[0]['value']], 'version'=>1,'origen_est'=>1];
         $this->from($url)->post(route('rrhh-documentos.battery'),$post)->assertRedirect(route('rrhh-documentos.battery-show',2));
@@ -101,11 +107,16 @@ class RrhhDocumentDraftTest extends TestCase
             'estado'=>'BORRADOR','documentos'=>'["Contrato"]','document_details'=>'{"Contrato":{"talana_id":123}}',
         ]);
         $detail=route('rrhh-documentos.battery-show',1);
+        DB::table('rrhh_document_batteries')->where('id',1)->update(['documentos'=>'["Contrato","Anexo"]','document_details'=>'{"Contrato":{"talana_id":123,"validated_at":"2026-11-16 10:00:00","validated_by":7}}']);
+        $this->get($detail)->assertOk()->assertSee('<h3 class="doc-review-title">Anexo</h3>',false);
+        $this->get($detail.'?documento=0')->assertOk()->assertSee('<h3 class="doc-review-title">Contrato</h3>',false);
+        DB::table('rrhh_document_batteries')->where('id',1)->update(['documentos'=>'["Contrato"]','document_details'=>'{"Contrato":{"talana_id":123}}']);
+
         $user->allowEdits=false;
         $this->get($detail)->assertOk()->assertDontSee('Quitar de esta batería');
         $this->post(route('rrhh-documentos.battery-change',1),['revision'=>1,'action'=>'remove','position'=>0])->assertForbidden();
         $user->allowEdits=true;
-        $this->get($detail)->assertOk()->assertSee('Ver y validar')->assertSee('Quitar de esta batería');
+        $this->get($detail)->assertOk()->assertSee('document-preview')->assertSee('Validar documento')->assertSee('Quitar de esta batería');
         $this->from($detail)->post(route('rrhh-documentos.battery-activate',1),['revision'=>1])->assertSessionHasErrors('bateria');
         $validate=route('rrhh-documentos.battery-validate',[1,0]);
         $this->from($detail)->post($validate,['revision'=>1,'confirmed'=>1])->assertSessionHasErrors('documento');

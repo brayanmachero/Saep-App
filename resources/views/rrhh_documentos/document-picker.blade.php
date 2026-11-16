@@ -8,7 +8,7 @@ foreach ((array)old('documentos',[]) as $token) {
 }
 @endphp
 <div class="document-picker" data-url="{{ route('rrhh-documentos.document-options') }}">
-<label>Buscar documento en Talana <input type="search" class="document-query" maxlength="255" placeholder="Escribe al menos dos caracteres"></label>
+<label>Buscar documento en Talana <input type="search" class="document-query" maxlength="255" value="{{ $initialSearch ?? '' }}" placeholder="Escribe al menos dos caracteres"></label>
 <label>Orden en cada página<select class="document-order"><option value="recent">Más recientes</option><option value="oldest">Más antiguos</option><option value="name">Nombre A–Z</option></select></label>
 <button type="button" class="cta document-search">Buscar documentos</button>
 <p class="document-status muted" role="status" aria-live="polite"></p>
@@ -16,7 +16,7 @@ foreach ((array)old('documentos',[]) as $token) {
 <button type="button" class="cta secondary document-next" hidden>Más resultados</button>
 <h4>Documentos seleccionados</h4>
 <ul class="document-selected"></ul>
-<p class="muted">Fechas de creación de registros en Talana, hora de Chile. El orden se aplica a cada página. Revisa la versión antes de agregarla. Los PDF se adjuntan al preparar el lote.</p>
+<p class="muted">Fechas de creación de registros en Talana, hora de Chile. El orden se aplica a cada página. Revisa la versión antes de agregarla. Guarda la selección para abrir y validar los PDF de referencia en el detalle de la batería.</p>
 <script type="application/json" class="document-initial">@json($selectedDocuments)</script>
 </div>
 @once

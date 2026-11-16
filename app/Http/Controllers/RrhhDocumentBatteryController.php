@@ -12,8 +12,9 @@ use Illuminate\Validation\ValidationException;
 
 class RrhhDocumentBatteryController extends Controller
 {
-    public function show(int $battery)
+    public function show(Request $request, int $battery)
     {
+        $input = $request->validate(['documento'=>'nullable|integer|min:0']);
         $record = DB::table('rrhh_document_batteries')->find($battery);
         abort_unless($record, 404);
         $documents = json_decode($record->documentos, true);
@@ -27,7 +28,12 @@ class RrhhDocumentBatteryController extends Controller
         }
         $companies = TalanaContrato::select('empresa_id', 'empresa_nombre')->distinct()->orderBy('empresa_nombre')->get();
 
-        return view('rrhh_documentos.battery', compact('options', 'companies', 'record', 'documents', 'details', 'rules', 'editable', 'events'));
+        $firstPending = collect($documents)->search(fn($name) => empty($details[$name]['validated_at']));
+        $selectedPosition = isset($input['documento']) && isset($documents[$input['documento']]) ? (int)$input['documento'] : ($firstPending !== false ? $firstPending : array_key_first($documents));
+        $selectedName = $selectedPosition !== null ? $documents[$selectedPosition] : null;
+        $selectedDetails = $selectedName !== null ? ($details[$selectedName] ?? []) : [];
+        $versions = DB::table('rrhh_document_batteries')->where('nombre',$record->nombre)->orderByDesc('version')->get(['id','version','estado']);
+        return view('rrhh_documentos.battery', compact('selectedPosition','selectedName','selectedDetails','versions','options', 'companies', 'record', 'documents', 'details', 'rules', 'editable', 'events'));
     }
 
     public function change(Request $request, int $battery, RrhhDocumentBatteryService $service)

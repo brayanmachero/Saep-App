@@ -15,6 +15,46 @@ class RrhhDocumentController extends Controller
         return $request->validate(['empresa_id' => 'nullable|integer', 'centro_costo_nombre' => 'nullable|string|max:200', 'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200', 'buscar' => 'nullable|string|max:100']);
     }
 
+    public function overview(Request $request)
+    {
+        $filters = $request->validate([
+            'q'=>'nullable|string|max:150',
+            'estado'=>'nullable|in:BORRADOR,ACTIVA,ARCHIVADA',
+        ]);
+        $query = DB::table('rrhh_document_batteries');
+        if (filled($filters['q'] ?? null)) {
+            $term = '%'.$filters['q'].'%';
+            $query->where(fn($q)=>$q->where('nombre','like',$term)->orWhere('reglas','like',$term));
+        }
+        if (filled($filters['estado'] ?? null)) {
+            $query->where('estado',$filters['estado']);
+        }
+        $batteries = $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(12)->withQueryString();
+        $counts = DB::table('rrhh_document_batteries')->selectRaw('estado, count(*) as total')->groupBy('estado')->pluck('total','estado');
+        return view('rrhh_documentos.overview',compact('batteries','counts','filters'));
+    }
+
+    public function newBattery(Request $request)
+    {
+        $groups = json_decode(file_get_contents(resource_path('data/rrhh-est.json')),true);
+        $input = $request->validate([
+            'grupo'=>['nullable',\Illuminate\Validation\Rule::in(array_keys($groups))],
+            'buscar'=>'nullable|string|max:255',
+        ]);
+        $group = $input['grupo'] ?? null;
+        $initialSearch = $input['buscar'] ?? '';
+        $companies = TalanaContrato::select('empresa_id','empresa_nombre')->whereNotNull('empresa_id')->distinct()->orderBy('empresa_nombre')->get();
+        $options = [];
+        foreach (['centro_costo_nombre','cargo_nombre','tipo_contrato_nombre'] as $field) {
+            $query = TalanaContrato::whereNotNull($field)->where($field,'!=','');
+            if ($group) {
+                $query->where('empresa_id',config('services.talana.inventory_companies.EST',1081));
+            }
+            $options[$field] = $query->distinct()->orderBy($field)->pluck($field);
+        }
+        return view('rrhh_documentos.create',compact('group','initialSearch','companies','options'));
+    }
+
     public function index(Request $r, RrhhDocumentDraftService $service)
     {
         $filters = $this->filters($r);
@@ -28,7 +68,7 @@ class RrhhDocumentController extends Controller
         return view('rrhh_documentos.index', compact('contracts', 'filters', 'options', 'companies') + ['batteries' => DB::table('rrhh_document_batteries')->orderByDesc('id')->get(), 'batches' => DB::table('rrhh_document_batches')->orderByDesc('created_at')->paginate(10, ['*'], 'lotes_pagina')]);
     }
 
-    public function est(Request $request, \App\Services\TalanaDocumentApi $api)
+    public function est(Request $request)
     {
         $groups = json_decode(file_get_contents(resource_path('data/rrhh-est.json')), true, 512, JSON_THROW_ON_ERROR);
         $matches = json_decode(file_get_contents(resource_path('data/rrhh-est-talana.json')), true, 512, JSON_THROW_ON_ERROR);
@@ -52,26 +92,7 @@ class RrhhDocumentController extends Controller
                 $documents[$name][] = $source;
             }
         }
-        $page = (int) ($input['pagina'] ?? 1);
-        $term = $input['buscar'] ?? '';
-        $order = $input['orden'] ?? 'recent';
-        $names = [];
-        $total = null;
-        $next = false;
-        $error = null;
-        if ($term !== '') {
-            try {
-                $response = $api->searchDocuments($term, $page)->throw();
-                $names = $api->summarizeDocuments($response->json('results') ?? [], $order);
-                $total = $response->json('count');
-                $next = filled($response->json('next'));
-            } catch (\Illuminate\Http\Client\HttpClientException|\RuntimeException $e) {
-                $error = 'La consulta a Talana no está disponible. Vuelve a intentarlo.';
-            }
-        }
-        $companyId = (int) config('services.talana.inventory_companies.EST', 1081);
-        $centres = TalanaContrato::where('empresa_id', $companyId)->whereNotNull('centro_costo_nombre')->distinct()->orderBy('centro_costo_nombre')->pluck('centro_costo_nombre');
-        return view('rrhh_documentos.est', compact('matches','groups','group','documents','centres','term','names','order','page','total','next','error'));
+        return view('rrhh_documentos.est', compact('matches','groups','group','documents'));
     }
 
     public function documentOptions(Request $request, \App\Services\TalanaDocumentApi $api)
