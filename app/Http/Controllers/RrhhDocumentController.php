@@ -74,6 +74,27 @@ class RrhhDocumentController extends Controller
         return view('rrhh_documentos.est', compact('matches','groups','group','documents','centres','term','names','page','total','next','error'));
     }
 
+    public function documentOptions(Request $request, \App\Services\TalanaDocumentApi $api)
+    {
+        $data = $request->validate(['q'=>'required|string|min:2|max:255', 'page'=>'nullable|integer|min:1|max:10000']);
+        try {
+            $response = $api->searchDocuments($data['q'], $data['page'] ?? 1)->throw();
+        } catch (\Illuminate\Http\Client\HttpClientException|\RuntimeException $e) {
+            return response()->json(['message'=>'No se pudo consultar Talana. Intenta nuevamente.'],503);
+        }
+        $options = [];
+        foreach ($response->json('results') ?? [] as $entry) {
+            $name = $entry['nombre'] ?? '';
+            if ($name === '' || mb_strlen($name)>255 || isset($options[$name])) {
+                continue;
+            }
+            $options[$name] = ['name'=>$name, 'value'=>\Illuminate\Support\Facades\Crypt::encryptString(json_encode([
+                'name'=>$name, 'user'=>(int)$request->user()->id,
+            ]))];
+        }
+        return response()->json(['options'=>array_values($options), 'next'=>filled($response->json('next'))])->header('Cache-Control','private, no-store');
+    }
+
     public function battery(Request $r)
     {
         if ($r->boolean('origen_est')) {
@@ -84,11 +105,20 @@ class RrhhDocumentController extends Controller
                 \Illuminate\Validation\Rule::exists('talana_contratos', 'centro_costo_nombre')->where('empresa_id', $companyId),
             ]]);
         }
-        $d = $r->validate(['nombre' => 'required|string|max:150', 'version' => 'required|integer|min:1|max:9999', 'documentos' => 'required|string|max:12000', 'empresa_id' => 'nullable|integer', 'centro_costo_nombre' => $r->boolean('origen_est') ? 'required|string|max:200|exists:talana_contratos,centro_costo_nombre' : 'nullable|string|max:200', 'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200']);
-        $docs = array_values(array_unique(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $d['documentos'])))));
-        if (! $docs || count($docs) > 50 || collect($docs)->contains(fn ($v) => mb_strlen($v) > 200)) {
-            return back()->withErrors(['documentos' => 'Incluye entre 1 y 50 nombres de documentos, de hasta 200 caracteres.'])->withInput();
+        $d = $r->validate(['nombre' => 'required|string|max:150', 'version' => 'required|integer|min:1|max:9999', 'documentos' => 'required|array|min:1|max:50', 'documentos.*'=>'required|string|max:4096', 'empresa_id' => 'nullable|integer', 'centro_costo_nombre' => $r->boolean('origen_est') ? 'required|string|max:200|exists:talana_contratos,centro_costo_nombre' : 'nullable|string|max:200', 'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200']);
+        $docs = [];
+        foreach ($d['documentos'] as $token) {
+            try {
+                $selection = json_decode(\Illuminate\Support\Facades\Crypt::decryptString($token), true, 512, JSON_THROW_ON_ERROR);
+                if (($selection['user'] ?? null) !== (int)$r->user()->id || !is_string($selection['name'] ?? null)) {
+                    throw new \RuntimeException;
+                }
+                $docs[] = $selection['name'];
+            } catch (\Throwable $e) {
+                return back()->withErrors(['documentos'=>'Selecciona los documentos desde los resultados de Talana.'])->withInput();
+            }
         }
+        $docs = array_values(array_unique($docs));
         if (DB::table('rrhh_document_batteries')->where('nombre', $d['nombre'])->where('version', $d['version'])->exists()) {
             return back()->withErrors(['nombre' => 'Ya existe esa batería y versión. Crea una nueva versión.'])->withInput();
         }

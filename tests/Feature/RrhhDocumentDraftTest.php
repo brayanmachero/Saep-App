@@ -72,8 +72,12 @@ class RrhhDocumentDraftTest extends TestCase
         Http::fake(['*/documentos/*' => Http::response(['results'=>[['nombre'=>'Ejemplo.pdf'],['nombre'=>'Ejemplo.pdf']], 'next'=>null, 'count'=>2])]);
         $url = route('rrhh-documentos.est', ['grupo'=>'IDL Macul', 'buscar'=>'Ejemplo']);
         $this->get($url)->assertOk()->assertSee('20 referencias')->assertSee('Ejemplo.pdf')->assertSee('1 título distinto');
-        $post = ['nombre'=>'QA IDL', 'centro_costo_nombre'=>'CCU', 'documentos'=>"Anexo\nIRL", 'version'=>1,'origen_est'=>1];
+        $options = $this->getJson(route('rrhh-documentos.document-options',['q'=>'Ejemplo']))->assertOk()->json('options');
+        $post = ['nombre'=>'QA IDL', 'centro_costo_nombre'=>'CCU', 'documentos'=>[$options[0]['value']], 'version'=>1,'origen_est'=>1];
         $this->from($url)->post(route('rrhh-documentos.battery'),$post)->assertRedirect(route('rrhh-documentos.index'));
+        $tampered = $post;
+        $tampered['documentos'] = ['inventado'];
+        $this->from($url)->post(route('rrhh-documentos.battery'),$tampered)->assertSessionHasErrors('documentos');
         $this->assertDatabaseHas('rrhh_document_batteries',['nombre'=>'QA IDL','created_by'=>7]);
         $this->from($url)->post(route('rrhh-documentos.battery'),$post)->assertSessionHasErrors('nombre');
         $this->get($url)->assertSee('Ya existe esa batería')->assertSee('QA IDL');

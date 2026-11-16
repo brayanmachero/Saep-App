@@ -45,6 +45,6 @@
 <label>Centro de costo en Talana <select required name="centro_costo_nombre"><option value="">Elegir centro</option>@foreach($centres as $centre)<option @selected(old('centro_costo_nombre') === $centre)>{{ $centre }}</option>@endforeach</select></label>
 <label>Cargo (opcional) <input name="cargo_nombre" maxlength="200" value="{{ old('cargo_nombre') }}"></label>
 <label>Versión <input type="number" required min="1" max="9999" value="{{ old('version',1) }}" name="version"></label></div>
-<label>Documentos aprobados, uno por línea <textarea rows="7" required name="documentos">{{ old('documentos',implode("\n",array_keys($documents))) }}</textarea></label>
+@include('rrhh_documentos.document-picker')
 <p><button class="cta">Guardar versión</button></p></form></section>@endif
 </div>@endsection
