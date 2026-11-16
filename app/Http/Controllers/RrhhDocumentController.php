@@ -97,6 +97,7 @@ class RrhhDocumentController extends Controller
 
     public function documentOptions(Request $request, \App\Services\TalanaDocumentApi $api)
     {
+        abort_unless($request->user()->tieneAcceso('gestion_documental','puede_crear') || $request->user()->tieneAcceso('gestion_documental','puede_editar'),403);
         $data = $request->validate(['q'=>'required|string|min:2|max:255', 'page'=>'nullable|integer|min:1|max:10000', 'order'=>'nullable|in:recent,oldest,name']);
         try {
             $response = $api->searchDocuments($data['q'], $data['page'] ?? 1)->throw();

@@ -154,6 +154,47 @@ class RrhhDocumentDraftTest extends TestCase
         $this->assertSame(1,DB::table('rrhh_document_battery_events')->where('battery_id',2)->where('action','remove')->count());
     }
 
+    public function test_filtered_review_and_replacement_preserve_requirement_and_invalidate_approval(): void
+    {
+        $user = new class extends \App\Models\User {
+            public function tieneConsentimientoDatosVigente(): bool { return true; }
+            public function tieneAcceso(string $moduloSlug, string $accion = 'puede_ver'): bool { return true; }
+        };
+        $user->id=7; $user->setRelation('rol',new \App\Models\Rol);
+        $this->actingAs($user)->withoutVite();
+        DB::table('rrhh_document_batteries')->where('id',1)->update(['estado'=>'BORRADOR','documentos'=>'["Contrato","Anexo","IRL requerido"]','document_details'=>json_encode([
+            'Contrato'=>['talana_id'=>123,'validated_at'=>'2026-11-16 12:00:00','validated_by'=>7,'validated_name'=>'QA','source_reference'=>'Contrato EST'],
+            'Anexo'=>['talana_id'=>124],
+        ])]);
+        $url=route('rrhh-documentos.battery-show',1);
+        $this->get($url)->assertOk()->assertViewHas('linked',2)->assertViewHas('previous',0)->assertViewHas('next',2)->assertViewHas('selectedPosition',1);
+        $this->get($url.'?filtro=sin-vincular&documento=0')->assertOk()->assertViewHas('visibleDocuments',[2=>'IRL requerido'])->assertViewHas('selectedPosition',2);
+        $this->get($url.'?filtro=por-revisar')->assertOk()->assertViewHas('visibleDocuments',[1=>'Anexo']);
+        $this->get($url.'?filtro=validados')->assertOk()->assertViewHas('visibleDocuments',[0=>'Contrato']);
+        $token=fn($name,$id)=>\Illuminate\Support\Facades\Crypt::encryptString(json_encode(['user'=>7,'name'=>$name,'id'=>$id]));
+        $action=route('rrhh-documentos.battery-change',1);
+        $this->from($url)->post($action,['revision'=>1,'action'=>'replace','position'=>0,'documentos'=>[$token('Anexo',124)]])->assertSessionHasErrors('documentos');
+        $this->from($url)->post($action,['revision'=>1,'action'=>'replace','position'=>0,'documentos'=>[$token('Nuevo',125),$token('Otro',126)]])->assertSessionHasErrors('documentos');
+        $this->from($url)->post($action,['revision'=>1,'action'=>'replace','position'=>0,'documentos'=>['invalid']])->assertSessionHasErrors('documentos');
+        $this->post($action,['revision'=>1,'action'=>'replace','position'=>0,'documentos'=>[$token('Nuevo',125)]])->assertRedirect($url.'?documento=0');
+        $r=DB::table('rrhh_document_batteries')->find(1);$details=json_decode($r->document_details,true);
+        $this->assertSame(['Nuevo','Anexo','IRL requerido'],json_decode($r->documentos,true));
+        $this->assertSame(['talana_id'=>125,'source_reference'=>'Contrato EST'],$details['Nuevo']);
+        $this->assertArrayNotHasKey('Contrato',$details);
+        $this->assertSame(1,DB::table('rrhh_document_battery_events')->where('action','replace')->count());
+        $this->get($url.'?filtro=validados')->assertOk()->assertSee('No hay documentos con este estado')->assertDontSee('id="document-preview"',false);
+        $this->from($url)->post($action,['revision'=>1,'action'=>'replace','position'=>2,'documentos'=>[$token('IRL.pdf',126)]])->assertSessionHasErrors('bateria');
+        $this->post($action,['revision'=>2,'action'=>'replace','position'=>2,'documentos'=>[$token('IRL.pdf',126)]])->assertRedirect($url.'?documento=2');
+        $this->assertCount(3,json_decode(DB::table('rrhh_document_batteries')->value('documentos'),true));
+        config(['services.talana_documents.token'=>'test']);
+        Http::fake(['*/documentos/125/'=>Http::response(['nombre'=>'Nuevo','adjunto'=>'https://talana.com/es/remuneraciones/download-document/candidate']), 'https://talana.com/es/remuneraciones/download-document/candidate'=>fn()=>Http::response('%PDF-1.4 candidate')]);
+        $this->post(route('rrhh-documentos.candidate-pdf'),['selection'=>$token('Nuevo',125)])->assertOk()->assertHeader('Content-Type','application/pdf');
+        $this->assertNull(session('battery_preview.1.0'));
+        $this->from($url)->post(route('rrhh-documentos.candidate-pdf'),['selection'=>'invalid'])->assertSessionHasErrors('documentos');
+        DB::table('rrhh_document_batteries')->where('id',1)->update(['estado'=>'ACTIVA']);
+        $this->from($url)->post($action,['revision'=>3,'action'=>'replace','position'=>0,'documentos'=>[$token('Otro',127)]])->assertSessionHasErrors('bateria');
+    }
+
     public function test_preview_rejects_external_hosts_without_sending_credentials(): void
     {
         try {

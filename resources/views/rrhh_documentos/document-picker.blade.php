@@ -40,7 +40,7 @@ document.querySelectorAll('.document-picker').forEach(root => {
     let page=1, term='', busy=false, order='recent';
     function add(option) {
         if(selections.has(option.name)) { status.textContent='Este documento ya está seleccionado.'; return; }
-        if(selections.size>=50) { status.textContent='Puedes seleccionar hasta 50 documentos.'; return; }
+        if(selections.size>=Number(root.dataset.limit||50)) { status.textContent='Alcanzaste el máximo de selección. Quita un documento antes de elegir otro.'; return; }
         selections.set(option.name,option.value);
         const row=document.createElement('li'), title=document.createElement('span'), input=document.createElement('input'), remove=document.createElement('button');
         title.textContent=option.name;input.type='hidden';input.name='documentos[]';input.value=option.value;
@@ -63,14 +63,17 @@ document.querySelectorAll('.document-picker').forEach(root => {
                 const row=document.createElement('div'),title=document.createElement('span'),button=document.createElement('button');
                 row.className='document-result';title.textContent=option.name;
                 const meta=document.createElement('small');meta.className='document-meta';meta.textContent='Último registro observado · '+(option.date || 'Fecha no informada')+' · Versión en el título · '+(option.version || 'No identificada');title.append(meta);button.type='button';button.className='cta secondary';button.textContent='Agregar';button.setAttribute('aria-label','Agregar '+option.name);
-                button.onclick=()=>add(option);row.append(title,button);results.append(row);
+                button.onclick=()=>add(option);
+                const actions=document.createElement('div');actions.className='actions';
+                if(root.closest('#add-documents')){const preview=document.createElement('button');preview.type='button';preview.className='cta secondary';preview.textContent='Ver PDF';preview.setAttribute('aria-label','Ver PDF '+option.name);preview.onclick=()=>root.dispatchEvent(new CustomEvent('document-preview',{bubbles:true,detail:option}));actions.append(preview);}
+                actions.append(button);row.append(title,actions);results.append(row);
             }
             next.hidden=!data.next;page++;status.textContent=data.options.length?'Selecciona los documentos que correspondan.':'Sin resultados. Prueba con menos palabras.';
         }catch(error){status.textContent=error.message;}finally{busy=false;search.disabled=false;next.disabled=false;}
     }
     search.onclick=()=>load(false);next.onclick=()=>load(true);
     query.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();load(false);}});
-    root.closest('form').addEventListener('submit',event=>{if(!selections.size){event.preventDefault();status.textContent='Selecciona al menos un documento de Talana.';query.focus();}});
+    root.closest('form').addEventListener('submit',event=>{if(!selections.size||selections.size>Number(root.dataset.limit||50)){event.preventDefault();status.textContent='Revisa la selección: elige un archivo al reemplazar, o hasta 50 al agregar.';query.focus();}});
 });
 </script>
 @endpush

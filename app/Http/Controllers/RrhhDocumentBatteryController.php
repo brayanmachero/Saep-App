@@ -14,7 +14,7 @@ class RrhhDocumentBatteryController extends Controller
 {
     public function show(Request $request, int $battery)
     {
-        $input = $request->validate(['documento'=>'nullable|integer|min:0']);
+        $input = $request->validate(['documento'=>'nullable|integer|min:0','filtro'=>'nullable|in:todos,sin-vincular,por-revisar,validados']);
         $record = DB::table('rrhh_document_batteries')->find($battery);
         abort_unless($record, 404);
         $documents = json_decode($record->documentos, true);
@@ -28,25 +28,40 @@ class RrhhDocumentBatteryController extends Controller
         }
         $companies = TalanaContrato::select('empresa_id', 'empresa_nombre')->distinct()->orderBy('empresa_nombre')->get();
 
-        $firstPending = collect($documents)->search(fn($name) => empty($details[$name]['validated_at']));
-        $selectedPosition = isset($input['documento']) && isset($documents[$input['documento']]) ? (int)$input['documento'] : ($firstPending !== false ? $firstPending : array_key_first($documents));
+        $filter = $input['filtro'] ?? 'todos';
+        $linked = collect($documents)->filter(fn($name) => !empty($details[$name]['talana_id']))->count();
+        $visibleDocuments = array_filter($documents, function($name) use($filter,$details) {
+            $meta = $details[$name] ?? [];
+            return match($filter) {
+                'sin-vincular' => empty($meta['talana_id']),
+                'por-revisar' => !empty($meta['talana_id']) && empty($meta['validated_at']),
+                'validados' => !empty($meta['validated_at']),
+                default => true,
+            };
+        });
+        $firstPending = collect($visibleDocuments)->search(fn($name) => empty($details[$name]['validated_at']));
+        $selectedPosition = isset($input['documento']) && isset($visibleDocuments[$input['documento']]) ? (int)$input['documento'] : ($firstPending !== false ? $firstPending : array_key_first($visibleDocuments));
+        $positions = array_keys($visibleDocuments);
+        $index = array_search($selectedPosition,$positions,true);
+        $previous = $index !== false && $index > 0 ? $positions[$index-1] : null;
+        $next = $index !== false ? ($positions[$index+1] ?? null) : null;
         $selectedName = $selectedPosition !== null ? $documents[$selectedPosition] : null;
         $selectedDetails = $selectedName !== null ? ($details[$selectedName] ?? []) : [];
         $versions = DB::table('rrhh_document_batteries')->where('nombre',$record->nombre)->orderByDesc('version')->get(['id','version','estado']);
-        return view('rrhh_documentos.battery', compact('selectedPosition','selectedName','selectedDetails','versions','options', 'companies', 'record', 'documents', 'details', 'rules', 'editable', 'events'));
+        return view('rrhh_documentos.battery', compact('filter','linked','visibleDocuments','previous','next','selectedPosition','selectedName','selectedDetails','versions','options', 'companies', 'record', 'documents', 'details', 'rules', 'editable', 'events'));
     }
 
     public function change(Request $request, int $battery, RrhhDocumentBatteryService $service)
     {
         $data = $request->validate([
-            'revision' => 'required|integer|min:1', 'action' => 'required|in:remove,add,rules',
-            'position' => 'required_if:action,remove|integer|min:0',
-            'documentos' => 'required_if:action,add|array|min:1|max:50', 'documentos.*' => 'string|max:4096',
+            'revision' => 'required|integer|min:1', 'action' => 'required|in:remove,add,replace,rules',
+            'position' => 'nullable|required_if:action,remove,replace|integer|min:0',
+            'documentos' => 'required_if:action,add,replace|array|min:1|max:50', 'documentos.*' => 'string|max:4096',
             'empresa_id' => 'nullable|integer',
             'centro_costo_nombre' => 'nullable|string|max:200',
             'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200',
         ]);
-        $added = $data['action'] === 'add' ? $service->selections($data['documentos'], (int) $request->user()->id) : [];
+        $added = in_array($data['action'], ['add','replace'], true) ? $service->selections($data['documentos'], (int) $request->user()->id) : [];
         DB::transaction(function () use ($battery, $request, $data, $added, $service) {
             $record = DB::table('rrhh_document_batteries')->where('id', $battery)->lockForUpdate()->first();
             abort_unless($record, 404);
@@ -75,6 +90,22 @@ class RrhhDocumentBatteryController extends Controller
                 }
                 $eventDetail = ['documentos' => array_keys($added)];
             }
+            if ($data['action'] === 'replace') {
+                abort_unless(isset($documents[$data['position']]),422);
+                if (count($data['documentos']) !== 1 || count($added) !== 1) {
+                    throw ValidationException::withMessages(['documentos'=>'Selecciona exactamente un documento para este requisito.']);
+                }
+                $oldName = $documents[$data['position']];
+                $newName = array_key_first($added);
+                if ($newName !== $oldName && in_array($newName,$documents,true)) {
+                    throw ValidationException::withMessages(['documentos'=>'Ese documento ya está en otro requisito de esta batería.']);
+                }
+                $reference = $details[$oldName]['source_reference'] ?? $oldName;
+                $eventDetail = ['documento'=>$newName,'anterior'=>$oldName,'talana_id_anterior'=>$details[$oldName]['talana_id'] ?? null,'talana_id_nuevo'=>$added[$newName]['talana_id']];
+                unset($details[$oldName]);
+                $documents[$data['position']] = $newName;
+                $details[$newName] = $added[$newName] + ['source_reference'=>$reference];
+            }
             $changes = ['documentos' => json_encode($documents), 'document_details' => json_encode($details), 'revision' => $record->revision + 1, 'updated_at' => now()];
             if ($data['action'] === 'rules') {
                 $rules = array_intersect_key($data, array_flip(['empresa_id', 'centro_costo_nombre', 'cargo_nombre', 'tipo_contrato_nombre']));
@@ -90,7 +121,22 @@ class RrhhDocumentBatteryController extends Controller
             $service->event($battery, (int) $request->user()->id, $data['action'], $eventDetail);
         });
 
-        return redirect()->route('rrhh-documentos.battery-show', $battery)->with('success', 'Borrador actualizado.');
+        return redirect()->route('rrhh-documentos.battery-show', $data['action'] === 'replace' ? ['battery'=>$battery,'documento'=>$data['position']] : $battery)->with('success', 'Borrador actualizado.');
+    }
+
+    public function candidatePdf(Request $request, TalanaDocumentApi $api, RrhhDocumentBatteryService $service)
+    {
+        $data = $request->validate(['selection'=>'required|string|max:4096']);
+        $selected = $service->selections([$data['selection']], (int)$request->user()->id);
+        $name = array_key_first($selected);
+        try {
+            $document = $api->document($selected[$name]['talana_id'])->throw()->json();
+            abort_unless(($document['nombre'] ?? null) === $name,422);
+            $pdf = $api->previewPdf($document['adjunto'] ?? '');
+        } catch (HttpClientException|\RuntimeException $exception) {
+            return response()->json(['message'=>'No se pudo abrir el PDF de referencia.'],503);
+        }
+        return response($pdf)->header('Content-Type','application/pdf')->header('Content-Disposition','inline; filename="referencia.pdf"')->header('Cache-Control','private, no-store')->header('X-Content-Type-Options','nosniff');
     }
 
     public function clone(Request $request, int $battery, RrhhDocumentBatteryService $service)
@@ -181,7 +227,7 @@ class RrhhDocumentBatteryController extends Controller
 
     public function validateDocument(Request $request, int $battery, int $position, RrhhDocumentBatteryService $service)
     {
-        $data = $request->validate(['revision' => 'required|integer', 'confirmed' => 'accepted']);
+        $data = $request->validate(['revision' => 'required|integer', 'confirmed' => 'accepted', 'filtro'=>'nullable|in:todos,sin-vincular,por-revisar,validados']);
         DB::transaction(function () use ($request, $battery, $position, $data, $service) {
             $record = DB::table('rrhh_document_batteries')->where('id', $battery)->lockForUpdate()->first();
             abort_unless($record, 404);
@@ -202,7 +248,7 @@ class RrhhDocumentBatteryController extends Controller
             $service->event($battery, (int) $request->user()->id, 'validate', ['documento' => $name, 'talana_id' => $preview['id']]);
         });
 
-        return redirect()->route('rrhh-documentos.battery-show', $battery)->with('success', 'Documento validado.');
+        return redirect()->route('rrhh-documentos.battery-show', empty($data['filtro']) ? $battery : ['battery'=>$battery,'filtro'=>$data['filtro']])->with('success', 'Documento validado.');
     }
 
     public function activate(Request $request, int $battery, RrhhDocumentBatteryService $service)

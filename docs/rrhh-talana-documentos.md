@@ -32,3 +32,11 @@ La guía de Cristian permanece como referencia separada. El catálogo consultado
 Validación: 13 pruebas funcionales / 138 aserciones, incluyendo permisos, selección autenticada, navegación, validación sin PDF, edición, activación y conservación de versiones. QA en Edge con HTML Blade real, CSS compilado y API/PDF sintéticos: cinco vistas a 360, 768 y 1440 px, sin desbordamiento horizontal; modales, Escape, selección/retiro, error de carga, bloqueo y reintento. No se crearon baterías ni se validaron documentos reales como parte del QA.
 
 Pendientes operativos: revisión de contenido por Cristian, primera batería real y piloto controlado de lotes. No se habilitaron envíos productivos, generación automática de textos ni alertas automáticas de nuevas versiones de Talana.
+
+### Revisión guiada y reemplazo directo — 16/11/2026
+
+El detalle separa requisitos, vínculos y validaciones. Los filtros Todos/Sin vincular/Por revisar/Validados conservan la posición real del requisito, muestran vacío cuando corresponde y permiten Anterior/Siguiente dentro del filtro. La validación vuelve al mismo filtro.
+
+Vincular/reemplazar abre un selector de un archivo con vista previa autenticada antes de confirmar. El reemplazo es transaccional: conserva la posición y referencia original, impide duplicar otro documento de la batería, exige revisión vigente, elimina la aprobación del archivo anterior y audita nombre/ID anterior y nuevo. El candidato se consulta sin modificar la batería ni habilitar la validación del archivo guardado. Las versiones activas siguen protegidas.
+
+Validado con 14 pruebas y 182 aserciones, incluyendo filtros, vacío, vinculación, reemplazo, duplicados, token inválido, revisión concurrente, versión activa y PDF candidato. QA Edge local con Blade/CSS reales y datos sintéticos a 360/768/1440: modal de reemplazo, candidato PDF, selección, cierre y estados pendientes; sin desborde horizontal ni errores JS. No se sustituyeron documentos productivos durante las pruebas.

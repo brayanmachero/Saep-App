@@ -893,7 +893,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [\App\Http\Controllers\RrhhDocumentController::class, 'overview'])->name('index');
         Route::get('/lotes', [\App\Http\Controllers\RrhhDocumentController::class, 'index'])->name('lots');
         Route::get('/baterias/nueva', [\App\Http\Controllers\RrhhDocumentController::class, 'newBattery'])->middleware('modulo:gestion_documental,puede_crear')->name('battery-create');
-        Route::get('/documentos-talana', [\App\Http\Controllers\RrhhDocumentController::class, 'documentOptions'])->middleware('modulo:gestion_documental,puede_crear')->name('document-options');
+        Route::post('/documentos-talana/preview', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'candidatePdf'])->middleware('modulo:gestion_documental,puede_editar')->name('candidate-pdf');
+        Route::get('/documentos-talana', [\App\Http\Controllers\RrhhDocumentController::class, 'documentOptions'])->name('document-options');
         Route::get('/mantenedor-est', [\App\Http\Controllers\RrhhDocumentController::class, 'est'])->name('est');
         Route::get('/baterias/{battery}', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'show'])->whereNumber('battery')->name('battery-show');
         Route::post('/baterias/{battery}/cambios', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'change'])->whereNumber('battery')->middleware('modulo:gestion_documental,puede_editar')->name('battery-change');

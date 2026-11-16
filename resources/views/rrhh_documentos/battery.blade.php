@@ -21,6 +21,9 @@ $pending=count($documents)-$validated;
 @if($record->estado==='ACTIVA')<a class="cta secondary" href="{{ route('rrhh-documentos.lots') }}">Preparar lote de trabajadores</a>@endif
 </div></div>
 <p class="doc-field-hint">Activar deja esta versión disponible en SAEP. La preparación de archivos para cada trabajador y su envío se gestionan después, desde los lotes.</p>
+<div class="doc-counts" aria-label="Resumen de la batería">
+@foreach(['todos'=>[count($documents),'Requisitos'],'sin-vincular'=>[count($documents)-$linked,'Sin vincular'],'por-revisar'=>[$linked-$validated,'Por revisar'],'validados'=>[$validated,'Validados']] as $key=>$metric)<a href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'filtro'=>$key]) }}"><strong>{{ $metric[0] }}</strong>{{ $metric[1] }}</a>@endforeach
+</div><p class="muted">{{ $linked }} vinculados de {{ count($documents) }} requisitos. Vincular un archivo no valida su contenido.</p>
 <div style="margin-top:16px"><p>{{ $validated }} de {{ count($documents) }} documentos validados</p><progress max="{{ max(1,count($documents)) }}" value="{{ $validated }}" aria-label="Avance de revisión"></progress></div>
 @if($editable)<p class="muted">{{ !$documents ? 'Agrega documentos para comenzar.' : ($pending ? 'Selecciona un documento, revisa su PDF y confirma que corresponde a esta batería.' : 'Revisión completa. Puedes activar esta versión para utilizarla en nuevos lotes.') }}</p>@endif
 @if(count($versions)>1)<nav class="doc-version-links" aria-label="Versiones de la batería">@foreach($versions as $version)<a href="{{ route('rrhh-documentos.battery-show',$version->id) }}" @if($version->id===$record->id) aria-current="page" @endif>v{{ $version->version }} · {{ ['BORRADOR'=>'En preparación','ACTIVA'=>'Activa','ARCHIVADA'=>'Archivada'][$version->estado] }}</a>@endforeach</nav>@endif
@@ -28,11 +31,17 @@ $pending=count($documents)-$validated;
 @if($documents)
 <div class="doc-review-grid">
 <section class="panel"><h3>Documentos de la batería</h3><p class="muted">Selecciona un archivo para revisarlo.</p>
+<form method="get"><label>Mostrar documentos<select name="filtro" onchange="this.form.submit()">@foreach(['todos'=>'Todos','sin-vincular'=>'Sin vincular','por-revisar'=>'Por revisar','validados'=>'Validados'] as $value=>$label)<option value="{{ $value }}" @selected($filter===$value)>{{ $label }}</option>@endforeach</select></label><noscript><button class="cta">Filtrar</button></noscript></form>
 <ul class="doc-list" aria-label="Documentos">
-@foreach($documents as $position=>$name)<li><a href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'documento'=>$position]) }}#review" aria-current="{{ $selectedPosition===$position ? 'true' : 'false' }}"><strong>{{ $name }}</strong><small>{{ !empty($details[$name]['validated_at']) ? 'Validado' : (!empty($details[$name]['talana_id']) ? 'PDF vinculado · pendiente de revisión' : 'Pendiente de vincular') }}</small></a></li>@endforeach
+@foreach($visibleDocuments as $position=>$name)<li><a href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'documento'=>$position,'filtro'=>$filter]) }}#review" aria-current="{{ $selectedPosition===$position ? 'true' : 'false' }}"><strong>{{ $name }}</strong><small>{{ !empty($details[$name]['validated_at']) ? 'Validado' : (!empty($details[$name]['talana_id']) ? 'PDF vinculado · pendiente de revisión' : 'Pendiente de vincular') }}</small></a></li>@endforeach
 </ul></section>
 <section class="panel" id="review">
+@if($selectedName !== null)
+<nav class="actions" aria-label="Recorrer documentos">@if($previous !== null)<a class="cta secondary" href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'documento'=>$previous,'filtro'=>$filter]) }}#review">Anterior</a>@endif
+@if($next !== null)<a class="cta secondary" href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'documento'=>$next,'filtro'=>$filter]) }}#review">Siguiente</a>@endif</nav>
 <h3 class="doc-review-title">{{ $selectedName }}</h3>
+@if($editable && $canEdit)<button type="button" class="cta secondary" data-open-replace>{{ !empty($selectedDetails['talana_id']) ? 'Reemplazar documento' : 'Vincular a este requisito' }}</button>@endif
+@if(!empty($selectedDetails['source_reference']))<p class="doc-field-hint">Requisito de origen: {{ $selectedDetails['source_reference'] }}</p>@endif
 @if(!empty($selectedDetails['review_note']))<div class="note"><strong>Resultado de la conciliación</strong><p>{{ $selectedDetails['review_note'] }}</p>
 @if(!empty($selectedDetails['candidate_names']))<p>Posibles títulos encontrados; requieren confirmar equivalencia:</p><ul>@foreach($selectedDetails['candidate_names'] as $candidate)<li>{{ $candidate }}</li>@endforeach</ul>@endif
 @if(!empty($selectedDetails['checked_at']))<p class="muted">Consulta realizada {{ \Carbon\Carbon::parse($selectedDetails['checked_at'])->timezone('America/Santiago')->format('d/m/Y H:i') }}.</p>@endif
@@ -46,16 +55,17 @@ $pending=count($documents)-$validated;
 <div id="preview-home"><div id="preview-frame"><iframe class="pdf-frame" id="document-preview" title="Vista previa de {{ $selectedName }}" data-url="{{ route('rrhh-documentos.battery-pdf',[$record->id,$selectedPosition]) }}"></iframe></div></div>
 @if($editable && $canEdit && empty($selectedDetails['validated_at']))
 <form class="doc-confirm" method="post" action="{{ route('rrhh-documentos.battery-validate',[$record->id,$selectedPosition]) }}">@csrf<input type="hidden" name="revision" value="{{ $record->revision }}">
-<label class="check"><input type="checkbox" name="confirmed" value="1" id="confirm-document" required disabled> Revisé el archivo y confirmo que el contenido y la versión corresponden a esta batería.</label><button class="cta" id="validate-document" disabled>Validar documento</button></form>
+<input type="hidden" name="filtro" value="{{ $filter }}"><label class="check"><input type="checkbox" name="confirmed" value="1" id="confirm-document" required disabled> Revisé el archivo y confirmo que el contenido y la versión corresponden a esta batería.</label><button class="cta" id="validate-document" disabled>Validar documento</button></form>
 @endif
 <noscript><p><a href="{{ route('rrhh-documentos.battery-preview',[$record->id,$selectedPosition]) }}">Abrir la vista de revisión del documento</a></p></noscript>
-@else<div class="doc-empty"><h3>Archivo pendiente de vincular</h3><p class="muted">Busca el título en Talana y agrégalo a esta batería para abrir su PDF.</p>@if($editable && $canEdit)<button type="button" class="cta" data-open-add>Buscar y vincular documento</button>@endif</div>@endif
+@else<div class="doc-empty"><h3>Archivo pendiente de vincular</h3><p class="muted">Busca el título oficial y vincúlalo a este requisito; no se agregará un requisito adicional.</p>@if($editable && $canEdit)<button type="button" class="cta" data-open-replace>Buscar y vincular documento</button>@endif</div>@endif
 @if($editable && $canEdit)<form class="doc-confirm" method="post" action="{{ route('rrhh-documentos.battery-change',$record->id) }}">@csrf<input type="hidden" name="revision" value="{{ $record->revision }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="position" value="{{ $selectedPosition }}"><button class="cta doc-danger" aria-label="Quitar {{ $selectedName }} de esta batería">Quitar de esta batería</button></form>@endif
+@else<div class="doc-empty"><h3>No hay documentos con este estado</h3><a href="{{ route('rrhh-documentos.battery-show',$record->id) }}">Ver todos los documentos</a></div>@endif
 </section></div>
 @else<section class="doc-empty"><h2>La batería está vacía</h2><p class="muted">Agrega documentos desde Talana para comenzar.</p>@if($editable && $canEdit)<div class="actions"><button type="button" class="cta" data-open-add>Agregar el primer documento</button></div>@endif</section>@endif
 @include('rrhh_documentos.battery-settings')
 @if($editable && $canEdit)
-<dialog id="add-documents" aria-labelledby="add-documents-title"><div class="doc-toolbar"><h2 id="add-documents-title">Agregar documentos a esta batería</h2><button type="button" class="cta secondary" data-close-add>Cerrar</button></div><form method="post" action="{{ route('rrhh-documentos.battery-change',$record->id) }}">@csrf<input type="hidden" name="revision" value="{{ $record->revision }}"><input type="hidden" name="action" value="add">@include('rrhh_documentos.document-picker')<button class="cta">Guardar documentos y continuar revisión</button></form></dialog>
+<dialog id="add-documents" aria-labelledby="add-documents-title"><div class="doc-toolbar"><h2 id="add-documents-title">Agregar documentos a esta batería</h2><button type="button" class="cta secondary" data-close-add>Cerrar</button></div><form method="post" action="{{ route('rrhh-documentos.battery-change',$record->id) }}">@csrf<input type="hidden" name="revision" value="{{ $record->revision }}"><input type="hidden" name="action" value="add"><input type="hidden" name="position" value="{{ $selectedPosition }}"><p id="selection-mode-hint" class="muted"></p><div class="selection-workspace">@include('rrhh_documentos.document-picker')<div id="candidate-review" hidden><p role="status" id="candidate-status"></p><iframe class="pdf-frame" id="candidate-preview" title="Vista previa del candidato" hidden></iframe></div></div><div class="selection-footer"><button class="cta" id="save-selection">Guardar documentos y continuar revisión</button></div></form></dialog>
 @endif
 <dialog id="full-preview" aria-labelledby="full-preview-title"><div class="doc-toolbar"><h2 id="full-preview-title">Vista ampliada del documento</h2><button type="button" class="cta secondary" id="close-preview">Cerrar vista ampliada</button></div><div id="full-preview-content"></div></dialog>
 </div>
@@ -64,11 +74,32 @@ $pending=count($documents)-$validated;
 <script>
 (() => {
     const add=document.getElementById('add-documents');
-    document.querySelectorAll('[data-open-add]').forEach(button=>button.addEventListener('click',()=>add.showModal()));
+    function openSelection(mode) {
+        add.querySelector('[name="action"]').value=mode;
+        add.querySelector('.document-picker').dataset.limit=mode==='replace'?'1':'50';
+        document.getElementById('add-documents-title').textContent=mode==='replace'?'Vincular o reemplazar este requisito':'Agregar documentos a esta batería';
+        document.getElementById('selection-mode-hint').textContent=mode==='replace'?'Selecciona un solo archivo. Conservaremos el requisito de origen y el cambio quedará en el historial. El archivo necesitará nueva validación.':'Selecciona los documentos adicionales.';
+        document.getElementById('save-selection').textContent=mode==='replace'?'Confirmar vínculo y revisar documento':'Guardar documentos y continuar revisión';
+        add.showModal();
+    }
+    document.querySelectorAll('[data-open-add]').forEach(button=>button.addEventListener('click',()=>openSelection('add')));
+    document.querySelectorAll('[data-open-replace]').forEach(button=>button.addEventListener('click',()=>openSelection('replace')));
     document.querySelector('[data-close-add]')?.addEventListener('click',()=>add.close());
-    @if($errors->any() && old('action')==='add')
-    add?.showModal();
+    @if($errors->any() && in_array(old('action'),['add','replace']))
+    if(add)openSelection(@json(old('action')));
     @endif
+    let candidateUrl=null,candidateRequest=0;
+    add?.addEventListener('document-preview',async event=>{
+        const requestId=++candidateRequest,area=document.getElementById('candidate-review'),status=document.getElementById('candidate-status'),iframe=document.getElementById('candidate-preview');
+        area.hidden=false;iframe.hidden=true;status.textContent='Cargando vista previa del candidato…';
+        try {
+            const response=await fetch(@json(route('rrhh-documentos.candidate-pdf')),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/pdf','X-CSRF-TOKEN':add.querySelector('[name="_token"]').value},body:JSON.stringify({selection:event.detail.value})});
+            if(!response.ok||!response.headers.get('Content-Type')?.includes('application/pdf'))throw Error('No se pudo abrir el PDF. Puedes reintentar desde Ver PDF.');
+            const blob=await response.blob();if(requestId!==candidateRequest)return;
+            if(candidateUrl)URL.revokeObjectURL(candidateUrl);candidateUrl=URL.createObjectURL(blob);iframe.src=candidateUrl;iframe.hidden=false;status.textContent='Vista previa: '+event.detail.name+'. Confirma el vínculo para continuar su revisión.';
+        }catch(error){if(requestId===candidateRequest)status.textContent=error.message;}
+    });
+    window.addEventListener('pagehide',()=>{if(candidateUrl)URL.revokeObjectURL(candidateUrl);});
     const frame=document.getElementById('document-preview');
     if(!frame)return;
     const status=document.getElementById('pdf-status'),retry=document.getElementById('retry-preview'),check=document.getElementById('confirm-document'),validate=document.getElementById('validate-document'),expand=document.getElementById('expand-preview');
