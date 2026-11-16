@@ -10,19 +10,19 @@ $pending=count($documents)-$validated;
 @endphp
 <div class="gdm doc-workspace">
 @include('rrhh_documentos.navigation',['section'=>'batteries'])
-<a href="{{ route('rrhh-documentos.index') }}">← Todas las baterías</a>
+<div class="doc-toolbar"><a href="{{ route('rrhh-documentos.index') }}">← Todas las baterías</a><a href="{{ route('rrhh-documentos.battery-final',$record->id) }}">Revisión final y comparación de versiones</a></div>
 @if(session('success'))<p class="success" role="status">{{ session('success') }}</p>@endif
 @if($errors->any())<div class="panel err" role="alert"><ul>@foreach($errors->all() as $message)<li>{{ $message }}</li>@endforeach</ul></div>@endif
 <section class="panel">
 <div class="doc-toolbar"><div><h2>{{ $record->nombre }} · v{{ $record->version }}</h2><p class="muted">{{ $rules['centro_costo_nombre'] ?? 'Todos los centros' }} · {{ $rules['cargo_nombre'] ?? 'Todos los cargos' }}</p><span class="doc-state {{ $record->estado }}">{{ ['BORRADOR'=>'En preparación','ACTIVA'=>'Activa','ARCHIVADA'=>'Archivada'][$record->estado] }}</span></div>
 <div class="actions">
-@if($editable && $canEdit)<button type="button" class="cta secondary" data-open-add>Agregar documentos</button><form method="post" action="{{ route('rrhh-documentos.battery-activate',$record->id) }}">@csrf<input type="hidden" name="revision" value="{{ $record->revision }}"><button class="cta" @disabled(!$documents || $pending)>Activar batería</button></form>
+@if($editable && $canEdit)<button type="button" class="cta secondary" data-open-add>Agregar documentos</button><a class="cta" href="{{ route('rrhh-documentos.battery-final',$record->id) }}">Revisar y activar</a>
 @elseif(auth()->user()->tieneAcceso('gestion_documental','puede_crear'))<form method="post" action="{{ route('rrhh-documentos.battery-clone',$record->id) }}">@csrf<button class="cta">Crear nueva versión para editar</button></form>@endif
 @if($record->estado==='ACTIVA')<a class="cta secondary" href="{{ route('rrhh-documentos.lots') }}">Preparar lote de trabajadores</a>@endif
 </div></div>
 <p class="doc-field-hint">Activar deja esta versión disponible en SAEP. La preparación de archivos para cada trabajador y su envío se gestionan después, desde los lotes.</p>
 <div class="doc-counts" aria-label="Resumen de la batería">
-@foreach(['todos'=>[count($documents),'Requisitos'],'sin-vincular'=>[count($documents)-$linked,'Sin vincular'],'por-revisar'=>[$linked-$validated,'Por revisar'],'validados'=>[$validated,'Validados']] as $key=>$metric)<a href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'filtro'=>$key]) }}"><strong>{{ $metric[0] }}</strong>{{ $metric[1] }}</a>@endforeach
+@foreach(['todos'=>[count($documents),'Requisitos'],'sin-vincular'=>[$review['counts']['sin-vincular'],'Sin vincular'],'por-revisar'=>[$review['counts']['por-revisar'],'Por revisar'],'observados'=>[$review['counts']['observados'],'Requieren corrección'],'validados'=>[$review['counts']['validados'],'Validados']] as $key=>$metric)<a href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'filtro'=>$key]) }}"><strong>{{ $metric[0] }}</strong>{{ $metric[1] }}</a>@endforeach
 </div><p class="muted">{{ $linked }} vinculados de {{ count($documents) }} requisitos. Vincular un archivo no valida su contenido.</p>
 <div style="margin-top:16px"><p>{{ $validated }} de {{ count($documents) }} documentos validados</p><progress max="{{ max(1,count($documents)) }}" value="{{ $validated }}" aria-label="Avance de revisión"></progress></div>
 @if($editable)<p class="muted">{{ !$documents ? 'Agrega documentos para comenzar.' : ($pending ? 'Selecciona un documento, revisa su PDF y confirma que corresponde a esta batería.' : 'Revisión completa. Puedes activar esta versión para utilizarla en nuevos lotes.') }}</p>@endif
@@ -31,9 +31,9 @@ $pending=count($documents)-$validated;
 @if($documents)
 <div class="doc-review-grid">
 <section class="panel"><h3>Documentos de la batería</h3><p class="muted">Selecciona un archivo para revisarlo.</p>
-<form method="get"><label>Mostrar documentos<select name="filtro" onchange="this.form.submit()">@foreach(['todos'=>'Todos','sin-vincular'=>'Sin vincular','por-revisar'=>'Por revisar','validados'=>'Validados'] as $value=>$label)<option value="{{ $value }}" @selected($filter===$value)>{{ $label }}</option>@endforeach</select></label><noscript><button class="cta">Filtrar</button></noscript></form>
+<form method="get"><label>Mostrar documentos<select name="filtro" onchange="this.form.submit()">@foreach(['todos'=>'Todos','sin-vincular'=>'Sin vincular','por-revisar'=>'Por revisar','observados'=>'Requieren corrección','validados'=>'Validados'] as $value=>$label)<option value="{{ $value }}" @selected($filter===$value)>{{ $label }}</option>@endforeach</select></label><noscript><button class="cta">Filtrar</button></noscript></form>
 <ul class="doc-list" aria-label="Documentos">
-@foreach($visibleDocuments as $position=>$name)<li><a href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'documento'=>$position,'filtro'=>$filter]) }}#review" aria-current="{{ $selectedPosition===$position ? 'true' : 'false' }}"><strong>{{ $name }}</strong><small>{{ !empty($details[$name]['validated_at']) ? 'Validado' : (!empty($details[$name]['talana_id']) ? 'PDF vinculado · pendiente de revisión' : 'Pendiente de vincular') }}</small></a></li>@endforeach
+@foreach($visibleDocuments as $position=>$name)<li><a href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'documento'=>$position,'filtro'=>$filter]) }}#review" aria-current="{{ $selectedPosition===$position ? 'true' : 'false' }}"><strong>{{ $name }}</strong><small>{{ ($details[$name]['observation']['state'] ?? null)==='open' ? 'Requiere corrección' : (!empty($details[$name]['validated_at']) ? 'Validado' : (!empty($details[$name]['talana_id']) ? 'PDF vinculado · pendiente de revisión' : 'Pendiente de vincular')) }}</small></a></li>@endforeach
 </ul></section>
 <section class="panel" id="review">
 @if($selectedName !== null)
@@ -46,6 +46,10 @@ $pending=count($documents)-$validated;
 @if(!empty($selectedDetails['candidate_names']))<p>Posibles títulos encontrados; requieren confirmar equivalencia:</p><ul>@foreach($selectedDetails['candidate_names'] as $candidate)<li>{{ $candidate }}</li>@endforeach</ul>@endif
 @if(!empty($selectedDetails['checked_at']))<p class="muted">Consulta realizada {{ \Carbon\Carbon::parse($selectedDetails['checked_at'])->timezone('America/Santiago')->format('d/m/Y H:i') }}.</p>@endif
 </div>@endif
+@if(!empty($selectedDetails['observation']))
+<div class="note" role="status"><strong>{{ $selectedDetails['observation']['state']==='open' ? 'Requiere corrección' : 'Observación resuelta · pendiente de nueva revisión si corresponde' }}</strong><p>{{ $selectedDetails['observation']['reason'] }}</p><p class="muted">Registrada por {{ $selectedDetails['observation']['name'] }} · {{ \Carbon\Carbon::parse($selectedDetails['observation']['at'])->timezone('America/Santiago')->format('d/m/Y H:i') }}</p>
+@if(isset($selectedDetails['observation']['resolution']))<p>Resolución: {{ $selectedDetails['observation']['resolution']['reason'] }}</p>@endif</div>
+@endif
 @if(!empty($selectedDetails['validated_at']))<p class="muted">Validado por {{ $selectedDetails['validated_name'] ?? ('usuario #'.$selectedDetails['validated_by']) }} · {{ \Carbon\Carbon::parse($selectedDetails['validated_at'])->timezone('America/Santiago')->format('d/m/Y H:i') }}</p>@endif
 @if(!empty($selectedDetails['talana_id']))
 <p class="doc-field-hint">Archivo de referencia Talana #{{ $selectedDetails['talana_id'] }}. Puede contener datos del trabajador al que pertenece.</p>
@@ -53,12 +57,18 @@ $pending=count($documents)-$validated;
 <div class="doc-review-status" id="pdf-status" role="status" aria-live="polite">Cargando PDF…</div>
 <button type="button" class="cta secondary" id="retry-preview" hidden>Reintentar carga</button>
 <div id="preview-home"><div id="preview-frame"><iframe class="pdf-frame" id="document-preview" title="Vista previa de {{ $selectedName }}" data-url="{{ route('rrhh-documentos.battery-pdf',[$record->id,$selectedPosition]) }}"></iframe></div></div>
-@if($editable && $canEdit && empty($selectedDetails['validated_at']))
+@if($editable && $canEdit && empty($selectedDetails['validated_at']) && ($selectedDetails['observation']['state'] ?? null)!=='open')
 <form class="doc-confirm" method="post" action="{{ route('rrhh-documentos.battery-validate',[$record->id,$selectedPosition]) }}">@csrf<input type="hidden" name="revision" value="{{ $record->revision }}">
 <input type="hidden" name="filtro" value="{{ $filter }}"><label class="check"><input type="checkbox" name="confirmed" value="1" id="confirm-document" required disabled> Revisé el archivo y confirmo que el contenido y la versión corresponden a esta batería.</label><button class="cta" id="validate-document" disabled>Validar documento</button></form>
 @endif
 <noscript><p><a href="{{ route('rrhh-documentos.battery-preview',[$record->id,$selectedPosition]) }}">Abrir la vista de revisión del documento</a></p></noscript>
 @else<div class="doc-empty"><h3>Archivo pendiente de vincular</h3><p class="muted">Busca el título oficial y vincúlalo a este requisito; no se agregará un requisito adicional.</p>@if($editable && $canEdit)<button type="button" class="cta" data-open-replace>Buscar y vincular documento</button>@endif</div>@endif
+@if($editable && $canEdit)
+<details class="doc-confirm" @if(in_array(old('action'),['observe','resolve']) && $errors->any()) open @endif><summary>{{ ($selectedDetails['observation']['state'] ?? null)==='open' ? 'Registrar cómo se corrigió' : 'Marcar que requiere corrección' }}</summary>
+<form method="post" action="{{ route('rrhh-documentos.battery-change',$record->id) }}">@csrf<input type="hidden" name="revision" value="{{ $record->revision }}"><input type="hidden" name="position" value="{{ $selectedPosition }}"><input type="hidden" name="action" value="{{ ($selectedDetails['observation']['state'] ?? null)==='open' ? 'resolve' : 'observe' }}">
+<label>Motivo o detalle de la corrección<textarea name="reason" rows="3" required minlength="5" maxlength="1500">{{ in_array(old('action'),['observe','resolve']) ? old('reason') : '' }}</textarea></label>
+<p class="muted">Las observaciones abiertas bloquean la validación y la activación. Resolver una observación requiere revisar y validar nuevamente el PDF.</p><button class="cta secondary">{{ ($selectedDetails['observation']['state'] ?? null)==='open' ? 'Guardar corrección y volver a revisar' : 'Guardar observación' }}</button></form></details>
+@endif
 @if($editable && $canEdit)<form class="doc-confirm" method="post" action="{{ route('rrhh-documentos.battery-change',$record->id) }}">@csrf<input type="hidden" name="revision" value="{{ $record->revision }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="position" value="{{ $selectedPosition }}"><button class="cta doc-danger" aria-label="Quitar {{ $selectedName }} de esta batería">Quitar de esta batería</button></form>@endif
 @else<div class="doc-empty"><h3>No hay documentos con este estado</h3><a href="{{ route('rrhh-documentos.battery-show',$record->id) }}">Ver todos los documentos</a></div>@endif
 </section></div>

@@ -1,5 +1,6 @@
 @push('styles')
 <style>
+.doc-workspace .note{overflow-wrap:anywhere}.doc-workspace .final-issues{max-height:540px;overflow:auto}
 .doc-workspace .selection-workspace{min-width:0}.doc-workspace .selection-workspace>*{min-width:0}.doc-workspace .selection-workspace:has(#candidate-review:not([hidden])){display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}.doc-workspace .selection-footer{position:sticky;bottom:-18px;background:var(--card-bg,#fff);padding:14px 0;border-top:1px solid var(--border-color,#ddd);z-index:2}.doc-workspace #add-documents>.doc-toolbar{position:sticky;top:-18px;background:var(--card-bg,#fff);padding:10px 0;z-index:2}.doc-workspace #candidate-review{padding-top:16px}
 @media(max-width:900px){.doc-workspace .selection-workspace:has(#candidate-review:not([hidden])){grid-template-columns:1fr}}
 .doc-workspace .document-result .actions{flex-shrink:0}.doc-workspace #candidate-preview{height:50vh;min-height:260px}

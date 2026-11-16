@@ -195,6 +195,63 @@ class RrhhDocumentDraftTest extends TestCase
         $this->from($url)->post($action,['revision'=>3,'action'=>'replace','position'=>0,'documentos'=>[$token('Otro',127)]])->assertSessionHasErrors('bateria');
     }
 
+    public function test_observations_block_validation_until_resolved_and_final_review_is_read_only(): void
+    {
+        $user = new class extends \App\Models\User {
+            public function tieneConsentimientoDatosVigente(): bool { return true; }
+            public bool $allowEdits=true;
+            public function tieneAcceso(string $moduloSlug, string $accion = 'puede_ver'): bool { return $accion === 'puede_ver' || $this->allowEdits; }
+        };
+        $user->id=7;$user->name='Revisor QA';$user->setRelation('rol',new \App\Models\Rol);
+        $this->actingAs($user)->withoutVite();
+        DB::table('rrhh_document_batteries')->where('id',1)->update(['estado'=>'BORRADOR','documentos'=>'["Contrato"]','document_details'=>json_encode(['Contrato'=>['talana_id'=>123,'validated_at'=>'2026-11-16T12:00:00Z','validated_by'=>7,'validated_name'=>'QA','validated_sha256'=>'old']])]);
+        $url=route('rrhh-documentos.battery-show',1);$change=route('rrhh-documentos.battery-change',1);$final=route('rrhh-documentos.battery-final',1);
+        $this->get($final)->assertOk()->assertSee('Todos los documentos están vinculados y validados')->assertSee('Esta es la primera versión');
+        $this->assertDatabaseHas('rrhh_document_batteries',['id'=>1,'revision'=>1,'estado'=>'BORRADOR']);
+        $user->allowEdits=false;
+        $this->post($change,['action'=>'observe','revision'=>1,'position'=>0,'reason'=>'Falta revisar vigencia'])->assertForbidden();
+        $user->allowEdits=true;
+        $this->from($url)->post($change,['action'=>'observe','revision'=>1,'position'=>0,'reason'=>''])->assertSessionHasErrors('reason');
+        $this->post($change,['action'=>'observe','revision'=>1,'position'=>0,'reason'=>'Corregir modalidad <EST>'])->assertRedirect($url.'?documento=0');
+        $meta=json_decode(DB::table('rrhh_document_batteries')->value('document_details'),true)['Contrato'];
+        $this->assertSame('open',$meta['observation']['state']);$this->assertArrayNotHasKey('validated_at',$meta);$this->assertArrayNotHasKey('validated_sha256',$meta);
+        $this->get($url.'?filtro=observados')->assertOk()->assertViewHas('visibleDocuments',[0=>'Contrato'])->assertSee('Corregir modalidad &lt;EST&gt;',false)->assertDontSee('id="validate-document"',false);
+        $this->get($final)->assertOk()->assertSee('Pendientes que bloquean la activación');
+        $this->from($url)->post(route('rrhh-documentos.battery-validate',[1,0]),['revision'=>2,'confirmed'=>1])->assertSessionHasErrors('documento');
+        $this->from($url)->post(route('rrhh-documentos.battery-activate',1),['revision'=>2])->assertSessionHasErrors('bateria');
+        $this->from($url)->post($change,['action'=>'resolve','revision'=>1,'position'=>0,'reason'=>'Revisado con el area'])->assertSessionHasErrors('bateria');
+        $this->post($change,['action'=>'resolve','revision'=>2,'position'=>0,'reason'=>'Modalidad confirmada con el area'])->assertRedirect($url.'?documento=0');
+        $this->get($final)->assertOk()->assertViewHas('review',fn($review)=>!$review['ready'] && $review['counts']['por-revisar']===1 && $review['counts']['observados']===0);
+        config(['services.talana_documents.token'=>'test']);
+        Http::fake(['*/documentos/123/'=>Http::response(['nombre'=>'Contrato','adjunto'=>'https://talana.com/es/remuneraciones/download-document/review']), 'https://talana.com/es/remuneraciones/download-document/review'=>fn()=>Http::response('%PDF-1.4 review')]);
+        $this->get(route('rrhh-documentos.battery-pdf',[1,0]))->assertOk();
+        $this->post(route('rrhh-documentos.battery-validate',[1,0]),['revision'=>3,'confirmed'=>1])->assertRedirect($url);
+        $this->get($final)->assertOk()->assertViewHas('review',fn($review)=>$review['ready']);
+        $this->post(route('rrhh-documentos.battery-activate',1),['revision'=>4])->assertRedirect($url);
+        $this->from($url)->post($change,['action'=>'observe','revision'=>5,'position'=>0,'reason'=>'Una nueva observacion'])->assertSessionHasErrors('bateria');
+        $this->assertSame(1,DB::table('rrhh_document_battery_events')->where('action','observe')->count());
+        $this->assertSame(1,DB::table('rrhh_document_battery_events')->where('action','resolve')->count());
+        DB::table('rrhh_document_batteries')->insert(['id'=>2,'nombre'=>'Prueba','version'=>2,'estado'=>'BORRADOR','documentos'=>'["Nuevo contrato","Adicional"]','document_details'=>json_encode(['Nuevo contrato'=>['talana_id'=>125,'source_reference'=>'Contrato']]),'reglas'=>'{"cargo_nombre":"Supervisor"}','created_by'=>7,'created_at'=>now(),'updated_at'=>now()]);
+        $this->get(route('rrhh-documentos.battery-final',2))->assertOk()->assertSee('Reemplazado o vinculado')->assertSee('Agregado')->assertSee('Supervisor');
+        DB::table('rrhh_document_batteries')->insert(['id'=>3,'nombre'=>'Otra familia','version'=>1,'documentos'=>'[]','reglas'=>'{}','created_by'=>7,'created_at'=>now(),'updated_at'=>now()]);
+        $this->get(route('rrhh-documentos.battery-final',['battery'=>2,'comparar'=>3]))->assertNotFound();
+    }
+
+    public function test_version_comparison_detects_replacement_removal_order_and_scope(): void
+    {
+        $before=(object)['documentos'=>'["A","B","C","D"]','document_details'=>'{"A":{"talana_id":1},"C":{"talana_id":3}}','reglas'=>'{"empresa_id":1081}'];
+        $after=(object)['documentos'=>'["C","A nueva","E"]','document_details'=>'{"C":{"talana_id":30},"A nueva":{"talana_id":2,"source_reference":"A"}}','reglas'=>'{"empresa_id":1039}'];
+        $result=(new \App\Services\RrhhDocumentBatteryService)->compare($before,$after);
+        $this->assertSame(['replaced','replaced','added','removed','removed'],array_column($result['changes'],'type'));
+        $this->assertSame('A',$result['changes'][1]['before']);
+        $this->assertSame(3,$result['changes'][0]['before_id']);
+        $this->assertSame(30,$result['changes'][0]['after_id']);
+        $this->assertSame([['field'=>'empresa_id','before'=>1081,'after'=>1039]],$result['rules']);
+        $after->documentos='["B","A","C","D"]';$after->document_details=$before->document_details;
+        $result=(new \App\Services\RrhhDocumentBatteryService)->compare($before,$after);
+        $this->assertSame(['moved','moved'],array_column($result['changes'],'type'));
+    }
+
     public function test_preview_rejects_external_hosts_without_sending_credentials(): void
     {
         try {

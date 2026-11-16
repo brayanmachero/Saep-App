@@ -40,3 +40,11 @@ El detalle separa requisitos, vínculos y validaciones. Los filtros Todos/Sin vi
 Vincular/reemplazar abre un selector de un archivo con vista previa autenticada antes de confirmar. El reemplazo es transaccional: conserva la posición y referencia original, impide duplicar otro documento de la batería, exige revisión vigente, elimina la aprobación del archivo anterior y audita nombre/ID anterior y nuevo. El candidato se consulta sin modificar la batería ni habilitar la validación del archivo guardado. Las versiones activas siguen protegidas.
 
 Validado con 14 pruebas y 182 aserciones, incluyendo filtros, vacío, vinculación, reemplazo, duplicados, token inválido, revisión concurrente, versión activa y PDF candidato. QA Edge local con Blade/CSS reales y datos sintéticos a 360/768/1440: modal de reemplazo, candidato PDF, selección, cierre y estados pendientes; sin desborde horizontal ni errores JS. No se sustituyeron documentos productivos durante las pruebas.
+
+### Observaciones, comparación y cierre guiado — 16/11/2026
+
+Un documento puede marcarse como Requiere corrección con motivo, responsable y fecha. Se retira su validación previa y se bloquea validar/activar mientras la observación siga abierta. Registrar la resolución conserva el historial y devuelve el documento a revisión; no lo aprueba automáticamente. Las acciones requieren edición, borrador y revisión vigente.
+
+La pantalla Revisión final y comparación de versiones reúne aplicación de la batería, estados excluyentes, pendientes con enlaces directos y activación condicionada. Compara solamente versiones de la misma familia: agregados, retirados, reemplazos/vinculaciones, cambios de posición y reglas. Usa referencia de origen, nombre e ID Talana; no compara el texto de PDF ni certifica versiones externas. Al activar se mantienen los snapshots previos y se archiva la versión activa anterior.
+
+Validación: 16 pruebas/232 aserciones; observaciones, resolución, invalidación de aprobación, activación bloqueada, permisos, concurrencia, comparación de IDs/títulos/reglas/orden y rechazo de otra familia. QA Edge con datos sintéticos en 360/768/1440 px para observado, cierre bloqueado, listo y comparación: sin desborde horizontal ni errores JS. No se crearon observaciones reales ni se activaron baterías productivas para probar.

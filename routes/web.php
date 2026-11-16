@@ -896,6 +896,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/documentos-talana/preview', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'candidatePdf'])->middleware('modulo:gestion_documental,puede_editar')->name('candidate-pdf');
         Route::get('/documentos-talana', [\App\Http\Controllers\RrhhDocumentController::class, 'documentOptions'])->name('document-options');
         Route::get('/mantenedor-est', [\App\Http\Controllers\RrhhDocumentController::class, 'est'])->name('est');
+        Route::get('/baterias/{battery}/revision-final', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'finalReview'])->whereNumber('battery')->name('battery-final');
         Route::get('/baterias/{battery}', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'show'])->whereNumber('battery')->name('battery-show');
         Route::post('/baterias/{battery}/cambios', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'change'])->whereNumber('battery')->middleware('modulo:gestion_documental,puede_editar')->name('battery-change');
         Route::post('/baterias/{battery}/version', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'clone'])->whereNumber('battery')->middleware('modulo:gestion_documental,puede_crear')->name('battery-clone');
