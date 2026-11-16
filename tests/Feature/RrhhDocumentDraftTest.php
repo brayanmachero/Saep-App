@@ -83,6 +83,27 @@ class RrhhDocumentDraftTest extends TestCase
         $this->get($url)->assertSee('Ya existe esa batería')->assertSee('QA IDL');
     }
 
+    public function test_document_dates_are_grouped_sorted_and_missing_dates_stay_last(): void
+    {
+        $api = new \App\Services\TalanaDocumentApi;
+        $rows = [
+            ['nombre'=>'Anexo rv.01.pdf','fechaCreacion'=>'2026-01-01T10:00:00Z'],
+            ['nombre'=>'Anexo rv.01.pdf','fechaCreacion'=>'2026-11-16T15:30:00Z'],
+            ['nombre'=>'Manual V1.2.pdf','fechaCreacion'=>'2026-05-01T10:00:00Z'],
+            ['nombre'=>'Sin fecha.pdf','fechaCreacion'=>'invalid'],
+        ];
+        $recent = array_values($api->summarizeDocuments($rows));
+        $this->assertCount(3,$recent);
+        $this->assertSame('16/11/2026 12:30',$recent[0]['date']);
+        $this->assertSame('01',$recent[0]['version']);
+        $this->assertSame('1.2',$recent[1]['version']);
+        $this->assertNull($recent[2]['date']);
+        $oldest = array_values($api->summarizeDocuments($rows,'oldest'));
+        $this->assertSame('Manual V1.2.pdf',$oldest[0]['name']);
+        $this->assertSame('Sin fecha.pdf',$oldest[2]['name']);
+        $this->assertSame([], $api->summarizeDocuments([]));
+    }
+
     private function data(array $extra = []): array
     {
         return array_merge(['nombre' => 'Lote prueba', 'request_id' => (string) Str::uuid(), 'battery_id' => 1, 'seleccion' => 'todos'], $extra);

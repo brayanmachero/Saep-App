@@ -9,13 +9,14 @@ foreach ((array)old('documentos',[]) as $token) {
 @endphp
 <div class="document-picker" data-url="{{ route('rrhh-documentos.document-options') }}">
 <label>Buscar documento en Talana <input type="search" class="document-query" maxlength="255" placeholder="Escribe al menos dos caracteres"></label>
+<label>Orden en cada página<select class="document-order"><option value="recent">Más recientes</option><option value="oldest">Más antiguos</option><option value="name">Nombre A–Z</option></select></label>
 <button type="button" class="cta document-search">Buscar documentos</button>
 <p class="document-status muted" role="status" aria-live="polite"></p>
 <div class="document-results"></div>
 <button type="button" class="cta secondary document-next" hidden>Más resultados</button>
 <h4>Documentos seleccionados</h4>
 <ul class="document-selected"></ul>
-<p class="muted">Los títulos corresponden a documentos registrados en Talana. Revisa la versión antes de agregarla. Los PDF se adjuntan al preparar el lote.</p>
+<p class="muted">Fechas de creación de registros en Talana, hora de Chile. El orden se aplica a cada página. Revisa la versión antes de agregarla. Los PDF se adjuntan al preparar el lote.</p>
 <script type="application/json" class="document-initial">@json($selectedDocuments)</script>
 </div>
 @once
@@ -28,6 +29,7 @@ foreach ((array)old('documentos',[]) as $token) {
 .document-picker .document-result:last-child,.document-picker li:last-child{border-bottom:0}
 .document-picker .document-results span,.document-picker .document-selected span{line-height:1.5}
 .document-picker .muted{margin:10px 0;color:var(--text-muted,#64748b);font-size:12px;line-height:1.5}
+.document-picker .document-meta{display:block;font-size:12px;color:var(--text-muted,#64748b);margin-top:4px;line-height:1.6}
 </style>
 @endpush
 @push('scripts')
@@ -35,7 +37,7 @@ foreach ((array)old('documentos',[]) as $token) {
 document.querySelectorAll('.document-picker').forEach(root => {
     const query=root.querySelector('.document-query'), status=root.querySelector('.document-status'), results=root.querySelector('.document-results'), selected=root.querySelector('.document-selected'), next=root.querySelector('.document-next'), search=root.querySelector('.document-search');
     const selections=new Map();
-    let page=1, term='', busy=false;
+    let page=1, term='', busy=false, order='recent';
     function add(option) {
         if(selections.has(option.name)) { status.textContent='Este documento ya está seleccionado.'; return; }
         if(selections.size>=50) { status.textContent='Puedes seleccionar hasta 50 documentos.'; return; }
@@ -50,16 +52,17 @@ document.querySelectorAll('.document-picker').forEach(root => {
     JSON.parse(root.querySelector('.document-initial').textContent).forEach(add);
     async function load(append) {
         if(busy)return;
-        if(!append){term=query.value.trim();page=1;if(term.length<2){status.textContent='Escribe al menos dos caracteres.';return;}results.replaceChildren();next.hidden=true;}
+        if(!append){order=root.querySelector('.document-order').value;term=query.value.trim();page=1;if(term.length<2){status.textContent='Escribe al menos dos caracteres.';return;}results.replaceChildren();next.hidden=true;}
         busy=true;search.disabled=true;next.disabled=true;status.textContent='Consultando Talana…';
         try {
-            const url=new URL(root.dataset.url,location.origin);url.searchParams.set('q',term);url.searchParams.set('page',page);
+            const url=new URL(root.dataset.url,location.origin);url.searchParams.set('q',term);url.searchParams.set('page',page);url.searchParams.set('order',order);
             const response=await fetch(url,{headers:{Accept:'application/json'},credentials:'same-origin'});
             if(!response.ok)throw Error(response.status===401?'Tu sesión terminó. Vuelve a ingresar.':'No se pudo consultar Talana. Intenta nuevamente.');
             const data=await response.json();
             for(const option of data.options){
                 const row=document.createElement('div'),title=document.createElement('span'),button=document.createElement('button');
-                row.className='document-result';title.textContent=option.name;button.type='button';button.className='cta secondary';button.textContent='Agregar';button.setAttribute('aria-label','Agregar '+option.name);
+                row.className='document-result';title.textContent=option.name;
+                const meta=document.createElement('small');meta.className='document-meta';meta.textContent='Último registro observado · '+(option.date || 'Fecha no informada')+' · Versión en el título · '+(option.version || 'No identificada');title.append(meta);button.type='button';button.className='cta secondary';button.textContent='Agregar';button.setAttribute('aria-label','Agregar '+option.name);
                 button.onclick=()=>add(option);row.append(title,button);results.append(row);
             }
             next.hidden=!data.next;page++;status.textContent=data.options.length?'Selecciona los documentos que correspondan.':'Sin resultados. Prueba con menos palabras.';

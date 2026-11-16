@@ -36,6 +36,7 @@ class RrhhDocumentController extends Controller
             'grupo' => ['nullable', \Illuminate\Validation\Rule::in(array_keys($groups))],
             'buscar' => 'nullable|string|min:2|max:255',
             'pagina' => 'nullable|integer|min:1',
+            'orden' => 'nullable|in:recent,oldest,name',
         ]);
         $group = $input['grupo'] ?? 'Base EST';
         $sources = ['Base EST'];
@@ -53,6 +54,7 @@ class RrhhDocumentController extends Controller
         }
         $page = (int) ($input['pagina'] ?? 1);
         $term = $input['buscar'] ?? '';
+        $order = $input['orden'] ?? 'recent';
         $names = [];
         $total = null;
         $next = false;
@@ -60,9 +62,7 @@ class RrhhDocumentController extends Controller
         if ($term !== '') {
             try {
                 $response = $api->searchDocuments($term, $page)->throw();
-                foreach ($response->json('results') as $entry) {
-                    $names[$entry['nombre']] = true;
-                }
+                $names = $api->summarizeDocuments($response->json('results') ?? [], $order);
                 $total = $response->json('count');
                 $next = filled($response->json('next'));
             } catch (\Illuminate\Http\Client\HttpClientException|\RuntimeException $e) {
@@ -71,24 +71,24 @@ class RrhhDocumentController extends Controller
         }
         $companyId = (int) config('services.talana.inventory_companies.EST', 1081);
         $centres = TalanaContrato::where('empresa_id', $companyId)->whereNotNull('centro_costo_nombre')->distinct()->orderBy('centro_costo_nombre')->pluck('centro_costo_nombre');
-        return view('rrhh_documentos.est', compact('matches','groups','group','documents','centres','term','names','page','total','next','error'));
+        return view('rrhh_documentos.est', compact('matches','groups','group','documents','centres','term','names','order','page','total','next','error'));
     }
 
     public function documentOptions(Request $request, \App\Services\TalanaDocumentApi $api)
     {
-        $data = $request->validate(['q'=>'required|string|min:2|max:255', 'page'=>'nullable|integer|min:1|max:10000']);
+        $data = $request->validate(['q'=>'required|string|min:2|max:255', 'page'=>'nullable|integer|min:1|max:10000', 'order'=>'nullable|in:recent,oldest,name']);
         try {
             $response = $api->searchDocuments($data['q'], $data['page'] ?? 1)->throw();
         } catch (\Illuminate\Http\Client\HttpClientException|\RuntimeException $e) {
             return response()->json(['message'=>'No se pudo consultar Talana. Intenta nuevamente.'],503);
         }
         $options = [];
-        foreach ($response->json('results') ?? [] as $entry) {
-            $name = $entry['nombre'] ?? '';
+        foreach ($api->summarizeDocuments($response->json('results') ?? [], $data['order'] ?? 'recent') as $entry) {
+            $name = $entry['name'];
             if ($name === '' || mb_strlen($name)>255 || isset($options[$name])) {
                 continue;
             }
-            $options[$name] = ['name'=>$name, 'value'=>\Illuminate\Support\Facades\Crypt::encryptString(json_encode([
+            $options[$name] = $entry + ['value'=>\Illuminate\Support\Facades\Crypt::encryptString(json_encode([
                 'name'=>$name, 'user'=>(int)$request->user()->id,
             ]))];
         }

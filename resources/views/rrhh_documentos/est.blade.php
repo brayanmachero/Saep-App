@@ -16,6 +16,7 @@
 .est-view .est-pagination a{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 16px;border:1px solid var(--border-color,#dce3ed);border-radius:8px;background:var(--card-bg,#fff);font-size:12px;font-weight:600;text-decoration:none}
 .est-view .est-pagination a:hover{background:var(--hover-bg,#f1f5f9)}
 @media(max-width:640px){.est-view h2{font-size:17px}.est-view .est-results li{padding:10px 12px;font-size:12px}.est-view .est-pagination a{min-height:44px}}
+.est-view .talana-meta{display:block;font-size:12px;font-weight:400;color:var(--text-muted,#64748b);margin-top:4px;line-height:1.6}
 </style>
 @endpush
 @section('content')
@@ -39,12 +40,12 @@
 <a aria-label="Buscar {{ $name }} en Talana" href="{{ route('rrhh-documentos.est',['grupo'=>$group,'buscar'=>$name]) }}#talana">Buscar</a></div>
 @endforeach</div></section>
 <section class="panel" id="talana"><h2>Consultar Talana</h2>
-<form class="est-controls" method="get" action="{{ route('rrhh-documentos.est') }}#talana"><input type="hidden" name="grupo" value="{{ $group }}"><label>Nombre del documento <input type="search" name="buscar" required minlength="2" maxlength="255" value="{{ $term }}"></label><button class="cta">Buscar en Talana</button></form>
+<form class="est-controls" method="get" action="{{ route('rrhh-documentos.est') }}#talana"><input type="hidden" name="grupo" value="{{ $group }}"><label>Nombre del documento <input type="search" name="buscar" required minlength="2" maxlength="255" value="{{ $term }}"></label><label>Orden en esta página<select name="orden">@foreach(['recent'=>'Más recientes','oldest'=>'Más antiguos','name'=>'Nombre A–Z'] as $value=>$label)<option value="{{ $value }}" @selected($order === $value)>{{ $label }}</option>@endforeach</select></label><button class="cta">Buscar en Talana</button></form>
 @if($error)<p role="alert">{{ $error }}</p>@elseif($total !== null)
 @if((int) $total === 0)<p>Sin resultados para «{{ $term }}». Prueba con menos palabras.</p>@else
 <p class="est-results-meta">{{ number_format($total,0,',','.') }} registros · {{ count($names) }} {{ count($names) === 1 ? 'título distinto' : 'títulos distintos' }} en la página {{ $page }}</p>
-<ul class="est-results" tabindex="0" aria-label="Títulos encontrados en Talana">@foreach(array_keys($names) as $name)<li>{{ $name }}</li>@endforeach</ul>@endif
-<nav class="est-nav est-pagination" aria-label="Resultados de Talana">@if($page > 1)<a href="{{ request()->fullUrlWithQuery(['pagina'=>$page-1]) }}#talana">Anterior</a>@endif
+<ul class="est-results" tabindex="0" aria-label="Títulos encontrados en Talana">@foreach($names as $document)<li><strong>{{ $document['name'] }}</strong><small class="talana-meta">Último registro observado · {{ $document['date'] ?? 'Fecha no informada' }} · Versión en el título · {{ $document['version'] ?? 'No identificada' }}</small></li>@endforeach</ul>@endif
+<p class="muted">Fechas de creación en Talana, hora de Chile. Se agrupan y ordenan los registros de esta página. La vigencia de la plantilla requiere revisión.</p><nav class="est-nav est-pagination" aria-label="Resultados de Talana">@if($page > 1)<a href="{{ request()->fullUrlWithQuery(['pagina'=>$page-1]) }}#talana">Anterior</a>@endif
 @if($next)<a href="{{ request()->fullUrlWithQuery(['pagina'=>$page+1]) }}#talana">Siguiente</a>@endif</nav>
 @endif</section>
 @if(auth()->user()->tieneAcceso('gestion_documental','puede_crear'))
