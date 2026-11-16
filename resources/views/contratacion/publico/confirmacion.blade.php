@@ -137,7 +137,7 @@
     <div class="info-box">
         <strong><i class="bi bi-info-circle-fill"></i> Documentos faltantes</strong>
         Aún tienes documentos obligatorios por subir. Puedes volver al formulario en cualquier
-        momento usando tu cuenta de Google para completar tu postulación.
+        momento para enviar la documentación completa.
     </div>
     @else
     <div class="info-box" style="border-color:#22c55e;">
@@ -156,7 +156,7 @@
         <form method="POST" action="{{ route('contratacion-publico.logout') }}">
             @csrf
             <button type="submit" class="btn-secondary">
-                <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+                <i class="bi bi-box-arrow-right"></i> Finalizar
             </button>
         </form>
     </div>

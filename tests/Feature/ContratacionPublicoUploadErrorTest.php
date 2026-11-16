@@ -46,10 +46,10 @@ class ContratacionPublicoUploadErrorTest extends TestCase
             ->assertJson(['ok' => true]);
     }
 
-    public function test_public_upload_error_requires_google_session(): void
+    public function test_public_upload_error_accepts_guest_session(): void
     {
         $this->postJson(route('contratacion-publico.documento.error'), [
             'fase' => 'network_error',
-        ])->assertUnauthorized();
+        ])->assertOk()->assertJson(['ok' => true]);
     }
 }

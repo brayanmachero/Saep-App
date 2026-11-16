@@ -229,6 +229,7 @@
         <span>Portal de Contratación</span>
     </div>
     <div class="topbar__user">
+        @if($googleUser)
         @if($googleUser['avatar'])
         <img src="{{ $googleUser['avatar'] }}" alt="">
         @endif
@@ -239,24 +240,22 @@
                 <i class="bi bi-box-arrow-right"></i> Salir
             </button>
         </form>
+        @else
+        <a class="btn-logout" href="{{ route('contratacion-publico.google') }}">Actualizar postulación vinculada a Google</a>
+        @endif
     </div>
 </div>
 
 <div class="page">
     <!-- Steps -->
     <div class="steps-bar">
-        <div class="step done">
-            <div class="step__dot"><i class="bi bi-check"></i></div>
-            <span>Acceso</span>
-        </div>
-        <div class="step-line"></div>
         <div class="step active">
-            <div class="step__dot">2</div>
+            <div class="step__dot">1</div>
             <span>Datos</span>
         </div>
         <div class="step-line"></div>
         <div class="step">
-            <div class="step__dot">3</div>
+            <div class="step__dot">2</div>
             <span>Listo</span>
         </div>
     </div>
@@ -276,7 +275,7 @@
     <div class="postulante-banner" style="background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a;">
         <i class="bi bi-arrow-repeat"></i>
         <div>
-            <strong>¿Ya postulaste antes con otro correo?</strong><br>
+            <strong>¿Ya postulaste antes?</strong><br>
             Puedes completar el formulario con tu RUT y tus documentos actuales. Se creará una nueva versión para revisión de RRHH, sin exponer ni reemplazar tus documentos anteriores.
         </div>
     </div>
@@ -321,9 +320,10 @@
             </div>
 
             <div class="form-group">
-                <label>Correo electrónico</label>
-                <input type="text" class="form-control" value="{{ $googleUser['email'] }}" disabled>
-                <div class="form-hint">Correo verificado con Google — no modificable</div>
+                <label for="email">Correo electrónico <span class="required">*</span></label>
+                <input id="email" type="email" name="email" class="form-control" maxlength="255" autocomplete="email"
+                    value="{{ $googleUser['email'] ?? old('email') }}" @readonly($googleUser) required>
+                @error('email') <div class="invalid-feedback">{{ $message }}</div> @enderror
             </div>
         </div>
 
