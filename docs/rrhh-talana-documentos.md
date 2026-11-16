@@ -48,3 +48,11 @@ Un documento puede marcarse como Requiere corrección con motivo, responsable y 
 La pantalla Revisión final y comparación de versiones reúne aplicación de la batería, estados excluyentes, pendientes con enlaces directos y activación condicionada. Compara solamente versiones de la misma familia: agregados, retirados, reemplazos/vinculaciones, cambios de posición y reglas. Usa referencia de origen, nombre e ID Talana; no compara el texto de PDF ni certifica versiones externas. Al activar se mantienen los snapshots previos y se archiva la versión activa anterior.
 
 Validación: 16 pruebas/232 aserciones; observaciones, resolución, invalidación de aprobación, activación bloqueada, permisos, concurrencia, comparación de IDs/títulos/reglas/orden y rechazo de otra familia. QA Edge con datos sintéticos en 360/768/1440 px para observado, cierre bloqueado, listo y comparación: sin desborde horizontal ni errores JS. No se crearon observaciones reales ni se activaron baterías productivas para probar.
+
+### Preparación del piloto: detalle de lotes — 16/11/2026
+
+Se agrega resumen de PDF requeridos, registrados y faltantes sobre todos los contratos incluidos, independiente de página/filtro; los retirados no suman. Son conteos de registros, no certificación de existencia/integridad del archivo ni aprobación para enviar. La prevalidación del procesamiento mantiene sus comprobaciones de contrato vigente, sincronización, hash y ambigüedad.
+
+Cada contrato ofrece vista previa protegida del PDF guardado y descarga. El formulario permite previsualizar el archivo local antes de guardar, sin subirlo. Se explica la diferencia entre referencias de batería y archivos personales; guardar no envía a Talana. Se preserva consulta por lote/contrato/posición y cabeceras privadas sin caché. Fechas del detalle en hora de Chile.
+
+Pruebas: 17 casos/251 aserciones; aislamiento de PDF, descarga vs inline, conteos excluyendo retirados y ausencia de llamadas externas. QA Edge 360/768/1440, apertura/cierre, selección de archivo, vista previa local sin subida, PDF guardado, error de carga y sin desborde horizontal. Datos/PDF sintéticos. No se creó lote productivo; falta definir centro/cargo del piloto y completar revisión humana de batería.

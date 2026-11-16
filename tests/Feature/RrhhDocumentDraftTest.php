@@ -252,6 +252,34 @@ class RrhhDocumentDraftTest extends TestCase
         $this->assertSame(['moved','moved'],array_column($result['changes'],'type'));
     }
 
+    public function test_batch_preparation_counts_exclude_removed_workers_and_pdf_preview_is_scoped(): void
+    {
+        $user=new class extends \App\Models\User {
+            public function tieneConsentimientoDatosVigente(): bool { return true; }
+            public function tieneAcceso(string $moduloSlug,string $accion='puede_ver'): bool { return true; }
+        };
+        $user->id=7;$user->setRelation('rol',new \App\Models\Rol);$this->actingAs($user)->withoutVite();
+        $this->contract(1);$this->contract(2,['persona_rut'=>'98765432-1']);
+        $batch=(new RrhhDocumentDraftService)->create($this->data(),7);
+        $items=DB::table('rrhh_document_batch_items')->where('batch_id',$batch)->orderBy('id')->get();
+        $disk=Storage::fake('local');$disk->put('private/qa.pdf','%PDF-1.4 synthetic preview');
+        foreach($items as $item)DB::table('rrhh_document_deliveries')->insert(['item_id'=>$item->id,'position'=>0,'path'=>'private/qa.pdf','category'=>'Contrato','sha256'=>hash('sha256','%PDF-1.4 synthetic preview'),'prepared_by'=>7]);
+        $url=route('rrhh-documentos.show',$batch);
+        $this->get($url)->assertOk()->assertViewHas('preparation',fn($p)=>$p['expected']===4 && $p['registered']===2 && $p['missing']===2)->assertSee('Previsualizar archivo elegido');
+        (new RrhhDocumentReviewService)->update($batch,['accion'=>'retirar','item_id'=>$items[1]->id,'motivo'=>'Fuera del piloto'],7);
+        $this->get($url)->assertOk()->assertViewHas('preparation',fn($p)=>$p['expected']===2 && $p['registered']===1 && $p['missing']===1);
+        $this->get($url.'?revision=retirados')->assertOk()->assertViewHas('preparation',fn($p)=>$p['registered']===1)->assertDontSee('Guardar PDF de este trabajador');
+        $pdf=route('rrhh-documentos.pdf',[$batch,$items[0]->id,0]);
+        $response=$this->get($pdf.'?vista=1')->assertOk()->assertHeader('Content-Type','application/pdf');
+        $this->assertStringContainsString('inline',$response->headers->get('content-disposition'));
+        $this->assertStringContainsString('no-store',$response->headers->get('cache-control'));
+        $this->assertStringContainsString('attachment',$this->get($pdf)->assertOk()->headers->get('content-disposition'));
+        $this->get(route('rrhh-documentos.pdf',['invalid-batch',$items[0]->id,0,'vista'=>1]))->assertNotFound();
+        $this->get(route('rrhh-documentos.pdf',[$batch,$items[0]->id,1,'vista'=>1]))->assertNotFound();
+        $this->assertDatabaseHas('rrhh_document_batches',['id'=>$batch,'estado'=>'BORRADOR']);
+        Http::assertNothingSent();
+    }
+
     public function test_preview_rejects_external_hosts_without_sending_credentials(): void
     {
         try {

@@ -172,7 +172,16 @@ class RrhhDocumentController extends Controller
 
         $files = DB::table('rrhh_document_deliveries')->whereIn('item_id', $items->pluck('id'))->get()->groupBy('item_id');
 
-        return view('rrhh_documentos.show', compact('batch', 'items', 'filter', 'events', 'files'));
+        $included = DB::table('rrhh_document_batch_items')->where('batch_id',$id)->where('excluido',false);
+        $documentCount = count(json_decode($batch->battery_snapshot,true)['documentos']);
+        $expected = (clone $included)->count() * $documentCount;
+        $deliveryStates = DB::table('rrhh_document_deliveries')->whereIn('item_id',(clone $included)->select('id'))
+            ->where('position','<',$documentCount)->selectRaw('state, count(*) as total')->groupBy('state')->pluck('total','state');
+        $registered = (int)$deliveryStates->sum();
+        $preparation = ['expected'=>$expected,'registered'=>$registered,'missing'=>max(0,$expected-$registered),
+            'observed'=>(clone $included)->whereJsonLength('observaciones','>',0)->count(),'states'=>$deliveryStates,
+            'writes_enabled'=>(bool)config('services.talana_documents.writes')];
+        return view('rrhh_documentos.show', compact('batch', 'items', 'filter', 'events', 'files','preparation'));
     }
 
     public function review(Request $request, string $id, RrhhDocumentReviewService $service)

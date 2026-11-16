@@ -57,12 +57,16 @@ class RrhhDocumentFileController extends Controller
         return back()->with('success', 'PDF preparado.');
     }
 
-    public function download(string $id, int $item, int $position)
+    public function download(Request $request, string $id, int $item, int $position)
     {
+        $request->validate(['vista'=>'nullable|boolean']);
         $path = DB::table('rrhh_document_deliveries as d')->join('rrhh_document_batch_items as i', 'i.id', '=', 'd.item_id')
             ->where('i.batch_id', $id)->where('i.id', $item)->where('d.position', $position)->value('d.path');
         abort_unless($path && Storage::disk('local')->exists($path), 404);
 
+        if ($request->boolean('vista')) {
+            return Storage::disk('local')->response($path, 'documento.pdf', ['Content-Type'=>'application/pdf','Cache-Control'=>'private, no-store','X-Content-Type-Options'=>'nosniff']);
+        }
         return Storage::disk('local')->download($path, 'documento.pdf', ['Cache-Control' => 'private, no-store']);
     }
 }
