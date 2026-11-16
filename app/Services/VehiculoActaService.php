@@ -54,8 +54,26 @@ class VehiculoActaService
                     }
                 }
                 $preparar = $data['accion'] === 'preparar';
-                if ($preparar && count($fotos) < 1) {
-                    $this->error('Adjunta al menos una fotografía del vehículo antes de solicitar la firma.', 'fotos');
+                if ($preparar && count($fotos) !== 5) {
+                    $this->error('Adjunta cinco fotografías del vehículo antes de solicitar la firma.', 'fotos');
+                }
+                $hayDanos = in_array('Con observaciones', $data['condiciones'], true)
+                    || ($data['danos_nuevos'] ?? 'NO') === 'SI';
+                $hayIncidencia = $hayDanos || in_array('Faltante', $data['kit'], true)
+                    || in_array('Con desperfecto', $data['kit'], true);
+                if ($hayIncidencia && blank($data['observaciones'] ?? null)) {
+                    $this->error('Describe el daño, faltante o desperfecto en las observaciones.', 'observaciones');
+                }
+                $fotoDano = $acta?->datos['foto_dano'] ?? null;
+                if ($request->hasFile('foto_dano')) {
+                    $bytes = $this->imagen(file_get_contents($request->file('foto_dano')->getRealPath()));
+                    $path = "vehiculos/actas/{$uuid}/dano-".Str::uuid().'.png';
+                    $this->escribir($path, $bytes);
+                    $archivos[] = $path;
+                    $fotoDano = ['path' => $path, 'sha256' => hash('sha256', $bytes)];
+                }
+                if ($preparar && $hayDanos && !$fotoDano) {
+                    $this->error('Adjunta una fotografía del daño informado.', 'foto_dano');
                 }
                 $firmaPath = null;
                 if ($preparar) {
@@ -65,6 +83,8 @@ class VehiculoActaService
                     $archivos[] = $firmaPath;
                 }
                 $datos = collect($data)->only(['conductor_nombre', 'conductor_email', 'fecha', 'kilometraje', 'combustible', 'condiciones', 'kit', 'observaciones', 'danos_nuevos'])->all();
+                $datos['inspeccion_simplificada'] = empty($data['ubicacion']) && empty($data['croquis']) && empty($acta?->datos['croquis']);
+                $datos['foto_dano'] = $fotoDano;
                 $datos['ubicacion'] = $data['ubicacion'] ?? null;
                 $datos['ubicacion_motivo'] = $datos['ubicacion'] ? null : ($data['ubicacion_motivo'] ?? null);
                 $datos['croquis'] = !empty($data['quitar_croquis']) ? null : ($acta?->datos['croquis'] ?? null);

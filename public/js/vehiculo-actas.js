@@ -34,6 +34,8 @@
     let files = [], urls = [];
     const render = () => {
         const transfer = new DataTransfer(); files.forEach(file => transfer.items.add(file)); photos.files = transfer.files;
+        const count = document.querySelector('[data-photo-count]');
+        if (count) count.textContent = files.length ? files.length + ' de 5 fotos seleccionadas' : (photos.dataset.savedCount || 0) + ' de 5 fotos guardadas';
         urls.forEach(URL.revokeObjectURL); urls = []; preview.replaceChildren();
         files.forEach((file, index) => {
             const item = document.createElement('div'); item.className = 'photo-item';
@@ -45,7 +47,7 @@
         });
     };
     const add = incoming => {
-        if (files.length + incoming.length > 4) { alert('Puedes adjuntar hasta cuatro fotos. Quita una antes de agregar otra.'); render(); return; }
+        if (files.length + incoming.length > 5) { alert('Puedes adjuntar hasta cinco fotos. Quita una antes de agregar otra.'); render(); return; }
         if (incoming.some(f => !['image/jpeg', 'image/png'].includes(f.type) || f.size > 5 * 1024 * 1024)) {
             alert('Usa fotografías JPG o PNG de hasta 5 MB cada una.'); render(); return;
         }
@@ -56,18 +58,14 @@
         photos.addEventListener('change', () => add([...photos.files]));
         camera.addEventListener('change', () => { add([...camera.files]); camera.value = ''; });
     }
-    document.querySelector('[data-location-clear]')?.addEventListener('click', () => { document.querySelectorAll('[data-location-value]').forEach(input=>{input.value='';input.disabled=true;}); document.querySelector('[data-location-status]').textContent='Sin ubicación. Indica el motivo para continuar.'; pads.get('firma_encargado')?.reset(); });
-    const locationButton = document.querySelector('[data-location]');
-    locationButton?.addEventListener('click', () => {
-        const status = document.querySelector('[data-location-status]');
-        if (!navigator.geolocation || !window.isSecureContext) { status.textContent = 'Ubicación no disponible. Indica el motivo para continuar.'; return; }
-        locationButton.disabled = true; status.textContent = 'Obteniendo ubicación…';
-        navigator.geolocation.getCurrentPosition(position => {
-            const values = {latitud:position.coords.latitude, longitud:position.coords.longitude, precision:position.coords.accuracy, capturada_at:new Date(position.timestamp).toISOString()};
-            Object.entries(values).forEach(([key,value]) => { const input=document.querySelector(`[data-location-value="${key}"]`); input.disabled=false; input.value=value; });
-            status.textContent = `Ubicación: ${values.latitud.toFixed(6)}, ${values.longitud.toFixed(6)} · precisión ${Math.round(values.precision)} m`;
-            document.querySelector('#ubicacion_motivo').value=''; locationButton.disabled=false; pads.get('firma_encargado')?.reset();
-        }, () => { status.textContent = 'No se pudo obtener una ubicación nueva. Si existe una anterior se conserva; revisa el dato o indica el motivo.'; locationButton.disabled=false; }, {enableHighAccuracy:true,timeout:15000,maximumAge:0});
+    form?.addEventListener('submit', event => {
+        if (event.submitter?.value !== 'preparar' || !photos) return;
+        const count = photos.files.length || Number(photos.dataset.savedCount);
+        if (count !== 5) {
+            event.preventDefault();
+            alert('Adjunta las cinco fotografías antes de continuar a la firma.');
+            photos.scrollIntoView({block: 'center'});
+        }
     });
     document.querySelector('[data-final-sign]')?.addEventListener('submit', e => {
         const input = document.querySelector('[data-signature-value="firma_conductor"]');

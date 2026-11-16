@@ -48,7 +48,8 @@ class VehiculoActaController extends Controller
             'danos_nuevos' => [$tipo === 'devolucion' ? 'required' : 'nullable', Rule::in(['SI', 'NO'])],
             'condiciones' => ['required', 'array:'.implode(',', array_keys(VehiculoActaService::PARTES))],
             'kit' => ['required', 'array:'.implode(',', array_keys(VehiculoActaService::KIT))],
-            'fotos' => ['nullable', 'array', 'max:4'], 'fotos.*' => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:5120', 'dimensions:max_width=6000,max_height=6000'],
+            'fotos' => ['nullable', 'array', 'max:5'], 'fotos.*' => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:5120', 'dimensions:max_width=6000,max_height=6000'],
+            'foto_dano' => ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:5120', 'dimensions:max_width=6000,max_height=6000'],
             'firma_encargado' => ['nullable', 'string', 'max:700000'],
             'croquis' => ['nullable', 'string', 'max:700000'],
             'quitar_croquis' => ['nullable', 'boolean'],
@@ -60,14 +61,8 @@ class VehiculoActaController extends Controller
             'ubicacion_motivo' => ['nullable', 'string', 'max:300'],
         ];
         foreach (VehiculoActaService::PARTES as $key => $label) $rules['condiciones.'.$key] = ['required', Rule::in(['Bueno', 'Con observaciones'])];
-        foreach (VehiculoActaService::KIT as $key => $label) $rules['kit.'.$key] = ['required', Rule::in(['Presente', 'Faltante', 'No aplica'])];
+        foreach (VehiculoActaService::KIT as $key => $label) $rules['kit.'.$key] = ['required', Rule::in(['Presente', 'Faltante', 'Con desperfecto', 'No aplica'])];
         $data = $request->validate($rules);
-        if ($data['accion'] === 'preparar' && empty($data['ubicacion']) && blank($data['ubicacion_motivo'] ?? null)) {
-            return back()->withInput()->withErrors(['ubicacion' => 'Captura la ubicación o indica por qué no está disponible.']);
-        }
-        if ((in_array('Con observaciones', $data['condiciones'], true) || ($data['danos_nuevos'] ?? 'NO') === 'SI') && blank($data['observaciones'] ?? null)) {
-            return back()->withInput()->withErrors(['observaciones' => 'Describe los daños u observaciones detectados.']);
-        }
         $acta = $this->actas->guardar($reserva, $tipo, $data, $request);
         return redirect()->route($acta->estado === 'BORRADOR' ? 'vehiculos-actas.editar' : 'vehiculos-actas.show',
             $acta->estado === 'BORRADOR' ? [$reserva, $tipo] : [$acta])
@@ -128,6 +123,7 @@ class VehiculoActaController extends Controller
     {
         $this->acceso($request, $acta);
         $path = match ($archivo) {
+            'dano' => $acta->datos['foto_dano']['path'] ?? null,
             'croquis' => $acta->datos['croquis']['path'] ?? null,
             'encargado' => $acta->firma_encargado_path, 'conductor' => $acta->firma_conductor_path,
             default => ctype_digit($archivo) ? ($acta->evidencias[(int) $archivo]['path'] ?? null) : null,
