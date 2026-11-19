@@ -32,5 +32,7 @@
 .dark-mode .doc-workspace .doc-validation-observados{color:#fed7aa;background:#7c2d12;border-color:#fb923c}
 .dark-mode .doc-workspace .doc-validation-por-revisar{color:#fef08a;background:#713f12;border-color:#eab308}
 .dark-mode .doc-workspace .doc-validation-sin-vincular{color:#e2e8f0;background:#334155;border-color:#94a3b8}
+.doc-workspace .doc-validation-action{padding:14px;margin:12px 0 16px;border:1px solid var(--border-color,#cbd5e1);border-radius:10px;background:var(--hover-bg,#f8fafc)}
+.doc-workspace .doc-validation-action h3{margin:0 0 6px}.doc-workspace .doc-validation-action .check{align-items:flex-start}.doc-workspace #document-correction{scroll-margin-top:24px}
 </style>
 @endpush

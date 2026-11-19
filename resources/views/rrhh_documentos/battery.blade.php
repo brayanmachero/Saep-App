@@ -44,6 +44,13 @@ $pending=count($documents)-$validated;
 @if($next !== null)<a class="cta secondary" href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'documento'=>$next,'filtro'=>$filter]) }}#review">Siguiente</a>@endif</nav>
 <h3 class="doc-review-title">{{ $selectedName }}</h3>
 @include('rrhh_documentos.document-status',['metadata'=>$selectedDetails])
+@if($editable && $canEdit && !empty($selectedDetails['talana_id']) && empty($selectedDetails['validated_at']) && ($selectedDetails['observation']['state'] ?? null)!=='open')
+<form class="doc-confirm doc-validation-action" method="post" action="{{ route('rrhh-documentos.battery-validate',[$record->id,$selectedPosition]) }}">@csrf<h3>Validar este documento</h3><p class="muted">Revisa el PDF de abajo. Cuando cargue, marca la confirmación y pulsa Validar documento.</p><input type="hidden" name="revision" value="{{ $record->revision }}">
+<input type="hidden" name="filtro" value="{{ $filter }}"><label class="check"><input type="checkbox" name="confirmed" value="1" id="confirm-document" required disabled> Revisé el archivo y confirmo que el contenido y la versión corresponden a esta batería.</label><button class="cta" id="validate-document" disabled>Validar documento</button></form>
+@endif
+@if($editable && $canEdit && ($selectedDetails['observation']['state'] ?? null)==='open')
+<div class="doc-validation-action"><h3>Validación bloqueada por una observación</h3><p class="muted">Primero reemplaza el archivo o registra cómo se resolvió la observación. Después podrás revisar el PDF y validarlo.</p><a class="cta secondary" href="#document-correction" onclick="document.getElementById('document-correction').open=true">Resolver observación</a></div>
+@endif
 @if($editable && $canEdit)<button type="button" class="cta secondary" data-open-replace>{{ !empty($selectedDetails['talana_id']) ? 'Reemplazar documento' : 'Vincular a este requisito' }}</button>@endif
 @if(!empty($selectedDetails['source_reference']))<p class="doc-field-hint">Requisito de origen: {{ $selectedDetails['source_reference'] }}</p>@endif
 @if(!empty($selectedDetails['review_note']))<div class="note"><strong>Resultado de la conciliación</strong><p>{{ $selectedDetails['review_note'] }}</p>
@@ -61,14 +68,11 @@ $pending=count($documents)-$validated;
 <div class="doc-review-status" id="pdf-status" role="status" aria-live="polite">Cargando PDF…</div>
 <button type="button" class="cta secondary" id="retry-preview" hidden>Reintentar carga</button>
 <div id="preview-home"><div id="preview-frame"><iframe class="pdf-frame" id="document-preview" title="Vista previa de {{ $selectedName }}" data-url="{{ route('rrhh-documentos.battery-pdf',[$record->id,$selectedPosition]) }}"></iframe></div></div>
-@if($editable && $canEdit && empty($selectedDetails['validated_at']) && ($selectedDetails['observation']['state'] ?? null)!=='open')
-<form class="doc-confirm" method="post" action="{{ route('rrhh-documentos.battery-validate',[$record->id,$selectedPosition]) }}">@csrf<input type="hidden" name="revision" value="{{ $record->revision }}">
-<input type="hidden" name="filtro" value="{{ $filter }}"><label class="check"><input type="checkbox" name="confirmed" value="1" id="confirm-document" required disabled> Revisé el archivo y confirmo que el contenido y la versión corresponden a esta batería.</label><button class="cta" id="validate-document" disabled>Validar documento</button></form>
-@endif
+
 <noscript><p><a href="{{ route('rrhh-documentos.battery-preview',[$record->id,$selectedPosition]) }}">Abrir la vista de revisión del documento</a></p></noscript>
 @else<div class="doc-empty"><h3>Archivo pendiente de vincular</h3><p class="muted">Busca el título oficial y vincúlalo a este requisito; no se agregará un requisito adicional.</p>@if($editable && $canEdit)<button type="button" class="cta" data-open-replace>Buscar y vincular documento</button>@endif</div>@endif
 @if($editable && $canEdit)
-<details class="doc-confirm" @if(in_array(old('action'),['observe','resolve']) && $errors->any()) open @endif><summary>{{ ($selectedDetails['observation']['state'] ?? null)==='open' ? 'Registrar cómo se corrigió' : 'Marcar que requiere corrección' }}</summary>
+<details id="document-correction" class="doc-confirm" @if(in_array(old('action'),['observe','resolve']) && $errors->any()) open @endif><summary>{{ ($selectedDetails['observation']['state'] ?? null)==='open' ? 'Registrar cómo se corrigió' : 'Marcar que requiere corrección' }}</summary>
 <form method="post" action="{{ route('rrhh-documentos.battery-change',$record->id) }}">@csrf<input type="hidden" name="revision" value="{{ $record->revision }}"><input type="hidden" name="position" value="{{ $selectedPosition }}"><input type="hidden" name="action" value="{{ ($selectedDetails['observation']['state'] ?? null)==='open' ? 'resolve' : 'observe' }}">
 <label>Motivo o detalle de la corrección<textarea name="reason" rows="3" required minlength="5" maxlength="1500">{{ in_array(old('action'),['observe','resolve']) ? old('reason') : '' }}</textarea></label>
 <p class="muted">Las observaciones abiertas bloquean la validación y la activación. Resolver una observación requiere revisar y validar nuevamente el PDF.</p><button class="cta secondary">{{ ($selectedDetails['observation']['state'] ?? null)==='open' ? 'Guardar corrección y volver a revisar' : 'Guardar observación' }}</button></form></details>
