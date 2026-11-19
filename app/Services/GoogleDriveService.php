@@ -75,12 +75,12 @@ class GoogleDriveService
      */
     public function getLatestFile(): ?array
     {
-        return Cache::remember('gdrive_latest_file_info', 300, function () {
+        return Cache::remember('gdrive_stop_latest_file_info_v2', 300, function () {
             try {
                 $drive = new Drive($this->getClient());
 
                 $results = $drive->files->listFiles([
-                    'q'        => "'{$this->folderId}' in parents and trashed = false",
+                    'q'        => "'{$this->folderId}' in parents and trashed = false and mimeType = 'application/vnd.google-apps.spreadsheet' and name contains 'Formulario tarjeta STOP'",
                     'orderBy'  => 'modifiedTime desc',
                     'pageSize' => 5,
                     'fields'   => 'files(id, name, mimeType, modifiedTime, size)',
@@ -808,6 +808,7 @@ class GoogleDriveService
     public function clearCache(): void
     {
         Cache::forget('gdrive_latest_file_info');
+        Cache::forget('gdrive_stop_latest_file_info_v2');
 
         $fileInfo = $this->getLatestFile();
         if ($fileInfo) {

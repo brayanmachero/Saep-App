@@ -62,8 +62,7 @@ class StopSyncSheets extends Command
                 }
             }
             if (!$found) {
-                $sheetTitle = $spreadsheet->getSheets()[0]->getProperties()->getTitle();
-                $this->warn("Hoja '" . self::SHEET_NAME . "' no encontrada, usando: {$sheetTitle}");
+                throw new \RuntimeException('La planilla no contiene la hoja de respuestas STOP esperada.');
             }
 
             // Leer headers
@@ -73,6 +72,19 @@ class StopSyncSheets extends Command
             if (empty($allHeaders)) {
                 $this->error('No se encontraron headers en la hoja.');
                 return self::FAILURE;
+            }
+
+            $expectedHeaders = [
+                0 => 'Marca temporal',
+                2 => 'Fecha de la tarjeta',
+                4 => 'Centro',
+                8 => 'Clasificación de observación',
+                14 => 'Seleccione empresa de la persona observada',
+            ];
+            foreach ($expectedHeaders as $index => $expected) {
+                if (trim($allHeaders[$index] ?? '') !== $expected) {
+                    throw new \RuntimeException('Las columnas de la planilla no corresponden al formulario STOP.');
+                }
             }
 
             // Identificar columnas de checklist (índice 19+)
@@ -218,6 +230,10 @@ class StopSyncSheets extends Command
 
             $bar->finish();
             $this->newLine();
+
+            if ($totalImported === 0) {
+                throw new \RuntimeException('La planilla no contiene registros para la empresa configurada. Se conservan los datos anteriores.');
+            }
 
             DB::commit();
 
