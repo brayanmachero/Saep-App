@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\TalanaContrato;
 use App\Services\RrhhDocumentBatteryService;
+use App\Services\RrhhDocumentCompositionService;
 use App\Services\TalanaDocumentApi;
 use Illuminate\Http\Client\HttpClientException;
 use Illuminate\Http\Request;
@@ -28,6 +29,8 @@ class RrhhDocumentBatteryController extends Controller
         }
         $companies = TalanaContrato::select('empresa_id', 'empresa_nombre')->distinct()->orderBy('empresa_nombre')->get();
 
+        $composition = app(RrhhDocumentCompositionService::class)->resolve($record);
+        $parentChoices = app(RrhhDocumentCompositionService::class)->choices($battery);
         $filter = $input['filtro'] ?? 'todos';
         $linked = collect($documents)->filter(fn($name) => !empty($details[$name]['talana_id']))->count();
         $reviewService = app(RrhhDocumentBatteryService::class);
@@ -42,7 +45,7 @@ class RrhhDocumentBatteryController extends Controller
         $selectedName = $selectedPosition !== null ? $documents[$selectedPosition] : null;
         $selectedDetails = $selectedName !== null ? ($details[$selectedName] ?? []) : [];
         $versions = DB::table('rrhh_document_batteries')->where('nombre',$record->nombre)->orderByDesc('version')->get(['id','version','estado']);
-        return view('rrhh_documentos.battery', compact('review','filter','linked','visibleDocuments','previous','next','selectedPosition','selectedName','selectedDetails','versions','options', 'companies', 'record', 'documents', 'details', 'rules', 'editable', 'events'));
+        return view('rrhh_documentos.battery', compact('composition','parentChoices','review','filter','linked','visibleDocuments','previous','next','selectedPosition','selectedName','selectedDetails','versions','options', 'companies', 'record', 'documents', 'details', 'rules', 'editable', 'events'));
     }
 
     public function finalReview(Request $request, int $battery, RrhhDocumentBatteryService $service)
@@ -60,10 +63,12 @@ class RrhhDocumentBatteryController extends Controller
     public function change(Request $request, int $battery, RrhhDocumentBatteryService $service)
     {
         $data = $request->validate([
-            'revision' => 'required|integer|min:1', 'action' => 'required|in:remove,add,replace,rules,observe,resolve',
+            'revision' => 'required|integer|min:1', 'action' => 'required|in:remove,add,replace,rules,observe,resolve,composition',
             'position' => 'nullable|required_if:action,remove,replace,observe,resolve|integer|min:0',
             'documentos' => 'required_if:action,add,replace|array|min:1|max:50', 'documentos.*' => 'string|max:4096',
             'reason'=>'required_if:action,observe,resolve|string|min:5|max:1500',
+            'kind'=>'required_if:action,composition|in:base,specific,independent',
+            'parent_ids'=>'nullable|array|max:10', 'parent_ids.*'=>'integer|distinct|min:1',
             'empresa_id' => 'nullable|integer',
             'centro_costo_nombre' => 'nullable|string|max:200',
             'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200',
@@ -137,6 +142,17 @@ class RrhhDocumentBatteryController extends Controller
                 $changes['document_details'] = json_encode($details);
                 $eventDetail = ['reglas' => $rules];
             }
+            if ($data['action'] === 'composition') {
+                $changes['kind'] = $data['kind'];
+                foreach ($details as &$metadata) { unset($metadata['validated_by'], $metadata['validated_at']); }
+                unset($metadata);
+                $changes['document_details'] = json_encode($details);
+                $changes['parent_ids'] = json_encode(array_map('intval', $data['parent_ids'] ?? []));
+                $eventDetail = ['kind'=>$data['kind'], 'parent_ids'=>$data['parent_ids'] ?? []];
+            }
+            // Check scope conflicts and dependency validity before persisting edits.
+            $candidate = (object)array_merge((array)$record, $changes);
+            app(RrhhDocumentCompositionService::class)->assertUsable(app(RrhhDocumentCompositionService::class)->resolve($candidate, true));
             DB::table('rrhh_document_batteries')->where('id', $battery)->update($changes);
             $service->event($battery, (int) $request->user()->id, $data['action'], $eventDetail);
         });
@@ -177,6 +193,7 @@ class RrhhDocumentBatteryController extends Controller
             unset($metadata);
             $id = DB::table('rrhh_document_batteries')->insertGetId([
                 'nombre' => $source->nombre, 'version' => $family->max('version') + 1, 'documentos' => $source->documentos,
+                'kind'=>$source->kind, 'parent_ids'=>$source->parent_ids,
                 'reglas' => $source->reglas, 'document_details' => json_encode($details), 'created_by' => $request->user()->id,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
@@ -283,9 +300,10 @@ class RrhhDocumentBatteryController extends Controller
             $service->editable($record, (int) $data['revision']);
             $documents = json_decode($record->documentos, true);
             $details = json_decode($record->document_details ?? '{}', true);
-            if (! $service->review($documents,$details)['ready']) {
+            if (! app(RrhhDocumentCompositionService::class)->resolve($record, true)['review']['ready']) {
                 throw ValidationException::withMessages(['bateria' => 'Valida todos los documentos antes de activar la batería.']);
             }
+            app(RrhhDocumentCompositionService::class)->assertUsable(app(RrhhDocumentCompositionService::class)->resolve($record, true), true);
             foreach ($family->where('estado', 'ACTIVA') as $previous) {
                 DB::table('rrhh_document_batteries')->where('id', $previous->id)->update(['estado' => 'ARCHIVADA', 'revision' => $previous->revision + 1, 'updated_at' => now()]);
                 $service->event($previous->id, (int) $request->user()->id, 'archive', ['reemplazada_por' => $battery]);

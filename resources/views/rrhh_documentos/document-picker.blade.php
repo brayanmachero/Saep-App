@@ -7,7 +7,7 @@ foreach ((array)old('documentos',[]) as $token) {
     } catch (\Throwable $e) {}
 }
 @endphp
-<div class="document-picker" data-url="{{ route('rrhh-documentos.document-options') }}">
+<div class="document-picker" data-allow-inherited="{{ !empty($allowInheritedOnly) ? '1' : '0' }}" data-url="{{ route('rrhh-documentos.document-options') }}">
 <label>Buscar documento en Talana <input type="search" class="document-query" maxlength="255" value="{{ $initialSearch ?? '' }}" placeholder="Escribe al menos dos caracteres"></label>
 <label>Orden en cada página<select class="document-order"><option value="recent">Más recientes</option><option value="oldest">Más antiguos</option><option value="name">Nombre A–Z</option></select></label>
 <button type="button" class="cta document-search">Buscar documentos</button>
@@ -73,7 +73,7 @@ document.querySelectorAll('.document-picker').forEach(root => {
     }
     search.onclick=()=>load(false);next.onclick=()=>load(true);
     query.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();load(false);}});
-    root.closest('form').addEventListener('submit',event=>{if(!selections.size||selections.size>Number(root.dataset.limit||50)){event.preventDefault();status.textContent='Revisa la selección: elige un archivo al reemplazar, o hasta 50 al agregar.';query.focus();}});
+    root.closest('form').addEventListener('submit',event=>{const form=root.closest('form'), inheritedOnly=root.dataset.allowInherited==='1' && form.elements.kind?.value==='specific' && form.querySelector('input[name="parent_ids[]"]:checked');if((!selections.size&&!inheritedOnly)||selections.size>Number(root.dataset.limit||50)){event.preventDefault();status.textContent='Revisa la selección: elige un archivo al reemplazar, o hasta 50 al agregar.';query.focus();}});
 });
 </script>
 @endpush

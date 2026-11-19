@@ -52,7 +52,8 @@ class RrhhDocumentController extends Controller
             }
             $options[$field] = $query->distinct()->orderBy($field)->pluck($field);
         }
-        return view('rrhh_documentos.create',compact('group','initialSearch','companies','options'));
+        $parentChoices = app(\App\Services\RrhhDocumentCompositionService::class)->choices();
+        return view('rrhh_documentos.create',compact('parentChoices','group','initialSearch','companies','options'));
     }
 
     public function index(Request $r, RrhhDocumentDraftService $service)
@@ -127,15 +128,17 @@ class RrhhDocumentController extends Controller
                 \Illuminate\Validation\Rule::exists('talana_contratos', 'centro_costo_nombre')->where('empresa_id', $companyId),
             ]]);
         }
-        $d = $r->validate(['nombre' => 'required|string|max:150', 'version' => 'required|integer|min:1|max:9999', 'documentos' => 'required|array|min:1|max:50', 'documentos.*'=>'required|string|max:4096', 'empresa_id' => 'nullable|integer', 'centro_costo_nombre' => $r->boolean('origen_est') ? 'required|string|max:200|exists:talana_contratos,centro_costo_nombre' : 'nullable|string|max:200', 'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200']);
-        $details = app(\App\Services\RrhhDocumentBatteryService::class)->selections($d['documentos'], (int)$r->user()->id);
+        $d = $r->validate(['nombre' => 'required|string|max:150', 'version' => 'required|integer|min:1|max:9999', 'kind'=>'nullable|in:base,specific', 'parent_ids'=>'nullable|array|max:10', 'parent_ids.*'=>'integer|distinct|min:1', 'documentos' => 'required_without:parent_ids|array|max:50', 'documentos.*'=>'required|string|max:4096', 'empresa_id' => 'nullable|integer', 'centro_costo_nombre' => $r->boolean('origen_est') ? 'required|string|max:200|exists:talana_contratos,centro_costo_nombre' : 'nullable|string|max:200', 'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200']);
+        $details = app(\App\Services\RrhhDocumentBatteryService::class)->selections($d['documentos'] ?? [], (int)$r->user()->id);
         $docs = array_keys($details);
         if (DB::table('rrhh_document_batteries')->where('nombre', $d['nombre'])->where('version', $d['version'])->exists()) {
             return back()->withErrors(['nombre' => 'Ya existe esa batería y versión. Crea una nueva versión.'])->withInput();
         }
         try {
             $batteryId = DB::transaction(function () use ($details,$d,$docs,$r) {
-                $id = DB::table('rrhh_document_batteries')->insertGetId(['document_details'=>json_encode($details), 'nombre' => $d['nombre'], 'version' => $d['version'], 'documentos' => json_encode($docs, JSON_UNESCAPED_UNICODE), 'reglas' => json_encode(array_intersect_key($d, array_flip(['empresa_id', 'centro_costo_nombre', 'cargo_nombre', 'tipo_contrato_nombre']))), 'created_by' => $r->user()->id, 'created_at' => now(), 'updated_at' => now()]);
+                $id = DB::table('rrhh_document_batteries')->insertGetId(['kind'=>$d['kind'] ?? 'base', 'parent_ids'=>json_encode(array_map('intval',$d['parent_ids'] ?? [])), 'document_details'=>json_encode($details), 'nombre' => $d['nombre'], 'version' => $d['version'], 'documentos' => json_encode($docs, JSON_UNESCAPED_UNICODE), 'reglas' => json_encode(array_intersect_key($d, array_flip(['empresa_id', 'centro_costo_nombre', 'cargo_nombre', 'tipo_contrato_nombre']))), 'created_by' => $r->user()->id, 'created_at' => now(), 'updated_at' => now()]);
+                $compositionService = app(\App\Services\RrhhDocumentCompositionService::class);
+                $compositionService->assertUsable($compositionService->resolve(DB::table('rrhh_document_batteries')->find($id), true));
                 app(\App\Services\RrhhDocumentBatteryService::class)->event($id,(int)$r->user()->id,'create');
                 return $id;
             });

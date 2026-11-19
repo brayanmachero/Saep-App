@@ -66,7 +66,7 @@ class RrhhDocumentBatteryService
         foreach (['empresa_id','centro_costo_nombre','cargo_nombre','tipo_contrato_nombre'] as $key) {
             if ((string)($oldRules[$key] ?? '') !== (string)($newRules[$key] ?? '')) $rules[] = ['field'=>$key,'before'=>$oldRules[$key] ?? null,'after'=>$newRules[$key] ?? null];
         }
-        return compact('changes','rules');
+        return compact('changes','rules') + ['composition_changed'=>($before->kind ?? 'independent') !== ($after->kind ?? 'independent') || (json_decode($before->parent_ids ?? '[]',true) ?: []) !== (json_decode($after->parent_ids ?? '[]',true) ?: [])];
     }
 
     public function selections(array $tokens, int $userId): array

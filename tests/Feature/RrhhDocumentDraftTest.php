@@ -48,6 +48,7 @@ class RrhhDocumentDraftTest extends TestCase
         (require base_path('database/migrations/2026_10_15_210000_add_document_batch_review.php'))->up();
         (require base_path('database/migrations/2026_11_13_130000_create_rrhh_document_deliveries.php'))->up();
         (require base_path('database/migrations/2026_11_16_180000_add_document_battery_review.php'))->up();
+        (require base_path('database/migrations/2026_11_19_140000_add_battery_composition.php'))->up();
         DB::table('rrhh_document_batteries')->insert(['id' => 1, 'estado'=>'ACTIVA', 'nombre' => 'Prueba', 'version' => 1, 'documentos' => '["Contrato","Anexo"]', 'reglas' => '{}', 'created_by' => 1, 'created_at' => now(), 'updated_at' => now()]);
     }
 
@@ -485,5 +486,110 @@ class RrhhDocumentDraftTest extends TestCase
             $this->assertSame(404, $e->getStatusCode());
         }
         $this->assertSame(0,DB::table('rrhh_document_batch_events')->count());
+    }
+
+    private function compositionBattery(string $name, string $kind, array $docs, array $rules = [], array $parents = [], string $state = 'ACTIVA'): int
+    {
+        $details=[];
+        foreach ($docs as $title=>$id) $details[$title]=['talana_id'=>$id,'validated_at'=>now()->toIso8601String(),'validated_by'=>7];
+        return DB::table('rrhh_document_batteries')->insertGetId([
+            'nombre'=>$name,'kind'=>$kind,'version'=>1,'estado'=>$state,'parent_ids'=>json_encode($parents),
+            'documentos'=>json_encode(array_keys($docs)),'document_details'=>json_encode($details),'reglas'=>json_encode($rules),
+            'created_by'=>7,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+    }
+
+    public function test_composition_combines_base_centre_and_job_and_preserves_batch_snapshot(): void
+    {
+        $base=$this->compositionBattery('Base QA','base',['Obligatorio.pdf'=>901],['empresa_id'=>1039]);
+        $centre=$this->compositionBattery('Cliente QA','specific',['Cliente.pdf'=>902],['centro_costo_nombre'=>'CCU'],[$base]);
+        $job=$this->compositionBattery('Cargo QA','specific',['Cargo.pdf'=>903,'Obligatorio.pdf'=>901],['cargo_nombre'=>'Operario'],[$base,$centre]);
+        $record=DB::table('rrhh_document_batteries')->find($job);
+        $service=app(\App\Services\RrhhDocumentCompositionService::class);
+        $result=$service->resolve($record);
+        $this->assertSame([], $result['errors']);
+        $this->assertSame(['Obligatorio.pdf','Cliente.pdf','Cargo.pdf'], $result['documents']);
+        $this->assertCount(2, $result['origins']['Obligatorio.pdf']);
+        $this->assertSame(['empresa_id'=>1039,'centro_costo_nombre'=>'CCU','cargo_nombre'=>'Operario'], $result['rules']);
+        $this->contract(1);
+        $id=app(RrhhDocumentDraftService::class)->create(['request_id'=>(string)Str::uuid(),'nombre'=>'Composicion QA','battery_id'=>$job,'seleccion'=>'todos'],7);
+        $before=DB::table('rrhh_document_batches')->where('id',$id)->first();
+        $snapshot=json_decode($before->battery_snapshot,true);
+        $this->assertSame($result['documents'],$snapshot['documentos']);
+        $this->assertCount(3,$snapshot['sources']);
+        $this->assertSame(3,$before->documentos);
+        DB::table('rrhh_document_batteries')->where('id',$base)->update(['estado'=>'ARCHIVADA']);
+        $this->compositionBattery('Base QA nueva','base',['Nuevo.pdf'=>904],['empresa_id'=>1039]);
+        $this->assertNotEmpty($service->resolve($record)['pending']);
+        $this->assertSame($before->battery_snapshot,DB::table('rrhh_document_batches')->where('id',$id)->value('battery_snapshot'));
+        try {
+            app(RrhhDocumentDraftService::class)->create(['request_id'=>(string)Str::uuid(),'nombre'=>'Bloqueado','battery_id'=>$job,'seleccion'=>'todos'],7);
+            $this->fail('No se puede preparar con una base archivada');
+        } catch (ValidationException $e) { $this->assertArrayHasKey('composition',$e->errors()); }
+        $this->assertSame(1,DB::table('rrhh_document_batches')->count());
+    }
+
+    public function test_composition_rejects_cycles_scope_conflicts_and_missing_base(): void
+    {
+        $service=app(\App\Services\RrhhDocumentCompositionService::class);
+        $base=$this->compositionBattery('Base scope','base',['Comun.pdf'=>100],['empresa_id'=>1039]);
+        $child=$this->compositionBattery('Child scope','specific',['Extra.pdf'=>101],['empresa_id'=>1081],[$base]);
+        $result=$service->resolve(DB::table('rrhh_document_batteries')->find($child));
+        $this->assertStringContainsString('incompatibles',implode(' ',$result['errors']));
+        DB::table('rrhh_document_batteries')->where('id',$base)->update(['parent_ids'=>json_encode([$child])]);
+        $this->assertStringContainsString('ciclo',implode(' ',$service->resolve(DB::table('rrhh_document_batteries')->find($child))['errors']));
+        DB::table('rrhh_document_batteries')->where('id',$child)->update(['parent_ids'=>'[]']);
+        $this->assertStringContainsString('base obligatoria',implode(' ',$service->resolve(DB::table('rrhh_document_batteries')->find($child))['errors']));
+        DB::table('rrhh_document_batteries')->where('id',$base)->update(['parent_ids'=>'[]']);
+        DB::table('rrhh_document_batteries')->where('id',$child)->update(['parent_ids'=>json_encode([$base]),'reglas'=>'{}','documentos'=>'["Comun.pdf"]','document_details'=>'{"Comun.pdf":{"talana_id":999}}']);
+        $result=$service->resolve(DB::table('rrhh_document_batteries')->find($child));
+        $this->assertStringContainsString('distintas con el mismo nombre',implode(' ',$result['errors']));
+    }
+
+    public function test_inherited_only_battery_ui_activation_and_edit_protection(): void
+    {
+        $user=new class extends \App\Models\User {
+            public function tieneConsentimientoDatosVigente(): bool { return true; }
+            public function tieneAcceso(string $moduloSlug,string $accion='puede_ver'): bool { return true; }
+        };
+        $user->id=7; $user->setRelation('rol',new \App\Models\Rol);
+        $this->actingAs($user)->withoutVite();
+        $this->contract(1);
+        $base=$this->compositionBattery('Base interfaz','base',['Comun.pdf'=>150],['empresa_id'=>1039]);
+        $this->post(route('rrhh-documentos.battery'),['nombre'=>'Hereda sin extras','cargo_nombre'=>'Operario','version'=>1,'kind'=>'specific','parent_ids'=>[$base]])->assertRedirect();
+        $child=DB::table('rrhh_document_batteries')->where('nombre','Hereda sin extras')->first();
+        $this->assertNotNull($child);
+        $this->get(route('rrhh-documentos.battery-show',$child->id))->assertOk()->assertSee('Heredados')->assertSee('Comun.pdf')->assertSee('Ver documento en origen')->assertDontSee('La batería está vacía');
+        $this->get(route('rrhh-documentos.battery-final',$child->id))->assertOk()->assertDontSee('La batería está vacía');
+        $this->post(route('rrhh-documentos.battery-change',$child->id),['revision'=>1,'action'=>'remove','position'=>0])->assertStatus(422);
+        $this->post(route('rrhh-documentos.battery-activate',$child->id),['revision'=>1])->assertRedirect();
+        $this->assertDatabaseHas('rrhh_document_batteries',['id'=>$child->id,'estado'=>'ACTIVA']);
+        $this->post(route('rrhh-documentos.battery-clone',$child->id))->assertRedirect();
+        $new=DB::table('rrhh_document_batteries')->where('nombre',$child->nombre)->where('version',2)->first();
+        $this->assertSame($child->parent_ids,$new->parent_ids);
+        $this->assertSame('specific',$new->kind);
+        $this->post(route('rrhh-documentos.battery-change',$new->id),['revision'=>1,'action'=>'composition','kind'=>'specific','parent_ids'=>[$new->id]])->assertSessionHasErrors('composition');
+        Http::assertNothingSent();
+    }
+
+    public function test_draft_dependencies_can_be_prepared_but_not_activated_and_rebinding_requires_review(): void
+    {
+        $user=new class extends \App\Models\User {
+            public function tieneConsentimientoDatosVigente(): bool { return true; }
+            public function tieneAcceso(string $moduloSlug,string $accion='puede_ver'): bool { return true; }
+        };
+        $user->id=7; $user->setRelation('rol',new \App\Models\Rol);
+        $this->actingAs($user)->withoutVite();
+        $base=$this->compositionBattery('Base draft','base',['Comun.pdf'=>180],['empresa_id'=>1039],[],'BORRADOR');
+        $child=$this->compositionBattery('Cargo draft','specific',['Extra.pdf'=>181],['cargo_nombre'=>'Operario'],[$base],'BORRADOR');
+        $this->post(route('rrhh-documentos.battery-activate',$child),['revision'=>1])->assertSessionHasErrors('composition');
+        $this->assertDatabaseHas('rrhh_document_batteries',['id'=>$child,'estado'=>'BORRADOR']);
+        $this->post(route('rrhh-documentos.battery-activate',$base),['revision'=>1])->assertRedirect();
+        $this->post(route('rrhh-documentos.battery-change',$child),['revision'=>1,'action'=>'composition','kind'=>'specific','parent_ids'=>[$base]])->assertRedirect();
+        $record=DB::table('rrhh_document_batteries')->find($child);
+        $this->assertArrayNotHasKey('validated_at',json_decode($record->document_details,true)['Extra.pdf']);
+        $this->post(route('rrhh-documentos.battery-activate',$child),['revision'=>2])->assertSessionHasErrors('bateria');
+        $this->post(route('rrhh-documentos.battery-change',$child),['revision'=>1,'action'=>'composition','kind'=>'specific','parent_ids'=>[$base]])->assertSessionHasErrors('bateria');
+        Http::assertNothingSent();
     }
 }

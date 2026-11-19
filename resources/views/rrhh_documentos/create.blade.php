@@ -15,8 +15,9 @@
 <div class="fields"><label>Nombre de batería<input required name="nombre" maxlength="150" value="{{ old('nombre',$group ? 'EST · '.$group : '') }}" placeholder="Ej. Ingreso EST · IDL Macul"></label>
 @if(!$group)<label>Empresa<select name="empresa_id"><option value="">Todas</option>@foreach($companies as $company)<option value="{{ $company->empresa_id }}" @selected((string)old('empresa_id')===(string)$company->empresa_id)>{{ $company->empresa_nombre }}</option>@endforeach</select></label>@endif
 @foreach(['centro_costo_nombre'=>'Centro de costo','cargo_nombre'=>'Cargo','tipo_contrato_nombre'=>'Tipo de contrato'] as $field=>$label)<label>{{ $label }}<select name="{{ $field }}" @required($group && $field==='centro_costo_nombre')><option value="">{{ $group && $field==='centro_costo_nombre' ? 'Selecciona un centro EST' : 'Todos' }}</option>@foreach($options[$field] as $option)<option @selected(old($field)===$option)>{{ $option }}</option>@endforeach</select></label>@endforeach</div>
-<h3>Elige los documentos que debe incluir</h3>
-@include('rrhh_documentos.document-picker')
+@include('rrhh_documentos.composition-fields')
+<h3>Documentos propios de esta batería</h3><p class="muted">En una específica, agrega sólo los adicionales: la base se incorpora automáticamente. Puedes guardar sin adicionales si ya se heredan todos.</p>
+@include('rrhh_documentos.document-picker',['allowInheritedOnly'=>true])
 <div class="actions"><button class="cta">Crear borrador y abrir documentos</button><a href="{{ route('rrhh-documentos.index') }}">Cancelar</a></div>
 </form></section></div>
 @endsection
