@@ -19,5 +19,18 @@
 .doc-workspace .doc-inherited-list {max-height:360px;overflow:auto;}
 .doc-workspace .doc-counts>div {padding:12px;min-width:0;}
 .doc-workspace .doc-counts>div strong {display:block;font-size:1.35rem;}
+
+.doc-workspace .doc-validation-badge{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:4px 8px;margin:6px 0;border-radius:7px;font-size:12px;line-height:1.4;font-weight:600;border:1px solid transparent;white-space:normal}
+.doc-workspace .doc-validation-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:0 0 18px;border-radius:50%;font-size:14px;font-weight:800;background:currentColor}
+.doc-workspace .doc-validation-icon{background:transparent;border:1.5px solid currentColor}
+.doc-workspace .doc-validation-validados{color:#166534;background:#dcfce7;border-color:#86efac}
+.doc-workspace .doc-validation-observados{color:#9a3412;background:#fff7ed;border-color:#fdba74}
+.doc-workspace .doc-validation-por-revisar{color:#854d0e;background:#fef9c3;border-color:#fde047}
+.doc-workspace .doc-validation-sin-vincular{color:#475569;background:#f1f5f9;border-color:#cbd5e1}
+.doc-workspace .doc-list a>strong{display:block}
+.dark-mode .doc-workspace .doc-validation-validados{color:#bbf7d0;background:#14532d;border-color:#22c55e}
+.dark-mode .doc-workspace .doc-validation-observados{color:#fed7aa;background:#7c2d12;border-color:#fb923c}
+.dark-mode .doc-workspace .doc-validation-por-revisar{color:#fef08a;background:#713f12;border-color:#eab308}
+.dark-mode .doc-workspace .doc-validation-sin-vincular{color:#e2e8f0;background:#334155;border-color:#94a3b8}
 </style>
 @endpush

@@ -138,7 +138,7 @@ class RrhhDocumentDraftTest extends TestCase
         }
         $this->assertSame(2,DB::table('rrhh_document_batteries')->count());
         $draft=route('rrhh-documentos.battery-show',2);
-        $this->get($draft)->assertSee('PDF vinculado · pendiente de revisión');
+        $this->get($draft)->assertSee('Pendiente de validar');
         $this->post(route('rrhh-documentos.battery-change',2),['revision'=>1,'action'=>'remove','position'=>0])->assertRedirect($draft);
         $this->get($draft)->assertSee('La batería está vacía');
         $this->from($draft)->post(route('rrhh-documentos.battery-activate',2),['revision'=>2])->assertSessionHasErrors('bateria');

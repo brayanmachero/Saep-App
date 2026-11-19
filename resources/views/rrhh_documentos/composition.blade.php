@@ -8,7 +8,7 @@
 <details open><summary>Documentos heredados · se mantienen en su batería de origen</summary>
 <div class="doc-inherited-list">@foreach($composition['documents'] as $name)
 @php($origin=collect($composition['origins'][$name])->firstWhere('inherited',true))
-@if($origin)<article class="doc-reference-row"><div><strong>{{ $name }}</strong><p class="muted">{{ $origin['nombre'] }} · v{{ $origin['version'] }} · {{ empty($composition['details'][$name]['validated_at']) ? 'Pendiente de revisión en origen' : 'Validado en origen' }}</p></div><a class="cta secondary" href="{{ route('rrhh-documentos.battery-show',['battery'=>$origin['battery_id'],'documento'=>$origin['position']]) }}#review">Ver documento en origen</a></article>@endif
+@if($origin)<article class="doc-reference-row"><div><strong>{{ $name }}</strong><p class="muted">{{ $origin['nombre'] }} · v{{ $origin['version'] }}</p>@include('rrhh_documentos.document-status',['metadata'=>$composition['details'][$name] ?? []])</div><a class="cta secondary" href="{{ route('rrhh-documentos.battery-show',['battery'=>$origin['battery_id'],'documento'=>$origin['position']]) }}#review">Ver documento en origen</a></article>@endif
 @endforeach</div></details>
 @endif
 <p class="muted">Un mismo registro de Talana se incluye una sola vez. Los heredados no se pueden quitar desde esta batería. Cambiar la base exige revisar una nueva versión; los lotes anteriores mantienen su composición original.</p>

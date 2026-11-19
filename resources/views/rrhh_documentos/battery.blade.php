@@ -36,13 +36,14 @@ $pending=count($documents)-$validated;
 <section class="panel"><h3>Documentos propios de la batería</h3><p class="muted">Selecciona un archivo para revisarlo.</p>
 <form method="get"><label>Mostrar documentos<select name="filtro" onchange="this.form.submit()">@foreach(['todos'=>'Todos','sin-vincular'=>'Sin vincular','por-revisar'=>'Por revisar','observados'=>'Requieren corrección','validados'=>'Validados'] as $value=>$label)<option value="{{ $value }}" @selected($filter===$value)>{{ $label }}</option>@endforeach</select></label><noscript><button class="cta">Filtrar</button></noscript></form>
 <ul class="doc-list" aria-label="Documentos">
-@foreach($visibleDocuments as $position=>$name)<li><a href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'documento'=>$position,'filtro'=>$filter]) }}#review" aria-current="{{ $selectedPosition===$position ? 'true' : 'false' }}"><strong>{{ $name }}</strong><small>{{ ($details[$name]['observation']['state'] ?? null)==='open' ? 'Requiere corrección' : (!empty($details[$name]['validated_at']) ? 'Validado' : (!empty($details[$name]['talana_id']) ? 'PDF vinculado · pendiente de revisión' : 'Pendiente de vincular')) }}</small></a></li>@endforeach
+@foreach($visibleDocuments as $position=>$name)<li><a href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'documento'=>$position,'filtro'=>$filter]) }}#review" aria-current="{{ $selectedPosition===$position ? 'true' : 'false' }}"><strong>{{ $name }}</strong>@include('rrhh_documentos.document-status',['metadata'=>$details[$name] ?? []])</a></li>@endforeach
 </ul></section>
 <section class="panel" id="review">
 @if($selectedName !== null)
 <nav class="actions" aria-label="Recorrer documentos">@if($previous !== null)<a class="cta secondary" href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'documento'=>$previous,'filtro'=>$filter]) }}#review">Anterior</a>@endif
 @if($next !== null)<a class="cta secondary" href="{{ route('rrhh-documentos.battery-show',['battery'=>$record->id,'documento'=>$next,'filtro'=>$filter]) }}#review">Siguiente</a>@endif</nav>
 <h3 class="doc-review-title">{{ $selectedName }}</h3>
+@include('rrhh_documentos.document-status',['metadata'=>$selectedDetails])
 @if($editable && $canEdit)<button type="button" class="cta secondary" data-open-replace>{{ !empty($selectedDetails['talana_id']) ? 'Reemplazar documento' : 'Vincular a este requisito' }}</button>@endif
 @if(!empty($selectedDetails['source_reference']))<p class="doc-field-hint">Requisito de origen: {{ $selectedDetails['source_reference'] }}</p>@endif
 @if(!empty($selectedDetails['review_note']))<div class="note"><strong>Resultado de la conciliación</strong><p>{{ $selectedDetails['review_note'] }}</p>
