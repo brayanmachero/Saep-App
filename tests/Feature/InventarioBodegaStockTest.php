@@ -3386,6 +3386,7 @@ class InventarioBodegaStockTest extends TestCase
 
     public function test_epp_public_catalog_excludes_clothing_and_rejects_stale_form_items(): void
     {
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         foreach (['180000_create_solicitudes_epp', '190000_add_completion_to_solicitudes_epp', '210000_add_cambios_to_solicitudes_epp', '220000_create_epp_correos'] as $migration) {
             (require database_path('migrations/2026_11_12_'.$migration.'.php'))->up();
         }
@@ -3393,7 +3394,7 @@ class InventarioBodegaStockTest extends TestCase
         [, , , $variant] = $this->inventoryContextWithCentralStock(5);
         $center = InventarioCentroCosto::create(['nombre'=>'Centro prueba','nombre_normalizado'=>'centro prueba','activo'=>true]);
         $this->withSession(['epp.microsoft_identity'=>['name'=>'Solicitante','email'=>'solicitante@saep.cl']]);
-        foreach (['Polera RAC', 'Pantalón Cargo', 'Zapatos seguridad', 'Botín anticlavo', 'Micropolar azul', 'Parka RAC', 'Jardinera', 'Primera capa', 'Cuello polar', 'Gorro lana'] as $name) {
+        foreach (['Polera RAC', 'Pantalón Cargo', 'Zapatos seguridad', 'Botín anticlavo', 'Micropolar azul', 'Parka RAC', 'Jardinera', 'Primera capa', 'Cuello polar', 'Gorro lana', 'Chaleco Geólogo 360° Amarillo Fluor RAC', 'Chaleco Geologo Gabardina Canvas Doble Reflectante RAC'] as $name) {
             $variant->producto->update(['nombre'=>$name]);
             $this->get(route('epp.portal'))->assertOk()->assertDontSee($name);
             $this->post(route('epp.store'), ['folio'=>(string) \Illuminate\Support\Str::uuid(), 'centro_id'=>$center->id,
