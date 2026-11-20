@@ -30,7 +30,7 @@ class AuthController extends Controller
 
             $default = $this->defaultRedirect($user);
 
-            if ($user->tieneAcceso('entregas_bodega_dashboard') && ! $user->tieneAcceso('dashboard')) {
+            if ($default !== route('dashboard') && ! $user->tieneAcceso('dashboard')) {
                 return redirect()->to($default);
             }
 
@@ -52,8 +52,15 @@ class AuthController extends Controller
 
     private function defaultRedirect($user): string
     {
-        if ($user?->tieneAcceso('entregas_bodega_dashboard') && ! $user->tieneAcceso('dashboard')) {
-            return route('entregas-bodega-dashboard.index');
+        if ($user && !$user->tieneAcceso('dashboard')) {
+            foreach ([
+                'inventario_bodega' => 'inventario-bodega.index',
+                'solicitudes_epp' => 'inventario-bodega.epp.index',
+                'entregas_bodega_dashboard' => 'entregas-bodega-dashboard.index',
+                'gestion_vehiculos' => 'gestion-vehiculos.index',
+            ] as $module => $route) {
+                if ($user->tieneAcceso($module)) return route($route);
+            }
         }
 
         return route('dashboard');

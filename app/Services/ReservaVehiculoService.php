@@ -545,7 +545,7 @@ class ReservaVehiculoService
             ->where('activo', true)
             ->whereNotNull('email')
             ->whereHas('rol', fn ($query) => $query->whereIn('codigo', [
-                'BODEGA_ENTREGAS',
+                'BODEGA_JEFATURA', 'BODEGA_ENTREGAS',
                 'BODEGA_VEHICULOS',
             ]))
             ->get();

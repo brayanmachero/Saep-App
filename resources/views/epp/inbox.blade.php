@@ -31,7 +31,7 @@
             <header><img class="epp-brand" src="{{ asset('brand/wp/Logo_Saep.svg') }}" alt="SAEP"><h2 id="titulo-{{ $r->id }}">Pedido #{{ $r->id }}</h2><button type="button" data-close aria-label="Cerrar detalle">Cerrar ×</button></header>
             <div><div class="epp-order-summary"><strong>{{ $r->centro }}</strong><span>{{ $r->estado }}</span></div>
             <p>{{ $r->nombre }} · {{ $r->email }}<br>Mes solicitado {{ $r->mes }}</p>
-            @php($canManage = !$r->completada_en && auth()->user()->tieneAcceso('inventario_bodega','puede_editar'))
+            @php($canManage = !$r->completada_en && auth()->user()->tieneAcceso('solicitudes_epp','puede_editar'))
             @if($r->items)
                 <div class="epp-scroll"><table>
                     <caption>Disponibilidad actual en Sede Central SAEP</caption>
@@ -44,7 +44,7 @@
                                 <input class="epp-quantity" form="gestion-{{ $r->id }}" aria-label="Cantidad de {{ $item['nombre'] }} {{ $item['talla'] }}" type="number" min="1" max="99999" step="1" required name="cantidades[{{ $line }}]" value="{{ $item['cantidad'] }}">
                                 @else {{ $item['cantidad'] }} @endif</td><td>{{ $central ? $balance : '—' }}</td>
                             <td><span class="{{ $central && $balance >= $needed ? 'epp-ok' : 'epp-warn' }}">{{ !$central ? 'Sin ubicación activa' : ($balance >= $needed ? 'Disponible' : 'Faltan '.($needed - max(0, $balance))) }}</span></td></tr>
-                        @if(!isset($r->pending[$line]) && $central && !$r->completada_en && $balance < $needed && auth()->user()->tieneAcceso('inventario_bodega','puede_editar'))
+                        @if(!isset($r->pending[$line]) && $central && !$r->completada_en && $balance < $needed && auth()->user()->tieneAcceso('solicitudes_epp','puede_editar'))
                             <tr><td colspan="4">
                             @if(!empty($r->options[$line]))
                                 <form class="epp-replace" method="post" action="{{ route('inventario-bodega.epp.substitute', ['pedido'=>$r->id, 'mes'=>$filters['mes']]) }}">
@@ -87,7 +87,7 @@
                 </form>
             @endif
             @include('epp.timeline')
-            @if(!$r->pending && !$r->completada_en && auth()->user()->tieneAcceso('inventario_bodega','puede_editar'))
+            @if(!$r->pending && !$r->completada_en && auth()->user()->tieneAcceso('solicitudes_epp','puede_editar'))
                 <form method="post" action="{{ route('inventario-bodega.epp.complete', $r->id) }}">@csrf @method('PATCH')
                     <p>Completa la solicitud cuando hayas terminado su gestión. La salida de stock se registra en Inventario.</p>
                     <button class="epp-action">Marcar como completada</button>

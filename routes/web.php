@@ -536,14 +536,16 @@ Route::middleware('auth')->group(function () {
       });
 
       // --- BODEGA: INVENTARIO Y CONTEOS FISICOS ---
-      Route::middleware('modulo:inventario_bodega')->prefix('inventario-bodega')->name('inventario-bodega.')->group(function () {
+      Route::middleware('modulo:solicitudes_epp')->prefix('inventario-bodega')->name('inventario-bodega.')->group(function () {
         Route::get('solicitudes-epp', [SolicitudEppController::class, 'inbox'])->name('epp.index');
         Route::patch('solicitudes-epp/{pedido}/gestionar', [SolicitudEppController::class, 'manage'])
-            ->whereNumber('pedido')->middleware('modulo:inventario_bodega,puede_editar')->name('epp.manage');
+            ->whereNumber('pedido')->middleware('modulo:solicitudes_epp,puede_editar')->name('epp.manage');
         Route::patch('solicitudes-epp/{pedido}/reemplazar', [SolicitudEppController::class, 'substitute'])
-            ->whereNumber('pedido')->middleware('modulo:inventario_bodega,puede_editar')->name('epp.substitute');
+            ->whereNumber('pedido')->middleware('modulo:solicitudes_epp,puede_editar')->name('epp.substitute');
         Route::patch('solicitudes-epp/{pedido}/completar', [SolicitudEppController::class, 'complete'])
-            ->whereNumber('pedido')->middleware('modulo:inventario_bodega,puede_editar')->name('epp.complete');
+            ->whereNumber('pedido')->middleware('modulo:solicitudes_epp,puede_editar')->name('epp.complete');
+      });
+      Route::middleware('modulo:inventario_bodega')->prefix('inventario-bodega')->name('inventario-bodega.')->group(function () {
           Route::get('/', [InventarioBodegaController::class, 'index'])->name('index');
           Route::get('stock/{variante}/detalle', [InventarioBodegaController::class, 'stockDetail'])->name('stock.detalle');
           Route::get('exportar', [InventarioBodegaController::class, 'exportBalances'])->name('export');

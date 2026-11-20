@@ -3246,6 +3246,7 @@ class InventarioBodegaStockTest extends TestCase
         (require database_path('migrations/2026_11_12_190000_add_completion_to_solicitudes_epp.php'))->up();
         (require database_path('migrations/2026_11_12_210000_add_cambios_to_solicitudes_epp.php'))->up();
         (require database_path('migrations/2026_11_12_220000_create_epp_correos.php'))->up();
+        \App\Models\Modulo::firstOrCreate(['slug'=>'solicitudes_epp'], ['nombre'=>'Solicitudes EPP','activo'=>true]);
         $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-12 12:00'));
         [$manager, $origin, , $variant] = $this->inventoryContext();
         $origin->update(['codigo'=>'SAEP-CENTRAL']);
@@ -3295,6 +3296,7 @@ class InventarioBodegaStockTest extends TestCase
         foreach (['180000_create_solicitudes_epp', '190000_add_completion_to_solicitudes_epp', '210000_add_cambios_to_solicitudes_epp','220000_create_epp_correos'] as $migration) {
             (require database_path('migrations/2026_11_12_'.$migration.'.php'))->up();
         }
+        \App\Models\Modulo::firstOrCreate(['slug'=>'solicitudes_epp'], ['nombre'=>'Solicitudes EPP','activo'=>true]);
         [$manager, , , $available] = $this->inventoryContextWithCentralStock(5);
         $other = InventarioVariante::create(['producto_id'=>$available->producto_id,'codigo'=>'CASCO-L','talla'=>'L','activo'=>true]);
         $center = InventarioCentroCosto::create(['nombre'=>'Centro prueba','nombre_normalizado'=>'centro prueba','activo'=>true]);
@@ -3348,6 +3350,7 @@ class InventarioBodegaStockTest extends TestCase
         foreach (['180000_create_solicitudes_epp', '190000_add_completion_to_solicitudes_epp', '210000_add_cambios_to_solicitudes_epp', '220000_create_epp_correos'] as $migration) {
             (require database_path('migrations/2026_11_12_'.$migration.'.php'))->up();
         }
+        \App\Models\Modulo::firstOrCreate(['slug'=>'solicitudes_epp'], ['nombre'=>'Solicitudes EPP','activo'=>true]);
         [$manager, , , $available] = $this->inventoryContextWithCentralStock(5);
         $other = InventarioVariante::create(['producto_id'=>$available->producto_id,'codigo'=>'CASCO-OTRO','talla'=>'L','activo'=>true]);
         $center = InventarioCentroCosto::create(['nombre'=>'Centro prueba','nombre_normalizado'=>'centro prueba','activo'=>true]);
@@ -3386,6 +3389,7 @@ class InventarioBodegaStockTest extends TestCase
         foreach (['180000_create_solicitudes_epp', '190000_add_completion_to_solicitudes_epp', '210000_add_cambios_to_solicitudes_epp', '220000_create_epp_correos'] as $migration) {
             (require database_path('migrations/2026_11_12_'.$migration.'.php'))->up();
         }
+        \App\Models\Modulo::firstOrCreate(['slug'=>'solicitudes_epp'], ['nombre'=>'Solicitudes EPP','activo'=>true]);
         [, , , $variant] = $this->inventoryContextWithCentralStock(5);
         $center = InventarioCentroCosto::create(['nombre'=>'Centro prueba','nombre_normalizado'=>'centro prueba','activo'=>true]);
         $this->withSession(['epp.microsoft_identity'=>['name'=>'Solicitante','email'=>'solicitante@saep.cl']]);

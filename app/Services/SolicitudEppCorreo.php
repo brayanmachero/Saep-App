@@ -22,7 +22,7 @@ class SolicitudEppCorreo
                 $items[$change['linea']] = $change['nuevo'];
             }
         }
-        $team = User::where('activo', true)->whereHas('rol', fn ($q) => $q->whereIn('codigo', ['BODEGA_ENTREGAS', 'BODEGA_VEHICULOS']))
+        $team = User::where('activo', true)->whereHas('rol', fn ($q) => $q->whereIn('codigo', ['BODEGA_JEFATURA', 'BODEGA_ENTREGAS', 'BODEGA_VEHICULOS']))
             ->pluck('email')->prepend('bodega@saep.cl')->map(fn ($email) => strtolower(trim($email)))->filter()->unique()->values();
         $received = $evento === 'Solicitud recibida';
         $to = $received ? $team : collect([strtolower($order->email)]);
