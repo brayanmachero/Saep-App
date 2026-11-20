@@ -12,6 +12,12 @@ class SolicitudEppCorreo
         $order = DB::table('solicitudes_epp')->find($pedido);
         $items = json_decode($order->articulos, true);
         foreach (json_decode($order->cambios ?? '[]', true) as $change) {
+            if (($change['tipo'] ?? null) === 'gestion') {
+                foreach ($change['cantidades'] as $quantity) {
+                    $items[$quantity['linea']]['cantidad'] = $quantity['nueva'];
+                }
+                continue;
+            }
             if (($change['respuesta'] ?? 'aceptada') === 'aceptada') {
                 $items[$change['linea']] = $change['nuevo'];
             }

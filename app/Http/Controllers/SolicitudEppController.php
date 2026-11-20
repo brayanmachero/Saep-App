@@ -30,6 +30,15 @@ class SolicitudEppController extends Controller
         return InventarioVariante::with('producto')->where('activo', true)->whereHas('producto', fn ($q) => $q->where('activo', true));
     }
 
+    private function publicItem(InventarioVariante $variant): bool
+    {
+        $type = Str::lower(trim(Str::ascii($variant->producto->tipo ?? '')));
+        $category = Str::lower(trim(Str::ascii($variant->producto->categoria ?? '')));
+        if (in_array($type, ['uniforme', 'uniformes'], true) || $category === 'calzado') return false;
+        $name = Str::lower(Str::ascii($variant->producto->nombre));
+        return !preg_match('/\b(poleras?|pantalon(?:es)?|zapatos?|botin(?:es)?|micropolar(?:es)?|parkas?|jardineras?|primeras?\s+capas?|cuellos?|gorros?)\b/', $name);
+    }
+
     public function login(Request $request, ReservaVehiculoMicrosoftAuthService $auth)
     {
         if (! $auth->estaConfigurado()) {
@@ -50,7 +59,7 @@ class SolicitudEppController extends Controller
             return redirect()->route('epp.portal', ['pedido'=>$target])->withFragment('pedido-'.$target);
         }
         $centers = $identity ? InventarioCentroCosto::where('activo', true)->orderBy('nombre')->get(['id','nombre','codigo_origen']) : collect();
-        $catalog = $identity ? $this->variants()->get()->map(fn ($v) => $this->item($v))->sortBy('nombre')->values() : collect();
+        $catalog = $identity ? $this->variants()->get()->filter(fn ($v) => $this->publicItem($v))->map(fn ($v) => $this->item($v))->sortBy('nombre')->values() : collect();
         $history = $identity ? $this->orders()->where('email', $identity['email'])->latest('id')->limit(10)->get() : collect();
         if ($identity && $target && !$history->contains('id', $target)) {
             $requested = $this->orders()->where('email',$identity['email'])->find($target);
@@ -114,7 +123,7 @@ class SolicitudEppController extends Controller
             if ($existing) { abort_unless($existing->email === $identity['email'], 409); return $existing->id; }
             $ids = array_keys($quantities);
             if (array_filter($ids, fn ($id) => !ctype_digit((string)$id) || (int)$id < 1)) throw ValidationException::withMessages(['cantidades'=>'Selección de artículo inválida.'])->redirectTo(route('epp.portal'));
-            $variants = $this->variants()->whereKey($ids)->lockForUpdate()->get();
+            $variants = $this->variants()->whereKey($ids)->lockForUpdate()->get()->filter(fn ($v) => $this->publicItem($v));
             if ($variants->count() !== count($ids)) throw ValidationException::withMessages(['cantidades'=>'Un artículo ya no está disponible en el catálogo. Revisa el pedido.'])->redirectTo(route('epp.portal'));
             $items = $variants->map(fn ($v) => $this->item($v) + ['cantidad'=>(int)$quantities[$v->id]])->values();
             $id = DB::table('solicitudes_epp')->insertGetId(['folio'=>$data['folio'],'nombre'=>$identity['name'],'email'=>$identity['email'],'centro_id'=>$center->id,'centro'=>trim($center->codigo_origen.' '.$center->nombre),'mes'=>$data['mes'],'articulos'=>$items->toJson(),'insumos'=>$data['insumos'] ?? null,'created_at'=>now(),'updated_at'=>now()]);
@@ -195,6 +204,12 @@ class SolicitudEppController extends Controller
         $order->events = json_decode($order->cambios ?? '[]', true);
         $order->pending = [];
         foreach ($order->events as $event) {
+            if (($event['tipo'] ?? null) === 'gestion') {
+                foreach ($event['cantidades'] as $change) {
+                    $order->items[$change['linea']]['cantidad'] = $change['nueva'];
+                }
+                continue;
+            }
             $answer = $event['respuesta'] ?? 'aceptada';
             if ($answer === 'pendiente') {
                 $order->pending[$event['linea']] = $event;
@@ -238,6 +253,55 @@ class SolicitudEppController extends Controller
             }
         }
         return $options;
+    }
+
+    public function manage(Request $request, int $pedido)
+    {
+        $data = $request->validate([
+            'revision' => 'required|integer|min:0',
+            'cantidades' => 'nullable|array|max:200',
+            'cantidades.*' => 'required|integer|min:1|max:99999',
+            'observacion' => 'nullable|string|max:3000',
+        ], ['cantidades.*.integer' => 'La cantidad debe ser un número entero.',
+            'cantidades.*.min' => 'La cantidad mínima es 1.',
+            'cantidades.*.max' => 'La cantidad máxima es 99.999.',
+            'observacion.max' => 'La observación admite hasta 3.000 caracteres.']);
+        DB::transaction(function () use ($request, $pedido, $data) {
+            $query = DB::table('solicitudes_epp')->where('id', $pedido);
+            $order = (clone $query)->lockForUpdate()->first();
+            abort_unless($order, 404);
+            $this->prepareOrder($order);
+            if ($order->completada_en || count($order->events) !== (int) $data['revision']) {
+                throw ValidationException::withMessages(['pedido' => 'El pedido cambió. Reabre el detalle antes de guardar.']);
+            }
+            $items = $order->items;
+            $changes = [];
+            foreach ($data['cantidades'] ?? [] as $line => $quantity) {
+                if (!isset($items[$line])) {
+                    throw ValidationException::withMessages(['pedido' => 'El artículo ya no corresponde al pedido.']);
+                }
+                if ($items[$line]['cantidad'] != $quantity) {
+                    if ($order->pending) {
+                        throw ValidationException::withMessages(['pedido' => 'Espera la respuesta de los reemplazos antes de editar cantidades.']);
+                    }
+                    $changes[] = ['linea' => (int) $line, 'nombre' => $items[$line]['nombre'], 'talla' => $items[$line]['talla'],
+                        'anterior' => $items[$line]['cantidad'], 'nueva' => (int) $quantity];
+                    $items[$line]['cantidad'] = (int) $quantity;
+                }
+            }
+            $note = trim($data['observacion'] ?? '');
+            if (!$changes && $note === '') return;
+            $event = ['id' => (string) Str::uuid(), 'tipo' => 'gestion',
+                'cantidades' => $changes, 'observacion' => $note,
+                'usuario_id' => $request->user()->id, 'gestor' => $request->user()->name,
+                'fecha' => now()->toDateTimeString()];
+            $order->events[] = $event;
+            $query->update(['cambios' => json_encode($order->events, JSON_THROW_ON_ERROR), 'updated_at' => now()]);
+            SolicitudEppCorreo::registrar($pedido, 'Actualización de Bodega', $event);
+        });
+        return redirect()->route('inventario-bodega.epp.index', [
+            'mes' => $request->query('mes'), 'estado' => 'todas', 'pedido' => $pedido,
+        ])->with('epp_status', 'Cambios guardados. El solicitante recibirá la actualización por correo.');
     }
 
     public function substitute(Request $request, int $pedido)

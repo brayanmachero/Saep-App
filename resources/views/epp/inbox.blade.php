@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Solicitudes de EPP')
 @push('styles')
-<link rel="stylesheet" href="{{ asset('css/epp-inbox.css') }}?v=20261112g">
+<link rel="stylesheet" href="{{ asset('css/epp-inbox.css') }}?v=20261120">
 @endpush
 @section('content')
 <div class="epp-inbox">
@@ -31,6 +31,7 @@
             <header><img class="epp-brand" src="{{ asset('brand/wp/Logo_Saep.svg') }}" alt="SAEP"><h2 id="titulo-{{ $r->id }}">Pedido #{{ $r->id }}</h2><button type="button" data-close aria-label="Cerrar detalle">Cerrar ×</button></header>
             <div><div class="epp-order-summary"><strong>{{ $r->centro }}</strong><span>{{ $r->estado }}</span></div>
             <p>{{ $r->nombre }} · {{ $r->email }}<br>Mes solicitado {{ $r->mes }}</p>
+            @php($canManage = !$r->completada_en && auth()->user()->tieneAcceso('inventario_bodega','puede_editar'))
             @if($r->items)
                 <div class="epp-scroll"><table>
                     <caption>Disponibilidad actual en Sede Central SAEP</caption>
@@ -39,7 +40,9 @@
                         @php($balance = (float) $stock->get($item['id'], 0))
                         @php($needed = $r->demand[$item['id']])
                         <tr><td><strong>{{ $item['nombre'] }}</strong><small>{{ $item['talla'] }}</small></td>
-                            <td>{{ $item['cantidad'] }}</td><td>{{ $central ? $balance : '—' }}</td>
+                            <td>@if($canManage && !$r->pending)
+                                <input class="epp-quantity" form="gestion-{{ $r->id }}" aria-label="Cantidad de {{ $item['nombre'] }} {{ $item['talla'] }}" type="number" min="1" max="99999" step="1" required name="cantidades[{{ $line }}]" value="{{ $item['cantidad'] }}">
+                                @else {{ $item['cantidad'] }} @endif</td><td>{{ $central ? $balance : '—' }}</td>
                             <td><span class="{{ $central && $balance >= $needed ? 'epp-ok' : 'epp-warn' }}">{{ !$central ? 'Sin ubicación activa' : ($balance >= $needed ? 'Disponible' : 'Faltan '.($needed - max(0, $balance))) }}</span></td></tr>
                         @if(!isset($r->pending[$line]) && $central && !$r->completada_en && $balance < $needed && auth()->user()->tieneAcceso('inventario_bodega','puede_editar'))
                             <tr><td colspan="4">
@@ -72,6 +75,17 @@
                 </table></div>
             @endif
             @if($r->insumos)<p><strong>Insumos fuera del catálogo</strong> · {{ $r->insumos }}</p>@endif
+            @if($canManage)
+                <form id="gestion-{{ $r->id }}" class="epp-management" method="post" action="{{ route('inventario-bodega.epp.manage', ['pedido'=>$r->id, 'mes'=>$filters['mes']]) }}">
+                    @csrf @method('PATCH')
+                    <input type="hidden" name="revision" value="{{ count($r->events) }}">
+                    <label for="observacion-{{ $r->id }}">Observación de Bodega para el solicitante</label>
+                    <textarea id="observacion-{{ $r->id }}" name="observacion" rows="3" maxlength="3000" placeholder="Indica los ajustes o instrucciones para este pedido."></textarea>
+                    <p>Los cambios y la observación se guardarán en el historial y se enviarán por correo al solicitante.</p>
+                    @if($r->pending)<p>Las cantidades se podrán editar cuando se respondan los reemplazos pendientes.</p>@endif
+                    <button class="epp-action">Guardar cantidades y observación</button>
+                </form>
+            @endif
             @include('epp.timeline')
             @if(!$r->pending && !$r->completada_en && auth()->user()->tieneAcceso('inventario_bodega','puede_editar'))
                 <form method="post" action="{{ route('inventario-bodega.epp.complete', $r->id) }}">@csrf @method('PATCH')
@@ -86,5 +100,5 @@
     @endforelse
     {{ $requests->links() }}
 </div>
-<script defer src="{{ asset('js/epp-inbox.js') }}?v=20261112g"></script>
+<script defer src="{{ asset('js/epp-inbox.js') }}?v=20261120"></script>
 @endsection

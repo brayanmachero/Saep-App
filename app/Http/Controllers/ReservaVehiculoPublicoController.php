@@ -362,7 +362,7 @@ class ReservaVehiculoPublicoController extends Controller
         $detalle = trim((string) ($data['motivo_detalle'] ?? ''));
 
         $data['destino'] = $destino !== '' ? $destino : null;
-        $data['motivo'] = $motivo->nombre.($detalle !== '' ? ' â€” '.$detalle : '');
+        $data['motivo'] = $motivo->nombre.($detalle !== '' ? ' — '.$detalle : '');
 
         return $data;
     }

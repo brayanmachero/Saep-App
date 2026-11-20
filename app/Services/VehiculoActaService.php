@@ -143,7 +143,11 @@ class VehiculoActaService
                         $this->error('El vehículo no está habilitado para entrega.');
                     }
                     $ocupado = ReservaVehiculo::where('vehiculo_id', $vehiculo->id)->whereKeyNot($reserva->id)
-                        ->whereNotNull('entregada_at')->whereNull('devuelta_at')->whereIn('estado', ['EN_USO', 'VENCIDA'])->exists();
+                        ->whereNotNull('entregada_at')->whereNull('devuelta_at')->whereIn('estado', ['EN_USO', 'VENCIDA'])
+                        // El cierre documental de días anteriores no bloquea la operación diaria.
+                        // Las reservas del mismo día o de varios días siguen ocupando el vehículo.
+                        ->where(fn ($q) => $q->where('termino', '>=', now()->startOfDay())
+                            ->orWhere('entregada_at', '>=', now()->startOfDay()))->exists();
                     if ($ocupado) $this->error('El vehículo aún está en custodia de otro conductor. Registra primero su devolución.');
                 }
                 $firma = $this->firma($data['firma_conductor'], 'firma_conductor');

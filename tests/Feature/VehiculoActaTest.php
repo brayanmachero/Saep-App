@@ -275,6 +275,28 @@ class VehiculoActaTest extends TestCase
         $this->assertSame('CONFIRMADA', $this->reserva->fresh()->estado);
     }
 
+    public function test_previous_day_pending_return_does_not_block_delivery_and_keeps_history(): void
+    {
+        $acta = $this->prepare();
+        $previous = ReservaVehiculo::create(['codigo'=>'RV-YESTERDAY','vehiculo_id'=>$this->reserva->vehiculo_id,
+            'solicitante_nombre'=>'Otro','solicitante_email'=>'otro@example.test','inicio'=>now()->subDay()->startOfDay()->addHours(9),
+            'termino'=>now()->subDay()->endOfDay(),'motivo'=>'Anterior','estado'=>'VENCIDA','entregada_at'=>now()->subDay()->startOfDay()->addHours(9)]);
+        $this->sign($acta)->assertSessionHasNoErrors();
+        $this->assertSame('EN_USO',$this->reserva->fresh()->estado);
+        $this->assertSame('VENCIDA',$previous->fresh()->estado);
+        $this->assertNull($previous->fresh()->devuelta_at);
+    }
+
+    public function test_week_long_custody_still_blocks_delivery(): void
+    {
+        $acta = $this->prepare();
+        ReservaVehiculo::create(['codigo'=>'RV-WEEK','vehiculo_id'=>$this->reserva->vehiculo_id,
+            'solicitante_nombre'=>'Otro','solicitante_email'=>'otro@example.test','inicio'=>now()->subDays(2),
+            'termino'=>now()->addDays(3),'motivo'=>'Semana','estado'=>'EN_USO','entregada_at'=>now()->subDays(2)]);
+        $this->sign($acta)->assertSessionHasErrors('acta');
+        $this->assertSame('CONFIRMADA',$this->reserva->fresh()->estado);
+    }
+
     public function test_email_is_idempotent_and_copies_bodega_when_explicitly_enabled(): void
     {
         $acta = $this->prepare(); $this->sign($acta); $acta->refresh();

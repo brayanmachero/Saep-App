@@ -3343,6 +3343,64 @@ class InventarioBodegaStockTest extends TestCase
         $this->get(route('epp.portal'))->assertOk()->assertSee('Completada');
     }
 
+    public function test_epp_management_preserves_originals_notifies_and_rejects_stale_updates(): void
+    {
+        foreach (['180000_create_solicitudes_epp', '190000_add_completion_to_solicitudes_epp', '210000_add_cambios_to_solicitudes_epp', '220000_create_epp_correos'] as $migration) {
+            (require database_path('migrations/2026_11_12_'.$migration.'.php'))->up();
+        }
+        [$manager, , , $available] = $this->inventoryContextWithCentralStock(5);
+        $other = InventarioVariante::create(['producto_id'=>$available->producto_id,'codigo'=>'CASCO-OTRO','talla'=>'L','activo'=>true]);
+        $center = InventarioCentroCosto::create(['nombre'=>'Centro prueba','nombre_normalizado'=>'centro prueba','activo'=>true]);
+        $this->withSession(['epp.microsoft_identity'=>['name'=>'Solicitante','email'=>'solicitante@saep.cl']]);
+        $this->post(route('epp.store'), ['folio'=>(string) \Illuminate\Support\Str::uuid(), 'centro_id'=>$center->id,
+            'mes'=>now()->format('Y-m'), 'cantidades'=>[$other->id=>3]])->assertSessionHasNoErrors();
+        $url = route('inventario-bodega.epp.manage',1);
+        $this->patch($url,['revision'=>0])->assertRedirect();
+        $this->withoutMiddleware(VerificarConsentimientoDatos::class)->actingAs($manager);
+        $this->patch($url,['revision'=>0,'cantidades'=>[0=>0]])->assertSessionHasErrors('cantidades.0');
+        $this->patch($url,['revision'=>0,'cantidades'=>[0=>2],'observacion'=>'Se ajusta a dos unidades.'])->assertSessionHasNoErrors();
+        $this->assertSame(3,json_decode(DB::table('solicitudes_epp')->value('articulos'),true)[0]['cantidad']);
+        $this->get(route('epp.portal'))->assertOk()->assertSee('Se ajusta a dos unidades.')->assertSee('Actualización de Bodega');
+        $this->get(route('inventario-bodega.epp.index',['estado'=>'gestion','pedido'=>1]))->assertOk()->assertSee('value="2"',false);
+        $this->patch($url,['revision'=>0,'cantidades'=>[0=>4]])->assertSessionHasErrors('pedido');
+        $this->assertDatabaseCount('epp_correos',2);
+        $message = json_decode(DB::table('epp_correos')->latest('id')->value('mensaje'),true);
+        $this->assertContains('solicitante@saep.cl',$message['to']);
+        $this->assertContains('bmachero@saep.cl',$message['cc']);
+        $this->assertStringContainsString('Se ajusta a dos unidades.',$message['html']);
+        $this->patch(route('inventario-bodega.epp.substitute',1),['linea'=>0,'actual'=>$other->id,'reemplazo'=>$available->id])->assertSessionHasNoErrors();
+        $events = json_decode(DB::table('solicitudes_epp')->value('cambios'),true);
+        $this->patch($url,['revision'=>2,'cantidades'=>[0=>4]])->assertSessionHasErrors('pedido');
+        $this->patch($url,['revision'=>2,'observacion'=>'Esperamos tu respuesta.'])->assertSessionHasNoErrors();
+        $this->post(route('epp.respond',[1,$events[1]['id']]),['respuesta'=>'aceptada'])->assertSessionHasNoErrors();
+        $this->patch(route('inventario-bodega.epp.complete',1))->assertSessionHasNoErrors();
+        $this->patch($url,['revision'=>3,'observacion'=>'No permitido'])->assertSessionHasErrors('pedido');
+        $message = json_decode(DB::table('epp_correos')->latest('id')->value('mensaje'),true);
+        $this->assertStringContainsString('2 × '.$available->producto->nombre, $message['html']);
+        $this->get(route('epp.portal'))->assertOk()->assertSee('Completada')->assertSee('Esperamos tu respuesta.');
+        $this->assertDatabaseCount('inventario_movimientos',1);
+    }
+
+    public function test_epp_public_catalog_excludes_clothing_and_rejects_stale_form_items(): void
+    {
+        foreach (['180000_create_solicitudes_epp', '190000_add_completion_to_solicitudes_epp', '210000_add_cambios_to_solicitudes_epp', '220000_create_epp_correos'] as $migration) {
+            (require database_path('migrations/2026_11_12_'.$migration.'.php'))->up();
+        }
+        [, , , $variant] = $this->inventoryContextWithCentralStock(5);
+        $center = InventarioCentroCosto::create(['nombre'=>'Centro prueba','nombre_normalizado'=>'centro prueba','activo'=>true]);
+        $this->withSession(['epp.microsoft_identity'=>['name'=>'Solicitante','email'=>'solicitante@saep.cl']]);
+        foreach (['Polera RAC', 'Pantalón Cargo', 'Zapatos seguridad', 'Botín anticlavo', 'Micropolar azul', 'Parka RAC', 'Jardinera', 'Primera capa', 'Cuello polar', 'Gorro lana'] as $name) {
+            $variant->producto->update(['nombre'=>$name]);
+            $this->get(route('epp.portal'))->assertOk()->assertDontSee($name);
+            $this->post(route('epp.store'), ['folio'=>(string) \Illuminate\Support\Str::uuid(), 'centro_id'=>$center->id,
+                'mes'=>now()->format('Y-m'), 'cantidades'=>[$variant->id=>1]])->assertSessionHasErrors('cantidades');
+        }
+        $variant->producto->update(['nombre'=>'Guante protección']);
+        $this->post(route('epp.store'), ['folio'=>(string) \Illuminate\Support\Str::uuid(), 'centro_id'=>$center->id,
+            'mes'=>now()->format('Y-m'), 'cantidades'=>[$variant->id=>1]])->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('solicitudes_epp',1);
+    }
+
     private function inventoryContext(): array
     {
         $role = Rol::create(['codigo' => 'SUPER_ADMIN', 'nombre' => 'Super Admin']);

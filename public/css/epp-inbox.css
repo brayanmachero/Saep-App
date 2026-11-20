@@ -118,3 +118,11 @@
     .epp-replace .epp-action { width:100%; }
 }
 .epp-replace .epp-action:disabled { opacity:.55; cursor:default; }
+
+.epp-panel .epp-quantity { width: 90px; min-width: 70px; padding: 10px; border: 1px solid #b6c2d8; border-radius: 8px; color: #172441; background: white; font: inherit; }
+.epp-management { display: grid; gap: 12px; padding: 18px; margin: 20px 0; border: 1px solid #dbe0e8; border-left: 4px solid #ff7a41; border-radius: 10px; background: #f7f9fc; }
+.epp-management label { font-weight: 700; }
+.epp-management textarea { box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid #b6c2d8; border-radius: 8px; background: white; color: #172441; font: inherit; resize: vertical; }
+.epp-management p { margin: 0; color: #54627a; font-size: .9rem; }
+.epp-management button { justify-self: start; }
+.epp-management textarea:focus-visible, .epp-quantity:focus-visible { outline: 2px solid #6550a8; outline-offset: 2px; }

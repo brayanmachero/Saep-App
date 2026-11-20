@@ -48,6 +48,27 @@ class ReservaVehiculoTest extends TestCase
         parent::tearDown();
     }
 
+    public function test_previous_unreturned_booking_allows_next_day_but_not_week_overlap(): void
+    {
+        $vehicle = Vehiculo::create(['patente'=>'NEXT-DAY','estado'=>'DISPONIBLE','reservas_habilitadas'=>true]);
+        $previous = \App\Models\ReservaVehiculo::create(['codigo'=>'RV-PREVIOUS','vehiculo_id'=>$vehicle->id,
+            'solicitante_nombre'=>'Anterior','solicitante_email'=>'anterior@saep.cl',
+            'inicio'=>'2026-07-31 09:00:00','termino'=>'2026-07-31 18:00:00',
+            'estado'=>'VENCIDA','entregada_at'=>'2026-07-31 09:00:00','motivo'=>'Anterior']);
+        $service = app(ReservaVehiculoService::class);
+        $start = Carbon::parse('2026-08-02 09:00:00'); $end = $start->copy()->addHours(3);
+        $this->assertTrue($service->vehiculosDisponibles($start,$end)->contains('id',$vehicle->id));
+        $next = $service->crearReserva(['vehiculo_id'=>$vehicle->id,'inicio'=>$start,'termino'=>$end,'motivo'=>'Nuevo día'],
+            ['oid'=>'next-day-test','email'=>'nuevo@saep.cl','name'=>'Nuevo']);
+        $this->assertSame('CONFIRMADA',$next->estado);
+        $this->assertNull($previous->fresh()->devuelta_at);
+        $previous->update(['termino'=>'2026-08-07 18:00:00','estado'=>'EN_USO']);
+        $this->assertFalse($service->vehiculosDisponibles($end->copy()->addDay(),$end->copy()->addDay()->addHour())->contains('id',$vehicle->id));
+        $this->expectException(ValidationException::class);
+        $service->crearReserva(['vehiculo_id'=>$vehicle->id,'inicio'=>'2026-08-03 09:00:00','termino'=>'2026-08-03 12:00:00','motivo'=>'Cruce semanal'],
+            ['oid'=>'next-day-test','email'=>'nuevo@saep.cl','name'=>'Nuevo']);
+    }
+
     public function test_vehicle_requires_a_one_hour_operational_margin_between_reservations(): void
     {
         $vehiculo = Vehiculo::create([
