@@ -36,7 +36,7 @@ class SolicitudEppController extends Controller
         $category = Str::lower(trim(Str::ascii($variant->producto->categoria ?? '')));
         if (in_array($type, ['uniforme', 'uniformes'], true) || $category === 'calzado') return false;
         $name = Str::lower(Str::ascii($variant->producto->nombre));
-        return !preg_match('/\b(poleras?|pantalon(?:es)?|zapatos?|botin(?:es)?|micropolar(?:es)?|parkas?|jardineras?|primeras?\s+capas?|cuellos?|gorros?|chalecos?\s+geologos?)\b/', $name);
+        return !preg_match('/\b(poleras?|pantalon(?:es)?|zapatos?|botin(?:es)?|micropolar(?:es)?|parkas?|jardineras?|primeras?\s+capas?|cuellos?|gorros?|geologos?|chalecos?\s+citylux)\b/', $name);
     }
 
     public function login(Request $request, ReservaVehiculoMicrosoftAuthService $auth)

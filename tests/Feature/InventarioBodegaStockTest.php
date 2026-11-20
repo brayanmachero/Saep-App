@@ -3394,7 +3394,7 @@ class InventarioBodegaStockTest extends TestCase
         [, , , $variant] = $this->inventoryContextWithCentralStock(5);
         $center = InventarioCentroCosto::create(['nombre'=>'Centro prueba','nombre_normalizado'=>'centro prueba','activo'=>true]);
         $this->withSession(['epp.microsoft_identity'=>['name'=>'Solicitante','email'=>'solicitante@saep.cl']]);
-        foreach (['Polera RAC', 'Pantalón Cargo', 'Zapatos seguridad', 'Botín anticlavo', 'Micropolar azul', 'Parka RAC', 'Jardinera', 'Primera capa', 'Cuello polar', 'Gorro lana', 'Chaleco Geólogo 360° Amarillo Fluor RAC', 'Chaleco Geologo Gabardina Canvas Doble Reflectante RAC'] as $name) {
+        foreach (['Polera RAC', 'Pantalón Cargo', 'Zapatos seguridad', 'Botín anticlavo', 'Micropolar azul', 'Parka RAC', 'Jardinera', 'Primera capa', 'Cuello polar', 'Gorro lana', 'Chaleco Geólogo 360° Amarillo Fluor RAC', 'Chaleco Geologo Gabardina Canvas Doble Reflectante RAC', 'Chaleco Citylux Amarillo URZKEN', 'Chaleco Citylux Naranja URZKEN', 'Geologo CoverWork Engineer Amarillo - Supervisor Saep RAC'] as $name) {
             $variant->producto->update(['nombre'=>$name]);
             $this->get(route('epp.portal'))->assertOk()->assertDontSee($name);
             $this->post(route('epp.store'), ['folio'=>(string) \Illuminate\Support\Str::uuid(), 'centro_id'=>$center->id,
