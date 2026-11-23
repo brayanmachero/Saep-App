@@ -7,7 +7,8 @@ foreach ((array)old('documentos',[]) as $token) {
     } catch (\Throwable $e) {}
 }
 @endphp
-<div class="document-picker" data-allow-inherited="{{ !empty($allowInheritedOnly) ? '1' : '0' }}" data-url="{{ route('rrhh-documentos.document-options') }}">
+<div class="document-picker" data-company="{{ $documentCompanyId ?? '' }}" data-allow-inherited="{{ !empty($allowInheritedOnly) ? '1' : '0' }}" data-url="{{ route('rrhh-documentos.document-options') }}">
+<p class="muted">La búsqueda utiliza la empresa de esta batería. Al cambiarla se limpia la selección.</p>
 <label>Buscar documento en Talana <input type="search" class="document-query" maxlength="255" value="{{ $initialSearch ?? '' }}" placeholder="Escribe al menos dos caracteres"></label>
 <label>Orden en cada página<select class="document-order"><option value="recent">Más recientes</option><option value="oldest">Más antiguos</option><option value="name">Nombre A–Z</option></select></label>
 <button type="button" class="cta document-search">Buscar documentos</button>
@@ -36,7 +37,11 @@ foreach ((array)old('documentos',[]) as $token) {
 <script>
 document.querySelectorAll('.document-picker').forEach(root => {
     const query=root.querySelector('.document-query'), status=root.querySelector('.document-status'), results=root.querySelector('.document-results'), selected=root.querySelector('.document-selected'), next=root.querySelector('.document-next'), search=root.querySelector('.document-search');
+    const companyField=root.closest('form').querySelector('[name="empresa_id"]');
+    const company=()=>companyField?.value || root.dataset.company;
     const selections=new Map();
+    let generation=0;
+    companyField?.addEventListener('change',()=>{generation++;selections.clear();selected.replaceChildren();results.replaceChildren();next.hidden=true;status.textContent='Empresa cambiada. Busca y selecciona sus documentos.';});
     let page=1, term='', busy=false, order='recent';
     function add(option) {
         if(selections.has(option.name)) { status.textContent='Este documento ya está seleccionado.'; return; }
@@ -52,13 +57,16 @@ document.querySelectorAll('.document-picker').forEach(root => {
     JSON.parse(root.querySelector('.document-initial').textContent).forEach(add);
     async function load(append) {
         if(busy)return;
+        if(!company()){status.textContent='Selecciona la empresa de la batería antes de buscar documentos.';return;}
+        const requestGeneration=generation;
         if(!append){order=root.querySelector('.document-order').value;term=query.value.trim();page=1;if(term.length<2){status.textContent='Escribe al menos dos caracteres.';return;}results.replaceChildren();next.hidden=true;}
         busy=true;search.disabled=true;next.disabled=true;status.textContent='Consultando Talana…';
         try {
-            const url=new URL(root.dataset.url,location.origin);url.searchParams.set('q',term);url.searchParams.set('page',page);url.searchParams.set('order',order);
+            const url=new URL(root.dataset.url,location.origin);url.searchParams.set('empresa_id',company());url.searchParams.set('q',term);url.searchParams.set('page',page);url.searchParams.set('order',order);
             const response=await fetch(url,{headers:{Accept:'application/json'},credentials:'same-origin'});
             if(!response.ok)throw Error(response.status===401?'Tu sesión terminó. Vuelve a ingresar.':'No se pudo consultar Talana. Intenta nuevamente.');
             const data=await response.json();
+            if(requestGeneration!==generation)return;
             for(const option of data.options){
                 const row=document.createElement('div'),title=document.createElement('span'),button=document.createElement('button');
                 row.className='document-result';title.textContent=option.name;

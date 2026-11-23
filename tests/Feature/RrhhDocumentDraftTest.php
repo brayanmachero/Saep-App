@@ -52,6 +52,36 @@ class RrhhDocumentDraftTest extends TestCase
         DB::table('rrhh_document_batteries')->insert(['id' => 1, 'estado'=>'ACTIVA', 'nombre' => 'Prueba', 'version' => 1, 'documentos' => '["Contrato","Anexo"]', 'reglas' => '{}', 'created_by' => 1, 'created_at' => now(), 'updated_at' => now()]);
     }
 
+    public function test_document_company_is_required_signed_and_preserved_for_preview(): void
+    {
+        $user = new class extends \App\Models\User {
+            public function tieneConsentimientoDatosVigente(): bool { return true; }
+            public function tieneAcceso(string $moduloSlug, string $accion = 'puede_ver'): bool { return true; }
+        };
+        $user->id=7; $user->setRelation('rol', new \App\Models\Rol);
+        $this->actingAs($user)->withoutVite();
+        $this->contract(1); $this->contract(2,['empresa_id'=>1081,'empresa_nombre'=>'SAEP EST']);
+        config(['services.talana_documents.token'=>'test']);
+        Http::fake(['*/documentos/*'=>fn($r)=>str_contains($r->url(),'/500/') ? Http::response(['nombre'=>'010-DERECHO A SABER EST.pdf','adjunto'=>'https://talana.com/test-company.pdf']) : Http::response(['results'=>[['id'=>500,'nombre'=>'010-DERECHO A SABER EST.pdf']],'next'=>null]), 'https://talana.com/test-company.pdf'=>Http::response('%PDF-1.4 test')]);
+        $url=route('rrhh-documentos.document-options');
+        $this->getJson($url.'?q=DERECHO')->assertUnprocessable();
+        Http::assertNothingSent();
+        $option=$this->getJson($url.'?q=DERECHO&empresa_id=1081')->assertOk()->json('options.0');
+        Http::assertSent(fn($r)=>$r['empresa']===1081);
+        $service=app(\App\Services\RrhhDocumentBatteryService::class);
+        $details=$service->selections([$option['value']],7);
+        $this->assertSame(1081,$details[$option['name']]['empresa_id']);
+        $this->post(route('rrhh-documentos.battery'),['nombre'=>'EST correcta','version'=>1,'empresa_id'=>1039,'documentos'=>[$option['value']]])->assertSessionHasErrors('empresa_id');
+        $this->post(route('rrhh-documentos.battery'),['nombre'=>'EST correcta','version'=>1,'empresa_id'=>1081,'documentos'=>[$option['value']]])->assertRedirect(route('rrhh-documentos.battery-show',2));
+        Http::fake(['*/documentos/500/?*'=>Http::response(['nombre'=>$option['name'],'adjunto'=>'https://talana.com/test-company.pdf']), 'https://talana.com/test-company.pdf'=>Http::response('%PDF-1.4 test')]);
+        $this->get(route('rrhh-documentos.battery-pdf',[2,0]))->assertOk();
+        Http::assertSent(fn($r)=>str_contains($r->url(),'documentos/500/') && $r['empresa']==1081);
+        $this->post(route('rrhh-documentos.battery-validate',[2,0]),['revision'=>1,'confirmed'=>1])->assertSessionDoesntHaveErrors();
+        DB::table('rrhh_document_batteries')->where('id',2)->update(['reglas'=>'{"empresa_id":1039}']);
+        $composition=app(\App\Services\RrhhDocumentCompositionService::class)->resolve(DB::table('rrhh_document_batteries')->find(2));
+        $this->assertNotEmpty($composition['pending']);
+    }
+
     private function contract(int $n, array $extra = []): TalanaContrato
     {
         return TalanaContrato::create(array_merge(['talana_id' => $n, 'persona_talana_id' => $n, 'empresa_id' => 1039, 'empresa_nombre' => 'SAEP SUB', 'persona_nombre' => 'Persona '.$n, 'persona_rut' => '12345678-9', 'cargo_nombre' => 'Operario', 'centro_costo_nombre' => 'CCU', 'tipo_contrato_nombre' => 'Indefinido', 'finiquitado' => false, 'desde' => today()->subMonth(), 'synced_at' => now()], $extra));
@@ -80,7 +110,7 @@ class RrhhDocumentDraftTest extends TestCase
         $this->get(route('rrhh-documentos.index'))->assertOk()->assertSee('Prueba')->assertSee('Activas');
         $this->get(route('rrhh-documentos.index',['estado'=>'BORRADOR']))->assertOk()->assertDontSee('Ver batería y documentos');
         $this->get(route('rrhh-documentos.lots'))->assertOk()->assertSee('Lotes de trabajadores');
-        $options = $this->getJson(route('rrhh-documentos.document-options',['q'=>'Ejemplo']))->assertOk()->json('options');
+        $options = $this->getJson(route('rrhh-documentos.document-options',['q'=>'Ejemplo','empresa_id'=>1081]))->assertOk()->json('options');
         $post = ['nombre'=>'QA IDL', 'centro_costo_nombre'=>'CCU', 'documentos'=>[$options[0]['value']], 'version'=>1,'origen_est'=>1];
         $this->from($url)->post(route('rrhh-documentos.battery'),$post)->assertRedirect(route('rrhh-documentos.battery-show',2));
         $tampered = $post;
@@ -105,7 +135,7 @@ class RrhhDocumentDraftTest extends TestCase
         $this->contract(1);
         config(['services.talana_documents.token'=>'test']);
         DB::table('rrhh_document_batteries')->where('id',1)->update([
-            'estado'=>'BORRADOR','documentos'=>'["Contrato"]','document_details'=>'{"Contrato":{"talana_id":123}}',
+            'reglas'=>'{"empresa_id":1039}', 'estado'=>'BORRADOR','documentos'=>'["Contrato"]','document_details'=>'{"Contrato":{"talana_id":123}}',
         ]);
         $detail=route('rrhh-documentos.battery-show',1);
         DB::table('rrhh_document_batteries')->where('id',1)->update(['documentos'=>'["Contrato","Anexo"]','document_details'=>'{"Contrato":{"talana_id":123,"validated_at":"2026-11-16 10:00:00","validated_by":7}}']);
@@ -123,7 +153,7 @@ class RrhhDocumentDraftTest extends TestCase
         $this->from($detail)->post(route('rrhh-documentos.battery-activate',1),['revision'=>1])->assertSessionHasErrors('bateria');
         $validate=route('rrhh-documentos.battery-validate',[1,0]);
         $this->from($detail)->post($validate,['revision'=>1,'confirmed'=>1])->assertSessionHasErrors('documento');
-        Http::fake(['https://talana.com/es/remuneraciones/download-document/test'=>fn()=>Http::response('%PDF-1.4 example'), '*/documentos/123/'=>Http::response(['nombre'=>'Contrato','adjunto'=>'https://talana.com/es/remuneraciones/download-document/test'])]);
+        Http::fake(['https://talana.com/es/remuneraciones/download-document/test'=>fn()=>Http::response('%PDF-1.4 example'), '*/documentos/123/?*'=>Http::response(['nombre'=>'Contrato','adjunto'=>'https://talana.com/es/remuneraciones/download-document/test'])]);
         $this->get(route('rrhh-documentos.battery-preview',[1,0]))->assertOk()->assertSee('Validar documento');
         $this->get(route('rrhh-documentos.battery-pdf',[1,0]))->assertOk()->assertHeader('Content-Type','application/pdf');
         $this->post($validate,['revision'=>1,'confirmed'=>1])->assertRedirect($detail);
@@ -142,7 +172,7 @@ class RrhhDocumentDraftTest extends TestCase
         $this->post(route('rrhh-documentos.battery-change',2),['revision'=>1,'action'=>'remove','position'=>0])->assertRedirect($draft);
         $this->get($draft)->assertSee('La batería está vacía');
         $this->from($draft)->post(route('rrhh-documentos.battery-activate',2),['revision'=>2])->assertSessionHasErrors('bateria');
-        $token=\Illuminate\Support\Facades\Crypt::encryptString(json_encode(['user'=>7,'name'=>'Contrato','id'=>123]));
+        $token=\Illuminate\Support\Facades\Crypt::encryptString(json_encode(['user'=>7,'empresa_id'=>1039,'name'=>'Contrato','id'=>123]));
         $this->post(route('rrhh-documentos.battery-change',2),['revision'=>2,'action'=>'add','documentos'=>[$token]])->assertRedirect($draft);
         $this->from($draft)->post(route('rrhh-documentos.battery-change',2),['revision'=>2,'action'=>'remove','position'=>0])->assertSessionHasErrors('bateria');
         $this->get(route('rrhh-documentos.battery-preview',[2,0]))->assertOk();
@@ -163,7 +193,7 @@ class RrhhDocumentDraftTest extends TestCase
         };
         $user->id=7; $user->setRelation('rol',new \App\Models\Rol);
         $this->actingAs($user)->withoutVite();
-        DB::table('rrhh_document_batteries')->where('id',1)->update(['estado'=>'BORRADOR','documentos'=>'["Contrato","Anexo","IRL requerido"]','document_details'=>json_encode([
+        DB::table('rrhh_document_batteries')->where('id',1)->update(['reglas'=>'{"empresa_id":1039}','estado'=>'BORRADOR','documentos'=>'["Contrato","Anexo","IRL requerido"]','document_details'=>json_encode([
             'Contrato'=>['talana_id'=>123,'validated_at'=>'2026-11-16 12:00:00','validated_by'=>7,'validated_name'=>'QA','source_reference'=>'Contrato EST'],
             'Anexo'=>['talana_id'=>124],
         ])]);
@@ -172,7 +202,7 @@ class RrhhDocumentDraftTest extends TestCase
         $this->get($url.'?filtro=sin-vincular&documento=0')->assertOk()->assertViewHas('visibleDocuments',[2=>'IRL requerido'])->assertViewHas('selectedPosition',2);
         $this->get($url.'?filtro=por-revisar')->assertOk()->assertViewHas('visibleDocuments',[1=>'Anexo']);
         $this->get($url.'?filtro=validados')->assertOk()->assertViewHas('visibleDocuments',[0=>'Contrato']);
-        $token=fn($name,$id)=>\Illuminate\Support\Facades\Crypt::encryptString(json_encode(['user'=>7,'name'=>$name,'id'=>$id]));
+        $token=fn($name,$id)=>\Illuminate\Support\Facades\Crypt::encryptString(json_encode(['user'=>7,'empresa_id'=>1039,'name'=>$name,'id'=>$id]));
         $action=route('rrhh-documentos.battery-change',1);
         $this->from($url)->post($action,['revision'=>1,'action'=>'replace','position'=>0,'documentos'=>[$token('Anexo',124)]])->assertSessionHasErrors('documentos');
         $this->from($url)->post($action,['revision'=>1,'action'=>'replace','position'=>0,'documentos'=>[$token('Nuevo',125),$token('Otro',126)]])->assertSessionHasErrors('documentos');
@@ -180,7 +210,7 @@ class RrhhDocumentDraftTest extends TestCase
         $this->post($action,['revision'=>1,'action'=>'replace','position'=>0,'documentos'=>[$token('Nuevo',125)]])->assertRedirect($url.'?documento=0');
         $r=DB::table('rrhh_document_batteries')->find(1);$details=json_decode($r->document_details,true);
         $this->assertSame(['Nuevo','Anexo','IRL requerido'],json_decode($r->documentos,true));
-        $this->assertSame(['talana_id'=>125,'source_reference'=>'Contrato EST'],$details['Nuevo']);
+        $this->assertSame(['talana_id'=>125,'empresa_id'=>1039,'source_reference'=>'Contrato EST'],$details['Nuevo']);
         $this->assertArrayNotHasKey('Contrato',$details);
         $this->assertSame(1,DB::table('rrhh_document_battery_events')->where('action','replace')->count());
         $this->get($url.'?filtro=validados')->assertOk()->assertSee('No hay documentos con este estado')->assertDontSee('id="document-preview"',false);
@@ -188,7 +218,7 @@ class RrhhDocumentDraftTest extends TestCase
         $this->post($action,['revision'=>2,'action'=>'replace','position'=>2,'documentos'=>[$token('IRL.pdf',126)]])->assertRedirect($url.'?documento=2');
         $this->assertCount(3,json_decode(DB::table('rrhh_document_batteries')->value('documentos'),true));
         config(['services.talana_documents.token'=>'test']);
-        Http::fake(['*/documentos/125/'=>Http::response(['nombre'=>'Nuevo','adjunto'=>'https://talana.com/es/remuneraciones/download-document/candidate']), 'https://talana.com/es/remuneraciones/download-document/candidate'=>fn()=>Http::response('%PDF-1.4 candidate')]);
+        Http::fake(['*/documentos/125/?*'=>Http::response(['nombre'=>'Nuevo','adjunto'=>'https://talana.com/es/remuneraciones/download-document/candidate']), 'https://talana.com/es/remuneraciones/download-document/candidate'=>fn()=>Http::response('%PDF-1.4 candidate')]);
         $this->post(route('rrhh-documentos.candidate-pdf'),['selection'=>$token('Nuevo',125)])->assertOk()->assertHeader('Content-Type','application/pdf');
         $this->assertNull(session('battery_preview.1.0'));
         $this->from($url)->post(route('rrhh-documentos.candidate-pdf'),['selection'=>'invalid'])->assertSessionHasErrors('documentos');
@@ -224,7 +254,7 @@ class RrhhDocumentDraftTest extends TestCase
         $this->post($change,['action'=>'resolve','revision'=>2,'position'=>0,'reason'=>'Modalidad confirmada con el area'])->assertRedirect($url.'?documento=0');
         $this->get($final)->assertOk()->assertViewHas('review',fn($review)=>!$review['ready'] && $review['counts']['por-revisar']===1 && $review['counts']['observados']===0);
         config(['services.talana_documents.token'=>'test']);
-        Http::fake(['*/documentos/123/'=>Http::response(['nombre'=>'Contrato','adjunto'=>'https://talana.com/es/remuneraciones/download-document/review']), 'https://talana.com/es/remuneraciones/download-document/review'=>fn()=>Http::response('%PDF-1.4 review')]);
+        Http::fake(['*/documentos/123/?*'=>Http::response(['nombre'=>'Contrato','adjunto'=>'https://talana.com/es/remuneraciones/download-document/review']), 'https://talana.com/es/remuneraciones/download-document/review'=>fn()=>Http::response('%PDF-1.4 review')]);
         $this->get(route('rrhh-documentos.battery-pdf',[1,0]))->assertOk();
         $this->post(route('rrhh-documentos.battery-validate',[1,0]),['revision'=>3,'confirmed'=>1])->assertRedirect($url);
         $this->get($final)->assertOk()->assertViewHas('review',fn($review)=>$review['ready']);

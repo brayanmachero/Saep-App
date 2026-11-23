@@ -78,6 +78,10 @@ class RrhhDocumentBatteryController extends Controller
             $record = DB::table('rrhh_document_batteries')->where('id', $battery)->lockForUpdate()->first();
             abort_unless($record, 404);
             $service->editable($record, (int) $data['revision']);
+            if ($added) {
+                $effective = app(RrhhDocumentCompositionService::class)->resolve($record);
+                $service->assertCompany($added, isset($effective['rules']['empresa_id']) ? (int)$effective['rules']['empresa_id'] : null);
+            }
             $documents = json_decode($record->documentos, true);
             $details = json_decode($record->document_details ?? '{}', true);
             $eventDetail = [];
@@ -93,7 +97,7 @@ class RrhhDocumentBatteryController extends Controller
                     if (! in_array($name, $documents, true)) {
                         $documents[] = $name;
                     }
-                    if (($details[$name]['talana_id'] ?? null) !== $metadata['talana_id']) {
+                    if (($details[$name]['talana_id'] ?? null) !== $metadata['talana_id'] || $service->sourceCompany($details[$name] ?? []) !== $service->sourceCompany($metadata)) {
                         $details[$name] = $metadata;
                     }
                 }
@@ -166,7 +170,7 @@ class RrhhDocumentBatteryController extends Controller
         $selected = $service->selections([$data['selection']], (int)$request->user()->id);
         $name = array_key_first($selected);
         try {
-            $document = $api->document($selected[$name]['talana_id'])->throw()->json();
+            $document = $api->document($selected[$name]['talana_id'], $service->sourceCompany($selected[$name]))->throw()->json();
             abort_unless(($document['nombre'] ?? null) === $name,422);
             $pdf = $api->previewPdf($document['adjunto'] ?? '');
         } catch (HttpClientException|\RuntimeException $exception) {
@@ -219,7 +223,7 @@ class RrhhDocumentBatteryController extends Controller
             $error = 'Selecciona este documento nuevamente desde Talana para vincular el archivo.';
         } else {
             try {
-                $document = $api->document($metadata['talana_id'])->throw()->json();
+                $document = $api->document($metadata['talana_id'], app(RrhhDocumentBatteryService::class)->sourceCompany($metadata))->throw()->json();
                 $candidate = $document['adjunto'] ?? '';
                 $host = strtolower((string) parse_url($candidate, PHP_URL_HOST));
                 if (($document['nombre'] ?? null) !== $name || ! str_starts_with($candidate, 'https://') || ($host !== 'talana.com' && ! str_ends_with($host, '.talana.com'))) {
@@ -246,7 +250,7 @@ class RrhhDocumentBatteryController extends Controller
         $metadata = json_decode($record->document_details ?? '{}', true)[$name] ?? [];
         abort_unless(! empty($metadata['talana_id']), 404);
         try {
-            $document = $api->document($metadata['talana_id'])->throw()->json();
+            $document = $api->document($metadata['talana_id'], app(RrhhDocumentBatteryService::class)->sourceCompany($metadata))->throw()->json();
             abort_unless(($document['nombre'] ?? null) === $name, 409, 'El documento cambió. Vuelve a seleccionarlo.');
             $content = $api->previewPdf($document['adjunto'] ?? '');
         } catch (HttpClientException|\RuntimeException $e) {
@@ -275,6 +279,8 @@ class RrhhDocumentBatteryController extends Controller
             $details = json_decode($record->document_details ?? '{}', true);
             if (($details[$name]['observation']['state'] ?? null) === 'open') throw ValidationException::withMessages(['documento'=>'Resuelve la observación antes de validar este documento.']);
             $preview = $request->session()->get("battery_preview.{$battery}.{$position}");
+            $effective = app(RrhhDocumentCompositionService::class)->resolve($record);
+            $service->assertCompany([$details[$name] ?? []], isset($effective['rules']['empresa_id']) ? (int)$effective['rules']['empresa_id'] : 1039);
             if (! $preview || $preview['revision'] !== $record->revision || $preview['name'] !== $name || $preview['user'] !== (int) $request->user()->id || $preview['id'] !== ($details[$name]['talana_id'] ?? null)) {
                 throw ValidationException::withMessages(['documento' => 'Abre el documento de esta versión antes de validarlo.']);
             }

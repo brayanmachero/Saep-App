@@ -53,7 +53,7 @@ class RrhhDocumentCompositionService
             if ($own && !app(RrhhDocumentBatteryService::class)->review($own, $meta)['ready']) $allOwnValidated = false;
             foreach ($own as $position=>$name) {
                 $entry = $meta[$name] ?? [];
-                $identity = !empty($entry['talana_id']) ? 'talana:'.$entry['talana_id'] : 'name:'.$name;
+                $identity = !empty($entry['talana_id']) ? 'talana:'.app(RrhhDocumentBatteryService::class)->sourceCompany($entry).':'.$entry['talana_id'] : 'name:'.$name;
                 $origin = ['battery_id'=>$node->id, 'nombre'=>$node->nombre, 'version'=>$node->version, 'position'=>$position, 'inherited'=>$inherited];
                 if (isset($identities[$identity])) {
                     $origins[$identities[$identity]][] = $origin;
@@ -73,6 +73,11 @@ class RrhhDocumentCompositionService
         if (($battery->kind ?? '') === 'specific' && !$hasBase) $errors[] = 'La composición debe incluir una batería marcada como base común obligatoria.';
         if (($battery->kind ?? '') === 'specific' && !array_filter(array_intersect_key($rules, array_flip(['centro_costo_nombre','cargo_nombre','tipo_contrato_nombre'])))) $pending[] = 'Define el centro, cargo o tipo de contrato de esta batería específica antes de activarla.';
         if (count($documents) > 50) $errors[] = 'La composición admite hasta 50 documentos únicos.';
+        foreach ($details as $name=>$metadata) {
+            if (!empty($metadata['talana_id']) && !empty($rules['empresa_id']) && app(RrhhDocumentBatteryService::class)->sourceCompany($metadata) !== (int)$rules['empresa_id']) {
+                $pending[] = $name.': la referencia pertenece a otra base de Talana. Reemplázala por un documento de la empresa de esta batería.';
+            }
+        }
         $review = app(RrhhDocumentBatteryService::class)->review($documents, $details);
         $review['ready'] = $review['ready'] && $allOwnValidated;
         return compact('documents', 'details', 'origins', 'sources', 'rules', 'review') + ['errors'=>array_values(array_unique($errors)), 'pending'=>array_values(array_unique($pending))];

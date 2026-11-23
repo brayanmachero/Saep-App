@@ -99,9 +99,9 @@ class RrhhDocumentController extends Controller
     public function documentOptions(Request $request, \App\Services\TalanaDocumentApi $api)
     {
         abort_unless($request->user()->tieneAcceso('gestion_documental','puede_crear') || $request->user()->tieneAcceso('gestion_documental','puede_editar'),403);
-        $data = $request->validate(['q'=>'required|string|min:2|max:255', 'page'=>'nullable|integer|min:1|max:10000', 'order'=>'nullable|in:recent,oldest,name']);
+        $data = $request->validate(['empresa_id'=>'required|integer|exists:talana_contratos,empresa_id', 'q'=>'required|string|min:2|max:255', 'page'=>'nullable|integer|min:1|max:10000', 'order'=>'nullable|in:recent,oldest,name']);
         try {
-            $response = $api->searchDocuments($data['q'], $data['page'] ?? 1)->throw();
+            $response = $api->searchDocuments($data['q'], $data['page'] ?? 1, (int)$data['empresa_id'])->throw();
         } catch (\Illuminate\Http\Client\HttpClientException|\RuntimeException $e) {
             return response()->json(['message'=>'No se pudo consultar Talana. Intenta nuevamente.'],503);
         }
@@ -112,7 +112,7 @@ class RrhhDocumentController extends Controller
                 continue;
             }
             $options[$name] = $entry + ['value'=>\Illuminate\Support\Facades\Crypt::encryptString(json_encode([
-                'name'=>$name, 'id'=>$entry['id'], 'user'=>(int)$request->user()->id,
+                'name'=>$name, 'id'=>$entry['id'], 'empresa_id'=>(int)$data['empresa_id'], 'user'=>(int)$request->user()->id,
             ]))];
         }
         return response()->json(['options'=>array_values($options), 'next'=>filled($response->json('next'))])->header('Cache-Control','private, no-store');
@@ -130,6 +130,7 @@ class RrhhDocumentController extends Controller
         }
         $d = $r->validate(['nombre' => 'required|string|max:150', 'version' => 'required|integer|min:1|max:9999', 'kind'=>'nullable|in:base,specific', 'parent_ids'=>'nullable|array|max:10', 'parent_ids.*'=>'integer|distinct|min:1', 'documentos' => 'required_without:parent_ids|array|max:50', 'documentos.*'=>'required|string|max:4096', 'empresa_id' => 'nullable|integer', 'centro_costo_nombre' => $r->boolean('origen_est') ? 'required|string|max:200|exists:talana_contratos,centro_costo_nombre' : 'nullable|string|max:200', 'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200']);
         $details = app(\App\Services\RrhhDocumentBatteryService::class)->selections($d['documentos'] ?? [], (int)$r->user()->id);
+        app(\App\Services\RrhhDocumentBatteryService::class)->assertCompany($details, !empty($d['empresa_id']) ? (int)$d['empresa_id'] : null);
         $docs = array_keys($details);
         if (DB::table('rrhh_document_batteries')->where('nombre', $d['nombre'])->where('version', $d['version'])->exists()) {
             return back()->withErrors(['nombre' => 'Ya existe esa batería y versión. Crea una nueva versión.'])->withInput();

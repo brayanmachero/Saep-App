@@ -21,9 +21,9 @@ class TalanaDocumentApi
             ->withoutRedirecting()->acceptJson()->connectTimeout(8)->timeout(45);
     }
 
-    public function searchDocuments(string $term, int $page): Response
+    public function searchDocuments(string $term, int $page, int $companyId): Response
     {
-        return $this->client()->get('documentos/', ['search' => $term, 'page' => $page, 'page_size' => 50]);
+        return $this->client()->get('documentos/', ['empresa' => $companyId, 'search' => $term, 'page' => $page, 'page_size' => 50]);
     }
 
     public function summarizeDocuments(array $entries, string $order = 'recent'): array
@@ -64,9 +64,9 @@ class TalanaDocumentApi
         return $documents;
     }
 
-    public function document(int $id): Response
+    public function document(int $id, int $companyId): Response
     {
-        return $this->client()->get('documentos/'.$id.'/');
+        return $this->client()->get('documentos/'.$id.'/', ['empresa' => $companyId]);
     }
 
     public function previewPdf(string $url): string

@@ -31,3 +31,12 @@ Ejemplo: Base EST + documentos de CCU + documentos de Operario = batería final 
 ## Verificación
 
 Pruebas de composición, deduplicación, alcances, ciclos, herencia sin adicionales, bloqueo de padres no activos, control de revisión, clonación, protección de documentos heredados y conservación de snapshots, junto con las regresiones de preparación/envío existentes. QA de vistas Blade con datos sintéticos a 360, 768 y 1440 px; sin escrituras en Talana.
+
+
+## Empresa en Talana (23/11/2026)
+
+La búsqueda requiere elegir empresa y envía `empresa` al listado de documentos. El token de selección firmado y los metadatos conservan `empresa_id`; las vistas previas consultan el detalle con esa empresa. Se rechaza agregar una selección de otra empresa. Cambiar la empresa en creación limpia selección, resultados y paginación, descartando respuestas en vuelo anteriores.
+
+Las referencias anteriores a este cambio proceden de la consulta sin filtro (base SAEP 1039). Se preservan y se abren desde esa base; no se convierten ni renombran como EST. Si la composición requiere otra empresa, se avisa y se bloquea su validación/activación hasta reemplazarlas. Las nuevas selecciones deben revisarse de nuevo. Este cambio no reemplaza archivos automáticamente ni habilita envíos a trabajadores.
+
+Validación: 22 pruebas / 308 aserciones; QA del selector a 360 y 1440 px con resultados sintéticos, sin desbordamiento ni errores JS, empresa obligatoria, paginación y limpieza al cambiar. Consulta real de listado y detalle EST con empresa1081 confirmada; no se crean documentos productivos en QA.

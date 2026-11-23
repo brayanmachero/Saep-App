@@ -78,13 +78,29 @@ class RrhhDocumentBatteryService
                 if (($selection['user'] ?? null) !== $userId || ! is_string($selection['name'] ?? null) || ! is_int($selection['id'] ?? null) || $selection['id'] < 1) {
                     throw new \RuntimeException;
                 }
-                $documents[$selection['name']] = ['talana_id' => $selection['id']];
+                if (empty($selection['empresa_id']) || !is_int($selection['empresa_id'])) throw new \RuntimeException;
+                $documents[$selection['name']] = ['talana_id' => $selection['id'], 'empresa_id' => $selection['empresa_id']];
             } catch (\Throwable) {
                 throw ValidationException::withMessages(['documentos' => 'Busca y selecciona nuevamente el documento en Talana.']);
             }
         }
 
         return $documents;
+    }
+
+    // References selected before company filtering came from the default SAEP base.
+    public function sourceCompany(array $metadata): int
+    {
+        return (int)($metadata['empresa_id'] ?? 1039);
+    }
+
+    public function assertCompany(array $details, ?int $companyId): void
+    {
+        foreach ($details as $metadata) {
+            if (!$companyId || $this->sourceCompany($metadata) !== $companyId) {
+                throw ValidationException::withMessages(['empresa_id'=>'Selecciona documentos de la misma empresa que la batería. Vuelve a buscarlos en Talana.']);
+            }
+        }
     }
 
     public function event(int $batteryId, int $actorId, string $action, array $detail = []): void
