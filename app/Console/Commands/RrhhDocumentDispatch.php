@@ -76,7 +76,10 @@ class RrhhDocumentDispatch extends Command
             }
             foreach ((clone $items)->cursor() as $item) {
                 $snap = json_decode($item->snapshot, true);
-                $matches = (new RrhhDocumentDraftService)->query([])->where('persona_rut', $snap['persona_rut'])->get();
+                if ((json_decode($batch->filtros, true)['finalidad'] ?? 'ingreso') === 'regularizacion' && (empty($snap['reference']['confirmed']) || empty($snap['reference']['date']))) {
+                    throw new RuntimeException('Falta confirmar la fecha de referencia de regularización.');
+                }
+                $matches = (new RrhhDocumentDraftService)->query([])->where('persona_rut', $snap['persona_rut'])->where('empresa_id', $snap['empresa_id'])->where('persona_talana_id', $snap['persona_talana_id'])->get();
                 $current = $matches->first();
                 if ($matches->count() !== 1 || (int) $current->id !== (int) $item->contrato_id || ! $current->synced_at || $current->synced_at->lt(now()->subHours(48))) {
                     throw new RuntimeException('Contrato ambiguo, desactualizado o inactivo. Revisar antes de procesar.');

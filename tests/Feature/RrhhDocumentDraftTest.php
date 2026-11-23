@@ -40,6 +40,7 @@ class RrhhDocumentDraftTest extends TestCase
                 $t->string($f)->nullable();
             }$t->boolean('finiquitado');
             $t->date('desde')->nullable();
+            $t->date('fecha_contratacion')->nullable();
             $t->date('hasta')->nullable();
             $t->timestamp('synced_at')->nullable();
             $t->timestamps();
@@ -80,6 +81,85 @@ class RrhhDocumentDraftTest extends TestCase
         DB::table('rrhh_document_batteries')->where('id',2)->update(['reglas'=>'{"empresa_id":1039}']);
         $composition=app(\App\Services\RrhhDocumentCompositionService::class)->resolve(DB::table('rrhh_document_batteries')->find(2));
         $this->assertNotEmpty($composition['pending']);
+    }
+
+    public function test_worker_history_is_scoped_and_regularization_requires_confirmed_reference(): void
+    {
+        $user = new class extends \App\Models\User {
+            public function tieneConsentimientoDatosVigente(): bool { return true; }
+            public function tieneAcceso(string $moduloSlug, string $accion = 'puede_ver'): bool { return true; }
+        };
+        $user->id=7; $user->setRelation('rol',new \App\Models\Rol);
+        $this->actingAs($user)->withoutVite();
+        config(['services.talana_documents.token'=>'test']);
+        $worker=$this->contract(1,['empresa_id'=>1081,'empresa_nombre'=>'SAEP EST']);
+        $old=$this->contract(2,['empresa_id'=>1081,'persona_talana_id'=>1,'desde'=>'2020-01-10','finiquitado'=>true]);
+        $other=$this->contract(3,['empresa_id'=>1039,'persona_talana_id'=>1,'desde'=>'2010-01-10','finiquitado'=>true]);
+        Http::fake(['*/documentos/*'=>fn($r)=>str_contains($r->url(),'/44/')
+            ? Http::response(['id'=>44,'empleado'=>999,'nombre'=>'Otro.pdf','adjunto'=>'https://talana.com/private.pdf'])
+            : Http::response(['results'=>[['id'=>20,'empleado'=>1,'nombre'=>'Anexo EST.pdf','fechaCreacion'=>'2026-11-01T12:00:00Z'],['id'=>21,'empleado'=>999,'nombre'=>'No debe aparecer.pdf']], 'next'=>null])]);
+        $history=app(\App\Services\RrhhWorkerHistoryService::class);
+        $this->assertCount(2,$history->contracts($worker)->get());
+        $this->assertSame(2,$history->contractReference($worker,'primero','desde')['contract_id']);
+        $id=app(RrhhDocumentDraftService::class)->create(['request_id'=>(string)Str::uuid(),'nombre'=>'Regularización QA','battery_id'=>1,'seleccion'=>'manual','contratos'=>[$worker->id],'finalidad'=>'regularizacion'],7);
+        $item=DB::table('rrhh_document_batch_items')->where('batch_id',$id)->first();
+        $this->assertStringContainsString('Confirma la fecha',json_decode($item->observaciones,true)[0]);
+        $url=route('rrhh-documentos.worker-history',['contract'=>$worker->id,'item'=>$item->id]);
+        $page=$this->get($url)->assertOk()->assertSee('Anexo EST.pdf')->assertDontSee('No debe aparecer.pdf')->assertSee('Guardar referencia');
+        if (getenv('SAEP_QA_RENDER')) file_put_contents(getenv('SAEP_QA_RENDER').'/worker-history.html',$page->getContent());
+        Http::assertSent(fn($r)=>$r['empresa']==1081 && $r['empleado']==1);
+        $this->get(route('rrhh-documentos.worker-pdf',[$worker->id,44]))->assertNotFound();
+        $post=['snapshot_hash'=>hash('sha256',$item->snapshot),'source'=>'especifico','contract_id'=>$other->id,'fecha_campo'=>'desde','motivo'=>'Contrato verificado para regularización','confirmed'=>1];
+        $target=route('rrhh-documentos.worker-reference',[$id,$item->id]);
+        $this->post($target,$post)->assertSessionHasErrors('referencia');
+        $post['contract_id']=$old->id;
+        $this->post($target,$post)->assertSessionDoesntHaveErrors();
+        $updated=DB::table('rrhh_document_batch_items')->find($item->id);
+        $reference=json_decode($updated->snapshot,true)['reference'];
+        $this->assertSame('2020-01-10',$reference['date']);
+        $this->assertTrue($reference['confirmed']);
+        $this->assertSame([],json_decode($updated->observaciones,true));
+        $this->post($target,$post)->assertSessionHasErrors('referencia');
+        $this->get(route('rrhh-documentos.show',$id))->assertOk()->assertSee('2020-01-10');
+        $post['snapshot_hash']=hash('sha256',$updated->snapshot);
+        DB::table('rrhh_document_batches')->where('id',$id)->update(['estado'=>'EN_PROCESO']);
+        $this->post($target,$post)->assertSessionHasErrors('referencia');
+    }
+
+    public function test_unknown_contract_dates_cannot_be_assumed_to_be_first_or_last(): void
+    {
+        $worker=$this->contract(1);
+        $this->contract(2,['persona_talana_id'=>1,'desde'=>null,'finiquitado'=>true]);
+        $this->expectException(ValidationException::class);
+        app(\App\Services\RrhhWorkerHistoryService::class)->contractReference($worker,'primero','desde');
+    }
+
+    public function test_summary_distinguishes_prepared_from_signed_and_excludes_retired_contracts(): void
+    {
+        $user=new class extends \App\Models\User {
+            public function tieneConsentimientoDatosVigente(): bool { return true; }
+            public function tieneAcceso(string $moduloSlug,string $accion='puede_ver'): bool { return true; }
+        };
+        $user->id=7; $user->setRelation('rol',new \App\Models\Rol);
+        $this->actingAs($user)->withoutVite();
+        $this->contract(1); $this->contract(2);
+        $id=app(RrhhDocumentDraftService::class)->create(['request_id'=>(string)Str::uuid(),'nombre'=>'Resumen QA','battery_id'=>1,'seleccion'=>'todos'],7);
+        $items=DB::table('rrhh_document_batch_items')->where('batch_id',$id)->orderBy('id')->get();
+        DB::table('rrhh_document_batch_items')->where('id',$items[1]->id)->update(['excluido'=>true]);
+        $url=route('rrhh-documentos.summary',$id);
+        $page=$this->get($url)->assertOk()->assertSee('Documentos previstos: 2')->assertSee('Sin PDF registrado: 2')->assertSee('Pendiente de completar');
+        if (getenv('SAEP_QA_RENDER')) file_put_contents(getenv('SAEP_QA_RENDER').'/batch-summary.html',$page->getContent());
+        $response=$this->get($url.'?formato=eml')->assertOk()->assertHeader('Content-Type','message/rfc822');
+        $this->assertStringContainsString('X-Unsent: 1',$response->getContent());
+        $parts=explode("\r\n\r\n",$response->getContent(),2);
+        $this->assertStringContainsString('Documentos previstos: 2',base64_decode($parts[1]));
+        foreach ([[$items[0]->id,0,'cargado'],[$items[0]->id,1,'firma_solicitada'],[$items[1]->id,0,'firmado']] as [$itemId,$position,$state]) {
+            DB::table('rrhh_document_deliveries')->insert(['item_id'=>$itemId,'position'=>$position,'state'=>$state,'category'=>'Test','path'=>'test.pdf','sha256'=>str_repeat('a',64),'prepared_by'=>7,'created_at'=>now(),'updated_at'=>now()]);
+        }
+        $this->get($url)->assertOk()->assertSee('Firma confirmada por Talana: 0')->assertSee('Cargados en Talana sin firma solicitada: 1')->assertSee('Pendiente de completar');
+        DB::table('rrhh_document_deliveries')->where('item_id',$items[0]->id)->update(['state'=>'firmado']);
+        $this->get($url)->assertOk()->assertSee('Todos los documentos tienen firma confirmada.');
+        Http::assertNothingSent();
     }
 
     private function contract(int $n, array $extra = []): TalanaContrato

@@ -47,6 +47,7 @@ class RrhhDocumentDraftService
             $docs = $composition['documents'];
             $rules = $composition['rules'];
             $filters = array_intersect_key($data, array_flip(['empresa_id', 'centro_costo_nombre', 'cargo_nombre', 'tipo_contrato_nombre', 'buscar']));
+            $filters['finalidad'] = $data['finalidad'] ?? 'ingreso';
             $q = $this->query($filters);
             if ($data['seleccion'] === 'manual') {
                 $ids = array_unique($data['contratos'] ?? []);
@@ -88,10 +89,13 @@ class RrhhDocumentDraftService
                 if ($previous->has($c->id)) {
                     $warnings[] = 'Este contrato ya está incluido en otro borrador de esta batería';
                 }
+                if ($filters['finalidad'] === 'regularizacion') {
+                    $warnings[] = 'Confirma la fecha de referencia de regularización';
+                }
                 if ($warnings) {
                     $observed++;
                 }
-                $rows[] = ['batch_id' => $id, 'contrato_id' => $c->id, 'snapshot' => json_encode($c->only(['talana_id', 'persona_talana_id', 'persona_nombre', 'persona_rut', 'empresa_id', 'empresa_nombre', 'cargo_nombre', 'centro_costo_nombre', 'tipo_contrato_nombre', 'desde', 'hasta', 'synced_at']), JSON_UNESCAPED_UNICODE), 'observaciones' => json_encode($warnings, JSON_UNESCAPED_UNICODE)];
+                $rows[] = ['batch_id' => $id, 'contrato_id' => $c->id, 'snapshot' => json_encode($c->only(['talana_id', 'persona_talana_id', 'persona_nombre', 'persona_rut', 'empresa_id', 'empresa_nombre', 'cargo_nombre', 'centro_costo_nombre', 'tipo_contrato_nombre', 'desde', 'hasta', 'fecha_contratacion', 'synced_at']), JSON_UNESCAPED_UNICODE), 'observaciones' => json_encode($warnings, JSON_UNESCAPED_UNICODE)];
             }
             DB::table('rrhh_document_batches')->insert(['id' => $id, 'nombre' => $data['nombre'], 'battery_id' => $battery->id, 'battery_snapshot' => json_encode(['nombre' => $battery->nombre, 'version' => $battery->version, 'documentos' => $docs, 'reglas' => $rules, 'document_details'=>$composition['details'], 'origins'=>$composition['origins'], 'sources'=>$composition['sources']], JSON_UNESCAPED_UNICODE), 'filtros' => json_encode($filters), 'created_by' => $userId, 'estado' => 'BORRADOR', 'trabajadores' => $contracts->count(), 'documentos' => $contracts->count() * count($docs), 'observados' => $observed, 'created_at' => now(), 'updated_at' => now()]);
             foreach (array_chunk($rows, 200) as $chunk) {

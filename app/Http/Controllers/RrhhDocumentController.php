@@ -153,7 +153,7 @@ class RrhhDocumentController extends Controller
     public function store(Request $r, RrhhDocumentDraftService $service)
     {
         $filters = $this->filters($r);
-        $data = $r->validate(['nombre' => 'required|string|max:150', 'request_id' => 'required|uuid', 'battery_id' => 'required|integer', 'seleccion' => 'required|in:manual,todos', 'contratos' => 'nullable|array|max:5000', 'contratos.*' => 'integer|distinct']);
+        $data = $r->validate(['nombre' => 'required|string|max:150', 'request_id' => 'required|uuid', 'battery_id' => 'required|integer', 'seleccion' => 'required|in:manual,todos', 'contratos' => 'nullable|array|max:5000', 'contratos.*' => 'integer|distinct', 'finalidad'=>'nullable|in:ingreso,regularizacion']);
         $id = $service->create($data + $filters, $r->user()->id);
 
         return redirect()->route('rrhh-documentos.show', $id);

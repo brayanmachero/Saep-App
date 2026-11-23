@@ -26,6 +26,11 @@ class TalanaDocumentApi
         return $this->client()->get('documentos/', ['empresa' => $companyId, 'search' => $term, 'page' => $page, 'page_size' => 50]);
     }
 
+    public function employeeDocuments(int $companyId, int $employeeId, int $page = 1): Response
+    {
+        return $this->client()->get('documentos/', ['empresa'=>$companyId, 'empleado'=>$employeeId, 'page'=>$page, 'page_size'=>100]);
+    }
+
     public function summarizeDocuments(array $entries, string $order = 'recent'): array
     {
         $documents = [];

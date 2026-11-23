@@ -4,7 +4,7 @@ La batería identifica documentos requeridos; no genera sus textos legales. Crea
 
 - Generar el manifiesto: php artisan rrhh:preparar-pdfs LOTE CARPETA. Completar categoria_talana en el CSV y colocar los archivos con los nombres correspondientes.
 - Importar sin contactar a Talana: repetir con --importar. Si falta una fila o un archivo, se revierte toda la importación.
-- Validar: php artisan rrhh:documentos LOTE. Se requiere un contrato vigente inequívoco por RUT y datos sincronizados en las últimas 48 horas.
+- Validar: php artisan rrhh:documentos LOTE. Se requiere un contrato vigente inequívoco por empresa, ID de trabajador y RUT y datos sincronizados en las últimas 48 horas.
 - Piloto autorizado: configurar TALANA_DOCUMENT_TOKEN y TALANA_DOCUMENT_WRITES en el servidor, recargar el caché de configuración y ejecutar el comando del lote primero con --ejecutar. Verificar en Talana antes de usar --firmar: este paso puede notificar a trabajadores. Sin interruptor habilitado, no hay envíos.
 - Consultar con --consultar. Sólo una firma confirmada cambia a firmado. Un resultado ausente no prueba rechazo. Una respuesta ambigua o ejecución interrumpida requiere conciliación manual antes de repetir.
 - Rotación: sustituir sólo el token documental, recargar la configuración y repetir una lectura antes de operar.
@@ -56,3 +56,16 @@ Se agrega resumen de PDF requeridos, registrados y faltantes sobre todos los con
 Cada contrato ofrece vista previa protegida del PDF guardado y descarga. El formulario permite previsualizar el archivo local antes de guardar, sin subirlo. Se explica la diferencia entre referencias de batería y archivos personales; guardar no envía a Talana. Se preserva consulta por lote/contrato/posición y cabeceras privadas sin caché. Fechas del detalle en hora de Chile.
 
 Pruebas: 17 casos/251 aserciones; aislamiento de PDF, descarga vs inline, conteos excluyendo retirados y ausencia de llamadas externas. QA Edge 360/768/1440, apertura/cierre, selección de archivo, vista previa local sin subida, PDF guardado, error de carga y sin desborde horizontal. Datos/PDF sintéticos. No se creó lote productivo; falta definir centro/cargo del piloto y completar revisión humana de batería.
+
+
+### Historial, regularización y resumen para reunión — 23/11/2026
+
+Desde Lotes de trabajadores, “Ver contratos y anexos” consulta documentos por empresa + empleado, con caché de dos minutos. La consulta recorre hasta 20 páginas y avisa si el listado es parcial. El tipo contrato/anexo es orientativo por nombre. Los contratos históricos provienen de la copia local; no se certifica que esa copia contenga toda la historia de Talana. Creación del registro, contratación, vigencia y firma son fechas diferentes.
+
+Al crear un lote se elige Ingreso o Regularización documental. En regularización cada caso queda observado hasta confirmar una referencia desde el detalle del trabajador: primer/último contrato según el campo elegido, contrato específico o documento/anexo con vigencia ingresada tras leerlo. Primera/última significa entre los contratos locales disponibles; fechas desconocidas impiden selección automática. Se conserva empresa, trabajador, fuente, campo, fecha, motivo, actor y momento. Una instantánea concurrente obsoleta se rechaza. No se cambia la referencia tras preparar PDF, retirar el caso o iniciar procesamiento. Se conserva el contrato destinatario actual por separado del contrato histórico de referencia.
+
+La fecha es una referencia para preparar el PDF; no genera ni cambia el texto del documento y no actualiza contratos en Talana. Los envíos productivos permanecen deshabilitados. Antes del piloto aún hay que verificar cómo dirigir las escrituras a EST/SUB con la cuenta que accede a ambas bases: no se presupone que un parámetro GET sea válido en POST.
+
+“Ver resumen para Cristian” muestra estados sobre los contratos incluidos y descarga un borrador .eml dirigido a chormazabal@saep.cl. Distingue faltantes, preparados, cargados, firma solicitada, firma confirmada y errores; cargado no significa firmado. No envía correo automáticamente, no adjunta PDF ni datos personales. Las firmas corresponden al último estado consultado. El usuario revisa y envía el borrador desde su correo.
+
+Pruebas controladas propuestas para 24/11: un ingreso, una regularización desde contrato histórico y otra desde anexo; confirmar documento/fecha con Cristian, previsualizar el PDF personal y revisar el resumen. No probar envíos reales antes de cerrar validación de batería y direccionamiento de escritura. QA automatizado con datos sintéticos y revisión responsive de historial y resumen en 360/1440 px; no se crearon lotes ni se enviaron correos/documentos reales durante QA.
