@@ -458,15 +458,7 @@
                 </form>
                 @endif
 
-                @if($puedeEliminarComercial)
-                <form method="POST" action="{{ route('comercial.cotizaciones.destroy', $cotizacion) }}" style="display:inline">
-                    @csrf @method('DELETE')
-                    <input type="hidden" name="motivo">
-                    <button type="submit" class="btn-secondary" style="color:var(--danger-color)" onclick="return solicitarMotivo(this, 'Solo administradores pueden eliminar cotizaciones. Indica el motivo de eliminación:')">
-                        <i class="bi bi-trash-fill"></i> Eliminar
-                    </button>
-                </form>
-                @endif
+                @include('comercial.cotizador.eliminar', ['cotizacion' => $cotizacion])
             </div>
         </div>
     </div>

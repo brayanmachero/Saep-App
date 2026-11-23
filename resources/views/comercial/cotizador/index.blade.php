@@ -410,6 +410,7 @@
                             </td>
                             <td>
                                 <div class="quote-actions">
+                                    @include('comercial.cotizador.eliminar', ['cotizacion' => $cotizacion])
                                     <a href="{{ route('comercial.cotizaciones.show', $cotizacion) }}" class="icon-btn" title="Ver detalles"><i class="bi bi-eye-fill"></i></a>
                                     <a href="{{ route('comercial.cotizaciones.pdf', $cotizacion) }}" class="icon-btn" title="Descargar PDF final" target="_blank"><i class="bi bi-file-pdf-fill"></i></a>
                                 </div>
@@ -471,6 +472,7 @@
                             </td>
                             <td>
                                 <div class="quote-actions">
+                                    @include('comercial.cotizador.eliminar', ['cotizacion' => $cotizacion])
                                     <a href="{{ route('comercial.cotizaciones.show', $cotizacion) }}" class="icon-btn" title="Ver detalles"><i class="bi bi-eye-fill"></i></a>
                                     @if(auth()->user()->tieneAcceso('comercial', 'puede_crear'))
                                     <form method="POST" action="{{ route('comercial.cotizaciones.duplicar', $cotizacion) }}" style="display:inline">
@@ -537,6 +539,7 @@
                             <td class="quote-muted">{{ $periodoActivo($cotizacion) }}</td>
                             <td>
                                 <div class="quote-actions">
+                                    @include('comercial.cotizador.eliminar', ['cotizacion' => $cotizacion])
                                     <a href="{{ route('comercial.cotizaciones.show', $cotizacion) }}" class="icon-btn" title="Ver histórico"><i class="bi bi-eye-fill"></i></a>
                                     <a href="{{ route('comercial.cotizaciones.pdf', $cotizacion) }}" class="icon-btn" title="Descargar PDF guardado" target="_blank"><i class="bi bi-file-pdf-fill"></i></a>
                                 </div>

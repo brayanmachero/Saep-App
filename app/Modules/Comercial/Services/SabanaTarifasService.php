@@ -118,6 +118,11 @@ class SabanaTarifasService
             $query->whereYear('fecha_referencia', $filtros['anio']);
         }
         $vista = $filtros['vista'] ?? 'ultimas';
+        // Deleted quotations remain available only in the explicit historical view.
+        if ($vista !== 'historico') {
+            $query->where(fn ($q) => $q->whereNull('cotizacion_id')
+                ->orWhereHas('cotizacion', fn ($c) => $c->whereNull('deleted_at')));
+        }
         if ($vista === 'vigentes') {
             $fecha = $filtros['fecha'] ?? now()->toDateString();
             $query->where(fn ($q) => $q->whereNull('cotizacion_id')->orWhereHas('cotizacion', fn ($c) => $c

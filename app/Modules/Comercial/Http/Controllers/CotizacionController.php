@@ -477,6 +477,10 @@ class CotizacionController
 
         $validated = $request->validate([
             'motivo' => 'required|string|min:5|max:1000',
+        ], [
+            'motivo.required' => 'Indica el motivo de eliminación.',
+            'motivo.min' => 'El motivo debe tener al menos 5 caracteres.',
+            'motivo.max' => 'El motivo no puede superar los 1000 caracteres.',
         ]);
 
         DB::transaction(function () use ($cotizacion, $validated) {

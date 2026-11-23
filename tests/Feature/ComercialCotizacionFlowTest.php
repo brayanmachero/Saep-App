@@ -584,6 +584,33 @@ class ComercialCotizacionFlowTest extends TestCase
         $this->assertNotSame($normalizar('SUPERVISOR NOCHE'),$normalizar('SUPERVISOR DE OPERACIONES'));
     }
 
+    public function test_eliminacion_desde_listado_exige_permiso_y_motivo_y_retira_precio(): void
+    {
+        $admin = $this->createAdminUser();
+        $this->actingAs($admin);
+        ['cliente'=>$cliente, 'centro'=>$centro, 'modalidad'=>$modalidad] = $this->createCommercialFixture();
+        $this->post(route('comercial.cotizaciones.store'), $this->quotePayload($cliente,$centro,$modalidad,700000))->assertSessionHasNoErrors();
+        $cotizacion = Cotizacion::firstOrFail();
+        $this->get(route('comercial.cotizaciones.index'))->assertOk()->assertSee('Eliminar cotización '.$cotizacion->numero)->assertSee('Confirmar eliminación');
+        $this->deleteJson(route('comercial.cotizaciones.destroy',$cotizacion),[])->assertUnprocessable()->assertJsonValidationErrors('motivo');
+        $rol = Rol::create(['codigo'=>'LECTOR_COMERCIAL', 'nombre'=>'Consulta Comercial']);
+        $rol->modulos()->attach(Modulo::where('slug','comercial')->first()->id,['puede_ver'=>true,'puede_eliminar'=>true]);
+        $lector = User::create(['name'=>'Consulta','email'=>'consulta-delete@example.test','password'=>'password','rol_id'=>$rol->id,'activo'=>true]);
+        $this->actingAs($lector);
+        $this->get(route('comercial.cotizaciones.index'))->assertOk()->assertDontSee('Eliminar cotización '.$cotizacion->numero);
+        $this->deleteJson(route('comercial.cotizaciones.destroy',$cotizacion),['motivo'=>'Intento sin rol administrador'])->assertForbidden();
+        $this->assertFalse($cotizacion->fresh()->trashed());
+        $this->actingAs($admin);
+        $this->patch(route('comercial.cotizaciones.aprobar',$cotizacion))->assertSessionHas('success');
+        $this->delete(route('comercial.cotizaciones.destroy',$cotizacion),['motivo'=>'Cotización de prueba autorizada'])->assertSessionHas('success');
+        $this->assertTrue(Cotizacion::withTrashed()->findOrFail($cotizacion->id)->trashed());
+        $this->assertSame(1,CotizacionAuditoria::where('cotizacion_id',$cotizacion->id)->where('accion','eliminada')->count());
+        $sabana = app(\App\Modules\Comercial\Services\SabanaTarifasService::class);
+        foreach (['vigentes','ultimas','referencias','cotizaciones'] as $vista) $this->assertSame(0,$sabana->consulta(['vista'=>$vista])->count());
+        $this->assertSame(1,$sabana->consulta(['vista'=>'historico'])->count());
+        $this->get(route('comercial.cotizaciones.show',$cotizacion))->assertNotFound();
+    }
+
     private function createAdminUser(): User
     {
         $rol = Rol::create([
