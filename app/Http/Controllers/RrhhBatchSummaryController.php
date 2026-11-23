@@ -23,7 +23,7 @@ class RrhhBatchSummaryController extends Controller
         $companies = $items->map(fn ($i) => json_decode($i->snapshot, true)['empresa_nombre'])->unique()->implode(', ');
         $labels = ['preparado'=>'Preparados en SAEP', 'cargando'=>'Carga en curso', 'cargado'=>'Cargados en Talana sin firma solicitada',
             'solicitando_firma'=>'Solicitud de firma en curso', 'firma_solicitada'=>'Firma solicitada, pendiente de confirmación',
-            'firmado'=>'Firma confirmada por Talana', 'revisar_carga'=>'Carga por revisar', 'revisar_firma'=>'Firma por revisar'];
+            'firmado'=>'Firma confirmada por Talana', 'revisar_carga'=>'Carga por revisar', 'revisar_firma'=>'Firma por revisar', 'retirando_prueba'=>'Retiro de prueba en curso', 'retirado_prueba'=>'Pruebas retiradas de Talana', 'revisar_retiro'=>'Retiro por conciliar'];
         $completed = $expected > 0 && (int)($states['firmado'] ?? 0) === $expected && !$observed && $batch->estado !== 'CANCELADO';
         $subject = 'Gestión documental · '.$batch->nombre;
         $lines = ['Hola Cristian,', '', 'Resumen del lote: '.$batch->nombre, 'Identificador: '.$batch->id,

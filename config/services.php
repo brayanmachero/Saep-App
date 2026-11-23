@@ -146,6 +146,9 @@ return [
     'talana_documents' => [
         'token' => env('TALANA_DOCUMENT_TOKEN'),
         'writes' => env('TALANA_DOCUMENT_WRITES', false),
+        'pilot' => env('TALANA_DOCUMENT_PILOT', false),
+        'pilot_until' => env('TALANA_DOCUMENT_PILOT_UNTIL'),
+        'pilot_recipients' => array_values(array_filter(array_map('trim', explode(',', env('TALANA_DOCUMENT_PILOT_RECIPIENTS', ''))))),
     ],
 
     'talana' => [

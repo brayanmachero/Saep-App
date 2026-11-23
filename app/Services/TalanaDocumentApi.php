@@ -104,16 +104,21 @@ class TalanaDocumentApi
         return $pdf;
     }
 
-    public function upload(string $rut, string $name, string $category, string $pdf): Response
+    public function upload(int $employeeId, string $name, string $category, string $pdf): Response
     {
         return $this->client()->post('documentos/', [
-            'rut' => $rut,
+            'empleado' => $employeeId,
             'nombre' => $name,
             'categoria' => $category,
-            'puedeVerloElTrabajador' => false,
+            'puedeVerloElTrabajador' => true,
             'filename' => 'documento.pdf',
             'filedata_b64' => base64_encode($pdf),
         ]);
+    }
+
+    public function deleteDocument(int $id): Response
+    {
+        return $this->client()->delete('documentos/'.$id.'/');
     }
 
     public function requestSignature(int $documentId): Response

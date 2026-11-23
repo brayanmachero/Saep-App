@@ -446,14 +446,45 @@ class RrhhDocumentDraftTest extends TestCase
         config(['services.talana_documents.writes' => true]);
         Http::fake(['*/documentos/' => Http::sequence()->push(['id' => 101], 201)->push(['id' => 102], 201),
             '*/integration-signature-requests-paginated/*' => Http::response(['results' => [['id' => 201, 'signed' => true], ['id' => 202, 'signed' => false]]]),
+            '*/documentos/101/*' => Http::response(['empleado'=>1]), '*/documentos/102/*' => Http::response(['empleado'=>1]),
             '*/requestSignature' => Http::sequence()->push(['sr_id' => 201])->push(['sr_id' => 202])]);
         foreach (['--ejecutar', '--ejecutar', '--firmar', '--firmar'] as $option) {
             $this->artisan('rrhh:documentos', ['lote' => $batch, $option => true])->assertSuccessful();
         }
-        Http::assertSentCount(4);
+        Http::assertSentCount(6);
+        Http::assertSent(fn($r)=>$r->method()==='POST' && ($r['empleado'] ?? null)===1 && !isset($r['rut']) && $r['puedeVerloElTrabajador']===true);
         $this->assertSame(2, DB::table('rrhh_document_deliveries')->where('state', 'firma_solicitada')->count());
         $this->artisan('rrhh:documentos', ['lote' => $batch, '--consultar' => true])->assertSuccessful();
         $this->assertSame(1, DB::table('rrhh_document_deliveries')->where('state', 'firmado')->count());
+    }
+
+    public function test_pilot_restricts_recipients_blocks_signature_and_can_remove_its_unsigned_document(): void
+    {
+        config(['services.talana_documents.token'=>'fake','services.talana_documents.writes'=>true,'services.talana_documents.pilot'=>true,
+            'services.talana_documents.pilot_until'=>now()->addDay()->toIso8601String(),'services.talana_documents.pilot_recipients'=>['1039:1']]);
+        $this->contract(2);
+        $blocked=(new RrhhDocumentDraftService)->create($this->data(),1);
+        $this->artisan('rrhh:documentos',['lote'=>$blocked,'--ejecutar'=>true])->assertFailed();
+        $this->artisan('rrhh:documentos',['lote'=>$blocked,'--firmar'=>true])->assertFailed();
+        Http::assertNothingSent();
+        $this->contract(1);
+        $batch=(new RrhhDocumentDraftService)->create($this->data(['seleccion'=>'manual','contratos'=>[2]]),1);
+        $item=DB::table('rrhh_document_batch_items')->where('batch_id',$batch)->value('id');
+        $delivery=DB::table('rrhh_document_deliveries')->insertGetId(['item_id'=>$item,'position'=>0,'category'=>'Prueba','path'=>'qa.pdf','sha256'=>str_repeat('a',64),'prepared_by'=>1,'state'=>'cargado','document_id'=>900]);
+        Http::fake(['*/documentos/900/*'=>Http::sequence()->push(['empleado'=>1,'nombre'=>'[PRUEBA SAEP] Documento'])
+            ->push(['empleado'=>1,'nombre'=>'[PRUEBA SAEP] Documento'])->push('',204)->push('',404)]);
+        $this->artisan('rrhh:retirar-prueba',['entrega'=>$delivery])->assertSuccessful();
+        Http::assertSentCount(1);
+        $this->artisan('rrhh:retirar-prueba',['entrega'=>$delivery,'--confirmar'=>true])->assertSuccessful();
+        $this->assertDatabaseHas('rrhh_document_deliveries',['id'=>$delivery,'state'=>'retirado_prueba','document_id'=>900]);
+        $this->artisan('rrhh:retirar-prueba',['entrega'=>$delivery,'--confirmar'=>true])->assertFailed();
+        Http::assertSentCount(4);
+        DB::table('rrhh_document_deliveries')->where('id',$delivery)->update(['state'=>'firma_solicitada','signature_id'=>100]);
+        $this->artisan('rrhh:retirar-prueba',['entrega'=>$delivery,'--confirmar'=>true])->assertFailed();
+        Http::assertSentCount(4);
+        config(['services.talana_documents.pilot_until'=>now()->subSecond()->toIso8601String()]);
+        $this->artisan('rrhh:documentos',['lote'=>$batch,'--ejecutar'=>true])->assertFailed();
+        Http::assertSentCount(4);
     }
 
     public function test_batch_supports_fifty_workers_with_twenty_documents(): void

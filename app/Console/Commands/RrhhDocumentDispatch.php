@@ -61,6 +61,17 @@ class RrhhDocumentDispatch extends Command
         }
 
         $id = $this->argument('lote');
+        if ($write && config('services.talana_documents.pilot')) {
+            if ($this->option('firmar')) {
+                $this->error('Este piloto permite cargar y retirar documentos; la firma está deshabilitada.');
+                return self::FAILURE;
+            }
+            try {
+                foreach (DB::table('rrhh_document_batch_items')->where('batch_id',$id)->where('excluido',false)->get() as $item) {
+                    app(\App\Services\RrhhDocumentPilot::class)->assertRecipient(json_decode($item->snapshot,true));
+                }
+            } catch (RuntimeException $e) { $this->error($e->getMessage()); return self::FAILURE; }
+        }
         $batch = DB::transaction(function () use ($id, $write) {
             $batch = DB::table('rrhh_document_batches')->where('id', $id)->lockForUpdate()->first();
             if (! $batch || ! in_array($batch->estado, ['BORRADOR', 'EN_PROCESO'], true)) {
@@ -131,6 +142,8 @@ class RrhhDocumentDispatch extends Command
             if (! $write) {
                 continue;
             }
+            try { app(\App\Services\RrhhDocumentPilot::class)->assertRecipient(json_decode($row->snapshot,true)); }
+            catch (RuntimeException $e) { $this->error($e->getMessage()); return self::FAILURE; }
             $delivery = DB::table('rrhh_document_deliveries')->where('id', $row->id);
             $claimed = (clone $delivery)->where('state', $source)->update(['state' => $sign ? 'solicitando_firma' : 'cargando', 'updated_at' => now()]);
             if (! $claimed) {
@@ -140,11 +153,17 @@ class RrhhDocumentDispatch extends Command
             try {
                 $snapshot = json_decode($row->snapshot, true);
                 $response = $sign ? $api->requestSignature($row->document_id)
-                    : $api->upload($snapshot['persona_rut'], $docs[$row->position], $row->category, $pdf);
+                    : $api->upload((int)$snapshot['persona_talana_id'], (config('services.talana_documents.pilot') ? '[PRUEBA SAEP] ' : '').$docs[$row->position], $row->category, $pdf);
                 $status = $response->status();
                 $remote = filter_var($response->json($sign ? 'sr_id' : 'id'), FILTER_VALIDATE_INT);
                 if (! $response->successful() || ! $remote || $remote < 1) {
                     throw new RuntimeException('Respuesta no confirmada.');
+                }
+                if (!$sign) {
+                    // Preserve the remote ID even if verification fails: never retry an uncertain upload.
+                    $delivery->update(['document_id'=>$remote]);
+                    $check = $api->document($remote,(int)$snapshot['empresa_id'])->throw()->json();
+                    if ((int)($check['empleado'] ?? 0) !== (int)$snapshot['persona_talana_id']) throw new RuntimeException('Destinatario remoto no confirmado.');
                 }
                 $delivery->update(['state' => $sign ? 'firma_solicitada' : 'cargado',
                     ($sign ? 'signature_id' : 'document_id') => $remote, 'http_status' => $status, 'updated_at' => now()]);
