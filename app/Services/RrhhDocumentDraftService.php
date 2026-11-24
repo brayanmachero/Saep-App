@@ -10,7 +10,10 @@ class RrhhDocumentDraftService
 {
     public function query(array $filters)
     {
-        $q = TalanaContrato::query()->where('finiquitado', false)->where(fn ($q) => $q->whereNull('desde')->orWhereDate('desde', '<=', today()))->where(fn ($q) => $q->whereNull('hasta')->orWhereDate('hasta', '>=', today()));
+        $q = TalanaContrato::query()->where('finiquitado', false)->where(fn ($q) => $q->whereNull('hasta')->orWhereDate('hasta', '>=', today()));
+        $scope = $filters['vigencia'] ?? 'vigentes';
+        if ($scope === 'proximos') $q->whereDate('desde', '>', today());
+        elseif ($scope !== 'todos') $q->where(fn ($q) => $q->whereNull('desde')->orWhereDate('desde', '<=', today()));
         foreach (['empresa_id', 'centro_costo_nombre', 'cargo_nombre', 'tipo_contrato_nombre'] as $field) {
             if (filled($filters[$field] ?? null)) {
                 $q->where($field, $filters[$field]);
@@ -46,7 +49,7 @@ class RrhhDocumentDraftService
             $compositionService->assertUsable($composition, $battery->kind !== 'independent');
             $docs = $composition['documents'];
             $rules = $composition['rules'];
-            $filters = array_intersect_key($data, array_flip(['empresa_id', 'centro_costo_nombre', 'cargo_nombre', 'tipo_contrato_nombre', 'buscar']));
+            $filters = array_intersect_key($data, array_flip(['empresa_id', 'centro_costo_nombre', 'cargo_nombre', 'tipo_contrato_nombre', 'buscar', 'vigencia']));
             $filters['finalidad'] = $data['finalidad'] ?? 'ingreso';
             $q = $this->query($filters);
             if ($data['seleccion'] === 'manual') {

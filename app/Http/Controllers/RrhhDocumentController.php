@@ -12,7 +12,7 @@ class RrhhDocumentController extends Controller
 {
     private function filters(Request $request): array
     {
-        return $request->validate(['empresa_id' => 'nullable|integer', 'centro_costo_nombre' => 'nullable|string|max:200', 'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200', 'buscar' => 'nullable|string|max:100']);
+        return $request->validate(['empresa_id' => 'nullable|integer', 'centro_costo_nombre' => 'nullable|string|max:200', 'cargo_nombre' => 'nullable|string|max:200', 'tipo_contrato_nombre' => 'nullable|string|max:200', 'buscar' => 'nullable|string|max:100', 'vigencia'=>'nullable|in:vigentes,proximos,todos']);
     }
 
     public function overview(Request $request)
@@ -66,7 +66,8 @@ class RrhhDocumentController extends Controller
         }
         $companies = TalanaContrato::select('empresa_id', 'empresa_nombre')->whereNotNull('empresa_id')->whereNotNull('empresa_nombre')->where('empresa_nombre', '!=', '')->distinct()->orderBy('empresa_nombre')->get();
 
-        return view('rrhh_documentos.index', compact('contracts', 'filters', 'options', 'companies') + ['batteries' => DB::table('rrhh_document_batteries')->orderByDesc('id')->get(), 'batches' => DB::table('rrhh_document_batches')->orderByDesc('created_at')->paginate(10, ['*'], 'lotes_pagina')]);
+        $workerSync = RrhhWorkerSyncController::info();
+        return view('rrhh_documentos.index', compact('workerSync', 'contracts', 'filters', 'options', 'companies') + ['batteries' => DB::table('rrhh_document_batteries')->orderByDesc('id')->get(), 'batches' => DB::table('rrhh_document_batches')->orderByDesc('created_at')->paginate(10, ['*'], 'lotes_pagina')]);
     }
 
     public function est(Request $request)

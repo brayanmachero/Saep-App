@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\DB;
 class TalanaSyncDbCommand extends Command
 {
     protected $signature = 'talana:sync-db
+                            {--padron-documental : Solo contratos con datos del trabajador; falla si no puede completarse}
                             {--solo-contratos : Sincroniza solo personas y contratos (omite marcas)}
                             {--meses=1        : Meses hacia atrás para sincronizar marcas (default: 1)}
                             {--dry-run        : Consulta la API y muestra totales, sin persistir}';
@@ -38,6 +39,11 @@ class TalanaSyncDbCommand extends Command
 
     public function handle(): int
     {
+        $lock = Cache::lock('talana_contracts_sync_lock', 900);
+        if (!$lock->get()) {
+            $this->warn('Ya hay una sincronización de Talana en curso.');
+            return self::FAILURE;
+        }
         $isDry = $this->option('dry-run');
         $meses = (int) $this->option('meses');
         $soloContr = $this->option('solo-contratos');
@@ -56,13 +62,13 @@ class TalanaSyncDbCommand extends Command
 
         try {
             // 1. Personas ─────────────────────────────────────────────────────
-            $this->syncPersonas($isDry);
+            if (!$this->option('padron-documental')) $this->syncPersonas($isDry);
 
             // 2. Contratos ────────────────────────────────────────────────────
             $this->syncContratos($isDry);
 
             // 3. Marcas de asistencia ─────────────────────────────────────────
-            if (! $soloContr) {
+            if (! $soloContr && !$this->option('padron-documental')) {
                 $this->syncMarcas($isDry, $meses);
             }
 
@@ -85,6 +91,7 @@ class TalanaSyncDbCommand extends Command
             if (! $isDry) {
                 Cache::forget('talana_sync_running');
             }
+            $lock->release();
         }
 
         return self::SUCCESS;
@@ -150,6 +157,7 @@ class TalanaSyncDbCommand extends Command
         $empresas = config('services.talana.empresas', []);
 
         if (empty($empresas)) {
+            if ($this->option('padron-documental')) throw new \RuntimeException('No hay empresas configuradas para el padrón.');
             $this->warn('   ⚠ No hay empresas configuradas en services.talana.empresas');
 
             return;
@@ -224,11 +232,13 @@ class TalanaSyncDbCommand extends Command
             }
 
             $activos = count(array_filter($loteTotal, fn ($c) => ! $c['finiquitado']));
+            Cache::forever('talana_contracts_last_success', now()->toDateTimeString());
             $finiquitados = count($loteTotal) - $activos;
             $this->line("   ✓ {$this->count($loteTotal)} contratos sincronizados ({$activos} activos, {$finiquitados} finiquitados)");
 
         } catch (\Exception $e) {
             $this->warn("   ⚠ Error contratos: {$e->getMessage()}");
+            if ($this->option('padron-documental')) throw $e;
         }
     }
 

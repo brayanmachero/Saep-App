@@ -896,6 +896,8 @@ Route::middleware('auth')->group(function () {
     Route::middleware('modulo:gestion_documental')->prefix('rrhh/documentos')->name('rrhh-documentos.')->group(function () {
         Route::get('/', [\App\Http\Controllers\RrhhDocumentController::class, 'overview'])->name('index');
         Route::get('/lotes', [\App\Http\Controllers\RrhhDocumentController::class, 'index'])->name('lots');
+        Route::get('/trabajadores/actualizacion', [\App\Http\Controllers\RrhhWorkerSyncController::class, 'status'])->name('workers-sync-status');
+        Route::post('/trabajadores/actualizacion', [\App\Http\Controllers\RrhhWorkerSyncController::class, 'start'])->middleware(['modulo:gestion_documental,puede_editar','throttle:6,1'])->name('workers-sync');
         Route::get('/baterias/nueva', [\App\Http\Controllers\RrhhDocumentController::class, 'newBattery'])->middleware('modulo:gestion_documental,puede_crear')->name('battery-create');
         Route::post('/documentos-talana/preview', [\App\Http\Controllers\RrhhDocumentBatteryController::class, 'candidatePdf'])->middleware('modulo:gestion_documental,puede_editar')->name('candidate-pdf');
         Route::get('/documentos-talana', [\App\Http\Controllers\RrhhDocumentController::class, 'documentOptions'])->name('document-options');

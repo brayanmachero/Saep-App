@@ -267,6 +267,69 @@ class RrhhDocumentDraftTest extends TestCase
         $this->assertCount(0,Http::recorded(fn($r)=>$r->method()==='POST'));
     }
 
+
+    public function test_future_workers_can_be_prepared_but_not_dispatched(): void
+    {
+        [$old]=$this->livePilotFixture();
+        $future=$this->contract(2,['desde'=>today()->addDays(3)]);
+        $this->contract(3,['desde'=>today()->addDays(2),'finiquitado'=>true]);
+        $this->contract(4,['hasta'=>today()->subDay()]);
+        $svc=app(RrhhDocumentDraftService::class);
+        $this->assertSame([1],$svc->query([])->pluck('talana_id')->all());
+        $this->assertSame([2],$svc->query(['vigencia'=>'proximos'])->pluck('talana_id')->all());
+        $this->assertCount(2,$svc->query(['vigencia'=>'todos'])->get());
+        $this->get(route('rrhh-documentos.lots',['vigencia'=>'proximos']))->assertOk()->assertSee('Próximo ingreso · Solo preparación')->assertSee('Persona 2')->assertDontSee('Persona 1');
+        $this->post(route('rrhh-documentos.store'),['request_id'=>$id=(string)Str::uuid(),'nombre'=>'Próximo ingreso QA','battery_id'=>1,'seleccion'=>'manual','contratos'=>[$future->id],'vigencia'=>'proximos'])->assertRedirect(route('rrhh-documentos.show',$id));
+        $item=DB::table('rrhh_document_batch_items')->where('batch_id',$id)->sole();
+        $this->assertSame([],json_decode($item->observaciones,true));
+        DB::table('rrhh_document_deliveries')->insert(['item_id'=>$item->id,'position'=>0,'category'=>'Otros Documentos','path'=>'pilot.pdf','sha256'=>hash('sha256','%PDF-1.4 test'),'prepared_by'=>7,'state'=>'preparado','created_at'=>now(),'updated_at'=>now()]);
+        config(['services.talana_documents.pilot_recipients'=>['1039:2']]);
+        $this->post(route('rrhh-documentos.operation',$id),['action'=>'upload','confirmed'=>1])->assertSessionHasErrors('operation');
+        Http::assertNothingSent();
+    }
+
+    public function test_worker_sync_is_queued_once_and_permissions_are_checked(): void
+    {
+        [$id,$user]=$this->livePilotFixture();
+        config(['services.talana.token'=>'test']);
+        \Illuminate\Support\Facades\Queue::fake();
+        $url=route('rrhh-documentos.workers-sync');
+        $user->edit=false;$this->postJson($url)->assertForbidden();$user->edit=true;
+        $this->postJson($url)->assertStatus(202)->assertJsonPath('state','queued')->assertJsonPath('busy',true);
+        $this->postJson($url)->assertStatus(409);
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\RrhhWorkerSyncJob::class,fn($j)=>$j->connection==='dashboard_sync' && $j->queue==='dashboard-sync' && $j->actor===7);
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\RrhhWorkerSyncJob::class,1);
+        $this->getJson(route('rrhh-documentos.workers-sync-status'))->assertOk()->assertJsonPath('busy',true);
+        $this->travel(21)->minutes();
+        $this->getJson(route('rrhh-documentos.workers-sync-status'))->assertJsonPath('state','error')->assertJsonPath('busy',false);
+        Http::assertNothingSent();
+    }
+
+    public function test_worker_job_does_not_report_command_failure_as_success(): void
+    {
+        \Illuminate\Support\Facades\Cache::put('rrhh_worker_sync_reservation','qa');
+        \Illuminate\Support\Facades\Artisan::shouldReceive('call')->once()->with('talana:sync-db',['--padron-documental'=>true])->andReturn(1);
+        (new \App\Jobs\RrhhWorkerSyncJob(7,'qa'))->handle();
+        $this->assertSame('error',\Illuminate\Support\Facades\Cache::get('rrhh_worker_sync_status')['state']);
+        $this->assertFalse(\Illuminate\Support\Facades\Cache::has('rrhh_worker_sync_reservation'));
+        $this->assertNull(\Illuminate\Support\Facades\Cache::get('talana_contracts_last_success'));
+    }
+
+    public function test_contract_sync_lock_and_strict_failure_preserve_previous_success(): void
+    {
+        config(['services.talana.empresas'=>[1039=>'SAEP']]);
+        $api=\Mockery::mock(\App\Services\TalanaService::class);
+        $api->shouldReceive('contratos')->once()->with(['empresa'=>1039])->andThrow(new \RuntimeException('API unavailable'));
+        $this->app->instance(\App\Services\TalanaService::class,$api);
+        $lock=\Illuminate\Support\Facades\Cache::lock('talana_contracts_sync_lock',900);$lock->get();
+        $this->artisan('talana:sync-db',['--padron-documental'=>true])->assertExitCode(1);$lock->release();
+        \Illuminate\Support\Facades\Cache::forever('talana_contracts_last_success','2026-11-01 06:00:00');
+        $this->artisan('talana:sync-db',['--padron-documental'=>true])->assertExitCode(1);
+        $this->assertSame('2026-11-01 06:00:00',\Illuminate\Support\Facades\Cache::get('talana_contracts_last_success'));
+        $this->assertFalse(\Illuminate\Support\Facades\Cache::get('talana_sync_running',false));
+        $free=\Illuminate\Support\Facades\Cache::lock('talana_contracts_sync_lock',900);$this->assertTrue($free->get());$free->release();
+    }
+
     private function contract(int $n, array $extra = []): TalanaContrato
     {
         return TalanaContrato::create(array_merge(['talana_id' => $n, 'persona_talana_id' => $n, 'empresa_id' => 1039, 'empresa_nombre' => 'SAEP SUB', 'persona_nombre' => 'Persona '.$n, 'persona_rut' => '12345678-9', 'cargo_nombre' => 'Operario', 'centro_costo_nombre' => 'CCU', 'tipo_contrato_nombre' => 'Indefinido', 'finiquitado' => false, 'desde' => today()->subMonth(), 'synced_at' => now()], $extra));
