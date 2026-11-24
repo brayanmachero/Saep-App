@@ -162,6 +162,111 @@ class RrhhDocumentDraftTest extends TestCase
         Http::assertNothingSent();
     }
 
+
+    private function livePilotFixture(): array
+    {
+        $user = new class extends \App\Models\User {
+            public bool $edit = true;
+            public function tieneConsentimientoDatosVigente(): bool { return true; }
+            public function tieneAcceso(string $moduloSlug, string $accion = 'puede_ver'): bool { return $accion === 'puede_ver' || $this->edit; }
+        };
+        $user->id=7; $user->setRelation('rol', new \App\Models\Rol);
+        $this->actingAs($user)->withoutVite();
+        $this->contract(1);
+        config(['services.talana_documents.token'=>'test','services.talana_documents.writes'=>true,
+            'services.talana_documents.pilot'=>true,'services.talana_documents.pilot_until'=>now()->addDay()->toIso8601String(),
+            'services.talana_documents.pilot_recipients'=>['1039:1']]);
+        DB::table('rrhh_document_batteries')->where('id',1)->update(['documentos'=>'["SAEP-PILOTO-QA - SIN VALIDEZ.pdf"]']);
+        $id=app(RrhhDocumentDraftService::class)->create(['request_id'=>(string)Str::uuid(),'nombre'=>'Prueba UI','battery_id'=>1,'seleccion'=>'todos'],7);
+        $item=DB::table('rrhh_document_batch_items')->where('batch_id',$id)->first();
+        Storage::fake('local'); Storage::disk('local')->put('pilot.pdf','%PDF-1.4 test');
+        DB::table('rrhh_document_deliveries')->insert(['item_id'=>$item->id,'position'=>0,'category'=>'Otros Documentos','path'=>'pilot.pdf','sha256'=>hash('sha256','%PDF-1.4 test'),'prepared_by'=>7,'state'=>'preparado','created_at'=>now(),'updated_at'=>now()]);
+        return [$id,$user];
+    }
+
+    public function test_live_pilot_http_actions_are_explicit_and_idempotent(): void
+    {
+        [$id,$user]=$this->livePilotFixture();
+        $url=route('rrhh-documentos.operation',$id);
+        $this->post($url,['action'=>'upload'])->assertSessionHasErrors('confirmed');
+        $user->edit=false;
+        $this->post($url,['action'=>'upload','confirmed'=>1])->assertForbidden();
+        $user->edit=true;
+        Http::assertNothingSent();
+        Http::fake([
+            '*/documentos/'=>Http::response(['id'=>500],201),
+            '*/documentos/500/?*'=>Http::response(['id'=>500,'empleado'=>1,'nombre'=>'[PRUEBA SAEP] SAEP-PILOTO-QA - SIN VALIDEZ.pdf','adjunto'=>'https://talana.com/pilot.pdf']),
+            'https://talana.com/pilot.pdf'=>Http::response('%PDF-1.4 test'),
+            '*/integration-signature-requests-paginated/*'=>Http::sequence()->push(['results'=>[]])->push(['results'=>[['id'=>600,'documentReference'=>'500','signed'=>false,'details'=>[['requestedUser'=>1,'signed'=>false,'status'=>'P']]]]]),
+            '*/document/requestSignature'=>Http::response(['sr_id'=>600],200),
+        ]);
+        $this->post($url,['action'=>'upload','confirmed'=>1])->assertSessionHas('success');
+        $this->assertDatabaseHas('rrhh_document_deliveries',['document_id'=>500,'state'=>'cargado']);
+        $this->post($url,['action'=>'upload','confirmed'=>1])->assertSessionHasErrors('operation');
+        $this->get(route('rrhh-documentos.show',$id))->assertOk()->assertSee('Solicitar firma al trabajador')->assertSee('Cargados sin firma');
+        $this->post($url,['action'=>'signature','confirmed'=>1])->assertSessionHas('success');
+        $this->assertDatabaseHas('rrhh_document_deliveries',['signature_id'=>600,'state'=>'firma_solicitada']);
+        $this->post($url,['action'=>'signature','confirmed'=>1])->assertSessionHasErrors('operation');
+        // Consult remains available after the write window closes.
+        $this->travel(61)->seconds();
+        config(['services.talana_documents.pilot_until'=>now()->subMinute()->toIso8601String()]);
+        $this->post($url,['action'=>'refresh'])->assertSessionHas('success');
+        $this->assertDatabaseHas('rrhh_document_deliveries',['state'=>'firma_solicitada']);
+        $posts=Http::recorded(fn($r)=>$r->method()==='POST');
+        $this->assertCount(2,$posts);
+        $this->assertDatabaseHas('rrhh_document_batch_events',['accion'=>'Estado consultado en Talana','actor_id'=>7]);
+    }
+
+    public function test_live_pilot_blocks_expired_window_wrong_recipient_and_concurrent_operation(): void
+    {
+        [$id]=$this->livePilotFixture(); $url=route('rrhh-documentos.operation',$id);
+        config(['services.talana_documents.pilot_recipients'=>['1081:1']]);
+        $this->post($url,['action'=>'upload','confirmed'=>1])->assertSessionHasErrors('operation');
+        config(['services.talana_documents.pilot_recipients'=>['1039:1'],'services.talana_documents.pilot_until'=>now()->subMinute()->toIso8601String()]);
+        $this->post($url,['action'=>'upload','confirmed'=>1])->assertSessionHasErrors('operation');
+        config(['services.talana_documents.pilot_until'=>now()->addDay()->toIso8601String()]);
+        $lock=\Illuminate\Support\Facades\Cache::lock('rrhh-document-operation:'.$id,300); $lock->get();
+        $this->post($url,['action'=>'upload','confirmed'=>1])->assertSessionHasErrors('operation'); $lock->release();
+        Http::assertNothingSent();
+    }
+
+    public function test_live_pilot_does_not_repeat_uncertain_signature_request(): void
+    {
+        [$id]=$this->livePilotFixture(); $url=route('rrhh-documentos.operation',$id);
+        DB::table('rrhh_document_batches')->where('id',$id)->update(['estado'=>'EN_PROCESO']);
+        DB::table('rrhh_document_deliveries')->update(['state'=>'cargado','document_id'=>500]);
+        Http::fake([
+            '*/documentos/500/?*'=>Http::response(['empleado'=>1,'nombre'=>'[PRUEBA SAEP] SAEP-PILOTO-QA - SIN VALIDEZ.pdf','adjunto'=>'https://talana.com/pilot.pdf']),
+            'https://talana.com/pilot.pdf'=>Http::response('%PDF-1.4 test'),
+            '*/integration-signature-requests-paginated/*'=>Http::response(['results'=>[]]),
+            '*/document/requestSignature'=>Http::response([],500),
+        ]);
+        $this->post($url,['action'=>'signature','confirmed'=>1])->assertSessionHasErrors('operation');
+        $this->assertDatabaseHas('rrhh_document_deliveries',['state'=>'revisar_firma']);
+        $this->post($url,['action'=>'signature','confirmed'=>1])->assertSessionHasErrors('operation');
+        $this->assertCount(1,Http::recorded(fn($r)=>$r->method()==='POST'));
+    }
+
+
+    public function test_live_status_confirms_only_the_matching_document_and_worker(): void
+    {
+        [$id]=$this->livePilotFixture();
+        DB::table('rrhh_document_batches')->where('id',$id)->update(['estado'=>'EN_PROCESO']);
+        DB::table('rrhh_document_deliveries')->update(['state'=>'firma_solicitada','document_id'=>500,'signature_id'=>600]);
+        Http::fake([
+            '*/documentos/500/?*'=>Http::response(['empleado'=>1]),
+            '*/integration-signature-requests-paginated/*'=>Http::sequence()
+                ->push(['results'=>[['id'=>600,'documentReference'=>'500','signed'=>true,'details'=>[['requestedUser'=>999,'signed'=>true,'status'=>'F']]]]])
+                ->push(['results'=>[['id'=>600,'documentReference'=>'500','signed'=>true,'details'=>[['requestedUser'=>1,'signed'=>true,'status'=>'F']]]]]),
+        ]);
+        $url=route('rrhh-documentos.operation',$id);
+        $this->post($url,['action'=>'refresh'])->assertSessionHasErrors('operation');
+        $this->assertDatabaseHas('rrhh_document_deliveries',['state'=>'firma_solicitada']);
+        $this->post($url,['action'=>'refresh'])->assertSessionHas('success');
+        $this->assertDatabaseHas('rrhh_document_deliveries',['state'=>'firmado']);
+        $this->assertCount(0,Http::recorded(fn($r)=>$r->method()==='POST'));
+    }
+
     private function contract(int $n, array $extra = []): TalanaContrato
     {
         return TalanaContrato::create(array_merge(['talana_id' => $n, 'persona_talana_id' => $n, 'empresa_id' => 1039, 'empresa_nombre' => 'SAEP SUB', 'persona_nombre' => 'Persona '.$n, 'persona_rut' => '12345678-9', 'cargo_nombre' => 'Operario', 'centro_costo_nombre' => 'CCU', 'tipo_contrato_nombre' => 'Indefinido', 'finiquitado' => false, 'desde' => today()->subMonth(), 'synced_at' => now()], $extra));

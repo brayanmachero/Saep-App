@@ -917,6 +917,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/trabajadores/{contract}/documentos/{document}/pdf', [\App\Http\Controllers\RrhhWorkerHistoryController::class, 'pdf'])->whereNumber(['contract','document'])->name('worker-pdf');
         Route::post('/lotes/{id}/contratos/{item}/referencia', [\App\Http\Controllers\RrhhWorkerHistoryController::class, 'reference'])->whereNumber('item')->middleware('modulo:gestion_documental,puede_editar')->name('worker-reference');
         Route::get('/lotes/{id}/resumen', [\App\Http\Controllers\RrhhBatchSummaryController::class, 'show'])->name('summary');
+        Route::post('/lotes/{id}/operacion', [\App\Http\Controllers\RrhhDocumentOperationController::class, 'store'])->middleware(['modulo:gestion_documental,puede_editar','throttle:6,1'])->name('operation');
         Route::get('/lotes/{id}', [\App\Http\Controllers\RrhhDocumentController::class, 'show'])->name('show');
     });
     // --- CONTRATACIÓN RRHH (panel admin) ---

@@ -185,7 +185,12 @@ class RrhhDocumentController extends Controller
         $preparation = ['expected'=>$expected,'registered'=>$registered,'missing'=>max(0,$expected-$registered),
             'observed'=>(clone $included)->whereJsonLength('observaciones','>',0)->count(),'states'=>$deliveryStates,
             'writes_enabled'=>(bool)config('services.talana_documents.writes')];
-        return view('rrhh_documentos.show', compact('batch', 'items', 'filter', 'events', 'files','preparation'));
+        $pilotContext = null;
+        $pilotReason = null;
+        try { $pilotContext = app(\App\Services\RrhhDocumentLivePilot::class)->context($id); }
+        catch (\RuntimeException $e) { $pilotReason = $e->getMessage(); }
+        $lastStatusCheck = DB::table('rrhh_document_batch_events')->where('batch_id',$id)->where('accion','Estado consultado en Talana')->max('created_at');
+        return view('rrhh_documentos.show', compact('batch', 'items', 'filter', 'events', 'files','preparation','pilotContext','pilotReason','lastStatusCheck'));
     }
 
     public function review(Request $request, string $id, RrhhDocumentReviewService $service)
