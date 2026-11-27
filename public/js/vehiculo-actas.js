@@ -31,7 +31,8 @@
     });
     const photos = document.querySelector('[data-photo-input]'), preview = document.querySelector('[data-photo-preview]');
     const camera = document.querySelector('[data-camera]');
-    let files = [], urls = [];
+    let files = [], urls = [], processingPhotos = false;
+    const thumbnails = new WeakMap();
     const render = () => {
         const transfer = new DataTransfer(); files.forEach(file => transfer.items.add(file)); photos.files = transfer.files;
         const count = document.querySelector('[data-photo-count]');
@@ -39,19 +40,39 @@
         urls.forEach(URL.revokeObjectURL); urls = []; preview.replaceChildren();
         files.forEach((file, index) => {
             const item = document.createElement('div'); item.className = 'photo-item';
-            const img = document.createElement('img'), url = URL.createObjectURL(file); urls.push(url);
-            img.src = url; img.alt = 'Fotografía ' + (index + 1);
+            const img = document.createElement('img'), url = URL.createObjectURL(thumbnails.get(file) || file); urls.push(url);
+            img.decoding = 'async'; img.src = url; img.alt = 'Fotografía ' + (index + 1);
             const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Quitar foto ' + (index + 1);
             remove.addEventListener('click', () => { files.splice(index, 1); render(); pads.get('firma_encargado')?.reset(); });
             item.append(img, remove); preview.append(item);
         });
     };
-    const add = incoming => {
+    const add = async incoming => {
+        if (processingPhotos) return;
         if (files.length + incoming.length > 5) { alert('Puedes adjuntar hasta cinco fotos. Quita una antes de agregar otra.'); render(); return; }
         if (incoming.some(f => !['image/jpeg', 'image/png'].includes(f.type) || f.size > 5 * 1024 * 1024)) {
             alert('Usa fotografías JPG o PNG de hasta 5 MB cada una.'); render(); return;
         }
-        files.push(...incoming); render(); pads.get('firma_encargado')?.reset();
+        processingPhotos = true;
+        photos.disabled = true; camera.disabled = true;
+        preview.querySelectorAll('button').forEach(button => { button.disabled = true; });
+        const count = document.querySelector('[data-photo-count]');
+        let failed = false;
+        try {
+            for (let i = 0; i < incoming.length; i++) {
+                if (count) count.textContent = `Preparando foto ${i + 1} de ${incoming.length}… Puedes seguir completando los datos.`;
+                // Yield between photos so mobile input and paint remain responsive.
+                await new Promise(resolve => setTimeout(resolve, 0));
+                const file = typeof createImageBitmap === 'function' ? await compactPhoto(incoming[i]) : incoming[i];
+                files.push(file);
+            }
+        } catch (_) {
+            failed = true;
+        } finally {
+            processingPhotos = false; photos.disabled = false; camera.disabled = false;
+            render(); pads.get('firma_encargado')?.reset();
+            if (failed && count) count.textContent = `${files.length} fotos listas. No se pudo preparar una foto; vuelve a seleccionar las que faltan. Las anteriores se conservaron.`;
+        }
     };
     if (photos && typeof DataTransfer !== 'undefined') {
         document.querySelector('.camera-action').hidden = false;
@@ -59,6 +80,11 @@
         camera.addEventListener('change', () => { add([...camera.files]); camera.value = ''; });
     }
     form?.addEventListener('submit', event => {
+        if (processingPhotos) {
+            event.preventDefault();
+            document.querySelector('[data-photo-count]')?.scrollIntoView({block:'center'});
+            return;
+        }
         if (event.submitter?.value !== 'preparar' || !photos) return;
         const count = photos.files.length || Number(photos.dataset.savedCount);
         if (count !== 5) {
@@ -88,7 +114,15 @@
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .85));
             if (!blob) throw new Error('No se pudo optimizar la fotografía.');
             const result = new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', {type:'image/jpeg'});
+            const thumb = document.createElement('canvas');
+            const thumbScale = Math.min(1, 640 / Math.max(canvas.width, canvas.height));
+            thumb.width = Math.max(1, Math.round(canvas.width * thumbScale));
+            thumb.height = Math.max(1, Math.round(canvas.height * thumbScale));
+            thumb.getContext('2d').drawImage(canvas, 0, 0, thumb.width, thumb.height);
+            const thumbnail = await new Promise(resolve => thumb.toBlob(resolve, 'image/jpeg', .75));
+            if (thumbnail) thumbnails.set(result, thumbnail);
             optimized.set(file, result);
+            optimized.set(result, result); // Do not recompress a selected photo at submission.
             return result;
         } finally { bitmap.close(); }
     }
