@@ -46,8 +46,8 @@ class VehiculoActaService
                     $fotos = [];
                     foreach ($request->file('fotos') as $foto) {
                         // Re-encode image: strip EXIF/location and reject active formats.
-                        $bytes = $this->imagen(file_get_contents($foto->getRealPath()));
-                        $path = "vehiculos/actas/{$uuid}/".Str::uuid().'.png';
+                        $bytes = $this->fotografia(file_get_contents($foto->getRealPath()));
+                        $path = "vehiculos/actas/{$uuid}/".Str::uuid().'.jpg';
                         $this->escribir($path, $bytes);
                         $archivos[] = $path;
                         $fotos[] = ['path' => $path, 'sha256' => hash('sha256', $bytes)];
@@ -66,8 +66,8 @@ class VehiculoActaService
                 }
                 $fotoDano = $acta?->datos['foto_dano'] ?? null;
                 if ($request->hasFile('foto_dano')) {
-                    $bytes = $this->imagen(file_get_contents($request->file('foto_dano')->getRealPath()));
-                    $path = "vehiculos/actas/{$uuid}/dano-".Str::uuid().'.png';
+                    $bytes = $this->fotografia(file_get_contents($request->file('foto_dano')->getRealPath()));
+                    $path = "vehiculos/actas/{$uuid}/dano-".Str::uuid().'.jpg';
                     $this->escribir($path, $bytes);
                     $archivos[] = $path;
                     $fotoDano = ['path' => $path, 'sha256' => hash('sha256', $bytes)];
@@ -202,6 +202,27 @@ class VehiculoActaService
             || !$reserva->actasSaep()->where('tipo', 'entrega')->where('estado', 'FIRMADA')->exists())) {
             $this->error('La devolución requiere una entrega firmada en SAEP y una reserva en uso o vencida.');
         }
+    }
+
+    public function fotografia(string $bytes, int $maxSide = 2400, bool $webp = false): string
+    {
+        $size = @getimagesizefromstring($bytes);
+        if (!$size || $size[0] * $size[1] > 16000000 || !in_array($size[2], [IMAGETYPE_PNG, IMAGETYPE_JPEG], true)) {
+            $this->error('Utiliza fotografías JPG o PNG de hasta 16 megapíxeles.', 'fotos');
+        }
+        $source = imagecreatefromstring($bytes);
+        $scale = min(1, $maxSide / max($size[0], $size[1]));
+        $width = max(1, (int) round($size[0] * $scale));
+        $height = max(1, (int) round($size[1] * $scale));
+        $copy = imagecreatetruecolor($width, $height);
+        imagefill($copy, 0, 0, imagecolorallocate($copy, 255, 255, 255));
+        imagecopyresampled($copy, $source, 0, 0, 0, 0, $width, $height, $size[0], $size[1]);
+        ob_start();
+        if ($webp && function_exists('imagewebp')) imagewebp($copy, null, 80);
+        else imagejpeg($copy, null, 85);
+        $result = ob_get_clean();
+        imagedestroy($copy); imagedestroy($source);
+        return $result;
     }
 
     public function imagen(string $bytes): string

@@ -64,6 +64,11 @@ class VehiculoActaController extends Controller
         foreach (VehiculoActaService::KIT as $key => $label) $rules['kit.'.$key] = ['required', Rule::in(['Presente', 'Faltante', 'Con desperfecto', 'No aplica'])];
         $data = $request->validate($rules);
         $acta = $this->actas->guardar($reserva, $tipo, $data, $request);
+        if ($request->expectsJson()) {
+            $request->session()->flash('success', $acta->estado === 'BORRADOR' ? 'Borrador guardado correctamente.' : 'Inspección lista para la firma del conductor.');
+            return response()->json(['redirect' => $acta->estado === 'BORRADOR'
+                ? route('vehiculos-actas.editar', [$reserva, $tipo]) : route('vehiculos-actas.show', $acta)]);
+        }
         return redirect()->route($acta->estado === 'BORRADOR' ? 'vehiculos-actas.editar' : 'vehiculos-actas.show',
             $acta->estado === 'BORRADOR' ? [$reserva, $tipo] : [$acta])
             ->with('success', $acta->estado === 'BORRADOR' ? 'Borrador guardado. Puedes continuar más tarde.' : 'Inspección lista. Entrega el dispositivo al conductor para revisar y firmar.');
@@ -99,16 +104,20 @@ class VehiculoActaController extends Controller
             'presencial' => $interno ? ['accepted'] : ['nullable'],
         ]);
         if (mb_strtolower(trim($data['nombre_firmante'])) !== mb_strtolower(trim($acta->datos['conductor_nombre']))) {
-            return back()->withErrors(['nombre_firmante' => 'Escribe el nombre del conductor tal como aparece en el acta.']);
+            throw \Illuminate\Validation\ValidationException::withMessages(['nombre_firmante' => 'Escribe el nombre del conductor tal como aparece en el acta.']);
         }
         $identidad = $interno
             ? ['modalidad' => 'PRESENCIAL_ATESTIGUADA_BODEGA', 'email' => $acta->datos['conductor_email']]
             : ['modalidad' => 'MICROSOFT_CORPORATIVO', 'email' => app(ReservaVehiculoMicrosoftAuthService::class)->identidad($request)['email']];
+        if ($acta->estado === 'FIRMADA' && hash_equals((string) $acta->contenido_hash, $data['contenido_hash']) && $request->expectsJson()) {
+            return response()->json(['redirect' => route($interno ? 'vehiculos-actas.show' : 'portal-actas.show', $acta)]);
+        }
         $acta = $this->actas->firmar($acta, $data, $request, $identidad);
         if (config('vehiculos_actas.mail_enabled') || config('vehiculos_actas.calendar_enabled')) {
             try { NotificarVehiculoActa::dispatch($acta->id); }
             catch (\Throwable $e) { report($e); $acta->update(['email_estado' => 'ERROR', 'email_error' => 'No se pudo iniciar el envío. El acta quedó guardada.']); }
         }
+        if ($request->expectsJson()) return response()->json(['redirect' => route($interno ? 'vehiculos-actas.show' : 'portal-actas.show', $acta)]);
         return redirect()->route($interno ? 'vehiculos-actas.show' : 'portal-actas.show', $acta)->with('success', 'Acta firmada y guardada. La reserva fue actualizada.');
     }
 
@@ -129,7 +138,16 @@ class VehiculoActaController extends Controller
             default => ctype_digit($archivo) ? ($acta->evidencias[(int) $archivo]['path'] ?? null) : null,
         };
         abort_unless($path && Storage::disk(config('vehiculos_actas.disk'))->exists($path), 404);
-        return response(Storage::disk(config('vehiculos_actas.disk'))->get($path), 200, ['Content-Type' => 'image/png', 'Cache-Control' => 'no-store, private', 'X-Content-Type-Options' => 'nosniff']);
+        $disk = Storage::disk(config('vehiculos_actas.disk'));
+        if ($request->boolean('mini') && (ctype_digit($archivo) || $archivo === 'dano')) {
+            $webp = function_exists('imagewebp');
+            $preview = 'vehiculos/previews/'.hash('sha256', $path.':'.$disk->lastModified($path)).($webp ? '.webp' : '.jpg');
+            if (!$disk->exists($preview)) $disk->put($preview, $this->actas->fotografia($disk->get($path), 1000, $webp));
+            $path = $preview;
+        }
+        $bytes = $disk->get($path);
+        $mime = getimagesizefromstring($bytes)['mime'] ?? 'image/png';
+        return response($bytes, 200, ['Content-Type' => $mime, 'Cache-Control' => 'no-store, private', 'X-Content-Type-Options' => 'nosniff']);
     }
 
     public function pdf(Request $request, VehiculoActa $acta)

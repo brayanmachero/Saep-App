@@ -11,7 +11,9 @@ class VehiculoActaDocumentService
     public function imagen(?string $path): ?string
     {
         if (!$path) return null;
-        return 'data:image/png;base64,'.base64_encode(Storage::disk(config('vehiculos_actas.disk'))->get($path));
+        $bytes = Storage::disk(config('vehiculos_actas.disk'))->get($path);
+        $mime = getimagesizefromstring($bytes)['mime'] ?? 'image/png';
+        return 'data:'.$mime.';base64,'.base64_encode($bytes);
     }
 
     public function fotoPdf(string $path): string
@@ -61,7 +63,7 @@ class VehiculoActaDocumentService
         if (!empty($d['croquis']) && $entrega) {
             $medias[] = ['field' => 'dibujo', 'name' => 'croquis.png', 'sha256' => $d['croquis']['sha256'], 'data_url' => $this->imagen($d['croquis']['path'])];
         }
-        foreach ($acta->evidencias as $i => $foto) $medias[] = ['field' => $entrega ? 'foto' : 'fotos', 'name' => 'foto-'.($i + 1).'.png', 'sha256' => $foto['sha256'], 'data_url' => $this->imagen($foto['path'])];
+        foreach ($acta->evidencias as $i => $foto) $medias[] = ['field' => $entrega ? 'foto' : 'fotos', 'name' => 'foto-'.($i + 1).'.'.pathinfo($foto['path'], PATHINFO_EXTENSION), 'sha256' => $foto['sha256'], 'data_url' => $this->imagen($foto['path'])];
         foreach (['conductor', 'encargado'] as $rol) {
             $field = $rol === 'conductor' ? ($entrega ? 'firma' : 'firma1') : ($entrega ? 'firma_encargado' : 'firma_encargado1');
             $medias[] = ['field' => $field, 'name' => $rol.'.png', 'data_url' => $this->imagen($acta->{'firma_'.$rol.'_path'})];

@@ -71,4 +71,95 @@
         const input = document.querySelector('[data-signature-value="firma_conductor"]');
         if (!input.value) { e.preventDefault(); alert('Dibuja tu firma antes de confirmar.'); input.closest('.sig-panel').scrollIntoView({block:'center'}); }
     });
+
+    // Keep the page, photos and signatures intact on validation or network errors.
+    const optimized = new WeakMap();
+    async function compactPhoto(file) {
+        if (optimized.has(file)) return optimized.get(file);
+        const bitmap = await createImageBitmap(file);
+        try {
+            const scale = Math.min(1, 2400 / Math.max(bitmap.width, bitmap.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+            canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .85));
+            if (!blob) throw new Error('No se pudo optimizar la fotografía.');
+            const result = new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', {type:'image/jpeg'});
+            optimized.set(file, result);
+            return result;
+        } finally { bitmap.close(); }
+    }
+    document.querySelectorAll('[data-acta-form], [data-final-sign]').forEach(target => {
+        let busy = false, dirty = false;
+        const status = document.createElement('div');
+        status.className = 'alert'; status.hidden = true; status.setAttribute('role', 'status');
+        target.before(status);
+        target.addEventListener('input', () => { dirty = true; });
+        target.addEventListener('change', () => { dirty = true; });
+        target.addEventListener('pointerdown', e => { if (e.target.matches('[data-signature]')) dirty = true; });
+        window.addEventListener('beforeunload', e => {
+            if (dirty || busy) { e.preventDefault(); e.returnValue = ''; }
+        });
+        target.addEventListener('submit', async event => {
+            if (event.defaultPrevented) return;
+            event.preventDefault();
+            if (busy) return;
+            status.hidden = false; status.className = 'alert';
+            if (!navigator.onLine) {
+                status.textContent = 'No hay conexión. Tus datos siguen en esta pantalla. Recupera la conexión y vuelve a guardar; no cierres la página.';
+                return;
+            }
+            busy = true; target.inert = true;
+            status.textContent = 'Preparando fotografías… No cierres esta pantalla.';
+            try {
+                const payload = new FormData(target);
+                if (event.submitter?.name) payload.set(event.submitter.name, event.submitter.value);
+                if (typeof createImageBitmap === 'function') {
+                    for (const name of ['fotos[]', 'foto_dano']) {
+                        const selected = payload.getAll(name).filter(file => file instanceof File && file.size);
+                        if (!selected.length) continue;
+                        payload.delete(name);
+                        for (let i = 0; i < selected.length; i++) {
+                            status.textContent = `Optimizando fotografía ${i + 1} de ${selected.length}…`;
+                            payload.append(name, await compactPhoto(selected[i]));
+                        }
+                    }
+                }
+                const response = await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open(target.method || 'POST', target.action);
+                    xhr.setRequestHeader('Accept', 'application/json');
+                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                    xhr.timeout = 120000;
+                    xhr.upload.onprogress = e => {
+                        status.textContent = e.lengthComputable && e.loaded < e.total
+                            ? `Enviando: ${Math.round(e.loaded * 100 / e.total)}%. No cierres esta pantalla.`
+                            : 'Archivos enviados. Confirmando el guardado…';
+                    };
+                    xhr.onload = () => {
+                        let data;
+                        try { data = JSON.parse(xhr.responseText); } catch (_) { data = {}; }
+                        if (xhr.status >= 200 && xhr.status < 300 && data.redirect) return resolve(data);
+                        const messages = Object.values(data.errors || {}).flat().join(' ');
+                        reject(new Error(messages || (xhr.status === 419 || xhr.status === 401
+                            ? 'La sesión venció. Inicia sesión en otra pestaña y vuelve a intentar aquí.'
+                            : 'No se pudo confirmar el guardado. Revisa el estado del acta antes de reintentar.')));
+                    };
+                    xhr.onerror = xhr.ontimeout = () => reject(new Error('Se interrumpió la conexión o la respuesta tardó demasiado. El servidor podría haber guardado el acta; revisa su estado antes de reintentar.'));
+                    xhr.send(payload);
+                });
+                dirty = false; busy = false;
+                status.textContent = 'Guardado confirmado. Abriendo el acta…';
+                window.location.assign(response.redirect);
+            } catch (error) {
+                busy = false; target.inert = false;
+                status.className = 'alert error';
+                status.textContent = error.message + ' Tus datos, fotos y firmas siguen en esta pantalla mientras no la cierres ni recargues.';
+                status.scrollIntoView({block:'center'});
+            }
+        });
+    });
 })();

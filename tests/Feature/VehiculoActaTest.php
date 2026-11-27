@@ -67,6 +67,50 @@ class VehiculoActaTest extends TestCase
         }
     }
 
+    public function test_new_photos_are_bounded_jpeg_and_served_with_correct_mime(): void
+    {
+        $acta=$this->prepare();
+        $path=$acta->evidencias[0]['path'];
+        $bytes=Storage::disk('local')->get($path);
+        $this->assertSame('image/jpeg',getimagesizefromstring($bytes)['mime']);
+        $this->get(route('vehiculos-actas.media',[$acta,0]))->assertHeader('Content-Type','image/jpeg');
+        $im=imagecreatetruecolor(3200,2400);
+        imagefill($im,0,0,imagecolorallocate($im,100,150,200));
+        ob_start();imagepng($im);$original=ob_get_clean();imagedestroy($im);
+        $optimized=app(VehiculoActaService::class)->fotografia($original);
+        $size=getimagesizefromstring($optimized);
+        $this->assertSame([2400,1800],[$size[0],$size[1]]);
+        $this->assertSame('image/jpeg',$size['mime']);
+    }
+
+    public function test_preview_does_not_modify_original_evidence_or_its_hash(): void
+    {
+        $acta=$this->prepare();
+        $path=$acta->evidencias[0]['path'];
+        $original=Storage::disk('local')->get($path);
+        $hash=$acta->evidencias[0]['sha256'];
+        $response=$this->get(route('vehiculos-actas.media',[$acta,0,'mini'=>1]))->assertOk()->assertHeader('Content-Type',function_exists('imagewebp') ? 'image/webp' : 'image/jpeg');
+        $size=getimagesizefromstring($response->getContent());
+        $this->assertLessThanOrEqual(1000,max($size[0],$size[1]));
+        $this->assertSame($original,Storage::disk('local')->get($path));
+        $this->assertSame($hash,$acta->fresh()->evidencias[0]['sha256']);
+    }
+
+    public function test_json_save_validation_and_signature_retry_are_safe(): void
+    {
+        $this->postJson(route('vehiculos-actas.guardar',[$this->reserva,'entrega']),[])->assertUnprocessable()->assertJsonValidationErrors('fecha');
+        $this->post(route('vehiculos-actas.guardar',[$this->reserva,'entrega']),$this->data(),['Accept'=>'application/json'])
+            ->assertOk()->assertJsonStructure(['redirect']);
+        $acta=VehiculoActa::firstOrFail();
+        $payload=['contenido_hash'=>$acta->contenido_hash,'aceptacion'=>'1','presencial'=>'1','nombre_firmante'=>'Conductor Prueba','firma_conductor'=>$this->signature()];
+        $url=route('vehiculos-actas.firmar',$acta);
+        $this->postJson($url,$payload)->assertOk()->assertJsonStructure(['redirect']);
+        $hash=$acta->fresh()->documento_hash;
+        $this->postJson($url,$payload)->assertOk()->assertJsonStructure(['redirect']);
+        $this->assertSame($hash,$acta->fresh()->documento_hash);
+        $this->assertSame(1,$this->reserva->eventos()->where('accion','ACTA_SAEP_FIRMADA')->count());
+    }
+
     private function signature(): string
     {
         $im = imagecreatetruecolor(500, 150); imagefill($im, 0, 0, imagecolorallocate($im, 255, 255, 255));
