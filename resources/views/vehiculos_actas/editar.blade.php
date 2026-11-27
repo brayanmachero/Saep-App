@@ -1,6 +1,9 @@
 @extends('vehiculos_actas.layout')
 @section('title', 'Registrar '.$tipo)
 @section('content')
+@if($tipo === 'entrega' && $reserva->estado === 'VENCIDA')
+<section class="card" role="status"><strong>Entrega pendiente de firma</strong><p>Esta reserva venció con el acta sin finalizar. Puedes completar la inspección guardada; conserva la fecha real de entrega. La firma se registrará con la fecha y hora actuales. Después debes registrar la devolución.</p></section>
+@endif
 @php
     $d = $acta?->datos ?? [];
     $baseConductor = $entrega?->datos ?? [];

@@ -38,6 +38,35 @@ class VehiculoActaTest extends TestCase
         $this->actingAs($this->operator);
     }
 
+    public function test_expired_reservation_can_resume_existing_draft_without_fabricating_signature(): void
+    {
+        $acta = $this->prepare();
+        app(VehiculoActaService::class)->reabrir($acta, $this->operator);
+        $this->reserva->update(['estado'=>'VENCIDA','termino'=>now()->subMinute()]);
+        $this->get(route('vehiculos-actas.editar',[$this->reserva,'entrega']))->assertOk()->assertSee('Entrega pendiente de firma');
+        $this->assertNull($acta->fresh()->firmada_at);
+        $this->post(route('vehiculos-actas.guardar',[$this->reserva,'entrega']),$this->data(['revision'=>$acta->fresh()->revision]))->assertSessionHasNoErrors();
+        $this->sign($acta->fresh())->assertSessionHasNoErrors();
+        $this->assertSame('FIRMADA',$acta->fresh()->estado);
+        $this->assertSame('VENCIDA',$this->reserva->fresh()->estado);
+        $this->assertNotNull($this->reserva->fresh()->entregada_at);
+        $this->assertNull($this->reserva->fresh()->devuelta_at);
+        $this->get(route('vehiculos-actas.editar',[$this->reserva,'devolucion']))->assertOk();
+    }
+
+    public function test_expiry_does_not_allow_new_delivery_without_existing_acta_or_after_return(): void
+    {
+        $this->reserva->update(['estado'=>'VENCIDA']);
+        $this->get(route('vehiculos-actas.editar',[$this->reserva,'entrega']))->assertSessionHasErrors('acta');
+        $this->reserva->update(['estado'=>'CONFIRMADA']);
+        $acta=$this->prepare();
+        app(VehiculoActaService::class)->reabrir($acta,$this->operator);
+        foreach(['CANCELADA','DEVUELTA'] as $state) {
+            $this->reserva->update(['estado'=>$state]);
+            $this->get(route('vehiculos-actas.editar',[$this->reserva,'entrega']))->assertSessionHasErrors('acta');
+        }
+    }
+
     private function signature(): string
     {
         $im = imagecreatetruecolor(500, 150); imagefill($im, 0, 0, imagecolorallocate($im, 255, 255, 255));

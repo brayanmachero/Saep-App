@@ -167,7 +167,7 @@ class VehiculoActaService
                     'email_estado' => config('vehiculos_actas.mail_enabled') ? 'PENDIENTE' : 'DESACTIVADO',
                 ]);
                 $reserva->update($acta->tipo === 'entrega'
-                    ? ['estado' => 'EN_USO', 'entregada_at' => $acta->datos['fecha']]
+                    ? ['estado' => $reserva->termino->isPast() ? 'VENCIDA' : 'EN_USO', 'entregada_at' => $acta->datos['fecha']]
                     : ['estado' => 'DEVUELTA', 'devuelta_at' => $acta->datos['fecha']]);
                 $this->evento($acta, $request->user(), 'ACTA_SAEP_FIRMADA', 'Acta de '.$acta->tipo.' firmada en SAEP.');
                 return $acta->fresh();
@@ -191,7 +191,11 @@ class VehiculoActaService
 
     public function validarOperacion(ReservaVehiculo $reserva, string $tipo): void
     {
-        if ($tipo === 'entrega' && ($reserva->estado !== 'CONFIRMADA' || $reserva->entregada_at)) {
+        $entregaPendienteVencida = $reserva->estado === 'VENCIDA'
+            && $reserva->actasSaep()->where('tipo', 'entrega')
+                ->whereIn('estado', ['BORRADOR', 'PENDIENTE_FIRMA'])->exists();
+        if ($tipo === 'entrega' && ((!$entregaPendienteVencida && $reserva->estado !== 'CONFIRMADA')
+            || $reserva->entregada_at || $reserva->devuelta_at)) {
             $this->error('La entrega requiere una reserva confirmada sin entrega previa.');
         }
         if ($tipo === 'devolucion' && (!in_array($reserva->estado, ['EN_USO', 'VENCIDA'], true)
